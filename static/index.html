@@ -25,6 +25,10 @@
       padding: 4px 0;
     }
 
+    .name {
+      color: white;
+    }
+
     #chat-form {
       display: flex;
       gap: 8px;
@@ -66,12 +70,20 @@
     const form = document.getElementById("chat-form");
     const input = document.getElementById("message-input");
 
+    // Get our name from this browser's storage, or ask for it the first time.
+    let name = localStorage.getItem("name");
+    while (!name) {
+      name = (prompt("What's your name?") || "").trim().slice(0, 32);
+    }
+    localStorage.setItem("name", name);
+
     // Open a WebSocket to the same server that served this page.
     const socket = new WebSocket(`ws://${location.host}/ws`);
 
     // Event 1: the server sent us a message.
     socket.addEventListener("message", (event) => {
-      showMessage(event.data);
+      const message = JSON.parse(event.data);  // JSON string -> object with .name and .text
+      showMessage(message);
     });
 
     // Event 2: the user pressed Enter or clicked Send.
@@ -79,15 +91,23 @@
       event.preventDefault();  // stop the browser from reloading the page
       const text = input.value.trim();
       if (text === "") return;
-      socket.send(text);
+      socket.send(JSON.stringify({ name: name, text: text }));  // object -> JSON string
       input.value = "";
     });
 
     // Add one message to the bottom of the #messages box.
-    function showMessage(text) {
+    // Built piece by piece with textContent, never innerHTML: names and text are
+    // shown as-is, so neither can ever run as code.
+    function showMessage(message) {
       const div = document.createElement("div");
-      div.textContent = text;  // textContent, never innerHTML: shows the text as-is, so it can't run as code
       div.className = "message";
+
+      const nameElement = document.createElement("strong");
+      nameElement.className = "name";
+      nameElement.textContent = message.name;
+
+      div.appendChild(nameElement);
+      div.appendChild(document.createTextNode(": " + message.text));
 
       // Were we scrolled to (or near) the bottom before this message arrived?
       const distanceFromBottom = messages.scrollHeight - messages.scrollTop - messages.clientHeight;
