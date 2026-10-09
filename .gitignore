@@ -1,0 +1,14 @@
+# Python's compiled cache files (recreated automatically)
+__pycache__/
+*.pyc
+
+# Secrets: passwords, API keys, etc. Never commit these.
+.env
+
+# The SQLite database (holds everyone's messages and accounts)
+*.db
+*.sqlite3
+
+# Editor and OS clutter
+.vscode/
+Thumbs.db
