@@ -34,7 +34,15 @@ the point is for me to understand how it works, not just to have it done.
 - `uploads/`: uploaded files, saved under random names (git-ignored, like `chat.db`).
 - `ROADMAP.md`: the milestones, ticked off as they're done.
 - `setup.ps1`: creates the `chatapp` conda environment and installs `requirements.txt`.
-- `start.ps1`: activates the environment and starts the server with auto-reload.
+- `start.ps1`: activates the environment and starts the server with auto-reload (development).
+- `serve.ps1`: runs the real site for chat.datslok.no: no reload, localhost only, settings from `.env`.
+- `.env.example`: template for `.env` (INVITE_CODE, SECURE_COOKIES). `.env` itself is never committed.
+
+## Hosting
+
+The live site is https://chat.datslok.no, served from this PC through a Cloudflare Tunnel
+(`cloudflared` runs as a Windows service and forwards to http://localhost:8000). The domain is
+registered at domene.shop with its DNS on Cloudflare.
 
 ## Running it
 
@@ -48,10 +56,12 @@ Python comes from Anaconda; conda is already hooked into PowerShell. First time 
 Then start the server with:
 
 ```powershell
-.\start.ps1
+.\start.ps1     # development, with auto-reload
+.\serve.ps1     # the real site (needs .env)
 ```
 
-Then open http://localhost:8000 in two browser tabs and chat between them.
+For development, open http://localhost:8001 (start.ps1) in two browser tabs and chat between them.
+Port 8000 is reserved for serve.ps1, because the tunnel forwards the public site there.
 
 ## Roadmap
 

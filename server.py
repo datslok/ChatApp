@@ -1,7 +1,9 @@
 import json
+import os
 import re
 import secrets
 import sqlite3
+import time
 from pathlib import Path
 
 from argon2 import PasswordHasher
@@ -10,7 +12,15 @@ from fastapi import FastAPI, HTTPException, Request, Response, WebSocket, WebSoc
 from fastapi.responses import FileResponse, RedirectResponse
 from pydantic import BaseModel
 
-app = FastAPI()
+# docs_url etc. = None: turn off FastAPI's automatic API explorer pages (/docs, /redoc),
+# handy in development but nothing the public internet needs to see.
+app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
+
+# Settings from the environment. serve.ps1 loads them from the .env file (which is never committed).
+INVITE_CODE = os.environ.get("INVITE_CODE", "")  # needed to create an account; empty = anyone can
+SECURE_COOKIES = os.environ.get("SECURE_COOKIES") == "1"  # 1 = cookies only ever sent over HTTPS
+if not INVITE_CODE:
+    print("WARNING: no INVITE_CODE set, so anyone who can reach this server can create an account.")
 
 CHANNELS = ["general", "memes"]  # add a name here to make a new channel
 MAX_TEXT_LENGTH = 2000
@@ -21,6 +31,8 @@ MIN_PASSWORD_LENGTH = 8
 MAX_PASSWORD_LENGTH = 200
 SESSION_COOKIE = "session"
 SESSION_DAYS = 30
+MAX_FAILURES = 5          # wrong passwords (or invite codes) allowed...
+FAILURE_WINDOW = 15 * 60  # ...within this many seconds, before we refuse to check more
 
 UPLOAD_DIR = Path("uploads")
 UPLOAD_DIR.mkdir(exist_ok=True)  # create the folder if it isn't there yet
@@ -172,6 +184,34 @@ class Credentials(BaseModel):
     """What the login page sends: FastAPI checks the JSON has these fields, as strings."""
     username: str
     password: str
+    invite: str = ""  # only used when creating an account
+
+
+# Recent failed attempts, to stop password (and invite code) guessing:
+# {"login:axel": [time, time, ...], "invite:203.0.113.5": [...]}. Kept in memory only.
+failures = {}
+
+
+def too_many_failures(key):
+    """Has this key failed MAX_FAILURES times within the last FAILURE_WINDOW seconds?"""
+    now = time.monotonic()  # a clock in seconds that only ever goes forward
+    recent = [t for t in failures.get(key, []) if now - t < FAILURE_WINDOW]  # forget old ones
+    if recent:
+        failures[key] = recent
+    else:
+        failures.pop(key, None)  # nothing recent: remove the key, so the dict doesn't keep growing
+    return len(recent) >= MAX_FAILURES
+
+
+def record_failure(key):
+    failures.setdefault(key, []).append(time.monotonic())
+
+
+def client_ip(request):
+    """The visitor's IP address. Behind the Cloudflare Tunnel every request comes from
+    cloudflared on this PC, so Cloudflare puts the real address in a header for us.
+    (We only trust that header because the server only listens on this PC; see serve.ps1.)"""
+    return request.headers.get("cf-connecting-ip") or request.client.host
 
 
 def start_session(response, user_id):
@@ -185,6 +225,7 @@ def start_session(response, user_id):
         max_age=SESSION_DAYS * 24 * 60 * 60,  # in seconds
         httponly=True,   # JavaScript can't read it, so a script can't steal it
         samesite="lax",  # other websites can't make the browser send it to us
+        secure=SECURE_COOKIES,  # on the real site: only ever sent over HTTPS
     )
 
 
@@ -204,7 +245,18 @@ def user_from_token(token):
 
 
 @app.post("/register")
-async def register(credentials: Credentials, response: Response):
+async def register(credentials: Credentials, request: Request, response: Response):
+    if INVITE_CODE:
+        # Limit guesses per visitor (IP address), so the code can't be found by trying them all.
+        key = "invite:" + client_ip(request)
+        if too_many_failures(key):
+            raise HTTPException(429, "Too many attempts. Try again in 15 minutes.")
+        # compare_digest takes the same time however much of the guess is right,
+        # so the response time gives no hints about the real code.
+        if not secrets.compare_digest(credentials.invite.strip().encode(), INVITE_CODE.encode()):
+            record_failure(key)
+            raise HTTPException(403, "Wrong invite code.")
+
     username = credentials.username.strip()
     password = credentials.password
     if not USERNAME_PATTERN.fullmatch(username):
@@ -233,19 +285,28 @@ async def login(credentials: Credentials, response: Response):
     # so nobody can use this to find out which usernames exist.
     wrong = HTTPException(401, "Wrong username or password.")
 
+    # Limit guesses per username. Checked before the password, so while it's locked
+    # even the right password is refused; otherwise guessing could just carry on.
+    key = "login:" + credentials.username.strip().lower()
+    if too_many_failures(key):
+        raise HTTPException(429, "Too many attempts. Try again in 15 minutes.")
+
     row = db.execute(
         "SELECT id, password_hash FROM users WHERE username = ?",
         (credentials.username.strip(),),
     ).fetchone()
     if row is None:
+        record_failure(key)
         raise wrong
     user_id, password_hash = row
 
     try:
         hasher.verify(password_hash, credentials.password)
     except VerifyMismatchError:
+        record_failure(key)
         raise wrong
 
+    failures.pop(key, None)  # logged in: start counting from zero again
     start_session(response, user_id)
     return {"ok": True}
 
@@ -257,7 +318,7 @@ async def logout(request: Request, response: Response):
         # Delete it on the server too, so the token stops working even if someone copied it.
         with db:
             db.execute("DELETE FROM sessions WHERE token = ?", (token,))
-    response.delete_cookie(SESSION_COOKIE)
+    response.delete_cookie(SESSION_COOKIE, httponly=True, samesite="lax", secure=SECURE_COOKIES)
     return {"ok": True}
 
 

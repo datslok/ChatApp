@@ -88,6 +88,10 @@
       Password
       <input id="password" type="password" autocomplete="current-password" required>
     </label>
+    <label>
+      Invite code (only for new accounts)
+      <input id="invite" autocomplete="off">
+    </label>
     <div id="error"></div>
     <div class="buttons">
       <button value="login">Log in</button>
@@ -99,6 +103,7 @@
     const form = document.getElementById("login-form");
     const usernameInput = document.getElementById("username");
     const passwordInput = document.getElementById("password");
+    const inviteInput = document.getElementById("invite");
     const errorBox = document.getElementById("error");
 
     form.addEventListener("submit", async (event) => {
@@ -111,7 +116,11 @@
       const response = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: usernameInput.value, password: passwordInput.value }),
+        body: JSON.stringify({
+          username: usernameInput.value,
+          password: passwordInput.value,
+          invite: inviteInput.value,  // ignored when logging in
+        }),
       });
 
       if (response.ok) {

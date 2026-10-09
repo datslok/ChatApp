@@ -425,7 +425,10 @@
 
     // Open the WebSocket. Called once at the start, and again each time the connection drops.
     function connect() {
-      socket = new WebSocket(`ws://${location.host}/ws`);
+      // On the real site the page comes over HTTPS, so the WebSocket must be encrypted too:
+      // wss:// instead of ws:// (like https:// instead of http://).
+      const protocol = location.protocol === "https:" ? "wss:" : "ws:";
+      socket = new WebSocket(`${protocol}//${location.host}/ws`);
 
       // We can only send once the connection is open, so join a channel then.
       socket.addEventListener("open", () => {
