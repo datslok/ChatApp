@@ -23,8 +23,9 @@ SESSION_DAYS = 30
 
 hasher = PasswordHasher()
 
-# The browser tabs currently connected to each channel: {"general": {ws1, ws2}, "memes": {...}}
-connections = {channel: set() for channel in CHANNELS}
+# Every open connection (one per browser tab) and what we know about it:
+# {websocket: {"username": "axel", "channel": "memes"}}
+clients = {}
 
 # Open the database file (SQLite creates it if it doesn't exist) and make sure the tables are there.
 db = sqlite3.connect("chat.db")
@@ -83,11 +84,10 @@ def recent_messages(channel):
     return [{"name": name, "text": text} for name, text in rows]
 
 
-def clean_text(raw):
-    """Get the message text out of what a client sent, or None if it's invalid.
+def parse_json(raw):
+    """Turn raw text from a client into a dict, or None if it isn't a JSON object.
 
     Never trust what clients send: anyone can connect to /ws with their own script.
-    The sender's name is NOT taken from here; it comes from their login session.
     """
     try:
         data = json.loads(raw)
@@ -95,7 +95,14 @@ def clean_text(raw):
         return None
     if not isinstance(data, dict):
         return None
+    return data
 
+
+def clean_text(data):
+    """Get valid message text out of a client's "message", or None if it's invalid.
+
+    The sender's name is NOT taken from here; it comes from their login session.
+    """
     text = data.get("text")
     if not isinstance(text, str):
         return None
@@ -220,36 +227,84 @@ async def channels():
 
 # ---------- Chat ----------
 
-@app.websocket("/ws/{channel}")
-async def chat(websocket: WebSocket, channel: str):
+def online_users():
+    """Everyone with at least one open tab, sorted by name. A set first, so two tabs count once."""
+    return sorted({client["username"] for client in clients.values()}, key=str.lower)
+
+
+async def send(websocket, data):
+    """Send to one connection, ignoring errors: if that tab just closed, its own
+    chat() call notices and cleans up, so a failure here must not crash the sender."""
+    try:
+        await websocket.send_json(data)
+    except Exception:
+        pass
+
+
+async def send_to_everyone(data):
+    # list() makes a copy, in case someone joins or leaves while we're sending.
+    for websocket in list(clients):
+        await send(websocket, data)
+
+
+async def send_to_channel(channel, data, except_user=None):
+    """Send to everyone viewing a channel, optionally leaving out one user (all their tabs)."""
+    for websocket, client in list(clients.items()):
+        if client["channel"] == channel and client["username"] != except_user:
+            await send(websocket, data)
+
+
+@app.websocket("/ws")
+async def chat(websocket: WebSocket):
     # The browser sends the session cookie along when it opens the WebSocket.
     username = user_from_token(websocket.cookies.get(SESSION_COOKIE))
-    if username is None or channel not in CHANNELS:
-        await websocket.close()  # refuse: not logged in, or no such channel
+    if username is None:
+        await websocket.close()  # refuse: not logged in
         return
 
     await websocket.accept()
-    # Fetch the history and join the broadcast list right after each other (no await in
-    # between), so no message can slip through the gap.
-    history = recent_messages(channel)
-    connections[channel].add(websocket)
+    was_online = username in online_users()  # already open in another tab?
+    clients[websocket] = {"username": username, "channel": None}  # no channel until they "join"
     try:
-        # Send the history to this connection only.
-        for message in history:
-            await websocket.send_json(message)
+        if was_online:
+            await send(websocket, {"type": "online", "users": online_users()})  # just this tab
+        else:
+            await send_to_everyone({"type": "online", "users": online_users()})  # they came online
 
         while True:
-            raw = await websocket.receive_text()
-            text = clean_text(raw)
-            if text is None:
+            data = parse_json(await websocket.receive_text())
+            if data is None:
                 continue  # ignore invalid messages
-            message = {"name": username, "text": text}  # the name comes from the login, not the client
-            save_message(channel, message)
-            # Send it to everyone in this channel, including whoever sent it.
-            # list() makes a copy, in case someone joins or leaves while we're sending.
-            for connection in list(connections[channel]):
-                await connection.send_json(message)
+            kind = data.get("type")
+            channel = clients[websocket]["channel"]
+
+            if kind == "join":
+                new_channel = data.get("channel")
+                if new_channel not in CHANNELS:
+                    continue
+                # Switch channel and fetch its history with no await in between,
+                # so no message can slip through the gap.
+                clients[websocket]["channel"] = new_channel
+                history = recent_messages(new_channel)
+                await send(websocket, {"type": "history", "channel": new_channel, "messages": history})
+
+            elif kind == "message" and channel is not None:
+                text = clean_text(data)
+                if text is None:
+                    continue
+                # The name comes from the login, never from the client.
+                message = {"type": "message", "channel": channel, "name": username, "text": text}
+                save_message(channel, message)
+                await send_to_channel(channel, message)  # everyone in the channel, including us
+
+            elif kind == "typing" and channel is not None:
+                # Tell the others in this channel; you don't need to see yourself typing.
+                await send_to_channel(
+                    channel, {"type": "typing", "channel": channel, "name": username}, except_user=username
+                )
     except WebSocketDisconnect:
         pass
     finally:
-        connections[channel].discard(websocket)
+        del clients[websocket]
+        if username not in online_users():  # that was their last tab: they went offline
+            await send_to_everyone({"type": "online", "users": online_users()})

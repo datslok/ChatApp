@@ -8,7 +8,7 @@
     body {
       margin: 0;
       height: 100vh;
-      display: flex;  /* sidebar and chat side by side */
+      display: flex;  /* sidebar, chat and online list side by side */
       font-family: system-ui, sans-serif;
       background: #313338;
       color: #dbdee1;
@@ -55,7 +55,7 @@
       flex: 1;
       min-width: 0;  /* lets long messages wrap instead of stretching the page */
       display: flex;
-      flex-direction: column;  /* messages above, text box below */
+      flex-direction: column;  /* messages, typing line and text box stacked */
     }
 
     #messages {
@@ -72,10 +72,17 @@
       color: white;
     }
 
+    #typing {
+      height: 1.2em;  /* keep the space even when empty, so the page doesn't jump */
+      padding: 0 16px;
+      font-size: 0.85rem;
+      color: #949ba4;
+    }
+
     #chat-form {
       display: flex;
       gap: 8px;
-      padding: 16px;
+      padding: 8px 16px 16px;
     }
 
     #message-input {
@@ -97,6 +104,40 @@
       font-size: 1rem;
       cursor: pointer;
     }
+
+    #members {
+      width: 200px;
+      padding: 16px;
+      background: #2b2d31;
+    }
+
+    #members h2 {
+      margin: 0 0 8px;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      color: #949ba4;
+    }
+
+    #online-list {
+      margin: 0;
+      padding: 0;
+      list-style: none;  /* no bullet points */
+    }
+
+    #online-list li {
+      padding: 4px 0;
+    }
+
+    /* A green dot in front of each name, drawn with CSS (no image needed). */
+    #online-list li::before {
+      content: "";
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      margin-right: 8px;
+      border-radius: 50%;  /* a square with fully rounded corners is a circle */
+      background: #23a55a;
+    }
   </style>
 </head>
 <body>
@@ -107,6 +148,7 @@
 
   <main id="chat">
     <div id="messages"></div>
+    <div id="typing"></div>
 
     <form id="chat-form">
       <input id="message-input" autocomplete="off">
@@ -114,18 +156,27 @@
     </form>
   </main>
 
+  <aside id="members">
+    <h2 id="online-heading">Online</h2>
+    <ul id="online-list"></ul>
+  </aside>
+
   <script>
     // Grab the HTML elements we need, by their id.
     const channelList = document.getElementById("channel-list");
     const logoutButton = document.getElementById("logout");
     const messages = document.getElementById("messages");
+    const typingLine = document.getElementById("typing");
     const form = document.getElementById("chat-form");
     const input = document.getElementById("message-input");
+    const onlineHeading = document.getElementById("online-heading");
+    const onlineList = document.getElementById("online-list");
 
-    let socket = null;          // the WebSocket for the channel we're in
-    let currentChannel = null;
+    let socket = null;          // our one WebSocket, open as long as the tab is
+    let currentChannel = null;  // the channel we're looking at
 
-    // Ask the server which channels exist, make a sidebar button for each, and open the first.
+    // Ask the server which channels exist, make a sidebar button for each,
+    // then connect and open the first channel.
     async function start() {
       const response = await fetch("/channels");
       const channels = await response.json();  // e.g. ["general", "memes"]
@@ -139,17 +190,44 @@
         channelList.appendChild(button);
       }
 
-      switchChannel(channels[0]);
+      socket = new WebSocket(`ws://${location.host}/ws`);
+      // We can only send once the connection is open, so join the first channel then.
+      socket.addEventListener("open", () => switchChannel(channels[0]));
+      socket.addEventListener("message", handleServerMessage);
     }
 
-    // Leave the current channel and join another: close the old WebSocket, clear the
-    // messages, and open a new WebSocket (the server then sends that channel's history).
+    // Everything the server sends comes through here. Its "type" says what it is.
+    function handleServerMessage(event) {
+      const data = JSON.parse(event.data);  // JSON string -> object
+
+      if (data.type === "online") {
+        showOnline(data.users);
+        return;
+      }
+
+      // Everything else belongs to a channel. Ignore it if it's for a channel we
+      // just left (it was already on its way when we switched).
+      if (data.channel !== currentChannel) return;
+
+      if (data.type === "history") {
+        for (const message of data.messages) {
+          showMessage(message);
+        }
+      } else if (data.type === "message") {
+        stopTyping(data.name);  // their message arrived, so they're done typing
+        showMessage(data);
+      } else if (data.type === "typing") {
+        showTyping(data.name);
+      }
+    }
+
+    // Switch channel: clear the screen and tell the server. It answers with the history.
     function switchChannel(channel) {
       if (channel === currentChannel) return;
       currentChannel = channel;
 
-      if (socket) socket.close();
       messages.replaceChildren();  // remove all the old channel's messages
+      clearTyping();
       input.placeholder = "Message #" + channel;
 
       // Highlight the button for the channel we're in.
@@ -157,11 +235,7 @@
         button.classList.toggle("active", button.dataset.channel === channel);
       }
 
-      socket = new WebSocket(`ws://${location.host}/ws/${channel}`);
-      socket.addEventListener("message", (event) => {
-        const message = JSON.parse(event.data);  // JSON string -> object with .name and .text
-        showMessage(message);
-      });
+      socket.send(JSON.stringify({ type: "join", channel: channel }));
     }
 
     // The user pressed Enter or clicked Send.
@@ -169,9 +243,10 @@
       event.preventDefault();  // stop the browser from reloading the page
       const text = input.value.trim();
       if (text === "") return;
-      // Only the text: the server knows who we are from our login.
-      socket.send(JSON.stringify({ text: text }));  // object -> JSON string
+      // Only the text: the server knows who we are and which channel we're in.
+      socket.send(JSON.stringify({ type: "message", text: text }));
       input.value = "";
+      lastTypingSent = 0;  // so typing the next message is announced straight away
     });
 
     // Log out: the server forgets our session, then we go back to the login page.
@@ -179,6 +254,70 @@
       await fetch("/logout", { method: "POST" });
       location.href = "/login";
     });
+
+    // ---------- Online list ----------
+
+    function showOnline(users) {
+      onlineHeading.textContent = `Online — ${users.length}`;
+      onlineList.replaceChildren();
+      for (const user of users) {
+        const item = document.createElement("li");
+        item.textContent = user;
+        onlineList.appendChild(item);
+      }
+    }
+
+    // ---------- "is typing…" ----------
+
+    // Sending: the "input" event fires on every keystroke, but we tell the server
+    // at most once every 2 seconds (throttling), so we don't flood it.
+    let lastTypingSent = 0;  // when we last sent "typing", in milliseconds
+    input.addEventListener("input", () => {
+      const now = Date.now();  // milliseconds since 1970: a simple clock
+      if (input.value.trim() !== "" && now - lastTypingSent > 2000) {
+        socket.send(JSON.stringify({ type: "typing" }));
+        lastTypingSent = now;
+      }
+    });
+
+    // Showing: who's typing, each with a timer that removes them after 3 quiet seconds.
+    const typers = new Map();  // name -> timer id
+
+    function showTyping(name) {
+      clearTimeout(typers.get(name));  // cancel their old timer, if any...
+      const timer = setTimeout(() => stopTyping(name), 3000);  // ...and start a fresh one
+      typers.set(name, timer);
+      updateTypingLine();
+    }
+
+    function stopTyping(name) {
+      clearTimeout(typers.get(name));
+      typers.delete(name);
+      updateTypingLine();
+    }
+
+    function clearTyping() {
+      for (const timer of typers.values()) {
+        clearTimeout(timer);
+      }
+      typers.clear();
+      updateTypingLine();
+    }
+
+    function updateTypingLine() {
+      const names = [...typers.keys()];  // the Map's keys as a normal array
+      if (names.length === 0) {
+        typingLine.textContent = "";
+      } else if (names.length === 1) {
+        typingLine.textContent = `${names[0]} is typing…`;
+      } else if (names.length === 2) {
+        typingLine.textContent = `${names[0]} and ${names[1]} are typing…`;
+      } else {
+        typingLine.textContent = "Several people are typing…";
+      }
+    }
+
+    // ---------- Messages ----------
 
     // Add one message to the bottom of the #messages box.
     // Built piece by piece with textContent, never innerHTML: names and text are
