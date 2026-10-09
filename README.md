@@ -13,8 +13,7 @@ You need [Anaconda](https://www.anaconda.com/) (or Miniconda). In PowerShell:
 
 ```powershell
 .\setup.ps1                   # first time: creates the "chatapp" environment and installs packages
-conda activate chatapp
-uvicorn server:app --reload
+.\start.ps1                   # starts the server (Ctrl+C to stop)
 ```
 
 Then open http://localhost:8000 in two browser tabs and chat between them.

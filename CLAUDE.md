@@ -5,10 +5,11 @@ the point is for me to understand how it works, not just to have it done.
 
 ## How to work with me
 
-- **Teach, don't just build.** Work in small steps. Before writing code, briefly explain the concept
-  (WebSockets, databases, auth, …). After writing it, explain what each part does and why.
-- **Leave parts for me to write.** For each milestone, suggest one or two small pieces I can implement
-  myself, and review my code when I do.
+- **You write all the code, but teach as you go.** Work in small steps. Before each step, explain the
+  logic and concepts behind it (WebSockets, databases, auth, …) *before* writing anything. After
+  writing it, explain what each part does and why. Don't leave exercises for me.
+- **Wait for my go-ahead.** After explaining a step, ask if I want clarification or have questions,
+  then wait for me to say go before writing any code or making changes.
 - **Keep it simple.** Prefer the standard library and a few well-known packages over frameworks and
   abstractions. Readable code beats clever code. Don't add features I didn't ask for.
 - **Explain any new dependency** before adding it: what it does and why it's needed.
@@ -31,6 +32,7 @@ the point is for me to understand how it works, not just to have it done.
 - `static/index.html`: the whole frontend (markup, styles and script in one file for now).
 - `ROADMAP.md`: the milestones, ticked off as they're done.
 - `setup.ps1`: creates the `chatapp` conda environment and installs `requirements.txt`.
+- `start.ps1`: activates the environment and starts the server with auto-reload.
 
 ## Running it
 
@@ -41,11 +43,10 @@ Python comes from Anaconda; conda is already hooked into PowerShell. First time 
 .\setup.ps1
 ```
 
-Every other time:
+Then start the server with:
 
 ```powershell
-conda activate chatapp
-uvicorn server:app --reload
+.\start.ps1
 ```
 
 Then open http://localhost:8000 in two browser tabs and chat between them.

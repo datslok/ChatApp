@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Our Chat</title>
+  <style>
+    body {
+      margin: 0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      font-family: system-ui, sans-serif;
+      background: #313338;
+      color: #dbdee1;
+    }
+
+    #messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+    }
+
+    .message {
+      padding: 4px 0;
+    }
+
+    #chat-form {
+      display: flex;
+      gap: 8px;
+      padding: 16px;
+    }
+
+    #message-input {
+      flex: 1;
+      padding: 10px 12px;
+      border: none;
+      border-radius: 8px;
+      background: #383a40;
+      color: inherit;
+      font-size: 1rem;
+    }
+
+    button {
+      padding: 10px 16px;
+      border: none;
+      border-radius: 8px;
+      background: #5865f2;
+      color: white;
+      font-size: 1rem;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div id="messages"></div>
+
+  <form id="chat-form">
+    <input id="message-input" autocomplete="off" placeholder="Send a message">
+    <button>Send</button>
+  </form>
+
+  <script>
+    // Grab the HTML elements we need, by their id.
+    const messages = document.getElementById("messages");
+    const form = document.getElementById("chat-form");
+    const input = document.getElementById("message-input");
+
+    // Open a WebSocket to the same server that served this page.
+    const socket = new WebSocket(`ws://${location.host}/ws`);
+
+    // Event 1: the server sent us a message.
+    socket.addEventListener("message", (event) => {
+      showMessage(event.data);
+    });
+
+    // Event 2: the user pressed Enter or clicked Send.
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();  // stop the browser from reloading the page
+      const text = input.value.trim();
+      if (text === "") return;
+      socket.send(text);
+      input.value = "";
+    });
+
+    // Add one message to the bottom of the #messages box.
+    function showMessage(text) {
+      const div = document.createElement("div");
+      div.textContent = text;  // textContent, never innerHTML: shows the text as-is, so it can't run as code
+      div.className = "message";
+
+      // Were we scrolled to (or near) the bottom before this message arrived?
+      const distanceFromBottom = messages.scrollHeight - messages.scrollTop - messages.clientHeight;
+      const wasAtBottom = distanceFromBottom < 50;
+
+      messages.appendChild(div);
+
+      // Only follow new messages if we were already at the bottom,
+      // so we don't yank someone away from older messages they're reading.
+      if (wasAtBottom) {
+        messages.scrollTop = messages.scrollHeight;
+      }
+    }
+  </script>
+</body>
+</html>

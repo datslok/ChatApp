@@ -1,6 +1,6 @@
 # Roadmap
 
-1. [ ] One chat room: WebSocket broadcast to everyone connected
+1. [x] One chat room: WebSocket broadcast to everyone connected
 2. [ ] Save messages in SQLite and load history when someone joins
 3. [ ] Channels (#general, #memes, …) and a sidebar to switch between them
 4. [ ] Accounts and login (hashed passwords, sessions)
