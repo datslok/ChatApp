@@ -84,6 +84,13 @@
       flex-direction: column;  /* messages, typing line and text box stacked */
     }
 
+    #banner {
+      padding: 8px 16px;
+      background: #f0b232;
+      color: #1e1f22;
+      font-size: 0.9rem;
+    }
+
     #messages {
       flex: 1;
       overflow-y: auto;
@@ -164,6 +171,7 @@
   </nav>
 
   <main id="chat">
+    <div id="banner" hidden>Connection lost, reconnecting…</div>
     <div id="messages"></div>
     <div id="typing"></div>
 
@@ -189,13 +197,15 @@
     const input = document.getElementById("message-input");
     const onlineHeading = document.getElementById("online-heading");
     const onlineList = document.getElementById("online-list");
+    const banner = document.getElementById("banner");
 
-    let socket = null;          // our one WebSocket, open as long as the tab is
+    let socket = null;          // our WebSocket (replaced with a new one if it drops)
     let currentChannel = null;  // the channel (or DM) we're looking at
+    let firstChannel = null;    // where to start: the first channel in the list
     let myName = null;          // our own username; the server tells us in its "welcome"
+    let reconnectDelay = 1000;  // milliseconds to wait before the next reconnect attempt
 
-    // Ask the server which channels exist, make a sidebar button for each,
-    // then connect and open the first channel.
+    // Ask the server which channels exist, make a sidebar button for each, then connect.
     async function start() {
       const response = await fetch("/channels");
       const channels = await response.json();  // e.g. ["general", "memes"]
@@ -209,10 +219,45 @@
         channelList.appendChild(button);
       }
 
+      firstChannel = channels[0];
+      connect();
+    }
+
+    // Open the WebSocket. Called once at the start, and again each time the connection drops.
+    function connect() {
       socket = new WebSocket(`ws://${location.host}/ws`);
-      // We can only send once the connection is open, so join the first channel then.
-      socket.addEventListener("open", () => switchChannel(channels[0], "#" + channels[0]));
+
+      // We can only send once the connection is open, so join a channel then.
+      socket.addEventListener("open", () => {
+        reconnectDelay = 1000;  // it worked, so start from 1 second again next time
+        banner.hidden = true;
+        if (currentChannel === null) {
+          switchChannel(firstChannel, "#" + firstChannel);  // first time: open the first channel
+        } else {
+          joinCurrentChannel();  // reconnected: rejoin where we were, which reloads the history
+        }
+      });
+
       socket.addEventListener("message", handleServerMessage);
+
+      socket.addEventListener("close", (event) => {
+        if (event.code === 4001) {
+          location.href = "/login";  // the server says we're not logged in
+          return;
+        }
+        // Try again later, waiting twice as long each time (max 10 seconds): exponential backoff.
+        banner.hidden = false;
+        setTimeout(connect, reconnectDelay);
+        reconnectDelay = Math.min(reconnectDelay * 2, 10000);
+      });
+    }
+
+    // Send something to the server, but only if we're connected. Returns true if it was sent.
+    // (A closed WebSocket silently throws away what you send, and a connecting one throws an error.)
+    function sendToServer(data) {
+      if (socket.readyState !== WebSocket.OPEN) return false;
+      socket.send(JSON.stringify(data));  // object -> JSON string
+      return true;
     }
 
     // Everything the server sends comes through here. Its "type" says what it is.
@@ -244,18 +289,21 @@
       }
     }
 
-    // Switch channel or DM: clear the screen and tell the server. It answers with the history.
-    // `label` is what to show in the text box, like "#general" or "@kari".
+    // Switch channel or DM. `label` is what to show in the text box, like "#general" or "@kari".
     function switchChannel(channel, label) {
       if (channel === currentChannel) return;
       currentChannel = channel;
-
-      messages.replaceChildren();  // remove all the old channel's messages
-      clearTyping();
       input.placeholder = "Message " + label;
       highlightCurrent();
+      joinCurrentChannel();
+    }
 
-      socket.send(JSON.stringify({ type: "join", channel: channel }));
+    // Clear the screen and tell the server where we are. It answers with the history.
+    // (If we're disconnected right now, nothing is sent; we rejoin when we reconnect.)
+    function joinCurrentChannel() {
+      messages.replaceChildren();  // remove all the old messages
+      clearTyping();
+      sendToServer({ type: "join", channel: currentChannel });
     }
 
     // The DM channel name for us and another person: both names, lowercase and sorted,
@@ -280,7 +328,8 @@
       const text = input.value.trim();
       if (text === "") return;
       // Only the text: the server knows who we are and which channel we're in.
-      socket.send(JSON.stringify({ type: "message", text: text }));
+      // If we're disconnected, keep the text in the box so it can be sent later.
+      if (!sendToServer({ type: "message", text: text })) return;
       input.value = "";
       lastTypingSent = 0;  // so typing the next message is announced straight away
     });
@@ -335,8 +384,9 @@
     input.addEventListener("input", () => {
       const now = Date.now();  // milliseconds since 1970: a simple clock
       if (input.value.trim() !== "" && now - lastTypingSent > 2000) {
-        socket.send(JSON.stringify({ type: "typing" }));
-        lastTypingSent = now;
+        if (sendToServer({ type: "typing" })) {
+          lastTypingSent = now;
+        }
       }
     });
 

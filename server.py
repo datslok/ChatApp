@@ -290,7 +290,10 @@ async def chat(websocket: WebSocket):
     # The browser sends the session cookie along when it opens the WebSocket.
     username = user_from_token(websocket.cookies.get(SESSION_COOKIE))
     if username is None:
-        await websocket.close()  # refuse: not logged in
+        # Not logged in. Accept first and then close with our own code (4000-4999 are free
+        # for apps): if we refused outright, the page couldn't see why, and would keep retrying.
+        await websocket.accept()
+        await websocket.close(code=4001)
         return
 
     await websocket.accept()
