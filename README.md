@@ -21,11 +21,4 @@ Then open http://localhost:8000 in two browser tabs and chat between them.
 
 ## Roadmap
 
-- [ ] One chat room
-- [ ] Message history (SQLite)
-- [ ] Channels
-- [ ] Accounts and login
-- [ ] Online list and "is typing…"
-- [ ] Image and file uploads
-- [ ] Hosting so friends can connect
-- [ ] Voice channels
+See [ROADMAP.md](ROADMAP.md) for what's planned and what's done.

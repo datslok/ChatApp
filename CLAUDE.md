@@ -29,6 +29,7 @@ the point is for me to understand how it works, not just to have it done.
 
 - `server.py`: FastAPI app. Serves the page and the `/ws` WebSocket endpoint that broadcasts messages.
 - `static/index.html`: the whole frontend (markup, styles and script in one file for now).
+- `ROADMAP.md`: the milestones, ticked off as they're done.
 - `setup.ps1`: creates the `chatapp` conda environment and installs `requirements.txt`.
 
 ## Running it
@@ -51,14 +52,4 @@ Then open http://localhost:8000 in two browser tabs and chat between them.
 
 ## Roadmap
 
-1. [ ] One chat room: WebSocket broadcast to everyone connected
-2. [ ] Save messages in SQLite and load history when someone joins
-3. [ ] Channels (#general, #memes, …) and a sidebar to switch between them
-4. [ ] Accounts and login (hashed passwords, sessions)
-5. [ ] Online list and "is typing…" indicator
-6. [ ] Image and file uploads
-7. [ ] Host it so friends can connect (VPS, or a Cloudflare Tunnel/Tailscale)
-8. [ ] Voice channels with WebRTC/LiveKit
-9. [ ] Nice-to-haves: reactions, replies, mentions, notifications, desktop app via Tauri
-
-Tick milestones off here as they're finished.
+The milestones live in `ROADMAP.md`. Tick them off there as they're finished.
