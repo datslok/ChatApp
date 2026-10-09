@@ -20,7 +20,26 @@
       background: #2b2d31;
       display: flex;
       flex-direction: column;
+    }
+
+    #sidebar-lists {
+      flex: 1;  /* take up the free space, which pushes the logout button to the bottom */
+      overflow-y: auto;  /* scroll if there are many channels and people */
+    }
+
+    #channel-list,
+    #dm-list {
+      display: flex;
+      flex-direction: column;
       gap: 2px;
+    }
+
+    .section-heading {
+      margin: 16px 0 8px;
+      padding: 0 12px;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      color: #949ba4;
     }
 
     .channel {
@@ -44,11 +63,18 @@
       color: white;
     }
 
-    #channel-list {
-      flex: 1;  /* take up the free space, which pushes the logout button to the bottom */
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
+    /* A small round status dot: grey for offline, green for online. */
+    .dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      margin-right: 8px;
+      border-radius: 50%;  /* a square with fully rounded corners is a circle */
+      background: #80848e;
+    }
+
+    .dot.online {
+      background: #23a55a;
     }
 
     #chat {
@@ -111,11 +137,9 @@
       background: #2b2d31;
     }
 
-    #members h2 {
-      margin: 0 0 8px;
-      font-size: 0.75rem;
-      text-transform: uppercase;
-      color: #949ba4;
+    #members .section-heading {
+      margin-top: 0;
+      padding: 0;
     }
 
     #online-list {
@@ -127,22 +151,15 @@
     #online-list li {
       padding: 4px 0;
     }
-
-    /* A green dot in front of each name, drawn with CSS (no image needed). */
-    #online-list li::before {
-      content: "";
-      display: inline-block;
-      width: 8px;
-      height: 8px;
-      margin-right: 8px;
-      border-radius: 50%;  /* a square with fully rounded corners is a circle */
-      background: #23a55a;
-    }
   </style>
 </head>
 <body>
   <nav id="sidebar">
-    <div id="channel-list"></div>
+    <div id="sidebar-lists">
+      <div id="channel-list"></div>
+      <h2 class="section-heading">Direct messages</h2>
+      <div id="dm-list"></div>
+    </div>
     <button id="logout" class="channel">Log out</button>
   </nav>
 
@@ -157,13 +174,14 @@
   </main>
 
   <aside id="members">
-    <h2 id="online-heading">Online</h2>
+    <h2 id="online-heading" class="section-heading">Online</h2>
     <ul id="online-list"></ul>
   </aside>
 
   <script>
     // Grab the HTML elements we need, by their id.
     const channelList = document.getElementById("channel-list");
+    const dmList = document.getElementById("dm-list");
     const logoutButton = document.getElementById("logout");
     const messages = document.getElementById("messages");
     const typingLine = document.getElementById("typing");
@@ -173,7 +191,8 @@
     const onlineList = document.getElementById("online-list");
 
     let socket = null;          // our one WebSocket, open as long as the tab is
-    let currentChannel = null;  // the channel we're looking at
+    let currentChannel = null;  // the channel (or DM) we're looking at
+    let myName = null;          // our own username; the server tells us in its "welcome"
 
     // Ask the server which channels exist, make a sidebar button for each,
     // then connect and open the first channel.
@@ -186,13 +205,13 @@
         button.className = "channel";
         button.textContent = "# " + channel;
         button.dataset.channel = channel;  // remember which channel this button is for
-        button.addEventListener("click", () => switchChannel(channel));
+        button.addEventListener("click", () => switchChannel(channel, "#" + channel));
         channelList.appendChild(button);
       }
 
       socket = new WebSocket(`ws://${location.host}/ws`);
       // We can only send once the connection is open, so join the first channel then.
-      socket.addEventListener("open", () => switchChannel(channels[0]));
+      socket.addEventListener("open", () => switchChannel(channels[0], "#" + channels[0]));
       socket.addEventListener("message", handleServerMessage);
     }
 
@@ -200,8 +219,12 @@
     function handleServerMessage(event) {
       const data = JSON.parse(event.data);  // JSON string -> object
 
-      if (data.type === "online") {
-        showOnline(data.users);
+      if (data.type === "welcome") {
+        myName = data.username;
+        return;
+      }
+      if (data.type === "users") {
+        showUsers(data.users);
         return;
       }
 
@@ -221,21 +244,34 @@
       }
     }
 
-    // Switch channel: clear the screen and tell the server. It answers with the history.
-    function switchChannel(channel) {
+    // Switch channel or DM: clear the screen and tell the server. It answers with the history.
+    // `label` is what to show in the text box, like "#general" or "@kari".
+    function switchChannel(channel, label) {
       if (channel === currentChannel) return;
       currentChannel = channel;
 
       messages.replaceChildren();  // remove all the old channel's messages
       clearTyping();
-      input.placeholder = "Message #" + channel;
-
-      // Highlight the button for the channel we're in.
-      for (const button of channelList.children) {
-        button.classList.toggle("active", button.dataset.channel === channel);
-      }
+      input.placeholder = "Message " + label;
+      highlightCurrent();
 
       socket.send(JSON.stringify({ type: "join", channel: channel }));
+    }
+
+    // The DM channel name for us and another person: both names, lowercase and sorted,
+    // so both people end up with the same name. Axel+Kari and Kari+Axel -> "dm:axel:kari".
+    function dmChannel(otherName) {
+      const names = [myName.toLowerCase(), otherName.toLowerCase()].sort();
+      return "dm:" + names.join(":");
+    }
+
+    // Highlight the sidebar button (channel or DM) for where we are.
+    function highlightCurrent() {
+      // querySelectorAll finds every element matching a CSS selector:
+      // here, everything with a data-channel attribute (all channel and DM buttons).
+      for (const button of document.querySelectorAll("[data-channel]")) {
+        button.classList.toggle("active", button.dataset.channel === currentChannel);
+      }
     }
 
     // The user pressed Enter or clicked Send.
@@ -255,14 +291,38 @@
       location.href = "/login";
     });
 
-    // ---------- Online list ----------
+    // ---------- People: DM list and online list ----------
 
-    function showOnline(users) {
-      onlineHeading.textContent = `Online — ${users.length}`;
-      onlineList.replaceChildren();
+    function makeDot(online) {
+      const dot = document.createElement("span");
+      dot.className = online ? "dot online" : "dot";
+      return dot;
+    }
+
+    // `users` is every account: [{name: "axel", online: true}, ...]
+    function showUsers(users) {
+      // DM list in the sidebar: everyone except us.
+      dmList.replaceChildren();
       for (const user of users) {
+        if (user.name === myName) continue;
+        const button = document.createElement("button");
+        button.className = "channel";
+        button.dataset.channel = dmChannel(user.name);
+        button.appendChild(makeDot(user.online));
+        button.appendChild(document.createTextNode(user.name));
+        button.addEventListener("click", () => switchChannel(dmChannel(user.name), "@" + user.name));
+        dmList.appendChild(button);
+      }
+      highlightCurrent();  // the buttons are new, so mark the active one again
+
+      // Online list on the right: only the people who are online.
+      const online = users.filter((user) => user.online);
+      onlineHeading.textContent = `Online — ${online.length}`;
+      onlineList.replaceChildren();
+      for (const user of online) {
         const item = document.createElement("li");
-        item.textContent = user;
+        item.appendChild(makeDot(true));
+        item.appendChild(document.createTextNode(user.name));
         onlineList.appendChild(item);
       }
     }

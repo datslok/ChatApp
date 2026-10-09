@@ -6,7 +6,7 @@
 3. [x] Channels (#general, #memes, …) and a sidebar to switch between them
 4. [x] Accounts and login (hashed passwords, sessions)
 5. [x] Online list and "is typing…" indicator
-6. [ ] Direct messages: private two-person channels, opened from the sidebar
+6. [x] Direct messages: private two-person channels, opened from the sidebar
 7. [ ] Image and file uploads
 8. [ ] Host it so friends can connect (VPS, or a Cloudflare Tunnel/Tailscale)
    - Before going online: require an invite code to create an account, and limit login attempts

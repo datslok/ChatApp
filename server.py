@@ -169,6 +169,7 @@ async def register(credentials: Credentials, response: Response):
         raise HTTPException(400, "That username is taken.")
 
     start_session(response, cursor.lastrowid)  # lastrowid: the id SQLite gave the new user
+    await send_to_everyone(users_message())  # so the new person shows up in everyone's DM list
     return {"ok": True}
 
 
@@ -232,6 +233,36 @@ def online_users():
     return sorted({client["username"] for client in clients.values()}, key=str.lower)
 
 
+def users_message():
+    """Every account, each marked online or not: [{"name": "axel", "online": True}, ...]"""
+    online = set(online_users())
+    rows = db.execute("SELECT username FROM users ORDER BY username COLLATE NOCASE").fetchall()
+    return {"type": "users", "users": [{"name": name, "online": name in online} for (name,) in rows]}
+
+
+def user_exists(username):
+    row = db.execute("SELECT 1 FROM users WHERE username = ?", (username,)).fetchone()
+    return row is not None
+
+
+def can_join(channel, username):
+    """May this user join this channel? Normal channels: anyone logged in.
+    DMs ("dm:axel:kari", lowercase and sorted): only the two people in it."""
+    if channel in CHANNELS:
+        return True
+    if not isinstance(channel, str) or not channel.startswith("dm:"):
+        return False
+
+    names = channel.split(":")[1:]  # "dm:axel:kari" -> ["axel", "kari"]
+    if len(names) != 2 or channel != channel.lower() or names != sorted(names) or names[0] == names[1]:
+        return False  # not the exact shape the page builds
+    me = username.lower()
+    if me not in names:
+        return False  # someone else's DM: never
+    other = names[1] if names[0] == me else names[0]
+    return user_exists(other)
+
+
 async def send(websocket, data):
     """Send to one connection, ignoring errors: if that tab just closed, its own
     chat() call notices and cleans up, so a failure here must not crash the sender."""
@@ -266,10 +297,11 @@ async def chat(websocket: WebSocket):
     was_online = username in online_users()  # already open in another tab?
     clients[websocket] = {"username": username, "channel": None}  # no channel until they "join"
     try:
+        await send(websocket, {"type": "welcome", "username": username})  # tell the page who it is
         if was_online:
-            await send(websocket, {"type": "online", "users": online_users()})  # just this tab
+            await send(websocket, users_message())  # just this tab
         else:
-            await send_to_everyone({"type": "online", "users": online_users()})  # they came online
+            await send_to_everyone(users_message())  # they came online
 
         while True:
             data = parse_json(await websocket.receive_text())
@@ -280,7 +312,7 @@ async def chat(websocket: WebSocket):
 
             if kind == "join":
                 new_channel = data.get("channel")
-                if new_channel not in CHANNELS:
+                if not can_join(new_channel, username):
                     continue
                 # Switch channel and fetch its history with no await in between,
                 # so no message can slip through the gap.
@@ -307,4 +339,4 @@ async def chat(websocket: WebSocket):
     finally:
         del clients[websocket]
         if username not in online_users():  # that was their last tab: they went offline
-            await send_to_everyone({"type": "online", "users": online_users()})
+            await send_to_everyone(users_message())
