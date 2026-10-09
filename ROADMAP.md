@@ -7,7 +7,7 @@
 4. [x] Accounts and login (hashed passwords, sessions)
 5. [x] Online list and "is typing…" indicator
 6. [x] Direct messages: private two-person channels, opened from the sidebar
-7. [ ] Image and file uploads
+7. [x] Image and file uploads (with a preview tray, drag-and-drop and pasting)
 8. [ ] Host it so friends can connect (VPS, or a Cloudflare Tunnel/Tailscale)
    - Before going online: require an invite code to create an account, and limit login attempts
 9. [ ] Voice channels with WebRTC/LiveKit

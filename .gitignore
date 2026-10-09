@@ -9,6 +9,9 @@ __pycache__/
 *.db
 *.sqlite3
 
+# Uploaded images and files (your friends' photos don't belong on GitHub)
+uploads/
+
 # Editor and OS clutter
 .vscode/
 Thumbs.db

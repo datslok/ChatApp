@@ -81,7 +81,27 @@
       flex: 1;
       min-width: 0;  /* lets long messages wrap instead of stretching the page */
       display: flex;
-      flex-direction: column;  /* messages, typing line and text box stacked */
+      flex-direction: column;  /* messages, status line and text box stacked */
+      position: relative;  /* so the drop overlay can be placed on top of it */
+    }
+
+    /* Covers the whole chat while you drag files over it. */
+    #drop-overlay {
+      position: absolute;
+      inset: 8px;  /* 8px in from every edge of #chat */
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 3px dashed #5865f2;
+      border-radius: 12px;
+      background: rgba(30, 31, 34, 0.9);  /* nearly opaque dark grey */
+      color: white;
+      font-size: 1.3rem;
+    }
+
+    /* display: flex above would beat the "hidden" attribute, so say it explicitly. */
+    #drop-overlay[hidden] {
+      display: none;
     }
 
     #banner {
@@ -105,11 +125,90 @@
       color: white;
     }
 
-    #typing {
+    .attachment-image {
+      display: block;
+      max-width: min(400px, 100%);
+      max-height: 300px;
+      margin-top: 4px;
+      border-radius: 8px;
+    }
+
+    .attachment-file {
+      display: inline-block;
+      margin-top: 4px;
+      padding: 8px 12px;
+      border-radius: 8px;
+      background: #2b2d31;
+      color: #00a8fc;
+    }
+
+    /* "kari is typing…" on the left, "Uploading cat.png…" on the right */
+    #status-line {
       height: 1.2em;  /* keep the space even when empty, so the page doesn't jump */
       padding: 0 16px;
+      display: flex;
+      justify-content: space-between;
       font-size: 0.85rem;
       color: #949ba4;
+    }
+
+    #upload-status.error {
+      color: #f23f43;
+    }
+
+    /* Files waiting to be sent, shown just above the text box. */
+    #tray {
+      display: flex;
+      flex-wrap: wrap;  /* start a new row if there are many */
+      gap: 8px;
+      padding: 8px 16px 0;
+    }
+
+    #tray[hidden] {
+      display: none;
+    }
+
+    .tray-item {
+      position: relative;  /* so the × can be placed in its corner */
+      width: 80px;
+      height: 80px;
+      border-radius: 8px;
+      background: #2b2d31;
+      overflow: hidden;  /* cut off anything that sticks out, like the image's corners */
+    }
+
+    .tray-item img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;  /* fill the square, cropping the picture instead of squashing it */
+    }
+
+    .tray-item.file {
+      width: 160px;
+      padding: 8px 28px 8px 8px;  /* room on the right for the × */
+      box-sizing: border-box;     /* count the padding inside the 160px, not on top of it */
+      font-size: 0.8rem;
+      overflow-wrap: anywhere;    /* break long file names instead of overflowing */
+    }
+
+    .tray-item.failed {
+      outline: 2px solid #f23f43;
+    }
+
+    .tray-item .remove {
+      position: absolute;
+      top: 4px;
+      right: 4px;
+      width: 20px;
+      height: 20px;
+      padding: 0;
+      border: none;
+      border-radius: 50%;
+      background: #f23f43;
+      color: white;
+      font-size: 0.8rem;
+      line-height: 20px;
+      cursor: pointer;
     }
 
     #chat-form {
@@ -136,6 +235,14 @@
       color: white;
       font-size: 1rem;
       cursor: pointer;
+    }
+
+    #chat-form #attach-button {
+      padding: 10px 14px;
+      background: #383a40;
+      color: #dbdee1;
+      font-size: 1.2rem;
+      line-height: 1;
     }
 
     #members {
@@ -173,12 +280,23 @@
   <main id="chat">
     <div id="banner" hidden>Connection lost, reconnecting…</div>
     <div id="messages"></div>
-    <div id="typing"></div>
+    <div id="status-line">
+      <span id="typing"></span>
+      <span id="upload-status"></span>
+    </div>
+
+    <div id="tray" hidden></div>
 
     <form id="chat-form">
+      <!-- type="button": clicking it must not submit (send) the form -->
+      <button type="button" id="attach-button" title="Upload a file">+</button>
+      <!-- The browser's own file picker. Hidden; the + button opens it. -->
+      <input type="file" id="file-input" multiple hidden>
       <input id="message-input" autocomplete="off">
       <button>Send</button>
     </form>
+
+    <div id="drop-overlay" hidden>Drop to upload</div>
   </main>
 
   <aside id="members">
@@ -198,8 +316,14 @@
     const onlineHeading = document.getElementById("online-heading");
     const onlineList = document.getElementById("online-list");
     const banner = document.getElementById("banner");
+    const chat = document.getElementById("chat");
+    const attachButton = document.getElementById("attach-button");
+    const fileInput = document.getElementById("file-input");
+    const uploadStatus = document.getElementById("upload-status");
+    const dropOverlay = document.getElementById("drop-overlay");
+    const trayElement = document.getElementById("tray");
 
-    let socket = null;          // our WebSocket (replaced with a new one if it drops)
+    let socket = null;         // our WebSocket (replaced with a new one if it drops)
     let currentChannel = null;  // the channel (or DM) we're looking at
     let firstChannel = null;    // where to start: the first channel in the list
     let myName = null;          // our own username; the server tells us in its "welcome"
@@ -325,7 +449,15 @@
     // The user pressed Enter or clicked Send.
     form.addEventListener("submit", (event) => {
       event.preventDefault();  // stop the browser from reloading the page
+      if (sending) return;     // still busy sending the tray
       const text = input.value.trim();
+
+      // Files waiting in the tray? Send those, with the text as the caption.
+      if (tray.length > 0) {
+        sendTray(text);
+        return;
+      }
+
       if (text === "") return;
       // Only the text: the server knows who we are and which channel we're in.
       // If we're disconnected, keep the text in the box so it can be sent later.
@@ -427,7 +559,214 @@
       }
     }
 
+    // ---------- Uploads: the tray, the + button, drag-and-drop and pasting ----------
+
+    const MAX_UPLOAD_SIZE = 10 * 1024 * 1024;  // 10 MB, same as the server
+    const MAX_TRAY_FILES = 10;
+    const IMAGE_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"];  // same as the server
+
+    // Files waiting to be sent: [{file, previewUrl, failed}]. Nothing is uploaded until Enter.
+    const tray = [];
+    let sending = false;  // true while the tray is being uploaded and sent
+
+    // All three ways of adding files (+ button, drop, paste) end up here.
+    function addToTray(files) {
+      for (const file of files) {
+        if (file.size > MAX_UPLOAD_SIZE) {
+          showUploadError(`${file.name} is too big (max 10 MB)`);
+          continue;
+        }
+        if (file.size === 0) {
+          showUploadError(`${file.name} is empty`);
+          continue;
+        }
+        if (tray.length >= MAX_TRAY_FILES) {
+          showUploadError(`At most ${MAX_TRAY_FILES} files at a time`);
+          break;
+        }
+        // For pictures, a temporary local address so we can show a preview
+        // straight from your computer, without uploading anything yet.
+        const previewUrl = IMAGE_TYPES.includes(file.type) ? URL.createObjectURL(file) : null;
+        tray.push({ file: file, previewUrl: previewUrl, failed: false });
+      }
+      renderTray();
+      input.focus();  // put the cursor in the text box, ready for a caption or Enter
+    }
+
+    // Take a file out of the tray, and free its preview's memory.
+    function takeFromTray(item) {
+      if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
+      tray.splice(tray.indexOf(item), 1);  // splice(position, 1) removes one element there
+      renderTray();
+    }
+
+    // Redraw the tray from the `tray` list.
+    function renderTray() {
+      trayElement.replaceChildren();
+      trayElement.hidden = tray.length === 0;
+
+      for (const item of tray) {
+        const div = document.createElement("div");
+        div.className = "tray-item";
+        div.title = item.file.name;  // shows the full name when you hover over it
+        if (item.failed) div.classList.add("failed");
+
+        if (item.previewUrl) {
+          const img = document.createElement("img");
+          img.src = item.previewUrl;
+          img.alt = item.file.name;
+          div.appendChild(img);
+        } else {
+          div.classList.add("file");
+          div.textContent = `📄 ${item.file.name} (${formatSize(item.file.size)})`;
+        }
+
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "remove";
+        remove.title = "Remove";
+        remove.textContent = "×";
+        remove.addEventListener("click", () => {
+          if (!sending) takeFromTray(item);
+        });
+        div.appendChild(remove);
+
+        trayElement.appendChild(div);
+      }
+    }
+
+    // Enter was pressed with files in the tray: upload and send each one as its own message.
+    // The caption goes with the first file that's sent. Files that fail stay in the tray.
+    async function sendTray(caption) {
+      if (socket.readyState !== WebSocket.OPEN) {
+        showUploadError("Not connected, try again in a moment");
+        return;
+      }
+      sending = true;
+
+      for (const item of [...tray]) {  // a copy, since we take items out as we go
+        const fileId = await uploadFile(item.file);
+        const sent = fileId !== null && sendToServer({ type: "message", text: caption, file: fileId });
+        if (!sent) {
+          item.failed = true;  // keep it in the tray, outlined in red
+          continue;
+        }
+        takeFromTray(item);
+        if (caption) {
+          caption = "";      // the caption went with this file, so it's used up
+          input.value = "";
+        }
+      }
+
+      sending = false;
+      lastTypingSent = 0;
+      renderTray();  // show any failed ones in red
+    }
+
+    // Upload one file. Returns its id from the server, or null if it failed (and shows why).
+    async function uploadFile(file) {
+      uploadStatus.className = "";
+      uploadStatus.textContent = `Uploading ${file.name}…`;
+      let response;
+      try {
+        // Send the raw file over normal HTTP. The name goes in the URL;
+        // encodeURIComponent makes characters like spaces and & safe to put in a URL.
+        response = await fetch("/upload?filename=" + encodeURIComponent(file.name), {
+          method: "POST",
+          headers: { "Content-Type": file.type || "application/octet-stream" },
+          body: file,
+        });
+      } catch {
+        showUploadError(`Couldn't upload ${file.name}`);  // network trouble
+        return null;
+      }
+      if (!response.ok) {
+        // Show the server's reason if it gave one, e.g. "Files can be at most 10 MB."
+        const error = await response.json().catch(() => ({}));
+        showUploadError(typeof error.detail === "string" ? error.detail : `Couldn't upload ${file.name}`);
+        return null;
+      }
+      uploadStatus.textContent = "";
+      const data = await response.json();  // {"id": "..."}
+      return data.id;
+    }
+
+    function showUploadError(text) {
+      uploadStatus.className = "error";
+      uploadStatus.textContent = text;
+      setTimeout(() => {
+        if (uploadStatus.textContent === text) uploadStatus.textContent = "";
+      }, 5000);
+    }
+
+    // 1. The + button opens the browser's file picker (the hidden <input type="file">).
+    attachButton.addEventListener("click", () => fileInput.click());
+    fileInput.addEventListener("change", () => {
+      addToTray([...fileInput.files]);  // copy the list first...
+      fileInput.value = "";               // ...then reset, so the same file can be picked again
+    });
+
+    // 2. Drag-and-drop. Only react to dragged *files* (not, say, a bit of selected text).
+    function isDraggingFiles(event) {
+      return event.dataTransfer.types.includes("Files");
+    }
+
+    chat.addEventListener("dragover", (event) => {
+      if (!isDraggingFiles(event)) return;
+      event.preventDefault();  // required, or the browser won't let us accept the drop
+      dropOverlay.hidden = false;
+    });
+    // Once shown, the overlay covers the whole chat, so leaving the overlay = leaving the chat.
+    dropOverlay.addEventListener("dragleave", () => {
+      dropOverlay.hidden = true;
+    });
+    dropOverlay.addEventListener("drop", (event) => {
+      event.preventDefault();  // stop the browser from opening the file itself
+      dropOverlay.hidden = true;
+      addToTray([...event.dataTransfer.files]);
+    });
+    // Dropped somewhere else on the page (like the sidebar)? Then the browser would open the
+    // file and leave the chat. Prevent that everywhere; only the chat area accepts drops.
+    window.addEventListener("dragover", (event) => event.preventDefault());
+    window.addEventListener("drop", (event) => event.preventDefault());
+
+    // 3. Pasting: a copied screenshot or image arrives as a file on the clipboard.
+    document.addEventListener("paste", (event) => {
+      const files = [...event.clipboardData.files];
+      if (files.length === 0) return;  // just text: let the normal paste happen
+      event.preventDefault();
+      addToTray(files);
+    });
+
     // ---------- Messages ----------
+
+    // Turn a size in bytes into something readable, like "2.3 MB".
+    function formatSize(bytes) {
+      if (bytes < 1024) return bytes + " B";
+      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+      return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+    }
+
+    // The element showing an attached file: the picture itself, or a download link.
+    function makeAttachment(file) {
+      const url = "/uploads/" + encodeURIComponent(file.id);
+      const link = document.createElement("a");
+      link.href = url;
+
+      if (file.image) {
+        link.target = "_blank";  // open the full-size picture in a new tab
+        link.rel = "noopener";   // and don't give that tab access back to ours
+        const img = document.createElement("img");
+        img.className = "attachment-image";
+        img.src = url;
+        img.alt = file.filename;
+        link.appendChild(img);
+      } else {
+        link.className = "attachment-file";
+        link.textContent = `📄 ${file.filename} (${formatSize(file.size)})`;
+      }
+      return link;
+    }
 
     // Add one message to the bottom of the #messages box.
     // Built piece by piece with textContent, never innerHTML: names and text are
@@ -439,13 +778,27 @@
       const nameElement = document.createElement("strong");
       nameElement.className = "name";
       nameElement.textContent = message.name;
-
       div.appendChild(nameElement);
-      div.appendChild(document.createTextNode(": " + message.text));
+
+      if (message.text) {
+        div.appendChild(document.createTextNode(": " + message.text));
+      }
+      if (message.file) {
+        div.appendChild(makeAttachment(message.file));
+      }
 
       // Were we scrolled to (or near) the bottom before this message arrived?
       const distanceFromBottom = messages.scrollHeight - messages.scrollTop - messages.clientHeight;
       const wasAtBottom = distanceFromBottom < 50;
+
+      // A picture only gets its real height once it has loaded, which pushes the
+      // messages up after we've scrolled. So scroll again when it finishes loading.
+      const img = div.querySelector("img");
+      if (img && wasAtBottom) {
+        img.addEventListener("load", () => {
+          messages.scrollTop = messages.scrollHeight;
+        });
+      }
 
       messages.appendChild(div);
 

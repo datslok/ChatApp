@@ -2,6 +2,7 @@ import json
 import re
 import secrets
 import sqlite3
+from pathlib import Path
 
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
@@ -21,6 +22,14 @@ MAX_PASSWORD_LENGTH = 200
 SESSION_COOKIE = "session"
 SESSION_DAYS = 30
 
+UPLOAD_DIR = Path("uploads")
+UPLOAD_DIR.mkdir(exist_ok=True)  # create the folder if it isn't there yet
+MAX_UPLOAD_SIZE = 10 * 1024 * 1024  # 10 MB, in bytes
+MAX_FILENAME_LENGTH = 200
+# Only these are shown in the page. They're pure pictures and can't contain scripts.
+# Everything else (including SVG, which can) is only ever offered as a download.
+IMAGE_TYPES = {"image/png", "image/jpeg", "image/gif", "image/webp"}
+
 hasher = PasswordHasher()
 
 # Every open connection (one per browser tab) and what we know about it:
@@ -31,11 +40,23 @@ clients = {}
 db = sqlite3.connect("chat.db")
 db.execute("""
     CREATE TABLE IF NOT EXISTS messages (
-        id      INTEGER PRIMARY KEY,
-        channel TEXT NOT NULL DEFAULT 'general',
-        name    TEXT NOT NULL,
-        text    TEXT NOT NULL,
-        sent_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        id            INTEGER PRIMARY KEY,
+        channel       TEXT NOT NULL DEFAULT 'general',
+        name          TEXT NOT NULL,
+        text          TEXT NOT NULL,
+        sent_at       TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        attachment_id TEXT REFERENCES attachments(id)
+    )
+""")
+db.execute("""
+    CREATE TABLE IF NOT EXISTS attachments (
+        id           TEXT PRIMARY KEY,
+        filename     TEXT NOT NULL,
+        content_type TEXT NOT NULL,
+        size         INTEGER NOT NULL,
+        uploader     TEXT NOT NULL,
+        channel      TEXT,  -- NULL until the file is sent in a message
+        created_at   TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     )
 """)
 db.execute("""
@@ -54,12 +75,16 @@ db.execute("""
     )
 """)
 
-# Migration: databases made before channels existed have no "channel" column yet.
-# Add it, and the DEFAULT puts all the old messages in #general.
+# Migrations: add columns that older databases don't have yet.
 columns = [row[1] for row in db.execute("PRAGMA table_info(messages)")]
 if "channel" not in columns:
+    # From before channels existed: the DEFAULT puts all the old messages in #general.
     with db:
         db.execute("ALTER TABLE messages ADD COLUMN channel TEXT NOT NULL DEFAULT 'general'")
+if "attachment_id" not in columns:
+    # From before uploads existed: old messages simply have no attachment (NULL).
+    with db:
+        db.execute("ALTER TABLE messages ADD COLUMN attachment_id TEXT REFERENCES attachments(id)")
 
 
 # ---------- Messages ----------
@@ -67,21 +92,41 @@ if "channel" not in columns:
 def save_message(channel, message):
     # "with db" commits the change when the block ends (or undoes it if something fails).
     # The ? placeholders keep user text as data, so it can never be run as SQL.
+    attachment_id = message["file"]["id"] if message["file"] else None
     with db:
         db.execute(
-            "INSERT INTO messages (channel, name, text) VALUES (?, ?, ?)",
-            (channel, message["name"], message["text"]),
+            "INSERT INTO messages (channel, name, text, attachment_id) VALUES (?, ?, ?, ?)",
+            (channel, message["name"], message["text"], attachment_id),
         )
+
+
+def file_info(attachment_id, filename, size, content_type):
+    """What the page needs to know about an attachment."""
+    return {"id": attachment_id, "filename": filename, "size": size, "image": content_type in IMAGE_TYPES}
 
 
 def recent_messages(channel):
     """The channel's newest messages, oldest first, in the same shape as live messages."""
+    # LEFT JOIN: every message, plus its attachment's details if it has one (NULLs if not).
     rows = db.execute(
-        "SELECT name, text FROM messages WHERE channel = ? ORDER BY id DESC LIMIT ?",
+        """
+        SELECT messages.name, messages.text,
+               attachments.id, attachments.filename, attachments.size, attachments.content_type
+        FROM messages LEFT JOIN attachments ON attachments.id = messages.attachment_id
+        WHERE messages.channel = ?
+        ORDER BY messages.id DESC LIMIT ?
+        """,
         (channel, HISTORY_LIMIT),
     ).fetchall()
     rows.reverse()  # we fetched newest-first; chat reads oldest-first
-    return [{"name": name, "text": text} for name, text in rows]
+    return [
+        {
+            "name": name,
+            "text": text,
+            "file": file_info(file_id, filename, size, content_type) if file_id else None,
+        }
+        for name, text, file_id, filename, size, content_type in rows
+    ]
 
 
 def parse_json(raw):
@@ -99,7 +144,7 @@ def parse_json(raw):
 
 
 def clean_text(data):
-    """Get valid message text out of a client's "message", or None if it's invalid.
+    """Get the message text out of a client's "message" (maybe empty), or None if it's invalid.
 
     The sender's name is NOT taken from here; it comes from their login session.
     """
@@ -107,7 +152,7 @@ def clean_text(data):
     if not isinstance(text, str):
         return None
     text = text.strip()
-    if not text or len(text) > MAX_TEXT_LENGTH:
+    if len(text) > MAX_TEXT_LENGTH:
         return None
     return text
 
@@ -205,6 +250,104 @@ async def logout(request: Request, response: Response):
             db.execute("DELETE FROM sessions WHERE token = ?", (token,))
     response.delete_cookie(SESSION_COOKIE)
     return {"ok": True}
+
+
+# ---------- Uploads ----------
+
+def current_user(request):
+    """The logged-in username for an HTTP request, or None."""
+    return user_from_token(request.cookies.get(SESSION_COOKIE))
+
+
+@app.post("/upload")
+async def upload(request: Request, filename: str):
+    """Receive one file. The body is the raw file; its name comes in the URL: /upload?filename=cat.png"""
+    username = current_user(request)
+    if username is None:
+        raise HTTPException(401, "You're not logged in.")
+
+    filename = filename.strip()[:MAX_FILENAME_LENGTH] or "file"
+    # The browser says what type the file is. We only believe it for our safe image types;
+    # anything else is stored as a generic download type.
+    content_type = request.headers.get("content-type", "")
+    if content_type not in IMAGE_TYPES:
+        content_type = "application/octet-stream"
+
+    # On disk the file gets a random name, never the one the user gave
+    # (a name like "../../server.py" could otherwise overwrite our own files).
+    file_id = secrets.token_urlsafe(16)
+    path = UPLOAD_DIR / file_id
+
+    # Read the body piece by piece as it arrives, so we can stop as soon as it's too big.
+    size = 0
+    try:
+        with open(path, "wb") as out:  # "wb": write, in binary mode (bytes, not text)
+            async for chunk in request.stream():
+                size += len(chunk)
+                if size > MAX_UPLOAD_SIZE:
+                    raise HTTPException(413, "Files can be at most 10 MB.")
+                out.write(chunk)
+        if size == 0:
+            raise HTTPException(400, "That file is empty.")
+    except BaseException:
+        # Whatever went wrong (too big, empty, the upload was cancelled...), don't keep half a file.
+        path.unlink(missing_ok=True)
+        raise
+
+    with db:
+        db.execute(
+            "INSERT INTO attachments (id, filename, content_type, size, uploader) VALUES (?, ?, ?, ?, ?)",
+            (file_id, filename, content_type, size, username),
+        )
+    return {"id": file_id}
+
+
+def claim_attachment(file_id, username, channel):
+    """Tie an uploaded file to the channel it's being sent in. Only the uploader can do that,
+    and only once. Returns the file's info for the message, or None if not allowed."""
+    if not isinstance(file_id, str):
+        return None
+    with db:
+        cursor = db.execute(
+            "UPDATE attachments SET channel = ? WHERE id = ? AND uploader = ? AND channel IS NULL",
+            (channel, file_id, username),
+        )
+    if cursor.rowcount != 1:  # rowcount: how many rows the UPDATE changed
+        return None
+    filename, size, content_type = db.execute(
+        "SELECT filename, size, content_type FROM attachments WHERE id = ?", (file_id,)
+    ).fetchone()
+    return file_info(file_id, filename, size, content_type)
+
+
+@app.get("/uploads/{file_id}")
+async def get_upload(request: Request, file_id: str):
+    """Send a file, but only to people who may see the message it's in."""
+    username = current_user(request)
+    row = db.execute(
+        "SELECT filename, content_type, uploader, channel FROM attachments WHERE id = ?", (file_id,)
+    ).fetchone()
+    # "Not found" for everything that isn't allowed, so nobody learns which files exist.
+    not_found = HTTPException(404, "Not found.")
+    if username is None or row is None:
+        raise not_found
+    filename, content_type, uploader, channel = row
+    if channel is None:
+        allowed = uploader == username  # not sent yet: only the uploader
+    else:
+        allowed = can_join(channel, username)  # sent: whoever can see that channel or DM
+    if not allowed:
+        raise not_found
+
+    return FileResponse(
+        UPLOAD_DIR / file_id,  # safe: file_id was found in our own table above
+        media_type=content_type,
+        filename=filename,
+        # Images are shown in the page; everything else is downloaded, never opened on our site.
+        content_disposition_type="inline" if content_type in IMAGE_TYPES else "attachment",
+        # Tell the browser to trust our type and never guess (so a fake "image" can't act as a page).
+        headers={"X-Content-Type-Options": "nosniff"},
+    )
 
 
 # ---------- Pages ----------
@@ -327,8 +470,15 @@ async def chat(websocket: WebSocket):
                 text = clean_text(data)
                 if text is None:
                     continue
+                file = None
+                if data.get("file") is not None:
+                    file = claim_attachment(data.get("file"), username, channel)
+                    if file is None:
+                        continue  # not their file, already sent, or doesn't exist
+                if not text and file is None:
+                    continue  # nothing to send
                 # The name comes from the login, never from the client.
-                message = {"type": "message", "channel": channel, "name": username, "text": text}
+                message = {"type": "message", "channel": channel, "name": username, "text": text, "file": file}
                 save_message(channel, message)
                 await send_to_channel(channel, message)  # everyone in the channel, including us
 

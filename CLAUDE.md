@@ -31,6 +31,7 @@ the point is for me to understand how it works, not just to have it done.
 - `server.py`: FastAPI app. Serves the page and the `/ws` WebSocket endpoint that broadcasts messages.
 - `static/index.html`: the chat page (markup, styles and script in one file for now).
 - `static/login.html`: the login / create account page.
+- `uploads/`: uploaded files, saved under random names (git-ignored, like `chat.db`).
 - `ROADMAP.md`: the milestones, ticked off as they're done.
 - `setup.ps1`: creates the `chatapp` conda environment and installs `requirements.txt`.
 - `start.ps1`: activates the environment and starts the server with auto-reload.
