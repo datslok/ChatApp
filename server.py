@@ -75,6 +75,15 @@ db.execute("""
     )
 """)
 
+db.execute("""
+    CREATE TABLE IF NOT EXISTS last_read (
+        username   TEXT NOT NULL,
+        channel    TEXT NOT NULL,
+        message_id INTEGER NOT NULL,  -- the newest message this user has seen in this channel
+        PRIMARY KEY (username, channel)  -- one row per person per channel
+    )
+""")
+
 # Migrations: add columns that older databases don't have yet.
 columns = [row[1] for row in db.execute("PRAGMA table_info(messages)")]
 if "channel" not in columns:
@@ -406,6 +415,46 @@ def can_join(channel, username):
     return user_exists(other)
 
 
+# ---------- Unread ----------
+
+def mark_read(username, channel):
+    """Remember that this user has now seen everything in this channel."""
+    newest = db.execute("SELECT COALESCE(MAX(id), 0) FROM messages WHERE channel = ?", (channel,)).fetchone()[0]
+    # An "upsert": insert a new row, or if this user already has one for this channel,
+    # update it instead. "excluded" means the values we just tried to insert.
+    with db:
+        db.execute(
+            """
+            INSERT INTO last_read (username, channel, message_id) VALUES (?, ?, ?)
+            ON CONFLICT (username, channel) DO UPDATE SET message_id = excluded.message_id
+            """,
+            (username, channel, newest),
+        )
+
+
+def unread_channels(username):
+    """Every channel and DM this user can see that has messages newer than the last one they saw."""
+    # GROUP BY: one row per channel, with the newest message id in it.
+    newest = dict(db.execute("SELECT channel, MAX(id) FROM messages GROUP BY channel"))
+    seen = dict(db.execute("SELECT channel, message_id FROM last_read WHERE username = ?", (username,)))
+    return [
+        channel
+        for channel, newest_id in newest.items()
+        if newest_id > seen.get(channel, 0) and can_join(channel, username)
+    ]
+
+
+async def announce_new_message(channel):
+    """After a new message: it counts as read for whoever is looking at the channel, and
+    everyone else who can see the channel gets an "unread" for it."""
+    viewers = {client["username"] for client in clients.values() if client["channel"] == channel}
+    for username in viewers:
+        mark_read(username, channel)
+    for websocket, client in list(clients.items()):
+        if client["username"] not in viewers and can_join(channel, client["username"]):
+            await send(websocket, {"type": "unread", "channels": [channel]})
+
+
 async def send(websocket, data):
     """Send to one connection, ignoring errors: if that tab just closed, its own
     chat() call notices and cleans up, so a failure here must not crash the sender."""
@@ -444,6 +493,7 @@ async def chat(websocket: WebSocket):
     clients[websocket] = {"username": username, "channel": None}  # no channel until they "join"
     try:
         await send(websocket, {"type": "welcome", "username": username})  # tell the page who it is
+        await send(websocket, {"type": "unread", "channels": unread_channels(username)})
         if was_online:
             await send(websocket, users_message())  # just this tab
         else:
@@ -464,6 +514,7 @@ async def chat(websocket: WebSocket):
                 # so no message can slip through the gap.
                 clients[websocket]["channel"] = new_channel
                 history = recent_messages(new_channel)
+                mark_read(username, new_channel)  # opening a channel means you've seen it
                 await send(websocket, {"type": "history", "channel": new_channel, "messages": history})
 
             elif kind == "message" and channel is not None:
@@ -481,6 +532,7 @@ async def chat(websocket: WebSocket):
                 message = {"type": "message", "channel": channel, "name": username, "text": text, "file": file}
                 save_message(channel, message)
                 await send_to_channel(channel, message)  # everyone in the channel, including us
+                await announce_new_message(channel)  # mark it read or unread for everyone else
 
             elif kind == "typing" and channel is not None:
                 # Tell the others in this channel; you don't need to see yourself typing.

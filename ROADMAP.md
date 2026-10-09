@@ -11,4 +11,5 @@
 8. [ ] Host it so friends can connect (VPS, or a Cloudflare Tunnel/Tailscale)
    - Before going online: require an invite code to create an account, and limit login attempts
 9. [ ] Voice channels with WebRTC/LiveKit
-10. [ ] Nice-to-haves: reactions, replies, mentions, notifications (e.g. unread DMs), desktop app via Tauri
+10. [ ] Nice-to-haves: reactions, replies, mentions, notifications, desktop app via Tauri
+    - [x] Unread dots on channels and DMs (remembered by the server)

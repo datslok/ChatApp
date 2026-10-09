@@ -63,6 +63,28 @@
       color: white;
     }
 
+    .channel {
+      position: relative;  /* so the unread dot can be placed against its left edge */
+    }
+
+    .channel.unread {
+      color: white;
+      font-weight: 600;  /* bold */
+    }
+
+    /* The unread dot: a small white circle just left of the name. */
+    .channel.unread::before {
+      content: "";
+      position: absolute;
+      left: 1px;  /* inside the button's left padding (the sidebar list would cut off anything further out) */
+      top: 50%;
+      width: 8px;
+      height: 8px;
+      margin-top: -4px;  /* half its height, so it sits exactly in the middle */
+      border-radius: 50%;
+      background: white;
+    }
+
     /* A small round status dot: grey for offline, green for online. */
     .dot {
       display: inline-block;
@@ -328,6 +350,7 @@
     let firstChannel = null;    // where to start: the first channel in the list
     let myName = null;          // our own username; the server tells us in its "welcome"
     let reconnectDelay = 1000;  // milliseconds to wait before the next reconnect attempt
+    const unread = new Set();   // channels and DMs with messages we haven't seen
 
     // Ask the server which channels exist, make a sidebar button for each, then connect.
     async function start() {
@@ -396,6 +419,13 @@
         showUsers(data.users);
         return;
       }
+      if (data.type === "unread") {
+        for (const channel of data.channels) {
+          if (channel !== currentChannel) unread.add(channel);  // where we are is never unread
+        }
+        updateSidebar();
+        return;
+      }
 
       // Everything else belongs to a channel. Ignore it if it's for a channel we
       // just left (it was already on its way when we switched).
@@ -418,7 +448,8 @@
       if (channel === currentChannel) return;
       currentChannel = channel;
       input.placeholder = "Message " + label;
-      highlightCurrent();
+      unread.delete(channel);  // opening it means we've seen it
+      updateSidebar();
       joinCurrentChannel();
     }
 
@@ -437,12 +468,13 @@
       return "dm:" + names.join(":");
     }
 
-    // Highlight the sidebar button (channel or DM) for where we are.
-    function highlightCurrent() {
+    // Mark the sidebar buttons (channels and DMs): highlight where we are, and dot the unread ones.
+    function updateSidebar() {
       // querySelectorAll finds every element matching a CSS selector:
       // here, everything with a data-channel attribute (all channel and DM buttons).
       for (const button of document.querySelectorAll("[data-channel]")) {
         button.classList.toggle("active", button.dataset.channel === currentChannel);
+        button.classList.toggle("unread", unread.has(button.dataset.channel));
       }
     }
 
@@ -494,7 +526,7 @@
         button.addEventListener("click", () => switchChannel(dmChannel(user.name), "@" + user.name));
         dmList.appendChild(button);
       }
-      highlightCurrent();  // the buttons are new, so mark the active one again
+      updateSidebar();  // the buttons are new, so mark the active and unread ones again
 
       // Online list on the right: only the people who are online.
       const online = users.filter((user) => user.online);
