@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Log in · Our Chat</title>
+  <style>
+    body {
+      margin: 0;
+      height: 100vh;
+      display: flex;
+      align-items: center;      /* centre the box vertically */
+      justify-content: center;  /* ...and horizontally */
+      font-family: system-ui, sans-serif;
+      background: #313338;
+      color: #dbdee1;
+    }
+
+    form {
+      width: 320px;
+      padding: 32px;
+      border-radius: 8px;
+      background: #2b2d31;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 1.5rem;
+      color: white;
+      text-align: center;
+    }
+
+    label {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-size: 0.85rem;
+      color: #b5bac1;
+    }
+
+    input {
+      padding: 10px 12px;
+      border: none;
+      border-radius: 6px;
+      background: #1e1f22;
+      color: inherit;
+      font-size: 1rem;
+    }
+
+    #error {
+      min-height: 1.2em;  /* keep the space even when empty, so the form doesn't jump */
+      color: #f23f43;
+      font-size: 0.9rem;
+    }
+
+    .buttons {
+      display: flex;
+      gap: 8px;
+    }
+
+    button {
+      flex: 1;
+      padding: 10px;
+      border: none;
+      border-radius: 6px;
+      background: #5865f2;
+      color: white;
+      font-size: 1rem;
+      cursor: pointer;
+    }
+
+    button[value="register"] {
+      background: #4e5058;
+    }
+  </style>
+</head>
+<body>
+  <form id="login-form">
+    <h1>Our Chat</h1>
+    <label>
+      Username
+      <input id="username" autocomplete="username" required>
+    </label>
+    <label>
+      Password
+      <input id="password" type="password" autocomplete="current-password" required>
+    </label>
+    <div id="error"></div>
+    <div class="buttons">
+      <button value="login">Log in</button>
+      <button value="register">Create account</button>
+    </div>
+  </form>
+
+  <script>
+    const form = document.getElementById("login-form");
+    const usernameInput = document.getElementById("username");
+    const passwordInput = document.getElementById("password");
+    const errorBox = document.getElementById("error");
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();  // stop the browser from reloading the page
+      errorBox.textContent = "";
+
+      // Which button was used? (Pressing Enter counts as the first one, "Log in".)
+      const url = event.submitter.value === "register" ? "/register" : "/login";
+
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: usernameInput.value, password: passwordInput.value }),
+      });
+
+      if (response.ok) {
+        // The server has set our session cookie: on to the chat.
+        location.href = "/";
+        return;
+      }
+
+      // Show the server's error message, e.g. "Wrong username or password."
+      const data = await response.json();
+      errorBox.textContent = typeof data.detail === "string" ? data.detail : "Something went wrong.";
+    });
+  </script>
+</body>
+</html>

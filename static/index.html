@@ -44,6 +44,13 @@
       color: white;
     }
 
+    #channel-list {
+      flex: 1;  /* take up the free space, which pushes the logout button to the bottom */
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
     #chat {
       flex: 1;
       min-width: 0;  /* lets long messages wrap instead of stretching the page */
@@ -93,7 +100,10 @@
   </style>
 </head>
 <body>
-  <nav id="sidebar"></nav>
+  <nav id="sidebar">
+    <div id="channel-list"></div>
+    <button id="logout" class="channel">Log out</button>
+  </nav>
 
   <main id="chat">
     <div id="messages"></div>
@@ -106,17 +116,11 @@
 
   <script>
     // Grab the HTML elements we need, by their id.
-    const sidebar = document.getElementById("sidebar");
+    const channelList = document.getElementById("channel-list");
+    const logoutButton = document.getElementById("logout");
     const messages = document.getElementById("messages");
     const form = document.getElementById("chat-form");
     const input = document.getElementById("message-input");
-
-    // Get our name from this browser's storage, or ask for it the first time.
-    let name = localStorage.getItem("name");
-    while (!name) {
-      name = (prompt("What's your name?") || "").trim().slice(0, 32);
-    }
-    localStorage.setItem("name", name);
 
     let socket = null;          // the WebSocket for the channel we're in
     let currentChannel = null;
@@ -132,7 +136,7 @@
         button.textContent = "# " + channel;
         button.dataset.channel = channel;  // remember which channel this button is for
         button.addEventListener("click", () => switchChannel(channel));
-        sidebar.appendChild(button);
+        channelList.appendChild(button);
       }
 
       switchChannel(channels[0]);
@@ -149,7 +153,7 @@
       input.placeholder = "Message #" + channel;
 
       // Highlight the button for the channel we're in.
-      for (const button of sidebar.children) {
+      for (const button of channelList.children) {
         button.classList.toggle("active", button.dataset.channel === channel);
       }
 
@@ -165,8 +169,15 @@
       event.preventDefault();  // stop the browser from reloading the page
       const text = input.value.trim();
       if (text === "") return;
-      socket.send(JSON.stringify({ name: name, text: text }));  // object -> JSON string
+      // Only the text: the server knows who we are from our login.
+      socket.send(JSON.stringify({ text: text }));  // object -> JSON string
       input.value = "";
+    });
+
+    // Log out: the server forgets our session, then we go back to the login page.
+    logoutButton.addEventListener("click", async () => {
+      await fetch("/logout", { method: "POST" });
+      location.href = "/login";
     });
 
     // Add one message to the bottom of the #messages box.
