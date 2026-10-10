@@ -53,19 +53,19 @@
       font-size: 1rem;
     }
 
+    /* Our rules above (like label's display: flex) would otherwise beat the browser's own
+       "hidden means display: none", and hidden fields would still show. */
+    [hidden] {
+      display: none !important;
+    }
+
     #error {
       min-height: 1.2em;  /* keep the space even when empty, so the form doesn't jump */
       color: #f23f43;
       font-size: 0.9rem;
     }
 
-    .buttons {
-      display: flex;
-      gap: 8px;
-    }
-
-    button {
-      flex: 1;
+    #submit {
       padding: 10px;
       border: none;
       border-radius: 6px;
@@ -75,27 +75,32 @@
       cursor: pointer;
     }
 
-    button[value="register"] {
-      background: #4e5058;
-    }
-
-    .new-account {
-      margin: 4px 0 0;
-      font-size: 0.75rem;
-      text-transform: uppercase;
-      color: #949ba4;
-    }
-
-    #forgot, #get-app {
+    #forgot, #get-app, .switch {
+      margin: 0;
       text-align: center;
       font-size: 0.9rem;
       color: #00a8fc;
+    }
+
+    .switch {
+      color: #b5bac1;
+    }
+
+    /* A button that looks like a link: it switches the form, rather than going to another page. */
+    .link-button {
+      padding: 0;
+      border: none;
+      background: none;
+      color: #00a8fc;
+      font: inherit;
+      text-decoration: underline;
+      cursor: pointer;
     }
   </style>
 </head>
 <body>
   <form id="login-form">
-    <h1>ChatApp</h1>
+    <h1 id="heading">ChatApp</h1>
     <label>
       Username
       <input id="username" autocomplete="username" required>
@@ -104,21 +109,24 @@
       Password
       <input id="password" type="password" autocomplete="current-password" required>
     </label>
-    <p class="new-account">Only for new accounts</p>
-    <label>
+    <!-- Only for new accounts: shown by "Create one". -->
+    <label id="email-field" hidden>
       Email (for resetting your password)
       <input id="email" type="email" autocomplete="email">
     </label>
-    <label>
+    <label id="invite-field" hidden>
       Invite code
       <input id="invite" autocomplete="off">
     </label>
     <div id="error"></div>
-    <div class="buttons">
-      <button value="login">Log in</button>
-      <button value="register">Create account</button>
-    </div>
+    <button id="submit">Log in</button>
     <a id="forgot" href="/reset">Forgot password?</a>
+    <p id="to-register" class="switch">
+      No account yet? <button type="button" class="link-button">Create one</button>
+    </p>
+    <p id="to-login" class="switch" hidden>
+      Already have an account? <button type="button" class="link-button">Log in</button>
+    </p>
     <a id="get-app" href="/download">Get the Windows app</a>
   </form>
 
@@ -130,15 +138,46 @@
     const inviteInput = document.getElementById("invite");
     const errorBox = document.getElementById("error");
 
+    const heading = document.getElementById("heading");
+    const submitButton = document.getElementById("submit");
+    const emailField = document.getElementById("email-field");
+    const inviteField = document.getElementById("invite-field");
+    const forgotLink = document.getElementById("forgot");
+    const toRegister = document.getElementById("to-register");
+    const toLogin = document.getElementById("to-login");
+
     // Already in the desktop app? (Tauri puts __TAURI_INTERNALS__ on its pages; browsers don't have it.)
     if ("__TAURI_INTERNALS__" in window) document.getElementById("get-app").hidden = true;
+
+    // The form has two modes: "login" (username and password) and "register" (plus email and invite code).
+    let mode = "login";
+
+    function showMode(newMode) {
+      mode = newMode;
+      const registering = mode === "register";
+      heading.textContent = registering ? "Create account" : "ChatApp";
+      submitButton.textContent = registering ? "Create account" : "Log in";
+      emailField.hidden = !registering;
+      inviteField.hidden = !registering;
+      forgotLink.hidden = registering;
+      toRegister.hidden = registering;
+      toLogin.hidden = !registering;
+      // A hidden field mustn't be required, or the browser would refuse to log in.
+      emailInput.required = registering;
+      // Tells password managers whether to fill in a saved password or suggest a new one.
+      passwordInput.autocomplete = registering ? "new-password" : "current-password";
+      errorBox.textContent = "";
+      usernameInput.focus();  // put the cursor back in the first field
+    }
+
+    toRegister.querySelector("button").addEventListener("click", () => showMode("register"));
+    toLogin.querySelector("button").addEventListener("click", () => showMode("login"));
 
     form.addEventListener("submit", async (event) => {
       event.preventDefault();  // stop the browser from reloading the page
       errorBox.textContent = "";
 
-      // Which button was used? (Pressing Enter counts as the first one, "Log in".)
-      const url = event.submitter.value === "register" ? "/register" : "/login";
+      const url = mode === "register" ? "/register" : "/login";
 
       const response = await fetch(url, {
         method: "POST",
