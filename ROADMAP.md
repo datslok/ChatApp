@@ -18,7 +18,7 @@
    - [x] Before going online: invite code for new accounts, login limits, HTTPS (wss://, secure cookies)
    - [x] Mobile-friendly layout (drawers for channels and the online list)
    - [x] Separate development database (dev.db), so tests stay out of the real chat
-9. [ ] Nice-to-haves, in this order:
+9. [x] Nice-to-haves, in this order:
    - [x] Unread dots on channels and DMs (remembered by the server)
    - [x] Message ids and times on the page, message grouping and date dividers
    - [x] Replies
@@ -28,7 +28,7 @@
    - [x] @mentions and @everyone (stored by user id), with a red unread count per channel
    - [x] Notifications for DMs and mentions (desktop notifications, a generated sound, count in the tab title)
    - [x] Custom emoji inside messages (typing :pog:, stored as <:id> tokens); emoji picker and jumbo emoji in messages; multi-line text box
-   - [ ] Desktop app via Tauri
+   - [x] Desktop app via Tauri (Windows installer, real notifications, automatic updates)
 10. [ ] Voice channels with WebRTC/LiveKit
 11. [ ] Video calls in DMs: 1-on-1, peer-to-peer WebRTC (signalling over our WebSocket, STUN/TURN),
     only between friends; mute, camera on/off, hang up

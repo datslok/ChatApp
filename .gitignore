@@ -19,3 +19,11 @@ backups/
 # Editor and OS clutter
 .vscode/
 Thumbs.db
+
+# Desktop app: npm packages and Rust's build output (both recreated by building)
+desktop/node_modules/
+desktop/src-tauri/target/
+desktop/src-tauri/gen/
+
+# Desktop app installers, served at /releases/ for the app's automatic updates
+releases/

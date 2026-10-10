@@ -30,6 +30,7 @@ SECURE_COOKIES = os.environ.get("SECURE_COOKIES") == "1"  # 1 = cookies only eve
 # so test messages never end up in the real chat.
 DATABASE_FILE = os.environ.get("DATABASE_FILE", "chat.db")
 UPLOAD_DIR = Path(os.environ.get("UPLOAD_DIR", "uploads"))
+RELEASES_DIR = Path("releases")  # the desktop app's installers and latest.json (see /releases/)
 # The site's own address, for links in emails. Never taken from the request: a request can
 # claim any host name, which would let someone make us email links to *their* site.
 PUBLIC_URL = os.environ.get("PUBLIC_URL", "http://localhost:8000").rstrip("/")
@@ -1530,6 +1531,17 @@ async def reset_page():
 async def emoji_list():
     # All emoji for the picker. They never change while the server runs, so browsers may keep it for a day.
     return FileResponse("static/emoji.json", headers={"Cache-Control": "public, max-age=86400"})
+
+
+@app.get("/releases/{name}")
+async def release_file(name: str):
+    # The desktop app's updates: latest.json (which version is newest) and the installers.
+    # No login needed: the app checks for updates before anyone has logged in.
+    # Only plain file names straight inside releases/ ("..\chat.db" and the like don't match).
+    if not re.fullmatch(r"[A-Za-z0-9_-][A-Za-z0-9._-]*", name) or not (RELEASES_DIR / name).is_file():
+        raise HTTPException(404)
+    # latest.json changes with every release, so it must never come from a cache.
+    return FileResponse(RELEASES_DIR / name, headers={"Cache-Control": "no-cache"})
 
 
 @app.get("/channels")

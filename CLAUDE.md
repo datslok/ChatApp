@@ -45,6 +45,13 @@ the point is for me to understand how it works, not just to have it done.
 - `start.ps1`: activates the environment and starts the server with auto-reload (development).
 - `serve.ps1`: runs the real site for chat.datslok.no: no reload, localhost only, settings from `.env`.
 - `.env.example`: template for `.env` (INVITE_CODE, SECURE_COOKIES). `.env` itself is never committed.
+- `desktop/`: the Windows app (Tauri). A window around https://chat.datslok.no, with real Windows
+  notifications (notification plugin, allowed for the site in `src-tauri/capabilities/default.json`)
+  and automatic updates at startup (updater plugin). `npm run tauri dev` in `desktop/` to try it.
+- `releases/`: the app's installers and `latest.json`, served without login at `/releases/` (git-ignored).
+  The app checks `latest.json` at startup and installs a newer version by itself.
+- The updates' private signing key is `C:\Users\axelk\.tauri\chatapp.key` (no password, never commit
+  it; losing it means friends must reinstall by hand). The public key is in `tauri.conf.json`.
 - `dev.env`: development settings for start.ps1: its own `dev.db` and `dev-uploads/`, so tests never
   touch the real chat's `chat.db` and `uploads/`.
 
@@ -73,6 +80,21 @@ Then start the server with:
 
 For development, open http://localhost:8001 (start.ps1) in two browser tabs and chat between them.
 Port 8000 is reserved for serve.ps1, because the tunnel forwards the public site there.
+
+## Releasing a new version of the desktop app
+
+Only needed when the app itself changes (icon, plugins, Rust code); chat changes reach it through the site.
+
+1. Raise `"version"` in `desktop/src-tauri/tauri.conf.json` (e.g. 0.1.1 → 0.1.2).
+2. Build and sign it, in `desktop/`:
+   ```powershell
+   $env:TAURI_SIGNING_PRIVATE_KEY = "C:\Users\axelk\.tauri\chatapp.key"
+   $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = ""
+   npm run tauri build
+   ```
+3. Copy `ChatApp_<version>_x64-setup.exe` and its `.sig` from `desktop/src-tauri/target/release/bundle/nsis/`
+   into `releases/`.
+4. In `releases/latest.json`, set `version`, the installer's `url`, and `signature` (the .sig file's contents).
 
 ## Roadmap
 
