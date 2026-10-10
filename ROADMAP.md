@@ -8,8 +8,9 @@
 5. [x] Online list and "is typing…" indicator
 6. [x] Direct messages: private two-person channels, opened from the sidebar
 7. [x] Image and file uploads (with a preview tray, drag-and-drop and pasting)
-8. [ ] Host it so friends can connect (VPS, or a Cloudflare Tunnel/Tailscale)
-   - Before going online: require an invite code to create an account, and limit login attempts
+8. [x] Host it so friends can connect: live at https://chat.datslok.no through a Cloudflare Tunnel
+   - [x] Before going online: invite code for new accounts, login limits, HTTPS (wss://, secure cookies)
+   - [ ] Mobile-friendly layout
 9. [ ] Voice channels with WebRTC/LiveKit
 10. [ ] Nice-to-haves: reactions, replies, mentions, notifications, desktop app via Tauri
     - [x] Unread dots on channels and DMs (remembered by the server)
