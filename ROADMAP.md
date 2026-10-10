@@ -17,8 +17,15 @@
    - [x] Before going online: invite code for new accounts, login limits, HTTPS (wss://, secure cookies)
    - [x] Mobile-friendly layout (drawers for channels and the online list)
    - [x] Separate development database (dev.db), so tests stay out of the real chat
-9. [ ] Nice-to-haves: reactions, replies, mentions, notifications, desktop app via Tauri
+9. [ ] Nice-to-haves, in this order:
    - [x] Unread dots on channels and DMs (remembered by the server)
+   - [ ] Message ids and times on the page, and message grouping
+   - [ ] Replies
+   - [ ] Reactions
+   - [ ] Editing and deleting your own messages; admins can edit and delete anyone's
+   - [ ] @mentions (stored by user id), with their own unread marker
+   - [ ] Notifications (browser notifications, sound, count in the tab title)
+   - [ ] Desktop app via Tauri
 10. [ ] Voice channels with WebRTC/LiveKit
 11. [ ] Video calls in DMs: 1-on-1, peer-to-peer WebRTC (signalling over our WebSocket, STUN/TURN),
     only between friends; mute, camera on/off, hang up
