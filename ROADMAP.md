@@ -26,7 +26,7 @@
    - [x] Custom emoji (12 per person, also animated) as reactions
    - [x] Editing and deleting your own messages; admins can edit and delete anyone's (tools/make_admin.py)
    - [x] @mentions and @everyone (stored by user id), with a red unread count per channel
-   - [ ] Notifications (browser notifications, sound, count in the tab title)
+   - [x] Notifications for DMs and mentions (desktop notifications, a generated sound, count in the tab title)
    - [x] Custom emoji inside messages (typing :pog:, stored as <:id> tokens); emoji picker and jumbo emoji in messages; multi-line text box
    - [ ] Desktop app via Tauri
 10. [ ] Voice channels with WebRTC/LiveKit

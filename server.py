@@ -1292,6 +1292,10 @@ def save_mentions(message_id, channel, sender_id, mentioned, everyone):
     see the channel, and never the sender themselves. @everyone = everyone who can see it."""
     if everyone:
         mentioned = {user_id for (user_id,) in db.execute("SELECT id FROM users")}
+    if channel.startswith("dm:"):
+        # In a DM, every message counts as mentioning the other person (like Discord): it gets a
+        # red number and a notification. "dm:3:7" -> both ids; the sender is left out below.
+        mentioned = set(mentioned) | {int(part) for part in channel.split(":")[1:]}
     people = [user_id for user_id in mentioned if user_id != sender_id and can_join(channel, user_id)]
     with db:
         db.execute("DELETE FROM mentions WHERE message_id = ?", (message_id,))
@@ -1609,10 +1613,10 @@ def unread_channels(user_id):
     ]
 
 
-async def announce_new_message(channel, mentioned=()):
+async def announce_new_message(channel, mentioned=(), message=None):
     """After a new message: it counts as read for whoever is looking at the channel, and
     everyone else who can see the channel gets an "unread" for it. People it mentioned also
-    get their new count of unread mentions there."""
+    get their new count of unread mentions there, and a short preview for a notification."""
     viewers = {client["user_id"] for client in clients.values() if client["channel"] == channel}
     for user_id in viewers:
         mark_read(user_id, channel)
@@ -1621,6 +1625,14 @@ async def announce_new_message(channel, mentioned=()):
             update = {"type": "unread", "channels": [channel]}
             if client["user_id"] in mentioned:
                 update["mentions"] = unread_mentions(client["user_id"], channel)  # {"memes": 2}
+                if message:
+                    update["notify"] = {
+                        "channel": channel,
+                        "user_id": message["user_id"],
+                        "name": message["name"],
+                        # The start of the text (a token cut in half at the end dropped), or a file.
+                        "text": re.sub(r"<(:\d*|@\w*)?$", "", message["text"][:100]) or ("📎 Attachment" if message["file"] else ""),
+                    }
             await send(websocket, update)
 
 
@@ -1735,7 +1747,7 @@ async def chat(websocket: WebSocket):
                     "edited_at": None,
                 }
                 await send_to_channel(channel, message)  # everyone in the channel, including us
-                await announce_new_message(channel, mentioned_people)  # read/unread (and mentions) for everyone else
+                await announce_new_message(channel, mentioned_people, message)  # read/unread, mentions, notifications
 
             elif kind == "react":
                 # {"type": "react", "message_id": 57, "emoji": "👍"}: add our reaction, or remove it

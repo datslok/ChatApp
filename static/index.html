@@ -486,6 +486,34 @@
       cursor: pointer;
     }
 
+    .settings-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    /* A checkbox with its text on the same line. */
+    #settings label.checkbox {
+      flex-direction: row;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.95rem;
+      color: #dbdee1;
+      cursor: pointer;
+    }
+
+    #settings label.checkbox input {
+      width: 18px;
+      height: 18px;
+      margin: 0;
+    }
+
+    .settings-help {
+      margin: 0;
+      font-size: 0.8rem;
+      color: #949ba4;
+    }
+
     .admin-badge {
       margin-left: 8px;
       padding: 2px 6px;
@@ -1607,6 +1635,19 @@
       <div id="emoji-status" class="status"></div>
     </form>
 
+    <h3>Notifications</h3>
+    <div class="settings-group">
+      <label class="checkbox">
+        <input type="checkbox" id="notify-desktop">
+        Desktop notifications for DMs and mentions
+      </label>
+      <p id="notify-help" class="settings-help"></p>
+      <label class="checkbox">
+        <input type="checkbox" id="notify-sound">
+        Sound
+      </label>
+    </div>
+
     <h3>Username</h3>
     <form id="username-form">
       <p>Current: <strong id="current-username">…</strong></p>
@@ -1737,6 +1778,9 @@
     const addEmojiButton = document.getElementById("add-emoji");
     const emojiInput = document.getElementById("emoji-input");
     const emojiStatus = document.getElementById("emoji-status");
+    const notifyDesktopBox = document.getElementById("notify-desktop");
+    const notifySoundBox = document.getElementById("notify-sound");
+    const notifyHelp = document.getElementById("notify-help");
     const changeBannerButton = document.getElementById("change-banner");
     const removeBannerButton = document.getElementById("remove-banner");
     const bannerInput = document.getElementById("banner-input");
@@ -1918,6 +1962,10 @@
           else mentionCounts.set(channel, count);
         }
         updateSidebar();
+        // A DM or mention in another channel: notify (we're not looking at that channel anyway).
+        if (data.notify) {
+          notify(data.notify.channel, data.notify.user_id, data.notify.name, data.notify.text);
+        }
         return;
       }
 
@@ -1934,6 +1982,14 @@
         stopTyping(data.name);  // their message arrived, so they're done typing
         shownMessages.push(data);
         showMessage(data);
+        // In the channel we're in, but the tab is hidden or the window isn't focused:
+        // a DM or a mention still notifies, and counts in the tab title until we're back.
+        const forMe = data.user_id !== myId && (dmPartner(currentChannel) !== null || mentionsMe(data.text));
+        if (forMe && !isLooking()) {
+          missedWhileAway += 1;
+          updateTitle();
+          notify(data.channel, data.user_id, data.name, data.text || (data.file ? "📎 Attachment" : ""));
+        }
       } else if (data.type === "edited") {
         // A message was edited: update it in our list (and quotes of it in replies), then redraw.
         const edited = shownMessages.find((message) => message.id === data.message_id);
@@ -2034,7 +2090,145 @@
       openSidebarButton.classList.toggle(
         "has-unread", unread.size > 0 || mentionCounts.size > 0 || incomingIds.size > 0
       );
+      updateTitle();  // "(3) Our Chat"
     }
+
+    // ---------- Notifications ----------
+    // For DMs and mentions, when we're not looking: a desktop notification, a "ping", and a count
+    // in the tab title. (Only while this page is open; a closed page can't notify.)
+
+    // The two switches, remembered in this browser. On unless switched off.
+    function loadSetting(key) {
+      try {
+        return localStorage.getItem(key) !== "off";
+      } catch {
+        return true;
+      }
+    }
+
+    function saveSetting(key, on) {
+      try {
+        localStorage.setItem(key, on ? "on" : "off");
+      } catch {}
+    }
+
+    let desktopNotifications = loadSetting("notifyDesktop");
+    let notificationSound = loadSetting("notifySound");
+
+    // Show the switches as they are, with a word about the browser's permission if needed.
+    function showNotificationSettings() {
+      notifySoundBox.checked = notificationSound;
+      if (!("Notification" in window)) {  // (e.g. most phone browsers)
+        notifyDesktopBox.checked = false;
+        notifyDesktopBox.disabled = true;
+        notifyHelp.textContent = "This browser can't show notifications from a web page.";
+        return;
+      }
+      notifyDesktopBox.checked = desktopNotifications && Notification.permission !== "denied";
+      if (Notification.permission === "denied") {
+        notifyHelp.textContent = "Blocked by the browser. Allow notifications for this site in the browser's site settings (the padlock left of the address).";
+      } else if (desktopNotifications && Notification.permission === "default") {
+        notifyHelp.textContent = "Tick the box once more so the browser can ask for permission.";
+        notifyDesktopBox.checked = false;
+      } else {
+        notifyHelp.textContent = "";
+      }
+    }
+
+    notifyDesktopBox.addEventListener("change", async () => {
+      if (notifyDesktopBox.checked && Notification.permission !== "granted") {
+        // Browsers only allow this question right after a click, which is why it's here.
+        await Notification.requestPermission();  // "Allow" or "Block"
+      }
+      desktopNotifications = notifyDesktopBox.checked && Notification.permission === "granted";
+      saveSetting("notifyDesktop", notifyDesktopBox.checked);
+      showNotificationSettings();
+    });
+
+    notifySoundBox.addEventListener("change", () => {
+      notificationSound = notifySoundBox.checked;
+      saveSetting("notifySound", notificationSound);
+      if (notificationSound) playPing();  // let them hear it
+    });
+
+    showNotificationSettings();
+
+    // A short "ping", generated by the browser (Web Audio): no sound file needed.
+    // An oscillator makes a tone (here a sine wave at a set pitch); a "gain" node is a volume
+    // knob, turned up quickly and then faded out, so it sounds like a soft chime, not a beep.
+    let audio = null;
+    function playPing() {
+      try {
+        audio ??= new AudioContext();  // created once, the first time
+        const now = audio.currentTime;
+        const tone = audio.createOscillator();
+        const volume = audio.createGain();
+        tone.type = "sine";
+        tone.frequency.setValueAtTime(880, now);         // A5
+        tone.frequency.setValueAtTime(1175, now + 0.08); // then D6: two quick notes
+        volume.gain.setValueAtTime(0.0001, now);
+        volume.gain.exponentialRampToValueAtTime(0.15, now + 0.01);  // up fast...
+        volume.gain.exponentialRampToValueAtTime(0.0001, now + 0.4); // ...and fade out
+        tone.connect(volume).connect(audio.destination);  // tone -> volume -> speakers
+        tone.start(now);
+        tone.stop(now + 0.45);
+      } catch {
+        // No sound possible (old browser, or no click on the page yet): just skip it.
+      }
+    }
+
+    // Are we looking at the chat right now? (Tab visible and window focused.)
+    function isLooking() {
+      return !document.hidden && document.hasFocus();
+    }
+
+    // How a channel is called: "#memes", or "@kari" for a DM.
+    function channelLabel(channel) {
+      const partner = dmPartner(channel);
+      return partner === null ? "#" + channel : "@" + (people.get(partner)?.name ?? "someone");
+    }
+
+    // Notify: sound and/or a desktop notification. Clicking it opens that channel.
+    function notify(channel, senderId, senderName, text) {
+      if (notificationSound) playPing();
+      if (!desktopNotifications || !("Notification" in window) || Notification.permission !== "granted") return;
+      const isDm = dmPartner(channel) !== null;
+      const avatar = people.get(senderId)?.avatar;
+      try {
+        const notification = new Notification(isDm ? senderName : `${senderName} in #${channel}`, {
+          body: tokensToCodes(text),  // <@2> -> @kari, <:17> -> :pog:
+          icon: avatar ? "/avatars/" + encodeURIComponent(avatar) : undefined,
+          tag: channel,  // a newer one from the same channel replaces the older one
+        });
+        notification.addEventListener("click", () => {
+          window.focus();
+          switchChannel(channel, channelLabel(channel));
+          notification.close();
+        });
+      } catch {
+        // Some browsers (Android Chrome) refuse notifications without a service worker.
+      }
+    }
+
+    // The tab title: "(3) Our Chat". Counts the red numbers, plus mentions that arrived in the
+    // channel we're in while we weren't looking.
+    let missedWhileAway = 0;
+
+    function updateTitle() {
+      let total = missedWhileAway;
+      for (const count of mentionCounts.values()) total += count;
+      document.title = total > 0 ? `(${total}) Our Chat` : "Our Chat";
+    }
+
+    // Back to the chat: those missed ones are seen now.
+    function cameBack() {
+      if (isLooking() && missedWhileAway > 0) {
+        missedWhileAway = 0;
+        updateTitle();
+      }
+    }
+    document.addEventListener("visibilitychange", cameBack);  // the tab became visible (or hidden)
+    window.addEventListener("focus", cameBack);               // the window got focus
 
     // ---------- Phone drawers ----------
     // On phones the sidebar and the online list are drawers. Opening one just adds the
@@ -2370,6 +2564,7 @@
       profileStatusLine.textContent = "";
       emojiStatus.textContent = "";
       renderMyEmoji();
+      showNotificationSettings();  // (the browser's permission may have changed since)
       settingsDialog.showModal();
 
       // Ask the server for our current details, to show them.
