@@ -48,7 +48,8 @@ the point is for me to understand how it works, not just to have it done.
 
 The live site is https://chat.datslok.no, served from this PC through a Cloudflare Tunnel
 (`cloudflared` runs as a Windows service and forwards to http://localhost:8000). The domain is
-registered at domene.shop with its DNS on Cloudflare.
+registered at domene.shop with its DNS on Cloudflare. `datslok.no` and `www.datslok.no` redirect (302) to
+the chat through a Cloudflare Redirect Rule (their DNS records are proxied placeholders, 192.0.2.1).
 
 ## Running it
 
