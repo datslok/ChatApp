@@ -22,10 +22,12 @@
    - [x] Unread dots on channels and DMs (remembered by the server)
    - [x] Message ids and times on the page, message grouping and date dividers
    - [x] Replies
-   - [ ] Reactions
+   - [ ] Reactions, with a full emoji picker (from Unicode's emoji list)
+   - [ ] Custom emoji (uploaded, also animated) as reactions
    - [ ] Editing and deleting your own messages; admins can edit and delete anyone's
    - [ ] @mentions (stored by user id), with their own unread marker
    - [ ] Notifications (browser notifications, sound, count in the tab title)
+   - [ ] Custom emoji inside messages (typing :pog:)
    - [ ] Desktop app via Tauri
 10. [ ] Voice channels with WebRTC/LiveKit
 11. [ ] Video calls in DMs: 1-on-1, peer-to-peer WebRTC (signalling over our WebSocket, STUN/TURN),
