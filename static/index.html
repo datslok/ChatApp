@@ -202,6 +202,131 @@
       color: white;
     }
 
+    /* Emoji are characters, drawn by the device's emoji font. Name the common ones explicitly,
+       so emoji always use them (and not a plain text font that draws them black and white). */
+    .emoji {
+      font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif;
+    }
+
+    /* Reaction chips under a message: "👍 3". */
+    .reactions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-top: 4px;
+    }
+
+    .reactions:empty {
+      display: none;  /* no reactions: no empty row taking up space */
+    }
+
+    .reaction-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 8px;
+      border: 1px solid transparent;
+      border-radius: 8px;
+      background: #2b2d31;
+      color: #dbdee1;
+      font-size: 0.85rem;
+      cursor: pointer;
+    }
+
+    .reaction-chip:hover {
+      border-color: #4e5058;
+    }
+
+    .reaction-chip.mine {
+      border-color: #5865f2;  /* one you reacted with yourself */
+      background: rgba(88, 101, 242, 0.15);
+    }
+
+    /* The emoji picker. Placed next to the 😀 button by JavaScript (position: fixed = relative to the window). */
+    #emoji-picker {
+      position: fixed;
+      z-index: 20;  /* above everything, including the message action bars */
+      width: 340px;
+      height: 380px;
+      display: flex;
+      flex-direction: column;
+      border: 1px solid #1e1f22;
+      border-radius: 8px;
+      background: #2b2d31;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    }
+
+    #emoji-picker[hidden] {
+      display: none;
+    }
+
+    #emoji-search {
+      margin: 8px;
+      padding: 8px 10px;
+      border: none;
+      border-radius: 6px;
+      background: #1e1f22;
+      color: inherit;
+      font-size: 0.95rem;
+    }
+
+    #emoji-categories {
+      display: flex;
+      justify-content: space-between;
+      padding: 0 8px 6px;
+      border-bottom: 1px solid #1e1f22;
+    }
+
+    #emoji-categories button {
+      padding: 2px 4px;
+      border: none;
+      border-radius: 4px;
+      background: none;
+      font-size: 1.1rem;
+      cursor: pointer;
+    }
+
+    #emoji-categories button:hover {
+      background: #404249;
+    }
+
+    #emoji-grid {
+      flex: 1;
+      overflow-y: auto;
+      padding: 0 8px 8px;
+    }
+
+    .emoji-section-title {
+      position: sticky;  /* stays at the top of the grid while its section scrolls past */
+      top: 0;
+      margin: 0;
+      padding: 8px 0 4px;
+      background: #2b2d31;
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      color: #949ba4;
+    }
+
+    /* CSS grid: as many 36px-wide columns as fit, sharing out any leftover space. */
+    .emoji-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(36px, 1fr));
+    }
+
+    .emoji-row button {
+      padding: 4px;
+      border: none;
+      border-radius: 4px;
+      background: none;
+      font-size: 1.4rem;
+      line-height: 1.2;
+      cursor: pointer;
+    }
+
+    .emoji-row button:hover {
+      background: #404249;
+    }
+
     /* The quote above a reply. */
     .reply-line {
       display: flex;
@@ -1103,6 +1228,16 @@
         display: none;
       }
 
+      /* The emoji picker becomes a panel along the bottom of the screen. */
+      #emoji-picker {
+        left: 0;
+        right: 0;
+        bottom: 0;
+        width: auto;
+        height: 55vh;
+        border-radius: 12px 12px 0 0;
+      }
+
       /* Bigger targets for fingers. */
       .channel {
         padding: 12px;
@@ -1302,6 +1437,13 @@
     <div id="people-list"></div>
     <p id="people-status" class="action-status"></p>
   </dialog>
+
+  <!-- The emoji picker for reactions: one element, reused for every message. -->
+  <div id="emoji-picker" hidden>
+    <input id="emoji-search" placeholder="Search emoji" autocomplete="off">
+    <div id="emoji-categories"></div>
+    <div id="emoji-grid"></div>
+  </div>
 
   <!-- Phones only: darkens the chat behind an open drawer. -->
   <div id="drawer-backdrop" hidden></div>
@@ -1512,6 +1654,15 @@
         showMessage(data);
       } else if (data.type === "typing") {
         showTyping(data.name);
+      } else if (data.type === "reactions") {
+        // A message's reactions changed: redraw just its chip row (if the message is on screen).
+        const row = messages.querySelector(`[data-id="${data.message_id}"] .reactions`);
+        if (row) {
+          const distanceFromBottom = messages.scrollHeight - messages.scrollTop - messages.clientHeight;
+          renderReactions(row, data.message_id, data.reactions);
+          // A new chip row makes the message taller: stay at the bottom if we were there.
+          if (distanceFromBottom < 50) messages.scrollTop = messages.scrollHeight;
+        }
       }
     }
 
@@ -2561,6 +2712,181 @@
       return link;
     }
 
+    // ---------- Reactions ----------
+
+    const emojiPicker = document.getElementById("emoji-picker");
+    const emojiSearch = document.getElementById("emoji-search");
+    const emojiCategories = document.getElementById("emoji-categories");
+    const emojiGrid = document.getElementById("emoji-grid");
+
+    let emojiGroups = null;       // [{name, emoji: [[emoji, name], ...]}, ...], loaded once from /emoji.json
+    const emojiNames = new Map(); // emoji -> its name, for tooltips and search
+    let pickerMessageId = null;   // which message the open picker is for
+    const RECENT_KEY = "recentEmoji";
+    const MAX_RECENT = 24;
+
+    // Recently used emoji, remembered in this browser (like a remembered tab: nice, not essential,
+    // so if the browser refuses storage, we simply don't remember).
+    function loadRecent() {
+      try {
+        return JSON.parse(localStorage.getItem(RECENT_KEY)) || [];
+      } catch {
+        return [];
+      }
+    }
+
+    function rememberRecent(emoji) {
+      // Put it first, remove it from further down, keep at most MAX_RECENT.
+      const recent = [emoji, ...loadRecent().filter((e) => e !== emoji)].slice(0, MAX_RECENT);
+      try {
+        localStorage.setItem(RECENT_KEY, JSON.stringify(recent));
+      } catch {}
+    }
+
+    // React to a message: add our reaction, or remove it if it's already there. The server
+    // answers everyone in the channel with the message's new reactions.
+    function react(messageId, emoji) {
+      sendToServer({ type: "react", message_id: messageId, emoji: emoji });
+    }
+
+    async function openEmojiPicker(messageId, button) {
+      pickerMessageId = messageId;
+      if (!emojiGroups) {
+        const response = await fetch("/emoji.json");
+        emojiGroups = (await response.json()).groups;
+        for (const group of emojiGroups) {
+          for (const [emoji, name] of group.emoji) emojiNames.set(emoji, name);
+        }
+        buildCategoryButtons();
+      }
+      emojiSearch.value = "";
+      renderEmojiGrid("");
+      emojiPicker.hidden = false;
+      placePicker(button);
+      emojiGrid.scrollTop = 0;
+      if (window.innerWidth > 700) emojiSearch.focus();  // (on phones, focusing would pop up the keyboard)
+    }
+
+    function closeEmojiPicker() {
+      emojiPicker.hidden = true;
+      pickerMessageId = null;
+    }
+
+    // Put the picker next to the 😀 button: below it, or above if there's no room below,
+    // and never off the edge of the window. (On phones, the CSS makes it a bottom panel instead.)
+    function placePicker(button) {
+      emojiPicker.style.top = "";
+      emojiPicker.style.left = "";
+      if (window.innerWidth <= 700) return;
+      const spot = button.getBoundingClientRect();  // where the button is on screen
+      const height = emojiPicker.offsetHeight;
+      const width = emojiPicker.offsetWidth;
+      let top = spot.bottom + 4;
+      if (top + height > window.innerHeight - 8) top = Math.max(8, spot.top - height - 4);
+      const left = Math.max(8, Math.min(spot.right - width, window.innerWidth - width - 8));
+      emojiPicker.style.top = top + "px";
+      emojiPicker.style.left = left + "px";
+    }
+
+    // One button per category (showing its first emoji) that scrolls the grid to that category.
+    function buildCategoryButtons() {
+      emojiCategories.replaceChildren();
+      emojiGroups.forEach((group, index) => {  // forEach: like a for loop, but also gives the position
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "emoji";
+        button.textContent = group.emoji[0][0];
+        button.title = group.name;
+        button.addEventListener("click", () => {
+          if (emojiSearch.value) {
+            emojiSearch.value = "";
+            renderEmojiGrid("");
+          }
+          document.getElementById("emoji-group-" + index).scrollIntoView({ block: "start" });
+        });
+        emojiCategories.appendChild(button);
+      });
+    }
+
+    // Fill the grid: search results, or "Recently used" plus every category.
+    function renderEmojiGrid(query) {
+      emojiGrid.replaceChildren();
+
+      function section(title, list, anchorId) {
+        const heading = document.createElement("h4");
+        heading.className = "emoji-section-title";
+        heading.textContent = title;
+        if (anchorId) heading.id = anchorId;
+        emojiGrid.appendChild(heading);
+        const row = document.createElement("div");
+        row.className = "emoji-row";
+        for (const [emoji, name] of list) {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "emoji";
+          button.textContent = emoji;
+          button.title = name;
+          button.addEventListener("click", () => {
+            react(pickerMessageId, emoji);
+            rememberRecent(emoji);
+            closeEmojiPicker();
+          });
+          row.appendChild(button);
+        }
+        emojiGrid.appendChild(row);
+      }
+
+      const search = query.trim().toLowerCase();
+      if (search) {
+        const results = [];
+        for (const group of emojiGroups) {
+          for (const entry of group.emoji) {
+            if (entry[1].includes(search)) results.push(entry);
+          }
+        }
+        section(results.length ? "Search results" : "No emoji found", results.slice(0, 300));
+        return;
+      }
+
+      const recent = loadRecent().filter((emoji) => emojiNames.has(emoji));
+      if (recent.length) section("Recently used", recent.map((emoji) => [emoji, emojiNames.get(emoji)]));
+      emojiGroups.forEach((group, index) => section(group.name, group.emoji, "emoji-group-" + index));
+    }
+
+    emojiSearch.addEventListener("input", () => renderEmojiGrid(emojiSearch.value));
+
+    // Close the picker when clicking anywhere outside it (except the 😀 buttons, which open it),
+    // or pressing Esc.
+    document.addEventListener("pointerdown", (event) => {
+      if (emojiPicker.hidden) return;
+      if (emojiPicker.contains(event.target) || event.target.closest(".open-picker")) return;
+      closeEmojiPicker();
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && !emojiPicker.hidden) closeEmojiPicker();
+    });
+
+    // The chips under a message: "👍 3", highlighted if we reacted too. Click to add/remove ours.
+    function renderReactions(container, messageId, reactions) {
+      container.replaceChildren();
+      for (const reaction of reactions) {
+        const chip = document.createElement("button");
+        chip.type = "button";
+        chip.className = "reaction-chip";
+        if (reaction.user_ids.includes(myId)) chip.classList.add("mine");
+        const emoji = document.createElement("span");
+        emoji.className = "emoji";
+        emoji.textContent = reaction.emoji;
+        const count = document.createElement("span");
+        count.textContent = reaction.user_ids.length;
+        chip.append(emoji, count);
+        // Who reacted, by their *current* names. ?. and ??: "someone" if we don't know them.
+        chip.title = reaction.user_ids.map((id) => people.get(id)?.name ?? "someone").join(", ");
+        chip.addEventListener("click", () => react(messageId, reaction.emoji));
+        container.appendChild(chip);
+      }
+    }
+
     // ---------- Times ----------
     // Times arrive as "2026-10-10T14:03:12Z" (UTC). new Date(...) turns that into a moment in time,
     // and the toLocale...String functions show it in the viewer's own time zone and language.
@@ -2686,7 +3012,13 @@
       replyButton.type = "button";
       replyButton.textContent = "↩ Reply";
       replyButton.addEventListener("click", () => startReply(message.id, message.name));
-      actions.appendChild(replyButton);
+      const reactButton = document.createElement("button");
+      reactButton.type = "button";
+      reactButton.className = "emoji open-picker";
+      reactButton.textContent = "😀";
+      reactButton.title = "Add reaction";
+      reactButton.addEventListener("click", () => openEmojiPicker(message.id, reactButton));
+      actions.append(reactButton, replyButton);
       div.appendChild(actions);
 
       const body = document.createElement("div");
@@ -2741,6 +3073,11 @@
       if (message.file) {
         body.appendChild(makeAttachment(message.file));
       }
+      // The reaction chips (an empty row is hidden by the CSS).
+      const reactions = document.createElement("div");
+      reactions.className = "reactions";
+      renderReactions(reactions, message.id, message.reactions || []);
+      body.appendChild(reactions);
       div.appendChild(body);
 
       // A picture only gets its real height once it has loaded, which pushes the

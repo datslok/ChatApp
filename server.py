@@ -46,6 +46,12 @@ if not SMTP_HOST:
     print("No SMTP_HOST set: emails will be printed here instead of sent.")
 
 CHANNELS = ["general", "memes"]  # add a name here to make a new channel
+
+# Every emoji allowed as a reaction, from static/emoji.json (made from Unicode's official list by
+# tools/make_emoji_json.py). The page's emoji picker uses the same file, so they always agree.
+# Without a list, someone with their own script could "react" with any text at all.
+with open("static/emoji.json", encoding="utf-8") as emoji_file:
+    ALLOWED_EMOJI = {emoji for group in json.load(emoji_file)["groups"] for emoji, name in group["emoji"]}
 MAX_TEXT_LENGTH = 2000
 HISTORY_LIMIT = 50  # how many old messages a new connection gets
 
@@ -163,6 +169,17 @@ db.execute("""
         channel    TEXT NOT NULL,
         message_id INTEGER NOT NULL,  -- the newest message this user has seen in this channel
         PRIMARY KEY (user_id, channel)  -- one row per person per channel
+    )
+""")
+db.execute("""
+    CREATE TABLE IF NOT EXISTS reactions (
+        message_id INTEGER NOT NULL REFERENCES messages(id),
+        user_id    INTEGER NOT NULL REFERENCES users(id),
+        emoji      TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        -- All three together: each person can use each emoji once per message
+        -- (but several different emoji).
+        PRIMARY KEY (message_id, user_id, emoji)
     )
 """)
 db.execute("""
@@ -424,6 +441,27 @@ def live_reply_preview(original_id):
     return reply_preview(*row) if row else None  # *row: the row's five values as five arguments
 
 
+def reactions_for(message_ids):
+    """The reactions on several messages: {message_id: [{"emoji": "👍", "user_ids": [1, 2]}, ...]}.
+    One query for all of them, not one per message: running a query for each of 50 messages
+    is so common (and slow) that it has a name, the "N+1 problem"."""
+    result = {message_id: [] for message_id in message_ids}
+    if not message_ids:
+        return result
+    placeholders = ",".join("?" * len(message_ids))  # "?,?,?" : one ? per id
+    rows = db.execute(
+        f"SELECT message_id, emoji, user_id FROM reactions WHERE message_id IN ({placeholders}) "
+        "ORDER BY created_at, rowid",  # oldest first, so the first emoji used comes first
+        list(message_ids),
+    )
+    by_message = {}  # {message_id: {emoji: [user ids]}}; dicts keep the order things were added in
+    for message_id, emoji, user_id in rows:
+        by_message.setdefault(message_id, {}).setdefault(emoji, []).append(user_id)
+    for message_id, emojis in by_message.items():
+        result[message_id] = [{"emoji": emoji, "user_ids": user_ids} for emoji, user_ids in emojis.items()]
+    return result
+
+
 def recent_messages(channel):
     """The channel's newest messages, oldest first, in the same shape as live messages."""
     # LEFT JOINs: each message, plus its sender's *current* username, plus its attachment
@@ -450,6 +488,7 @@ def recent_messages(channel):
         (channel, HISTORY_LIMIT),
     ).fetchall()
     rows.reverse()  # we fetched newest-first; chat reads oldest-first
+    reactions = reactions_for([row[0] for row in rows])  # all the reactions, in one query
     return [
         {
             "id": message_id,
@@ -459,6 +498,7 @@ def recent_messages(channel):
             "text": text,
             "file": file_info(file_id, filename, size, content_type) if file_id else None,
             "reply": reply_preview(*original),
+            "reactions": reactions[message_id],
         }
         for (message_id, sent_at, user_id, name, text, file_id, filename, size, content_type, *original) in rows
     ]
@@ -1262,6 +1302,12 @@ async def reset_page():
     return FileResponse("static/reset.html")
 
 
+@app.get("/emoji.json")
+async def emoji_list():
+    # All emoji for the picker. They never change while the server runs, so browsers may keep it for a day.
+    return FileResponse("static/emoji.json", headers={"Cache-Control": "public, max-age=86400"})
+
+
 @app.get("/channels")
 async def channels():
     return CHANNELS
@@ -1452,9 +1498,39 @@ async def chat(websocket: WebSocket):
                     "type": "message", "channel": channel, "id": message_id, "sent_at": sent_at,
                     "user_id": user_id, "name": username_of(user_id), "text": text, "file": file,
                     "reply": live_reply_preview(reply_to),
+                    "reactions": [],  # a brand new message has none yet
                 }
                 await send_to_channel(channel, message)  # everyone in the channel, including us
                 await announce_new_message(channel)  # mark it read or unread for everyone else
+
+            elif kind == "react":
+                # {"type": "react", "message_id": 57, "emoji": "👍"}: add our reaction, or remove it
+                # if it's already there (a toggle).
+                message_id = data.get("message_id")
+                emoji = data.get("emoji")
+                if not isinstance(message_id, int) or isinstance(message_id, bool):
+                    continue
+                if not isinstance(emoji, str) or emoji not in ALLOWED_EMOJI:
+                    continue
+                row = db.execute("SELECT channel FROM messages WHERE id = ?", (message_id,)).fetchone()
+                if row is None or not can_join(row[0], user_id):
+                    continue  # no such message, or one we're not allowed to see (someone else's DM)
+                message_channel = row[0]
+                with db:
+                    cursor = db.execute(
+                        "DELETE FROM reactions WHERE message_id = ? AND user_id = ? AND emoji = ?",
+                        (message_id, user_id, emoji),
+                    )
+                    if cursor.rowcount == 0:  # nothing was deleted, so it wasn't there yet: add it
+                        db.execute(
+                            "INSERT INTO reactions (message_id, user_id, emoji) VALUES (?, ?, ?)",
+                            (message_id, user_id, emoji),
+                        )
+                # Everyone looking at that channel gets the message's new reactions.
+                await send_to_channel(message_channel, {
+                    "type": "reactions", "channel": message_channel, "message_id": message_id,
+                    "reactions": reactions_for([message_id])[message_id],
+                })
 
             elif kind == "typing" and channel is not None:
                 # Tell the others in this channel; you don't need to see yourself typing.
