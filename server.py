@@ -151,6 +151,26 @@ db.execute("""
 """)
 
 
+def create_friendships_table():
+    """Friendships and friend requests: one row per pair of people. user_a is always the smaller
+    id (like in DM names "dm:3:7"), so each pair can only have one row, whoever asked first."""
+    db.execute("""
+        CREATE TABLE friendships (
+            user_a       INTEGER NOT NULL REFERENCES users(id),
+            user_b       INTEGER NOT NULL REFERENCES users(id),
+            requested_by INTEGER NOT NULL REFERENCES users(id),  -- who sent the request
+            accepted     INTEGER NOT NULL DEFAULT 0,             -- 0 = request pending, 1 = friends
+            created_at   TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (user_a, user_b),
+            CHECK (user_a < user_b)  -- the database itself refuses a row in the wrong order
+        )
+    """)
+
+
+def table_exists(table):
+    return db.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", (table,)).fetchone() is not None
+
+
 def table_columns(table):
     return [row[1] for row in db.execute(f"PRAGMA table_info({table})")]
 
@@ -278,6 +298,25 @@ if (
 ):
     print("Updating the database to use user ids...")
     migrate_names_to_ids()
+
+
+if not table_exists("friendships"):
+    # From before friends existed: DMs are now only allowed between friends, and nobody is
+    # friends yet, so the old DMs are deleted (messages, their files, unread state).
+    # This runs once: the next time, the friendships table exists.
+    dm_files = [
+        attachment_id
+        for (attachment_id,) in db.execute("SELECT id FROM attachments WHERE channel LIKE 'dm:%'")
+    ]
+    with db:
+        db.execute("BEGIN")
+        db.execute("DELETE FROM messages WHERE channel LIKE 'dm:%'")
+        db.execute("DELETE FROM attachments WHERE channel LIKE 'dm:%'")
+        db.execute("DELETE FROM last_read WHERE channel LIKE 'dm:%'")
+        create_friendships_table()
+    for attachment_id in dm_files:  # only after the database change has been saved
+        (UPLOAD_DIR / attachment_id).unlink(missing_ok=True)
+    print(f"Friends added: old DMs removed ({len(dm_files)} files).")
 
 
 def username_of(user_id):
@@ -944,6 +983,113 @@ async def change_profile(data: ProfileChange, request: Request):
     return {"ok": True}
 
 
+# ---------- Friends ----------
+
+def pair(a, b):
+    """Two user ids, smallest first: how a pair is stored in the friendships table."""
+    return (a, b) if a < b else (b, a)
+
+
+def friendship(a, b):
+    """(requested_by, accepted) for two people, or None if there's nothing between them."""
+    return db.execute(
+        "SELECT requested_by, accepted FROM friendships WHERE user_a = ? AND user_b = ?", pair(a, b)
+    ).fetchone()
+
+
+def are_friends(a, b):
+    row = friendship(a, b)
+    return row is not None and row[1] == 1
+
+
+def friends_message(user_id):
+    """One person's own view: {"type": "friends", "friends": [...], "incoming": [...], "outgoing": [...]}."""
+    friends, incoming, outgoing = [], [], []
+    rows = db.execute(
+        "SELECT user_a, user_b, requested_by, accepted FROM friendships WHERE user_a = ? OR user_b = ?",
+        (user_id, user_id),
+    )
+    for user_a, user_b, requested_by, accepted in rows:
+        other = user_b if user_a == user_id else user_a
+        if accepted:
+            friends.append(other)
+        elif requested_by == user_id:
+            outgoing.append(other)  # we asked them
+        else:
+            incoming.append(other)  # they asked us
+    return {"type": "friends", "friends": friends, "incoming": incoming, "outgoing": outgoing}
+
+
+async def send_friends_update(*user_ids):
+    """Friendships are personal, so they aren't sent to everyone: each of these people gets
+    their own up-to-date list, in all their open tabs."""
+    for user_id in user_ids:
+        message = friends_message(user_id)
+        for websocket, client in list(clients.items()):
+            if client["user_id"] == user_id:
+                await send(websocket, message)
+
+
+class FriendAction(BaseModel):
+    user_id: int  # the other person
+
+
+def other_person(data, request):
+    """(my id, their id) for a friend action, after checking it makes sense."""
+    me = current_user(request)
+    if me is None:
+        raise HTTPException(401, "You're not logged in.")
+    if data.user_id == me or username_of(data.user_id) is None:
+        raise HTTPException(400, "That's not someone you can add.")
+    return me, data.user_id
+
+
+@app.post("/friends/request")
+async def friend_request(data: FriendAction, request: Request):
+    me, other = other_person(data, request)
+    row = friendship(me, other)
+    user_a, user_b = pair(me, other)
+    if row is None:
+        with db:
+            db.execute(
+                "INSERT INTO friendships (user_a, user_b, requested_by) VALUES (?, ?, ?)", (user_a, user_b, me)
+            )
+    elif row[1] == 0 and row[0] == other:
+        # They had already asked us: asking back counts as accepting.
+        with db:
+            db.execute("UPDATE friendships SET accepted = 1 WHERE user_a = ? AND user_b = ?", (user_a, user_b))
+    # Otherwise we're already friends, or we already asked: nothing to change.
+    await send_friends_update(me, other)
+    return {"ok": True}
+
+
+@app.post("/friends/accept")
+async def friend_accept(data: FriendAction, request: Request):
+    me, other = other_person(data, request)
+    user_a, user_b = pair(me, other)
+    with db:
+        # Only a request *they* sent can be accepted by us.
+        cursor = db.execute(
+            "UPDATE friendships SET accepted = 1 WHERE user_a = ? AND user_b = ? AND requested_by = ? AND accepted = 0",
+            (user_a, user_b, other),
+        )
+    if cursor.rowcount != 1:
+        raise HTTPException(400, "There's no friend request from them.")
+    await send_friends_update(me, other)
+    return {"ok": True}
+
+
+@app.post("/friends/remove")
+async def friend_remove(data: FriendAction, request: Request):
+    """Decline a request, cancel your own, or end a friendship: all three remove the row.
+    The DM's messages stay in the database, hidden; becoming friends again brings them back."""
+    me, other = other_person(data, request)
+    with db:
+        db.execute("DELETE FROM friendships WHERE user_a = ? AND user_b = ?", pair(me, other))
+    await send_friends_update(me, other)
+    return {"ok": True}
+
+
 # ---------- Pages ----------
 
 @app.get("/")
@@ -997,7 +1143,8 @@ def users_message():
 
 def can_join(channel, user_id):
     """May this user join this channel? Normal channels: anyone logged in.
-    DMs ("dm:3:7", the two user ids, smallest first): only the two people in it."""
+    DMs ("dm:3:7", the two user ids, smallest first): only the two people in it, and only
+    while they're friends."""
     if channel in CHANNELS:
         return True
     if not isinstance(channel, str) or not channel.startswith("dm:"):
@@ -1012,7 +1159,7 @@ def can_join(channel, user_id):
     if user_id not in (first, second):
         return False  # someone else's DM: never
     other = second if user_id == first else first
-    return username_of(other) is not None  # the other person must exist
+    return are_friends(user_id, other)  # (a friendship also means the other person exists)
 
 
 # ---------- Unread ----------
@@ -1105,6 +1252,7 @@ async def chat(websocket: WebSocket):
     try:
         # Tell the page who it is (the id is for building DM names).
         await send(websocket, {"type": "welcome", "id": user_id, "username": username_of(user_id)})
+        await send(websocket, friends_message(user_id))
         await send(websocket, {"type": "unread", "channels": unread_channels(user_id)})
         if was_online:
             await send(websocket, users_message())  # just this tab
@@ -1130,6 +1278,10 @@ async def chat(websocket: WebSocket):
                 await send(websocket, {"type": "history", "channel": new_channel, "messages": history})
 
             elif kind == "message" and channel is not None:
+                # Check again, not just when joining: a DM stops being allowed the moment
+                # the friendship ends, even if this tab is still showing it.
+                if not can_join(channel, user_id):
+                    continue
                 text = clean_text(data)
                 if text is None:
                     continue

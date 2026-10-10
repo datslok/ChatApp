@@ -10,6 +10,8 @@
    - [x] Profiles: picture and banner (with a move/zoom editor), status, bio, profile popup
 5. [x] Online list and "is typing…" indicator
 6. [x] Direct messages: private two-person channels, opened from the sidebar
+   - [x] Friends: requests, friends list, list of all users; DMs only between friends
+   - [x] Online and offline people in the right column
 7. [x] Image and file uploads (with a preview tray, drag-and-drop and pasting)
 8. [x] Host it so friends can connect: live at https://chat.datslok.no through a Cloudflare Tunnel
    - [x] Before going online: invite code for new accounts, login limits, HTTPS (wss://, secure cookies)

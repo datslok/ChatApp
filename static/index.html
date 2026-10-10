@@ -487,6 +487,7 @@
     #members {
       width: 200px;
       padding: 16px;
+      overflow-y: auto;  /* scroll if there are many people */
       background: #2b2d31;
     }
 
@@ -495,14 +496,25 @@
       padding: 0;
     }
 
-    #online-list {
+    #members #offline-heading {
+      margin-top: 20px;
+    }
+
+    #online-list,
+    #offline-list {
       margin: 0;
       padding: 0;
       list-style: none;  /* no bullet points */
     }
 
-    #online-list li {
+    #online-list li,
+    #offline-list li {
       padding: 4px 0;
+    }
+
+    /* Offline people: dimmed, so the online ones stand out. */
+    #offline-list li {
+      opacity: 0.5;
     }
 
     /* Someone's profile, shown when you click their name or picture. */
@@ -576,16 +588,148 @@
       text-align: left;
     }
 
-    #profile-message {
-      margin-top: 20px;
-      width: 100%;
-      padding: 10px;
+    /* Friend buttons: Message, Add friend, Accept, Remove... */
+    .friend-actions {
+      display: flex;
+      gap: 6px;
+      flex-shrink: 0;  /* never squashed by the name next to them */
+    }
+
+    .friend-actions button {
+      padding: 6px 10px;
       border: none;
       border-radius: 6px;
       background: #5865f2;
       color: white;
-      font-size: 1rem;
+      font-size: 0.85rem;
       cursor: pointer;
+    }
+
+    .friend-actions button.secondary {
+      background: #4e5058;
+    }
+
+    #profile .friend-actions {
+      margin-top: 20px;
+    }
+
+    #profile .friend-actions button {
+      flex: 1;
+      padding: 10px;
+      font-size: 1rem;
+    }
+
+    .action-status {
+      min-height: 1.2em;
+      margin: 8px 0 0;
+      font-size: 0.85rem;
+      color: #f23f43;
+    }
+
+    /* The red number on the Friends button: waiting friend requests. */
+    .badge {
+      display: inline-block;
+      min-width: 18px;
+      margin-left: 6px;
+      padding: 0 6px;
+      box-sizing: border-box;
+      border-radius: 9px;
+      background: #f23f43;
+      color: white;
+      font-size: 0.75rem;
+      font-weight: 700;
+      line-height: 18px;
+      text-align: center;
+    }
+
+    .badge[hidden] {
+      display: none;
+    }
+
+    .empty-note {
+      margin: 4px 12px;
+      font-size: 0.85rem;
+      color: #949ba4;
+    }
+
+    /* The People popup. */
+    #people {
+      width: min(460px, 100% - 32px);
+      box-sizing: border-box;
+      max-height: 85vh;
+      padding: 24px;
+      border: none;
+      border-radius: 8px;
+      background: #2b2d31;
+      color: inherit;
+    }
+
+    #people[open] {
+      display: flex;  /* only when open: a closed dialog must stay hidden */
+      flex-direction: column;
+    }
+
+    #people::backdrop {
+      background: rgba(0, 0, 0, 0.6);
+    }
+
+    #people h2 {
+      margin: 0 0 12px;
+      color: white;
+    }
+
+    #people-close {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      width: 32px;
+      height: 32px;
+      border: none;
+      border-radius: 50%;
+      background: #1e1f22;
+      color: white;
+      cursor: pointer;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 8px;
+    }
+
+    .tab {
+      padding: 6px 12px;
+      border: none;
+      border-radius: 6px;
+      background: none;
+      color: #949ba4;
+      font-size: 0.95rem;
+      cursor: pointer;
+    }
+
+    .tab.active {
+      background: #404249;
+      color: white;
+    }
+
+    #people-list {
+      overflow-y: auto;  /* scroll inside the popup if the list is long */
+    }
+
+    .people-subheading {
+      margin: 12px 0 4px;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      color: #949ba4;
+    }
+
+    .people-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 8px 4px;
+      border-bottom: 1px solid #3f4147;
     }
 
     #profile-close {
@@ -817,6 +961,9 @@
 <body>
   <nav id="sidebar">
     <div id="sidebar-lists">
+      <button id="friends-button" class="channel">
+        Friends <span id="request-badge" class="badge" hidden></span>
+      </button>
       <div id="channel-list"></div>
       <h2 class="section-heading">Direct messages</h2>
       <div id="dm-list"></div>
@@ -856,6 +1003,8 @@
   <aside id="members">
     <h2 id="online-heading" class="section-heading">Online</h2>
     <ul id="online-list"></ul>
+    <h2 id="offline-heading" class="section-heading">Offline</h2>
+    <ul id="offline-list"></ul>
   </aside>
 
   <!-- The Settings popup: your email and your password. -->
@@ -962,8 +1111,23 @@
       <h2 id="profile-name"></h2>
       <p id="profile-status"></p>
       <p id="profile-bio"></p>
-      <button type="button" id="profile-message">Send message</button>
+      <!-- Message / Add friend / Accept / ... depending on how you two are connected. -->
+      <div id="profile-actions" class="friend-actions"></div>
+      <p id="profile-action-status" class="action-status"></p>
     </div>
+  </dialog>
+
+  <!-- Friends, friend requests, and everyone with an account. -->
+  <dialog id="people">
+    <button type="button" id="people-close" title="Close">×</button>
+    <h2>Friends</h2>
+    <div class="tabs">
+      <button type="button" class="tab active" data-tab="friends">Friends</button>
+      <button type="button" class="tab" data-tab="requests">Requests <span id="requests-tab-count"></span></button>
+      <button type="button" class="tab" data-tab="all">All users</button>
+    </div>
+    <div id="people-list"></div>
+    <p id="people-status" class="action-status"></p>
   </dialog>
 
   <!-- Phones only: darkens the chat behind an open drawer. -->
@@ -1007,7 +1171,15 @@
     const profileName = document.getElementById("profile-name");
     const profileStatus = document.getElementById("profile-status");
     const profileBio = document.getElementById("profile-bio");
-    const profileMessage = document.getElementById("profile-message");
+    const profileActions = document.getElementById("profile-actions");
+    const profileActionStatus = document.getElementById("profile-action-status");
+    const friendsButton = document.getElementById("friends-button");
+    const requestBadge = document.getElementById("request-badge");
+    const peopleDialog = document.getElementById("people");
+    const peopleClose = document.getElementById("people-close");
+    const peopleList = document.getElementById("people-list");
+    const peopleStatus = document.getElementById("people-status");
+    const requestsTabCount = document.getElementById("requests-tab-count");
     const usernameForm = document.getElementById("username-form");
     const currentUsername = document.getElementById("current-username");
     const newUsernameInput = document.getElementById("new-username");
@@ -1030,6 +1202,8 @@
     const input = document.getElementById("message-input");
     const onlineHeading = document.getElementById("online-heading");
     const onlineList = document.getElementById("online-list");
+    const offlineHeading = document.getElementById("offline-heading");
+    const offlineList = document.getElementById("offline-list");
     const banner = document.getElementById("banner");
     const chat = document.getElementById("chat");
     const sidebarElement = document.getElementById("sidebar");
@@ -1129,6 +1303,14 @@
         if (currentChannel !== null) joinCurrentChannel();
         return;
       }
+      if (data.type === "friends") {
+        // Our own friends and requests (only we get this): {friends: [ids], incoming, outgoing}
+        setAll(friendIds, data.friends);
+        setAll(incomingIds, data.incoming);
+        setAll(outgoingIds, data.outgoing);
+        friendsChanged();
+        return;
+      }
       if (data.type === "users") {
         showUsers(data.users);
         return;
@@ -1201,7 +1383,7 @@
         button.classList.toggle("unread", unread.has(button.dataset.channel));
       }
       // Phones: a dot on ☰ if anything is unread, since the sidebar is hidden there.
-      openSidebarButton.classList.toggle("has-unread", unread.size > 0);
+      openSidebarButton.classList.toggle("has-unread", unread.size > 0 || incomingIds.size > 0);
     }
 
     // ---------- Phone drawers ----------
@@ -1666,10 +1848,40 @@
       people.clear();
       for (const user of users) people.set(user.id, user);
 
-      // DM list in the sidebar: everyone except us.
-      dmList.replaceChildren();
+      renderDmList();
+
+      // The right column: everyone, split into online and offline (both alphabetical, as the
+      // server sent them). Click someone for their profile.
+      const online = users.filter((user) => user.online);
+      const offline = users.filter((user) => !user.online);  // ! means "not"
+      onlineHeading.textContent = `Online — ${online.length}`;
+      offlineHeading.textContent = `Offline — ${offline.length}`;
+      fillPeopleList(onlineList, online);
+      fillPeopleList(offlineList, offline);
+
+      redrawAvatars();  // messages, the profile popup and Settings
+      // Banners only appear in two places, so those are simply redrawn if they're open.
+      if (profileDialog.open) renderProfile(profileUserId);
+      if (settingsDialog.open) settingsBanner.replaceChildren(makeBanner(myId));
+      if (peopleDialog.open) renderPeopleList();  // names, pictures, online dots
+    }
+
+    function fillPeopleList(list, users) {
+      list.replaceChildren();
       for (const user of users) {
-        if (user.id === myId) continue;
+        const item = document.createElement("li");
+        item.classList.add("clickable");
+        item.appendChild(makePerson(user));
+        item.addEventListener("click", () => openProfile(user.id));
+        list.appendChild(item);
+      }
+    }
+
+    // DM list in the sidebar: only friends (DMs are only allowed between friends).
+    function renderDmList() {
+      dmList.replaceChildren();
+      for (const user of people.values()) {  // a Map remembers the order: alphabetical, from the server
+        if (!friendIds.has(user.id)) continue;
         const button = document.createElement("button");
         button.className = "channel";
         button.dataset.channel = dmChannel(user.id);
@@ -1677,24 +1889,157 @@
         button.addEventListener("click", () => switchChannel(dmChannel(user.id), "@" + user.name));
         dmList.appendChild(button);
       }
+      if (friendIds.size === 0) {
+        const note = document.createElement("p");
+        note.className = "empty-note";
+        note.textContent = "Add friends to send direct messages.";
+        dmList.appendChild(note);
+      }
       updateSidebar();  // the buttons are new, so mark the active and unread ones again
+    }
 
-      // Online list on the right: only the people who are online. Click one for their profile.
-      const online = users.filter((user) => user.online);
-      onlineHeading.textContent = `Online — ${online.length}`;
-      onlineList.replaceChildren();
-      for (const user of online) {
-        const item = document.createElement("li");
-        item.classList.add("clickable");
-        item.appendChild(makePerson(user));
-        item.addEventListener("click", () => openProfile(user.id));
-        onlineList.appendChild(item);
+    // ---------- Friends ----------
+
+    // Our own friends and friend requests, as user ids. Filled by the server's "friends" message.
+    const friendIds = new Set();
+    const incomingIds = new Set();  // they asked us
+    const outgoingIds = new Set();  // we asked them
+    let peopleTab = "friends";      // which tab of the People popup is showing
+
+    function setAll(set, ids) {
+      set.clear();
+      for (const id of ids) set.add(id);
+    }
+
+    // Our friends or requests changed: redraw everything that depends on them.
+    function friendsChanged() {
+      renderDmList();
+      requestBadge.textContent = incomingIds.size;
+      requestBadge.hidden = incomingIds.size === 0;
+      requestsTabCount.textContent = incomingIds.size > 0 ? `(${incomingIds.size})` : "";
+      updateSidebar();  // the dot on ☰ (phones) also counts friend requests
+      if (peopleDialog.open) renderPeopleList();
+      if (profileDialog.open) renderProfile(profileUserId);
+
+      // Looking at a DM with someone who's no longer a friend? Then it's gone: go to the first channel.
+      const other = dmPartner(currentChannel);
+      if (other !== null && !friendIds.has(other)) {
+        switchChannel(firstChannel, "#" + firstChannel);
+      }
+    }
+
+    // The other person in a DM channel name ("dm:3:7" -> 7 when we are 3), or null for normal channels.
+    function dmPartner(channel) {
+      if (!channel || !channel.startsWith("dm:")) return null;
+      const ids = channel.split(":").slice(1).map(Number);  // "dm:3:7" -> [3, 7]
+      return ids[0] === myId ? ids[1] : ids[0];
+    }
+
+    // Ask the server to change a friendship. It answers everyone involved with a fresh
+    // "friends" message, which redraws the lists, so we only need to handle errors here.
+    async function friendAction(action, userId, statusElement) {
+      statusElement.textContent = "";
+      const result = await postJson("/friends/" + action, { user_id: userId });
+      if (!result.ok) statusElement.textContent = result.error;
+    }
+
+    function openDm(userId) {
+      const person = people.get(userId);
+      profileDialog.close();
+      peopleDialog.close();
+      switchChannel(dmChannel(userId), "@" + person.name);
+    }
+
+    // The buttons for one person, depending on how we're connected.
+    function makeFriendButtons(userId, statusElement) {
+      const buttons = [];
+      function add(label, onClick, secondary) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.textContent = label;
+        if (secondary) button.className = "secondary";
+        button.addEventListener("click", (event) => {
+          event.stopPropagation();  // don't also count as a click on the row (which opens the profile)
+          onClick();
+        });
+        buttons.push(button);
       }
 
-      redrawAvatars();  // messages, the profile popup and Settings
-      // Banners only appear in two places, so those are simply redrawn if they're open.
-      if (profileDialog.open) renderProfile(profileUserId);
-      if (settingsDialog.open) settingsBanner.replaceChildren(makeBanner(myId));
+      if (friendIds.has(userId)) {
+        add("Message", () => openDm(userId));
+        add("Remove", () => friendAction("remove", userId, statusElement), true);
+      } else if (incomingIds.has(userId)) {
+        add("Accept", () => friendAction("accept", userId, statusElement));
+        add("Decline", () => friendAction("remove", userId, statusElement), true);
+      } else if (outgoingIds.has(userId)) {
+        add("Cancel request", () => friendAction("remove", userId, statusElement), true);
+      } else {
+        add("Add friend", () => friendAction("request", userId, statusElement));
+      }
+      return buttons;
+    }
+
+    // One person in the People popup: picture, name and status (click for their profile), and buttons.
+    function makePeopleRow(user) {
+      const row = document.createElement("div");
+      row.className = "people-row clickable";
+      row.appendChild(makePerson(user));
+      const actions = document.createElement("div");
+      actions.className = "friend-actions";
+      actions.append(...makeFriendButtons(user.id, peopleStatus));  // ... spreads the list into separate arguments
+      row.appendChild(actions);
+      row.addEventListener("click", () => openProfile(user.id));
+      return row;
+    }
+
+    function renderPeopleList() {
+      peopleList.replaceChildren();
+      const everyone = [...people.values()].filter((user) => user.id !== myId);
+
+      function section(title, users, emptyText) {
+        if (title) {
+          const heading = document.createElement("h3");
+          heading.className = "people-subheading";
+          heading.textContent = title;
+          peopleList.appendChild(heading);
+        }
+        for (const user of users) peopleList.appendChild(makePeopleRow(user));
+        if (users.length === 0) {
+          const note = document.createElement("p");
+          note.className = "empty-note";
+          note.textContent = emptyText;
+          peopleList.appendChild(note);
+        }
+      }
+
+      if (peopleTab === "friends") {
+        section("", everyone.filter((user) => friendIds.has(user.id)),
+          "No friends yet. Find people under All users.");
+      } else if (peopleTab === "requests") {
+        section("Received", everyone.filter((user) => incomingIds.has(user.id)), "No requests waiting.");
+        section("Sent", everyone.filter((user) => outgoingIds.has(user.id)), "You haven't sent any requests.");
+      } else {
+        section("", everyone, "Nobody else has an account yet.");  // online and offline
+      }
+    }
+
+    friendsButton.addEventListener("click", () => {
+      closeDrawers();
+      peopleStatus.textContent = "";
+      renderPeopleList();
+      peopleDialog.showModal();
+    });
+    peopleClose.addEventListener("click", () => peopleDialog.close());
+
+    for (const tab of document.querySelectorAll(".tab")) {
+      tab.addEventListener("click", () => {
+        peopleTab = tab.dataset.tab;
+        for (const other of document.querySelectorAll(".tab")) {
+          other.classList.toggle("active", other === tab);
+        }
+        peopleStatus.textContent = "";
+        renderPeopleList();
+      });
     }
 
     // ---------- Profile popup ----------
@@ -1718,14 +2063,11 @@
       profileName.textContent = person.name;
       profileStatus.textContent = person.status || "";
       profileBio.textContent = person.bio || "";
-      profileMessage.hidden = userId === myId;  // no DMs with yourself
+      profileActionStatus.textContent = "";
+      // Message / Add friend / Accept / ... (nothing on your own profile).
+      profileActions.replaceChildren(...(userId === myId ? [] : makeFriendButtons(userId, profileActionStatus)));
     }
 
-    profileMessage.addEventListener("click", () => {
-      const person = people.get(profileUserId);
-      profileDialog.close();
-      switchChannel(dmChannel(profileUserId), "@" + person.name);
-    });
     profileClose.addEventListener("click", () => profileDialog.close());
 
     // ---------- "is typing…" ----------
