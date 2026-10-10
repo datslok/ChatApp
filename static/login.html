@@ -191,8 +191,9 @@
       });
 
       if (response.ok) {
-        // The server has set our session cookie: on to the chat.
-        location.href = "/";
+        // The server has set our session cookie: on to the chat. replace() instead of href:
+        // the chat takes the login page's place in the history, so "back" doesn't lead here.
+        location.replace("/");
         return;
       }
 

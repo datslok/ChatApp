@@ -1517,7 +1517,9 @@ async def index(request: Request):
 
 
 @app.get("/login")
-async def login_page():
+async def login_page(request: Request):
+    if current_user(request) is not None:
+        return RedirectResponse("/")  # already logged in: straight to the chat
     return FileResponse("static/login.html")
 
 

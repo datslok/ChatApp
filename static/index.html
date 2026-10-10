@@ -2098,9 +2098,20 @@
     }
 
     // Switch channel or DM. `label` is what to show in the text box, like "#general" or "@kari".
-    function switchChannel(channel, label) {
+    // `fromHistory` is true when the back (or forward) button brought us here: then the history
+    // already has this step, and adding it again would make back bounce between two channels.
+    function switchChannel(channel, label, fromHistory = false) {
       closeDrawers();  // on a phone: picking a channel closes the drawer
       if (channel === currentChannel) return;
+      if (!fromHistory) {
+        // A new step for the back button (see "The back button" below). The very first channel,
+        // or one picked while a drawer or popup was open, takes the place of the current step.
+        if (currentChannel === null || history.state?.overlay) {
+          history.replaceState({ channel }, "");
+        } else {
+          history.pushState({ channel }, "");
+        }
+      }
       currentChannel = channel;
       setLabel(label);
       unread.delete(channel);  // opening it means we've seen it
@@ -2390,6 +2401,82 @@
     openSidebarButton.addEventListener("click", () => openDrawer(sidebarElement));
     openMembersButton.addEventListener("click", () => openDrawer(membersElement));
     drawerBackdrop.addEventListener("click", closeDrawers);
+
+    // ---------- The back button ----------
+    // The chat is one page, so by itself "back" would leave it. Instead we add our own steps to
+    // the browser's history (pushState), and the browser tells us when back is pressed (popstate):
+    //   - every channel switch is a step: { channel: "memes" }  (added in switchChannel)
+    //   - an open drawer or popup is one step on top: { channel: "memes", overlay: true }
+    // Back closes what's open; with nothing open, it goes to the channel before.
+
+    function somethingOpen() {
+      return sidebarElement.classList.contains("open")
+        || membersElement.classList.contains("open")
+        || document.querySelector("dialog[open]") !== null;
+    }
+
+    // history.back() takes a moment: until its popstate arrives, don't step back a second time.
+    let steppingBack = false;
+
+    // Make the history match the screen: something open needs an overlay step; nothing open, none.
+    function syncHistory() {
+      if (steppingBack) return;
+      const hasOverlayStep = history.state?.overlay === true;
+      if (somethingOpen() && !hasOverlayStep) {
+        history.pushState({ channel: currentChannel, overlay: true }, "");
+      } else if (!somethingOpen() && hasOverlayStep) {
+        // Closed with ✕, Esc or the backdrop: remove the step, or the next back would do nothing.
+        steppingBack = true;
+        history.back();
+      }
+    }
+
+    // Check once the click (or key press) has been fully handled, not halfway: tapping "Settings"
+    // in the drawer closes the drawer *and* opens Settings, which is still "something open".
+    let syncPending = false;
+    function scheduleSync() {
+      if (syncPending) return;
+      syncPending = true;
+      setTimeout(() => {
+        syncPending = false;
+        syncHistory();
+      });
+    }
+
+    // A MutationObserver calls a function whenever the elements it watches change. Here: the
+    // drawers' class ("open") and each popup's open attribute (set by showModal(), removed by close()).
+    // That way none of the many places that open or close something need to know about history.
+    const historyObserver = new MutationObserver(scheduleSync);
+    for (const drawer of [sidebarElement, membersElement]) {
+      historyObserver.observe(drawer, { attributes: true, attributeFilter: ["class"] });
+    }
+    for (const dialog of document.querySelectorAll("dialog")) {
+      historyObserver.observe(dialog, { attributes: true, attributeFilter: ["open"] });
+    }
+
+    // Back (or forward) was pressed. event.state is the object we gave that step.
+    window.addEventListener("popstate", (event) => {
+      steppingBack = false;
+      const state = event.state;
+      closeDrawers();
+      for (const dialog of document.querySelectorAll("dialog[open]")) dialog.close();
+
+      if (state?.overlay) {
+        // Forward into a "something was open" step: there's nothing to reopen, so skip past it.
+        steppingBack = true;
+        history.back();
+        return;
+      }
+      const channel = state?.channel;
+      if (!channel || channel === currentChannel) return;
+      const partner = dmPartner(channel);
+      if (partner !== null && !friendIds.has(partner)) {
+        // A DM with someone who's no longer a friend: it's gone, so stay where we are.
+        history.replaceState({ channel: currentChannel }, "");
+        return;
+      }
+      switchChannel(channel, channelLabel(channel), true);
+    });
 
     // ---------- The text box ----------
 
