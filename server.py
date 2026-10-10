@@ -19,6 +19,11 @@ app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
 # Settings from the environment. serve.ps1 loads them from the .env file (which is never committed).
 INVITE_CODE = os.environ.get("INVITE_CODE", "")  # needed to create an account; empty = anyone can
 SECURE_COOKIES = os.environ.get("SECURE_COOKIES") == "1"  # 1 = cookies only ever sent over HTTPS
+# Where messages and files are kept. Development (start.ps1, via dev.env) uses its own,
+# so test messages never end up in the real chat.
+DATABASE_FILE = os.environ.get("DATABASE_FILE", "chat.db")
+UPLOAD_DIR = Path(os.environ.get("UPLOAD_DIR", "uploads"))
+print(f"Using database {DATABASE_FILE} and upload folder {UPLOAD_DIR}/")
 if not INVITE_CODE:
     print("WARNING: no INVITE_CODE set, so anyone who can reach this server can create an account.")
 
@@ -34,7 +39,6 @@ SESSION_DAYS = 30
 MAX_FAILURES = 5          # wrong passwords (or invite codes) allowed...
 FAILURE_WINDOW = 15 * 60  # ...within this many seconds, before we refuse to check more
 
-UPLOAD_DIR = Path("uploads")
 UPLOAD_DIR.mkdir(exist_ok=True)  # create the folder if it isn't there yet
 MAX_UPLOAD_SIZE = 10 * 1024 * 1024  # 10 MB, in bytes
 MAX_FILENAME_LENGTH = 200
@@ -49,7 +53,7 @@ hasher = PasswordHasher()
 clients = {}
 
 # Open the database file (SQLite creates it if it doesn't exist) and make sure the tables are there.
-db = sqlite3.connect("chat.db")
+db = sqlite3.connect(DATABASE_FILE)
 db.execute("""
     CREATE TABLE IF NOT EXISTS messages (
         id            INTEGER PRIMARY KEY,

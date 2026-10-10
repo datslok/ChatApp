@@ -9,4 +9,5 @@ conda activate chatapp
 # --reload restarts the server automatically whenever you save a .py file.
 # --port 8001: NOT 8000, because the Cloudflare Tunnel sends the public site to port 8000.
 #   This way the internet can never reach the development server (which has no invite code).
-uvicorn server:app --reload --port 8001
+# --env-file dev.env: use dev.db and dev-uploads/, so tests stay out of the real chat.
+uvicorn server:app --reload --port 8001 --env-file dev.env

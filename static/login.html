@@ -7,7 +7,8 @@
   <style>
     body {
       margin: 0;
-      height: 100vh;
+      height: 100vh;   /* fallback for older browsers... */
+      height: 100dvh;  /* ...the part of the screen that's really visible */
       display: flex;
       align-items: center;      /* centre the box vertically */
       justify-content: center;  /* ...and horizontally */
@@ -17,7 +18,9 @@
     }
 
     form {
-      width: 320px;
+      /* 384px wide, but never wider than the screen minus a 16px margin on each side */
+      width: min(384px, 100% - 32px);
+      box-sizing: border-box;  /* the padding counts inside that width */
       padding: 32px;
       border-radius: 8px;
       background: #2b2d31;

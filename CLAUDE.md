@@ -37,6 +37,8 @@ the point is for me to understand how it works, not just to have it done.
 - `start.ps1`: activates the environment and starts the server with auto-reload (development).
 - `serve.ps1`: runs the real site for chat.datslok.no: no reload, localhost only, settings from `.env`.
 - `.env.example`: template for `.env` (INVITE_CODE, SECURE_COOKIES). `.env` itself is never committed.
+- `dev.env`: development settings for start.ps1: its own `dev.db` and `dev-uploads/`, so tests never
+  touch the real chat's `chat.db` and `uploads/`.
 
 ## Hosting
 

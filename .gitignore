@@ -11,6 +11,10 @@ __pycache__/
 
 # Uploaded images and files (your friends' photos don't belong on GitHub)
 uploads/
+dev-uploads/
+
+# Backup copies of the database and uploads
+backups/
 
 # Editor and OS clutter
 .vscode/

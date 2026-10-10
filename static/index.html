@@ -7,7 +7,8 @@
   <style>
     body {
       margin: 0;
-      height: 100vh;
+      height: 100vh;   /* fallback for older browsers... */
+      height: 100dvh;  /* ...the part of the screen that's really visible (phones: minus the address bar) */
       display: flex;  /* sidebar, chat and online list side by side */
       font-family: system-ui, sans-serif;
       background: #313338;
@@ -331,6 +332,117 @@
     #online-list li {
       padding: 4px 0;
     }
+    /* The top bar and the drawer backdrop only exist on phones (see below). */
+    #topbar,
+    #drawer-backdrop {
+      display: none;
+    }
+
+    /* ---------- Phones and other narrow screens ----------
+       Everything in here only applies when the screen is 700px wide or less. */
+    @media (max-width: 700px) {
+      /* A bar above the messages: ☰ (channels), where we are, 👥 (online). */
+      #topbar {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        padding: 4px;
+        border-bottom: 1px solid #26272b;
+      }
+
+      #topbar button {
+        position: relative;  /* for the unread dot on ☰ */
+        padding: 8px 12px;
+        border: none;
+        background: none;
+        color: #dbdee1;
+        font-size: 1.3rem;
+        cursor: pointer;
+      }
+
+      #topbar-title {
+        flex: 1;
+        overflow: hidden;         /* a very long name gets cut off... */
+        text-overflow: ellipsis;  /* ...with "…" */
+        white-space: nowrap;
+        font-weight: 600;
+        color: white;
+      }
+
+      /* Something unread somewhere: a red dot on the ☰ button. */
+      #open-sidebar.has-unread::after {
+        content: "";
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #f23f43;
+      }
+
+      /* Both side columns become drawers: taken out of the row, laid over the chat,
+         and parked just off-screen until opened. */
+      #sidebar,
+      #members {
+        position: fixed;
+        top: 0;
+        bottom: 0;
+        z-index: 10;  /* on top of the chat */
+        width: 80vw;
+        max-width: 280px;
+        box-sizing: border-box;
+        transition: transform 0.2s ease;  /* animate the sliding */
+      }
+
+      #sidebar {
+        left: 0;
+        transform: translateX(-100%);  /* moved left by its own width: just off-screen */
+      }
+
+      #members {
+        right: 0;
+        transform: translateX(100%);  /* moved right by its own width */
+      }
+
+      #sidebar.open,
+      #members.open {
+        transform: translateX(0);  /* slide into view */
+      }
+
+      /* Darkens the chat behind an open drawer; tapping it closes the drawer. */
+      #drawer-backdrop {
+        display: block;
+        position: fixed;
+        inset: 0;
+        z-index: 5;  /* above the chat, below the drawers */
+        background: rgba(0, 0, 0, 0.5);
+      }
+
+      #drawer-backdrop[hidden] {
+        display: none;
+      }
+
+      /* Bigger targets for fingers. */
+      .channel {
+        padding: 12px;
+      }
+
+      .tray-item .remove {
+        width: 28px;
+        height: 28px;
+        line-height: 28px;
+      }
+
+      /* A bit less empty space, since the screen is small. */
+      #messages {
+        padding: 12px;
+      }
+
+      #chat-form {
+        padding: 8px;
+      }
+    }
   </style>
 </head>
 <body>
@@ -344,6 +456,12 @@
   </nav>
 
   <main id="chat">
+    <!-- Only shown on phones (see the @media rules). -->
+    <header id="topbar">
+      <button type="button" id="open-sidebar" title="Channels">☰</button>
+      <span id="topbar-title"></span>
+      <button type="button" id="open-members" title="Online">👥</button>
+    </header>
     <div id="banner" hidden>Connection lost, reconnecting…</div>
     <div id="messages"></div>
     <div id="status-line">
@@ -370,6 +488,9 @@
     <ul id="online-list"></ul>
   </aside>
 
+  <!-- Phones only: darkens the chat behind an open drawer. -->
+  <div id="drawer-backdrop" hidden></div>
+
   <!-- The popup for looking at a picture. Hidden until showModal() opens it. -->
   <dialog id="image-viewer">
     <button type="button" id="viewer-close" title="Close">×</button>
@@ -389,6 +510,12 @@
     const onlineList = document.getElementById("online-list");
     const banner = document.getElementById("banner");
     const chat = document.getElementById("chat");
+    const sidebarElement = document.getElementById("sidebar");
+    const membersElement = document.getElementById("members");
+    const topbarTitle = document.getElementById("topbar-title");
+    const openSidebarButton = document.getElementById("open-sidebar");
+    const openMembersButton = document.getElementById("open-members");
+    const drawerBackdrop = document.getElementById("drawer-backdrop");
     const attachButton = document.getElementById("attach-button");
     const fileInput = document.getElementById("file-input");
     const uploadStatus = document.getElementById("upload-status");
@@ -501,9 +628,11 @@
 
     // Switch channel or DM. `label` is what to show in the text box, like "#general" or "@kari".
     function switchChannel(channel, label) {
+      closeDrawers();  // on a phone: picking a channel closes the drawer
       if (channel === currentChannel) return;
       currentChannel = channel;
       input.placeholder = "Message " + label;
+      topbarTitle.textContent = label;  // the phone top bar shows where we are
       unread.delete(channel);  // opening it means we've seen it
       updateSidebar();
       joinCurrentChannel();
@@ -532,7 +661,28 @@
         button.classList.toggle("active", button.dataset.channel === currentChannel);
         button.classList.toggle("unread", unread.has(button.dataset.channel));
       }
+      // Phones: a dot on ☰ if anything is unread, since the sidebar is hidden there.
+      openSidebarButton.classList.toggle("has-unread", unread.size > 0);
     }
+
+    // ---------- Phone drawers ----------
+    // On phones the sidebar and the online list are drawers. Opening one just adds the
+    // "open" class; the CSS slides it into view.
+
+    function openDrawer(drawer) {
+      drawer.classList.add("open");
+      drawerBackdrop.hidden = false;
+    }
+
+    function closeDrawers() {
+      sidebarElement.classList.remove("open");
+      membersElement.classList.remove("open");
+      drawerBackdrop.hidden = true;
+    }
+
+    openSidebarButton.addEventListener("click", () => openDrawer(sidebarElement));
+    openMembersButton.addEventListener("click", () => openDrawer(membersElement));
+    drawerBackdrop.addEventListener("click", closeDrawers);
 
     // The user pressed Enter or clicked Send.
     form.addEventListener("submit", (event) => {
