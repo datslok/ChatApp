@@ -2504,7 +2504,8 @@
 
     // A colon at the start or after a space, then name characters, right up to the cursor.
     // (Only after a space, so links like https://… and times like 14:30 don't pop the list up.)
-    const TYPING_CODE = /(^|\s):([A-Za-z0-9_]{1,32})$/;
+    // At least 2 characters, so plain-text faces like :D :P :3 stay as typed (not 🐶 "dog").
+    const TYPING_CODE = /(^|\s):([A-Za-z0-9_]{2,32})$/;
 
     // An @ at the start or after a space, then (maybe already) part of a name, up to the cursor.
     // {0,32}: the list already shows right after typing "@".
