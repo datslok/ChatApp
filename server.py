@@ -1533,6 +1533,23 @@ async def emoji_list():
     return FileResponse("static/emoji.json", headers={"Cache-Control": "public, max-age=86400"})
 
 
+@app.get("/download")
+async def download_page():
+    # "Get the Windows app" (app.datslok.no redirects here). No login needed.
+    return FileResponse("static/download.html")
+
+
+@app.get("/download/windows")
+async def download_windows():
+    # A link that never changes: sends the browser on to the newest installer, the one latest.json names.
+    try:
+        latest = json.loads((RELEASES_DIR / "latest.json").read_text())
+        url = latest["platforms"]["windows-x86_64"]["url"]
+    except (OSError, ValueError, KeyError):  # no latest.json yet, or not the shape we expect
+        raise HTTPException(404, "No Windows version has been released yet.")
+    return RedirectResponse(url, status_code=302)
+
+
 @app.get("/releases/{name}")
 async def release_file(name: str):
     # The desktop app's updates: latest.json (which version is newest) and the installers.

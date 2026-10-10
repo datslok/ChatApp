@@ -48,6 +48,8 @@ the point is for me to understand how it works, not just to have it done.
 - `desktop/`: the Windows app (Tauri). A window around https://chat.datslok.no, with real Windows
   notifications (notification plugin, allowed for the site in `src-tauri/capabilities/default.json`)
   and automatic updates at startup (updater plugin). `npm run tauri dev` in `desktop/` to try it.
+- `static/download.html`: the download page (`/download`, no login), linked from the login page and
+  Settings (hidden inside the app). `/download/windows` always redirects to the newest installer.
 - `releases/`: the app's installers and `latest.json`, served without login at `/releases/` (git-ignored).
   The app checks `latest.json` at startup and installs a newer version by itself.
 - The updates' private signing key is `C:\Users\axelk\.tauri\chatapp.key` (no password, never commit
@@ -61,6 +63,7 @@ The live site is https://chat.datslok.no, served from this PC through a Cloudfla
 (`cloudflared` runs as a Windows service and forwards to http://localhost:8000). The domain is
 registered at domene.shop with its DNS on Cloudflare. `datslok.no` and `www.datslok.no` redirect (302) to
 the chat through a Cloudflare Redirect Rule (their DNS records are proxied placeholders, 192.0.2.1).
+`app.datslok.no` redirects (302) the same way, to https://chat.datslok.no/download.
 
 ## Running it
 

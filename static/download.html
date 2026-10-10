@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Download · ChatApp</title>
+  <style>
+    body {
+      margin: 0;
+      min-height: 100vh;   /* fallback for older browsers... */
+      min-height: 100dvh;  /* ...the part of the screen that's really visible */
+      display: flex;
+      align-items: center;      /* centre the box vertically */
+      justify-content: center;  /* ...and horizontally */
+      font-family: system-ui, sans-serif;
+      background: #313338;
+      color: #dbdee1;
+    }
+
+    main {
+      /* 440px wide, but never wider than the screen minus a 16px margin on each side */
+      width: min(440px, 100% - 32px);
+      box-sizing: border-box;  /* the padding counts inside that width */
+      margin: 16px 0;
+      padding: 32px;
+      border-radius: 8px;
+      background: #2b2d31;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 1.5rem;
+      color: white;
+      text-align: center;
+    }
+
+    h2 {
+      margin: 8px 0 0;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      color: #949ba4;
+    }
+
+    p, ol {
+      margin: 0;
+      line-height: 1.45;
+    }
+
+    ol {
+      padding-left: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .intro {
+      text-align: center;
+      color: #b5bac1;
+    }
+
+    /* A link that looks like the big blue button on the login page. */
+    .download {
+      padding: 12px;
+      border-radius: 6px;
+      background: #5865f2;
+      color: white;
+      font-size: 1.05rem;
+      text-align: center;
+      text-decoration: none;
+    }
+
+    .download:hover {
+      background: #4752c4;
+    }
+
+    #version {
+      min-height: 1.2em;  /* keep the space while the version loads, so nothing jumps */
+      font-size: 0.8rem;
+      text-align: center;
+      color: #949ba4;
+    }
+
+    .back {
+      text-align: center;
+      font-size: 0.9rem;
+      color: #00a8fc;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>ChatApp for Windows</h1>
+    <p class="intro">The chat in its own window, with notifications. It keeps itself up to date.</p>
+    <a class="download" href="/download/windows">Download for Windows</a>
+    <p id="version"></p>
+
+    <h2>Installing</h2>
+    <ol>
+      <li>Open the file you downloaded (ChatApp_…_x64-setup.exe).</li>
+      <li>Windows may say <strong>"Windows protected your PC"</strong>: the app isn't signed by a company.
+        Click <strong>More info</strong>, then <strong>Run anyway</strong>. That's only needed once:
+        after that, the app updates itself.</li>
+      <li>Log in with your usual account.</li>
+    </ol>
+
+    <a class="back" href="/">Or use ChatApp in the browser</a>
+  </main>
+
+  <script>
+    // Show which version the button downloads, from the same latest.json the app checks for updates.
+    // (If it can't be loaded, the line simply stays empty.)
+    fetch("/releases/latest.json")
+      .then((response) => response.json())
+      .then((latest) => {
+        document.getElementById("version").textContent = "Version " + latest.version + " · Windows 10 and 11";
+      })
+      .catch(() => {});
+  </script>
+</body>
+</html>

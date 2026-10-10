@@ -86,7 +86,7 @@
       color: #949ba4;
     }
 
-    #forgot {
+    #forgot, #get-app {
       text-align: center;
       font-size: 0.9rem;
       color: #00a8fc;
@@ -119,6 +119,7 @@
       <button value="register">Create account</button>
     </div>
     <a id="forgot" href="/reset">Forgot password?</a>
+    <a id="get-app" href="/download">Get the Windows app</a>
   </form>
 
   <script>
@@ -128,6 +129,9 @@
     const emailInput = document.getElementById("email");
     const inviteInput = document.getElementById("invite");
     const errorBox = document.getElementById("error");
+
+    // Already in the desktop app? (Tauri puts __TAURI_INTERNALS__ on its pages; browsers don't have it.)
+    if ("__TAURI_INTERNALS__" in window) document.getElementById("get-app").hidden = true;
 
     form.addEventListener("submit", async (event) => {
       event.preventDefault();  // stop the browser from reloading the page
