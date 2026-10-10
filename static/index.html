@@ -514,6 +514,32 @@
       color: #949ba4;
     }
 
+    /* "Volume [——o——] 80%" on one line. */
+    #settings label.slider-row {
+      flex-direction: row;
+      align-items: center;
+      gap: 12px;
+    }
+
+    #settings label.slider-row input {
+      flex: 1;
+      padding: 0;
+    }
+
+    #notify-volume-value {
+      width: 3em;
+      text-align: right;
+    }
+
+    #settings select {
+      padding: 8px 10px;
+      border: none;
+      border-radius: 6px;
+      background: #1e1f22;
+      color: inherit;
+      font-size: 0.95rem;
+    }
+
     .admin-badge {
       margin-left: 8px;
       padding: 2px 6px;
@@ -1539,7 +1565,7 @@
       <h2 class="section-heading">Direct messages</h2>
       <div id="dm-list"></div>
     </div>
-    <button id="settings-button" class="channel">Settings</button>
+    <button id="settings-button" class="channel">Settings <span id="muted-icon" title="Notifications are muted" hidden>🔕</span></button>
     <button id="logout" class="channel">Log out</button>
   </nav>
 
@@ -1649,6 +1675,22 @@
         <input type="checkbox" id="notify-sound">
         Sound
       </label>
+      <label class="slider-row">
+        Volume
+        <input type="range" id="notify-volume" min="0" max="100" step="5">
+        <span id="notify-volume-value"></span>
+      </label>
+      <label>
+        Mute notifications (no sound, no popups; the red numbers still show)
+        <select id="mute-select">
+          <option value="off">Off</option>
+          <option value="1h">For 1 hour</option>
+          <option value="8h">For 8 hours</option>
+          <option value="morning">Until tomorrow 08:00</option>
+          <option value="forever">Until I turn it back on</option>
+        </select>
+      </label>
+      <p id="mute-status" class="settings-help"></p>
     </div>
 
     <h3>Username</h3>
@@ -1784,6 +1826,11 @@
     const notifyDesktopBox = document.getElementById("notify-desktop");
     const notifySoundBox = document.getElementById("notify-sound");
     const notifyHelp = document.getElementById("notify-help");
+    const notifyVolumeSlider = document.getElementById("notify-volume");
+    const notifyVolumeValue = document.getElementById("notify-volume-value");
+    const muteSelect = document.getElementById("mute-select");
+    const muteStatus = document.getElementById("mute-status");
+    const mutedIcon = document.getElementById("muted-icon");
     const changeBannerButton = document.getElementById("change-banner");
     const removeBannerButton = document.getElementById("remove-banner");
     const bannerInput = document.getElementById("banner-input");
@@ -2118,9 +2165,82 @@
     let desktopNotifications = loadSetting("notifyDesktop");
     let notificationSound = loadSetting("notifySound");
 
+    // The ping's volume, 0-100 (%). 100 unless changed.
+    let notificationVolume = 100;
+    try {
+      const saved = localStorage.getItem("notifyVolume");
+      if (saved !== null) notificationVolume = Number(saved);
+    } catch {}
+
+    notifyVolumeSlider.addEventListener("input", () => {  // while dragging: show the number
+      notificationVolume = Number(notifyVolumeSlider.value);
+      notifyVolumeValue.textContent = notificationVolume + "%";
+      try {
+        localStorage.setItem("notifyVolume", String(notificationVolume));
+      } catch {}
+    });
+    notifyVolumeSlider.addEventListener("change", () => playPing());  // let go: hear it
+
+    // Muted until when, as a point in time (milliseconds since 1970, like Date.now()).
+    // 0 = not muted; Infinity = until turned back on. Once the time has passed, it's simply
+    // not muted anymore: nothing needs to switch it off.
+    let mutedUntil = 0;
+    try {
+      const saved = localStorage.getItem("mutedUntil");
+      if (saved === "forever") mutedUntil = Infinity;
+      else if (saved) mutedUntil = Number(saved);
+    } catch {}
+
+    function isMuted() {
+      return Date.now() < mutedUntil;
+    }
+
+    muteSelect.addEventListener("change", () => {
+      const now = Date.now();
+      const choice = muteSelect.value;
+      if (choice === "off") mutedUntil = 0;
+      else if (choice === "1h") mutedUntil = now + 60 * 60 * 1000;
+      else if (choice === "8h") mutedUntil = now + 8 * 60 * 60 * 1000;
+      else if (choice === "forever") mutedUntil = Infinity;
+      else if (choice === "morning") {
+        const morning = new Date();
+        morning.setHours(8, 0, 0, 0);  // today 08:00:00.000...
+        if (morning.getTime() <= now) morning.setDate(morning.getDate() + 1);  // ...or tomorrow's, if that's passed
+        mutedUntil = morning.getTime();
+      }
+      try {
+        localStorage.setItem("mutedUntil", mutedUntil === Infinity ? "forever" : String(mutedUntil));
+      } catch {}
+      showMuteState();
+    });
+
+    // Show whether (and until when) we're muted: in Settings, and as 🔕 next to "Settings".
+    function showMuteState() {
+      const muted = isMuted();
+      mutedIcon.hidden = !muted;
+      if (!muted) {
+        muteSelect.value = "off";
+        muteStatus.textContent = "";
+      } else if (mutedUntil === Infinity) {
+        muteSelect.value = "forever";
+        muteStatus.textContent = "Muted until you turn it back on.";
+      } else {
+        const until = new Date(mutedUntil);
+        const sameDay = until.toDateString() === new Date().toDateString();
+        muteStatus.textContent = "Muted until " + (sameDay ? formatClock(until) : until.toLocaleString()) + ".";
+      }
+    }
+
+    // When a timed mute runs out, the 🔕 should go away by itself: check once a minute.
+    setInterval(showMuteState, 60 * 1000);
+    showMuteState();
+
     // Show the switches as they are, with a word about the browser's permission if needed.
     function showNotificationSettings() {
       notifySoundBox.checked = notificationSound;
+      notifyVolumeSlider.value = notificationVolume;
+      notifyVolumeValue.textContent = notificationVolume + "%";
+      showMuteState();
       if (!("Notification" in window)) {  // (e.g. most phone browsers)
         notifyDesktopBox.checked = false;
         notifyDesktopBox.disabled = true;
@@ -2161,16 +2281,18 @@
     // knob, turned up quickly and then faded out, so it sounds like a soft chime, not a beep.
     let audio = null;
     function playPing() {
+      if (notificationVolume <= 0) return;
       try {
         audio ??= new AudioContext();  // created once, the first time
         const now = audio.currentTime;
+        const peak = 0.15 * (notificationVolume / 100);  // the loudest point, scaled by the slider
         const tone = audio.createOscillator();
         const volume = audio.createGain();
         tone.type = "sine";
         tone.frequency.setValueAtTime(880, now);         // A5
         tone.frequency.setValueAtTime(1175, now + 0.08); // then D6: two quick notes
         volume.gain.setValueAtTime(0.0001, now);
-        volume.gain.exponentialRampToValueAtTime(0.15, now + 0.01);  // up fast...
+        volume.gain.exponentialRampToValueAtTime(peak, now + 0.01);  // up fast...
         volume.gain.exponentialRampToValueAtTime(0.0001, now + 0.4); // ...and fade out
         tone.connect(volume).connect(audio.destination);  // tone -> volume -> speakers
         tone.start(now);
@@ -2193,6 +2315,7 @@
 
     // Notify: sound and/or a desktop notification. Clicking it opens that channel.
     function notify(channel, senderId, senderName, text) {
+      if (isMuted()) return;  // do not disturb: no sound, no popup (the red numbers still update)
       if (notificationSound) playPing();
       if (!desktopNotifications || !("Notification" in window) || Notification.permission !== "granted") return;
       const isDm = dmPartner(channel) !== null;
