@@ -68,16 +68,32 @@ IMAGE_TYPES = {"image/png", "image/jpeg", "image/gif", "image/webp"}
 hasher = PasswordHasher()
 
 # Every open connection (one per browser tab) and what we know about it:
-# {websocket: {"username": "axel", "channel": "memes"}}
+# {websocket: {"user_id": 3, "channel": "memes"}}
 clients = {}
 
-# Open the database file (SQLite creates it if it doesn't exist) and make sure the tables are there.
+
+# ---------- Database ----------
+#
+# People are identified everywhere by their user id (users.id), never by their username.
+# The username is stored in exactly one place, the users table, and looked up when it's shown.
+# That way a username can change without touching anything else.
+
 db = sqlite3.connect(DATABASE_FILE)
+db.execute("""
+    CREATE TABLE IF NOT EXISTS users (
+        id            INTEGER PRIMARY KEY,
+        username      TEXT NOT NULL UNIQUE COLLATE NOCASE,
+        password_hash TEXT NOT NULL,
+        created_at    TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        email         TEXT  -- stored in lowercase; NULL for accounts made before emails existed
+    )
+""")
 db.execute("""
     CREATE TABLE IF NOT EXISTS messages (
         id            INTEGER PRIMARY KEY,
-        channel       TEXT NOT NULL DEFAULT 'general',
-        name          TEXT NOT NULL,
+        channel       TEXT NOT NULL DEFAULT 'general',  -- "general", or "dm:3:7" for a DM
+        user_id       INTEGER REFERENCES users(id),     -- who sent it
+        legacy_name   TEXT,  -- only for messages from before accounts existed (no user_id)
         text          TEXT NOT NULL,
         sent_at       TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         attachment_id TEXT REFERENCES attachments(id)
@@ -89,18 +105,9 @@ db.execute("""
         filename     TEXT NOT NULL,
         content_type TEXT NOT NULL,
         size         INTEGER NOT NULL,
-        uploader     TEXT NOT NULL,
+        uploader_id  INTEGER REFERENCES users(id),
         channel      TEXT,  -- NULL until the file is sent in a message
         created_at   TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-    )
-""")
-db.execute("""
-    CREATE TABLE IF NOT EXISTS users (
-        id            INTEGER PRIMARY KEY,
-        username      TEXT NOT NULL UNIQUE COLLATE NOCASE,
-        password_hash TEXT NOT NULL,
-        created_at    TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        email         TEXT  -- stored in lowercase; NULL for accounts made before emails existed
     )
 """)
 db.execute("""
@@ -110,13 +117,12 @@ db.execute("""
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     )
 """)
-
 db.execute("""
     CREATE TABLE IF NOT EXISTS last_read (
-        username   TEXT NOT NULL,
+        user_id    INTEGER NOT NULL REFERENCES users(id),
         channel    TEXT NOT NULL,
         message_id INTEGER NOT NULL,  -- the newest message this user has seen in this channel
-        PRIMARY KEY (username, channel)  -- one row per person per channel
+        PRIMARY KEY (user_id, channel)  -- one row per person per channel
     )
 """)
 db.execute("""
@@ -127,18 +133,23 @@ db.execute("""
     )
 """)
 
-# Migrations: add columns that older databases don't have yet.
-columns = [row[1] for row in db.execute("PRAGMA table_info(messages)")]
-if "channel" not in columns:
+
+def table_columns(table):
+    return [row[1] for row in db.execute(f"PRAGMA table_info({table})")]
+
+
+# Migrations: bring databases made by older versions of this code up to date.
+# Each one checks the table's current shape, so it only ever runs once.
+
+if "channel" not in table_columns("messages"):
     # From before channels existed: the DEFAULT puts all the old messages in #general.
     with db:
         db.execute("ALTER TABLE messages ADD COLUMN channel TEXT NOT NULL DEFAULT 'general'")
-if "attachment_id" not in columns:
+if "attachment_id" not in table_columns("messages"):
     # From before uploads existed: old messages simply have no attachment (NULL).
     with db:
         db.execute("ALTER TABLE messages ADD COLUMN attachment_id TEXT REFERENCES attachments(id)")
-user_columns = [row[1] for row in db.execute("PRAGMA table_info(users)")]
-if "email" not in user_columns:
+if "email" not in table_columns("users"):
     # From before emails existed: old accounts have none (NULL) until they add one in Settings.
     with db:
         db.execute("ALTER TABLE users ADD COLUMN email TEXT")
@@ -147,16 +158,120 @@ if "email" not in user_columns:
 db.execute("CREATE UNIQUE INDEX IF NOT EXISTS users_email ON users (email)")
 
 
+def migrate_names_to_ids():
+    """From before user ids were used: messages, attachments and unread state referred to people
+    by username, and DMs were called "dm:axel:kari". Rebuild those tables to use user ids, and
+    rename DMs to "dm:3:7".
+
+    SQLite can't change a column or a primary key in place, so each table is rebuilt: create the
+    new version, copy the rows across (turning names into ids), drop the old one, rename the new one.
+    All of it happens in one transaction: if anything fails, nothing changes at all."""
+    with db:
+        # Python's sqlite3 only starts a transaction by itself before INSERT/UPDATE/DELETE,
+        # not before CREATE/DROP, so we start one ourselves to cover everything.
+        db.execute("BEGIN")
+
+        if "name" in table_columns("messages"):
+            db.execute("""
+                CREATE TABLE messages_new (
+                    id            INTEGER PRIMARY KEY,
+                    channel       TEXT NOT NULL DEFAULT 'general',
+                    user_id       INTEGER REFERENCES users(id),
+                    legacy_name   TEXT,
+                    text          TEXT NOT NULL,
+                    sent_at       TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    attachment_id TEXT REFERENCES attachments(id)
+                )
+            """)
+            # LEFT JOIN: every message, plus the account with that name if there is one.
+            # No account (the "type your name" days)? Then keep the typed name as legacy_name.
+            db.execute("""
+                INSERT INTO messages_new (id, channel, user_id, legacy_name, text, sent_at, attachment_id)
+                SELECT messages.id, messages.channel, users.id,
+                       CASE WHEN users.id IS NULL THEN messages.name END,
+                       messages.text, messages.sent_at, messages.attachment_id
+                FROM messages LEFT JOIN users ON users.username = messages.name COLLATE NOCASE
+            """)
+            db.execute("DROP TABLE messages")
+            db.execute("ALTER TABLE messages_new RENAME TO messages")
+
+        if "uploader" in table_columns("attachments"):
+            db.execute("""
+                CREATE TABLE attachments_new (
+                    id           TEXT PRIMARY KEY,
+                    filename     TEXT NOT NULL,
+                    content_type TEXT NOT NULL,
+                    size         INTEGER NOT NULL,
+                    uploader_id  INTEGER REFERENCES users(id),
+                    channel      TEXT,
+                    created_at   TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            db.execute("""
+                INSERT INTO attachments_new (id, filename, content_type, size, uploader_id, channel, created_at)
+                SELECT attachments.id, attachments.filename, attachments.content_type, attachments.size,
+                       users.id, attachments.channel, attachments.created_at
+                FROM attachments LEFT JOIN users ON users.username = attachments.uploader COLLATE NOCASE
+            """)
+            db.execute("DROP TABLE attachments")
+            db.execute("ALTER TABLE attachments_new RENAME TO attachments")
+
+        if "username" in table_columns("last_read"):
+            db.execute("""
+                CREATE TABLE last_read_new (
+                    user_id    INTEGER NOT NULL REFERENCES users(id),
+                    channel    TEXT NOT NULL,
+                    message_id INTEGER NOT NULL,
+                    PRIMARY KEY (user_id, channel)
+                )
+            """)
+            # A plain JOIN here: unread state for a name with no account is simply dropped.
+            db.execute("""
+                INSERT OR IGNORE INTO last_read_new (user_id, channel, message_id)
+                SELECT users.id, last_read.channel, last_read.message_id
+                FROM last_read JOIN users ON users.username = last_read.username COLLATE NOCASE
+            """)
+            db.execute("DROP TABLE last_read")
+            db.execute("ALTER TABLE last_read_new RENAME TO last_read")
+
+        # Rename DMs from "dm:axel:kari" to "dm:3:7" everywhere a channel name is stored.
+        ids = {name.lower(): user_id for user_id, name in db.execute("SELECT id, username FROM users")}
+        old_dms = set()
+        for table in ("messages", "attachments", "last_read"):
+            old_dms |= {channel for (channel,) in db.execute(f"SELECT DISTINCT channel FROM {table} WHERE channel LIKE 'dm:%'")}
+        for old in old_dms:
+            names = old.split(":")[1:]
+            if len(names) != 2 or not all(name in ids for name in names):
+                continue  # already new style ("dm:3:7"), or someone without an account
+            first, second = sorted(ids[name] for name in names)
+            new = f"dm:{first}:{second}"
+            for table in ("messages", "attachments", "last_read"):
+                db.execute(f"UPDATE {table} SET channel = ? WHERE channel = ?", (new, old))
+
+
+if (
+    "name" in table_columns("messages")
+    or "uploader" in table_columns("attachments")
+    or "username" in table_columns("last_read")
+):
+    print("Updating the database to use user ids...")
+    migrate_names_to_ids()
+
+
+def username_of(user_id):
+    row = db.execute("SELECT username FROM users WHERE id = ?", (user_id,)).fetchone()
+    return row[0] if row else None
+
+
 # ---------- Messages ----------
 
-def save_message(channel, message):
+def save_message(channel, user_id, text, file):
     # "with db" commits the change when the block ends (or undoes it if something fails).
     # The ? placeholders keep user text as data, so it can never be run as SQL.
-    attachment_id = message["file"]["id"] if message["file"] else None
     with db:
         db.execute(
-            "INSERT INTO messages (channel, name, text, attachment_id) VALUES (?, ?, ?, ?)",
-            (channel, message["name"], message["text"], attachment_id),
+            "INSERT INTO messages (channel, user_id, text, attachment_id) VALUES (?, ?, ?, ?)",
+            (channel, user_id, text, file["id"] if file else None),
         )
 
 
@@ -167,12 +282,16 @@ def file_info(attachment_id, filename, size, content_type):
 
 def recent_messages(channel):
     """The channel's newest messages, oldest first, in the same shape as live messages."""
-    # LEFT JOIN: every message, plus its attachment's details if it has one (NULLs if not).
+    # Two LEFT JOINs: each message, plus its sender's *current* username, plus its attachment
+    # (NULLs where there's none). COALESCE(a, b) means "a, or b if a is NULL": for messages from
+    # before accounts existed, there's no user, so we show the name that was typed back then.
     rows = db.execute(
         """
-        SELECT messages.name, messages.text,
+        SELECT COALESCE(users.username, messages.legacy_name), messages.text,
                attachments.id, attachments.filename, attachments.size, attachments.content_type
-        FROM messages LEFT JOIN attachments ON attachments.id = messages.attachment_id
+        FROM messages
+        LEFT JOIN users ON users.id = messages.user_id
+        LEFT JOIN attachments ON attachments.id = messages.attachment_id
         WHERE messages.channel = ?
         ORDER BY messages.id DESC LIMIT ?
         """,
@@ -206,7 +325,7 @@ def parse_json(raw):
 def clean_text(data):
     """Get the message text out of a client's "message" (maybe empty), or None if it's invalid.
 
-    The sender's name is NOT taken from here; it comes from their login session.
+    The sender is NOT taken from here; it comes from their login session.
     """
     text = data.get("text")
     if not isinstance(text, str):
@@ -282,19 +401,20 @@ def start_session(response, user_id):
     )
 
 
-def user_from_token(token):
-    """The username a session token belongs to, or None if it's missing, unknown or expired."""
+def user_id_from_token(token):
+    """The id of the user a session token belongs to, or None if it's missing, unknown or expired."""
     if not token:
         return None
     row = db.execute(
-        """
-        SELECT users.username
-        FROM sessions JOIN users ON users.id = sessions.user_id
-        WHERE sessions.token = ? AND sessions.created_at > datetime('now', ?)
-        """,
+        "SELECT user_id FROM sessions WHERE token = ? AND created_at > datetime('now', ?)",
         (token, f"-{SESSION_DAYS} days"),
     ).fetchone()
     return row[0] if row else None
+
+
+def current_user(request):
+    """The logged-in user's id for an HTTP request, or None."""
+    return user_id_from_token(request.cookies.get(SESSION_COOKIE))
 
 
 @app.post("/register")
@@ -482,7 +602,7 @@ async def reset(data: ResetRequest):
         db.execute("DELETE FROM password_resets WHERE user_id = ?", (user_id,))  # every link, used up
         db.execute("DELETE FROM sessions WHERE user_id = ?", (user_id,))  # log out everywhere
     failures.pop("login:" + username.lower(), None)  # a fresh start for logging in
-    await disconnect_user(username)  # close their open chat tabs too
+    await disconnect_user(user_id)  # close their open chat tabs too
     return {"ok": True}
 
 
@@ -490,11 +610,11 @@ async def reset(data: ResetRequest):
 
 def logged_in_user(request):
     """(id, username, password_hash, email) of whoever is logged in, or a 401 error."""
-    username = user_from_token(request.cookies.get(SESSION_COOKIE))
-    if username is None:
+    user_id = current_user(request)
+    if user_id is None:
         raise HTTPException(401, "You're not logged in.")
     return db.execute(
-        "SELECT id, username, password_hash, email FROM users WHERE username = ?", (username,)
+        "SELECT id, username, password_hash, email FROM users WHERE id = ?", (user_id,)
     ).fetchone()
 
 
@@ -560,16 +680,11 @@ async def change_password(data: PasswordChange, request: Request):
 
 # ---------- Uploads ----------
 
-def current_user(request):
-    """The logged-in username for an HTTP request, or None."""
-    return user_from_token(request.cookies.get(SESSION_COOKIE))
-
-
 @app.post("/upload")
 async def upload(request: Request, filename: str):
     """Receive one file. The body is the raw file; its name comes in the URL: /upload?filename=cat.png"""
-    username = current_user(request)
-    if username is None:
+    user_id = current_user(request)
+    if user_id is None:
         raise HTTPException(401, "You're not logged in.")
 
     filename = filename.strip()[:MAX_FILENAME_LENGTH] or "file"
@@ -602,21 +717,21 @@ async def upload(request: Request, filename: str):
 
     with db:
         db.execute(
-            "INSERT INTO attachments (id, filename, content_type, size, uploader) VALUES (?, ?, ?, ?, ?)",
-            (file_id, filename, content_type, size, username),
+            "INSERT INTO attachments (id, filename, content_type, size, uploader_id) VALUES (?, ?, ?, ?, ?)",
+            (file_id, filename, content_type, size, user_id),
         )
     return {"id": file_id}
 
 
-def claim_attachment(file_id, username, channel):
+def claim_attachment(file_id, user_id, channel):
     """Tie an uploaded file to the channel it's being sent in. Only the uploader can do that,
     and only once. Returns the file's info for the message, or None if not allowed."""
     if not isinstance(file_id, str):
         return None
     with db:
         cursor = db.execute(
-            "UPDATE attachments SET channel = ? WHERE id = ? AND uploader = ? AND channel IS NULL",
-            (channel, file_id, username),
+            "UPDATE attachments SET channel = ? WHERE id = ? AND uploader_id = ? AND channel IS NULL",
+            (channel, file_id, user_id),
         )
     if cursor.rowcount != 1:  # rowcount: how many rows the UPDATE changed
         return None
@@ -629,19 +744,19 @@ def claim_attachment(file_id, username, channel):
 @app.get("/uploads/{file_id}")
 async def get_upload(request: Request, file_id: str):
     """Send a file, but only to people who may see the message it's in."""
-    username = current_user(request)
+    user_id = current_user(request)
     row = db.execute(
-        "SELECT filename, content_type, uploader, channel FROM attachments WHERE id = ?", (file_id,)
+        "SELECT filename, content_type, uploader_id, channel FROM attachments WHERE id = ?", (file_id,)
     ).fetchone()
     # "Not found" for everything that isn't allowed, so nobody learns which files exist.
     not_found = HTTPException(404, "Not found.")
-    if username is None or row is None:
+    if user_id is None or row is None:
         raise not_found
-    filename, content_type, uploader, channel = row
+    filename, content_type, uploader_id, channel = row
     if channel is None:
-        allowed = uploader == username  # not sent yet: only the uploader
+        allowed = uploader_id == user_id  # not sent yet: only the uploader
     else:
-        allowed = can_join(channel, username)  # sent: whoever can see that channel or DM
+        allowed = can_join(channel, user_id)  # sent: whoever can see that channel or DM
     if not allowed:
         raise not_found
 
@@ -660,7 +775,7 @@ async def get_upload(request: Request, file_id: str):
 
 @app.get("/")
 async def index(request: Request):
-    if user_from_token(request.cookies.get(SESSION_COOKIE)) is None:
+    if current_user(request) is None:
         return RedirectResponse("/login")  # not logged in: send them to the login page
     return FileResponse("static/index.html")
 
@@ -683,44 +798,44 @@ async def channels():
 
 # ---------- Chat ----------
 
-def online_users():
-    """Everyone with at least one open tab, sorted by name. A set first, so two tabs count once."""
-    return sorted({client["username"] for client in clients.values()}, key=str.lower)
+def online_user_ids():
+    """The ids of everyone with at least one open tab. A set, so two tabs count once."""
+    return {client["user_id"] for client in clients.values()}
 
 
 def users_message():
-    """Every account, each marked online or not: [{"name": "axel", "online": True}, ...]"""
-    online = set(online_users())
-    rows = db.execute("SELECT username FROM users ORDER BY username COLLATE NOCASE").fetchall()
-    return {"type": "users", "users": [{"name": name, "online": name in online} for (name,) in rows]}
+    """Every account, each marked online or not: [{"id": 3, "name": "axel", "online": True}, ...]"""
+    online = online_user_ids()
+    rows = db.execute("SELECT id, username FROM users ORDER BY username COLLATE NOCASE").fetchall()
+    return {
+        "type": "users",
+        "users": [{"id": user_id, "name": name, "online": user_id in online} for user_id, name in rows],
+    }
 
 
-def user_exists(username):
-    row = db.execute("SELECT 1 FROM users WHERE username = ?", (username,)).fetchone()
-    return row is not None
-
-
-def can_join(channel, username):
+def can_join(channel, user_id):
     """May this user join this channel? Normal channels: anyone logged in.
-    DMs ("dm:axel:kari", lowercase and sorted): only the two people in it."""
+    DMs ("dm:3:7", the two user ids, smallest first): only the two people in it."""
     if channel in CHANNELS:
         return True
     if not isinstance(channel, str) or not channel.startswith("dm:"):
         return False
 
-    names = channel.split(":")[1:]  # "dm:axel:kari" -> ["axel", "kari"]
-    if len(names) != 2 or channel != channel.lower() or names != sorted(names) or names[0] == names[1]:
-        return False  # not the exact shape the page builds
-    me = username.lower()
-    if me not in names:
+    parts = channel.split(":")[1:]  # "dm:3:7" -> ["3", "7"]
+    if len(parts) != 2 or not all(part.isdigit() for part in parts):
+        return False
+    first, second = int(parts[0]), int(parts[1])
+    if channel != f"dm:{first}:{second}" or first >= second:
+        return False  # not the exact shape the page builds (smallest first, no leading zeros)
+    if user_id not in (first, second):
         return False  # someone else's DM: never
-    other = names[1] if names[0] == me else names[0]
-    return user_exists(other)
+    other = second if user_id == first else first
+    return username_of(other) is not None  # the other person must exist
 
 
 # ---------- Unread ----------
 
-def mark_read(username, channel):
+def mark_read(user_id, channel):
     """Remember that this user has now seen everything in this channel."""
     newest = db.execute("SELECT COALESCE(MAX(id), 0) FROM messages WHERE channel = ?", (channel,)).fetchone()[0]
     # An "upsert": insert a new row, or if this user already has one for this channel,
@@ -728,33 +843,33 @@ def mark_read(username, channel):
     with db:
         db.execute(
             """
-            INSERT INTO last_read (username, channel, message_id) VALUES (?, ?, ?)
-            ON CONFLICT (username, channel) DO UPDATE SET message_id = excluded.message_id
+            INSERT INTO last_read (user_id, channel, message_id) VALUES (?, ?, ?)
+            ON CONFLICT (user_id, channel) DO UPDATE SET message_id = excluded.message_id
             """,
-            (username, channel, newest),
+            (user_id, channel, newest),
         )
 
 
-def unread_channels(username):
+def unread_channels(user_id):
     """Every channel and DM this user can see that has messages newer than the last one they saw."""
     # GROUP BY: one row per channel, with the newest message id in it.
     newest = dict(db.execute("SELECT channel, MAX(id) FROM messages GROUP BY channel"))
-    seen = dict(db.execute("SELECT channel, message_id FROM last_read WHERE username = ?", (username,)))
+    seen = dict(db.execute("SELECT channel, message_id FROM last_read WHERE user_id = ?", (user_id,)))
     return [
         channel
         for channel, newest_id in newest.items()
-        if newest_id > seen.get(channel, 0) and can_join(channel, username)
+        if newest_id > seen.get(channel, 0) and can_join(channel, user_id)
     ]
 
 
 async def announce_new_message(channel):
     """After a new message: it counts as read for whoever is looking at the channel, and
     everyone else who can see the channel gets an "unread" for it."""
-    viewers = {client["username"] for client in clients.values() if client["channel"] == channel}
-    for username in viewers:
-        mark_read(username, channel)
+    viewers = {client["user_id"] for client in clients.values() if client["channel"] == channel}
+    for user_id in viewers:
+        mark_read(user_id, channel)
     for websocket, client in list(clients.items()):
-        if client["username"] not in viewers and can_join(channel, client["username"]):
+        if client["user_id"] not in viewers and can_join(channel, client["user_id"]):
             await send(websocket, {"type": "unread", "channels": [channel]})
 
 
@@ -767,11 +882,11 @@ async def send(websocket, data):
         pass
 
 
-async def disconnect_user(username):
+async def disconnect_user(user_id):
     """Close every open chat tab of one user, with our "not logged in" code (the page then
     goes to the login page). Used after a password reset."""
     for websocket, client in list(clients.items()):
-        if client["username"] == username:
+        if client["user_id"] == user_id:
             try:
                 await websocket.close(code=4001)
             except Exception:
@@ -784,18 +899,18 @@ async def send_to_everyone(data):
         await send(websocket, data)
 
 
-async def send_to_channel(channel, data, except_user=None):
+async def send_to_channel(channel, data, except_user_id=None):
     """Send to everyone viewing a channel, optionally leaving out one user (all their tabs)."""
     for websocket, client in list(clients.items()):
-        if client["channel"] == channel and client["username"] != except_user:
+        if client["channel"] == channel and client["user_id"] != except_user_id:
             await send(websocket, data)
 
 
 @app.websocket("/ws")
 async def chat(websocket: WebSocket):
     # The browser sends the session cookie along when it opens the WebSocket.
-    username = user_from_token(websocket.cookies.get(SESSION_COOKIE))
-    if username is None:
+    user_id = user_id_from_token(websocket.cookies.get(SESSION_COOKIE))
+    if user_id is None:
         # Not logged in. Accept first and then close with our own code (4000-4999 are free
         # for apps): if we refused outright, the page couldn't see why, and would keep retrying.
         await websocket.accept()
@@ -803,11 +918,12 @@ async def chat(websocket: WebSocket):
         return
 
     await websocket.accept()
-    was_online = username in online_users()  # already open in another tab?
-    clients[websocket] = {"username": username, "channel": None}  # no channel until they "join"
+    was_online = user_id in online_user_ids()  # already open in another tab?
+    clients[websocket] = {"user_id": user_id, "channel": None}  # no channel until they "join"
     try:
-        await send(websocket, {"type": "welcome", "username": username})  # tell the page who it is
-        await send(websocket, {"type": "unread", "channels": unread_channels(username)})
+        # Tell the page who it is (the id is for building DM names).
+        await send(websocket, {"type": "welcome", "id": user_id, "username": username_of(user_id)})
+        await send(websocket, {"type": "unread", "channels": unread_channels(user_id)})
         if was_online:
             await send(websocket, users_message())  # just this tab
         else:
@@ -822,13 +938,13 @@ async def chat(websocket: WebSocket):
 
             if kind == "join":
                 new_channel = data.get("channel")
-                if not can_join(new_channel, username):
+                if not can_join(new_channel, user_id):
                     continue
                 # Switch channel and fetch its history with no await in between,
                 # so no message can slip through the gap.
                 clients[websocket]["channel"] = new_channel
                 history = recent_messages(new_channel)
-                mark_read(username, new_channel)  # opening a channel means you've seen it
+                mark_read(user_id, new_channel)  # opening a channel means you've seen it
                 await send(websocket, {"type": "history", "channel": new_channel, "messages": history})
 
             elif kind == "message" and channel is not None:
@@ -837,25 +953,27 @@ async def chat(websocket: WebSocket):
                     continue
                 file = None
                 if data.get("file") is not None:
-                    file = claim_attachment(data.get("file"), username, channel)
+                    file = claim_attachment(data.get("file"), user_id, channel)
                     if file is None:
                         continue  # not their file, already sent, or doesn't exist
                 if not text and file is None:
                     continue  # nothing to send
-                # The name comes from the login, never from the client.
-                message = {"type": "message", "channel": channel, "name": username, "text": text, "file": file}
-                save_message(channel, message)
+                save_message(channel, user_id, text, file)
+                # The name comes from the login (looked up now, so it's always the current one),
+                # never from the client.
+                message = {"type": "message", "channel": channel, "name": username_of(user_id), "text": text, "file": file}
                 await send_to_channel(channel, message)  # everyone in the channel, including us
                 await announce_new_message(channel)  # mark it read or unread for everyone else
 
             elif kind == "typing" and channel is not None:
                 # Tell the others in this channel; you don't need to see yourself typing.
                 await send_to_channel(
-                    channel, {"type": "typing", "channel": channel, "name": username}, except_user=username
+                    channel, {"type": "typing", "channel": channel, "name": username_of(user_id)},
+                    except_user_id=user_id,
                 )
     except WebSocketDisconnect:
         pass
     finally:
         del clients[websocket]
-        if username not in online_users():  # that was their last tab: they went offline
+        if user_id not in online_user_ids():  # that was their last tab: they went offline
             await send_to_everyone(users_message())

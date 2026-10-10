@@ -667,7 +667,7 @@
     let socket = null;         // our WebSocket (replaced with a new one if it drops)
     let currentChannel = null;  // the channel (or DM) we're looking at
     let firstChannel = null;    // where to start: the first channel in the list
-    let myName = null;          // our own username; the server tells us in its "welcome"
+    let myId = null;            // our own user id; the server tells us in its "welcome"
     let reconnectDelay = 1000;  // milliseconds to wait before the next reconnect attempt
     const unread = new Set();   // channels and DMs with messages we haven't seen
 
@@ -734,7 +734,7 @@
       const data = JSON.parse(event.data);  // JSON string -> object
 
       if (data.type === "welcome") {
-        myName = data.username;
+        myId = data.id;
         return;
       }
       if (data.type === "users") {
@@ -785,11 +785,14 @@
       sendToServer({ type: "join", channel: currentChannel });
     }
 
-    // The DM channel name for us and another person: both names, lowercase and sorted,
-    // so both people end up with the same name. Axel+Kari and Kari+Axel -> "dm:axel:kari".
-    function dmChannel(otherName) {
-      const names = [myName.toLowerCase(), otherName.toLowerCase()].sort();
-      return "dm:" + names.join(":");
+    // The DM channel name for us and another person: both user ids, smallest first,
+    // so both people end up with the same name. Users 7 and 3, either way round -> "dm:3:7".
+    // Ids, not usernames: a username can change, an id never does.
+    function dmChannel(otherId) {
+      // sort() on its own compares as *text*, so [10, 9] would stay [10, 9] ("1" comes before "9").
+      // (a, b) => a - b makes it compare as numbers: negative means a goes first.
+      const ids = [myId, otherId].sort((a, b) => a - b);
+      return "dm:" + ids.join(":");
     }
 
     // Mark the sidebar buttons (channels and DMs): highlight where we are, and dot the unread ones.
@@ -926,18 +929,18 @@
       return dot;
     }
 
-    // `users` is every account: [{name: "axel", online: true}, ...]
+    // `users` is every account: [{id: 3, name: "axel", online: true}, ...]
     function showUsers(users) {
       // DM list in the sidebar: everyone except us.
       dmList.replaceChildren();
       for (const user of users) {
-        if (user.name === myName) continue;
+        if (user.id === myId) continue;
         const button = document.createElement("button");
         button.className = "channel";
-        button.dataset.channel = dmChannel(user.name);
+        button.dataset.channel = dmChannel(user.id);
         button.appendChild(makeDot(user.online));
         button.appendChild(document.createTextNode(user.name));
-        button.addEventListener("click", () => switchChannel(dmChannel(user.name), "@" + user.name));
+        button.addEventListener("click", () => switchChannel(dmChannel(user.id), "@" + user.name));
         dmList.appendChild(button);
       }
       updateSidebar();  // the buttons are new, so mark the active and unread ones again
