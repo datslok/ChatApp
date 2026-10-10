@@ -37,6 +37,8 @@ the point is for me to understand how it works, not just to have it done.
   (as in development) they're printed in the server window instead.
 - `static/emoji.json`: every emoji for the reaction picker (and the server's list of allowed reactions),
   made from Unicode's `emoji-test.txt` by `tools/make_emoji_json.py`.
+- `tools/make_admin.py`: make someone an admin (or `--remove`, or `--list`); `--db dev.db` for development.
+  Admins can edit and delete anyone's messages and custom emoji.
 - `uploads/`: uploaded files, saved under random names (git-ignored, like `chat.db`).
 - `ROADMAP.md`: the milestones, ticked off as they're done.
 - `setup.ps1`: creates the `chatapp` conda environment and installs `requirements.txt`.

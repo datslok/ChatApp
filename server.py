@@ -137,7 +137,8 @@ db.execute("""
         avatar_id     TEXT,  -- profile picture's file name in uploads/avatars, like "Xk9...a.webp"; NULL = none
         banner_id     TEXT,  -- profile banner's file name in uploads/banners; NULL = none
         status        TEXT,  -- a short line like "playing Minecraft"; NULL = none
-        bio           TEXT   -- a few lines about yourself; NULL = none
+        bio           TEXT,  -- a few lines about yourself; NULL = none
+        is_admin      INTEGER NOT NULL DEFAULT 0  -- 1 = may edit and delete anyone's messages (tools/make_admin.py)
     )
 """)
 db.execute("""
@@ -149,7 +150,8 @@ db.execute("""
         text          TEXT NOT NULL,
         sent_at       TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         attachment_id TEXT REFERENCES attachments(id),
-        reply_to      INTEGER REFERENCES messages(id)   -- the message this one replies to; NULL = none
+        reply_to      INTEGER REFERENCES messages(id),  -- the message this one replies to; NULL = none
+        edited_at     TEXT                              -- when it was last edited; NULL = never
     )
 """)
 db.execute("""
@@ -380,6 +382,22 @@ if "reply_to" not in table_columns("messages"):
     with db:
         db.execute("ALTER TABLE messages ADD COLUMN reply_to INTEGER REFERENCES messages(id)")
 
+if "edited_at" not in table_columns("messages"):
+    # From before editing existed: no message has been edited (NULL).
+    with db:
+        db.execute("ALTER TABLE messages ADD COLUMN edited_at TEXT")
+
+if "is_admin" not in table_columns("users"):
+    # From before admins existed: nobody is one, until tools/make_admin.py says so.
+    with db:
+        db.execute("ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0")
+
+
+def is_admin(user_id):
+    """Checked fresh from the database every time, so tools/make_admin.py works straight away."""
+    row = db.execute("SELECT is_admin FROM users WHERE id = ?", (user_id,)).fetchone()
+    return bool(row and row[0])
+
 
 def username_of(user_id):
     row = db.execute("SELECT username FROM users WHERE id = ?", (user_id,)).fetchone()
@@ -489,7 +507,7 @@ def recent_messages(channel):
     # (an alias), holding the message being replied to, and "original_sender" its sender.
     rows = db.execute(
         """
-        SELECT messages.id, messages.sent_at,
+        SELECT messages.id, messages.sent_at, messages.edited_at, messages.reply_to,
                messages.user_id, COALESCE(users.username, messages.legacy_name), messages.text,
                attachments.id, attachments.filename, attachments.size, attachments.content_type,
                original.id, original.user_id, COALESCE(original_sender.username, original.legacy_name),
@@ -510,14 +528,17 @@ def recent_messages(channel):
         {
             "id": message_id,
             "sent_at": iso_time(sent_at),
+            "edited_at": iso_time(edited_at) if edited_at else None,
             "user_id": user_id,  # None for messages from before accounts existed
             "name": name,
             "text": text,
             "file": file_info(file_id, filename, size, content_type) if file_id else None,
-            "reply": reply_preview(*original),
+            # A reply whose original has been deleted: reply_to is still set, but the JOIN found nothing.
+            "reply": reply_preview(*original) or ({"id": reply_to, "deleted": True} if reply_to else None),
             "reactions": reactions[message_id],
         }
-        for (message_id, sent_at, user_id, name, text, file_id, filename, size, content_type, *original) in rows
+        for (message_id, sent_at, edited_at, reply_to, user_id, name, text,
+             file_id, filename, size, content_type, *original) in rows
     ]
 
 
@@ -1262,10 +1283,10 @@ async def add_custom_emoji(request: Request, name: str):
 
 @app.delete("/custom-emoji/{emoji_id}")
 async def delete_custom_emoji(request: Request, emoji_id: int):
-    """Delete one of your own custom emoji, and the reactions that used it."""
+    """Delete one of your own custom emoji (admins: anyone's), and the reactions that used it."""
     user_id, username, password_hash, email = logged_in_user(request)
-    row = db.execute("SELECT file FROM custom_emoji WHERE id = ? AND owner_id = ?", (emoji_id, user_id)).fetchone()
-    if row is None:
+    row = db.execute("SELECT file, owner_id FROM custom_emoji WHERE id = ?", (emoji_id,)).fetchone()
+    if row is None or (row[1] != user_id and not is_admin(user_id)):
         raise HTTPException(404, "That's not one of your emoji.")
     reaction = f"custom:{emoji_id}"
     # Which messages had it as a reaction, so their chips can be updated afterwards.
@@ -1453,16 +1474,16 @@ def users_message():
     [{"id": 3, "name": "axel", "online": True, "avatar": "Xk9...webp", "status": "...", "bio": "..."}, ...]"""
     online = online_user_ids()
     rows = db.execute(
-        "SELECT id, username, avatar_id, banner_id, status, bio FROM users ORDER BY username COLLATE NOCASE"
+        "SELECT id, username, avatar_id, banner_id, status, bio, is_admin FROM users ORDER BY username COLLATE NOCASE"
     ).fetchall()
     return {
         "type": "users",
         "users": [
             {
                 "id": user_id, "name": name, "online": user_id in online,
-                "avatar": avatar, "banner": banner, "status": status, "bio": bio,
+                "avatar": avatar, "banner": banner, "status": status, "bio": bio, "admin": bool(admin),
             }
-            for user_id, name, avatar, banner, status, bio in rows
+            for user_id, name, avatar, banner, status, bio, admin in rows
         ],
     }
 
@@ -1632,6 +1653,7 @@ async def chat(websocket: WebSocket):
                     "user_id": user_id, "name": username_of(user_id), "text": text, "file": file,
                     "reply": live_reply_preview(reply_to),
                     "reactions": [],  # a brand new message has none yet
+                    "edited_at": None,
                 }
                 await send_to_channel(channel, message)  # everyone in the channel, including us
                 await announce_new_message(channel)  # mark it read or unread for everyone else
@@ -1665,6 +1687,54 @@ async def chat(websocket: WebSocket):
                     "type": "reactions", "channel": message_channel, "message_id": message_id,
                     "reactions": reactions_for([message_id])[message_id],
                 })
+
+            elif kind in ("edit", "delete"):
+                # {"type": "edit", "message_id": 57, "text": "..."} or {"type": "delete", "message_id": 57}
+                message_id = data.get("message_id")
+                if not isinstance(message_id, int) or isinstance(message_id, bool):
+                    continue
+                row = db.execute(
+                    "SELECT channel, user_id, attachment_id FROM messages WHERE id = ?", (message_id,)
+                ).fetchone()
+                if row is None:
+                    continue
+                message_channel, author_id, attachment_id = row
+                if not can_join(message_channel, user_id):
+                    continue  # a message we can't even see
+                if author_id != user_id and not is_admin(user_id):
+                    continue  # only your own messages, unless you're an admin
+
+                if kind == "edit":
+                    text = clean_text(data)
+                    if text is None or (not text and attachment_id is None):
+                        continue  # too long, or empty without a file to keep the message
+                    text = expand_custom_emoji(text)  # :pog: -> <:17>, as for new messages
+                    with db:
+                        db.execute(
+                            "UPDATE messages SET text = ?, edited_at = CURRENT_TIMESTAMP WHERE id = ?",
+                            (text, message_id),
+                        )
+                    edited_at = db.execute("SELECT edited_at FROM messages WHERE id = ?", (message_id,)).fetchone()[0]
+                    await send_to_channel(message_channel, {
+                        "type": "edited", "channel": message_channel, "message_id": message_id,
+                        "text": text, "edited_at": iso_time(edited_at),
+                    })
+                else:
+                    # Delete the message with everything that belongs to it, in one transaction.
+                    file = None
+                    if attachment_id:
+                        file = db.execute("SELECT id FROM attachments WHERE id = ?", (attachment_id,)).fetchone()
+                    with db:
+                        db.execute("DELETE FROM reactions WHERE message_id = ?", (message_id,))
+                        db.execute("DELETE FROM messages WHERE id = ?", (message_id,))
+                        if attachment_id:
+                            db.execute("DELETE FROM attachments WHERE id = ?", (attachment_id,))
+                    if file:  # the file on disk, only once the database change has been saved
+                        (UPLOAD_DIR / attachment_id).unlink(missing_ok=True)
+                    # (Replies to it keep their reply_to; their quote now says "deleted".)
+                    await send_to_channel(message_channel, {
+                        "type": "deleted", "channel": message_channel, "message_id": message_id,
+                    })
 
             elif kind == "typing" and channel is not None:
                 # Tell the others in this channel; you don't need to see yourself typing.

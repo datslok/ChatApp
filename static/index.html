@@ -148,6 +148,7 @@
     }
 
     .message-body {
+      flex: 1;       /* take up the rest of the row (so an edit box can be full width) */
       min-width: 0;  /* lets long words wrap instead of stretching the message */
       overflow-wrap: anywhere;
     }
@@ -399,6 +400,63 @@
 
     .reply-line:hover .reply-text {
       color: white;
+    }
+
+    .reply-line.deleted {
+      font-style: italic;
+    }
+
+    .edited-label {
+      font-size: 0.7rem;  /* rem: always small, even in a jumbo emoji message */
+      color: #949ba4;
+      font-family: system-ui, sans-serif;
+    }
+
+    /* The edit box, in place of a message's text. */
+    .edit-input {
+      box-sizing: border-box;
+      width: 100%;
+      max-height: 50vh;
+      padding: 8px 10px;
+      border: none;
+      border-radius: 8px;
+      background: #383a40;
+      color: inherit;
+      font: inherit;
+      line-height: 1.4;
+      resize: none;
+      overflow-y: auto;
+    }
+
+    .editor-hint {
+      font-size: 0.75rem;
+      color: #949ba4;
+    }
+
+    /* "save" and "cancel" look like links. */
+    .editor-hint button {
+      padding: 0;
+      border: none;
+      background: none;
+      color: #00a8fc;
+      font-size: inherit;
+      cursor: pointer;
+    }
+
+    .admin-badge {
+      margin-left: 8px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: #5865f2;
+      color: white;
+      font-size: 0.7rem;
+      vertical-align: middle;
+    }
+
+    .admin-heading {
+      margin: 8px 0 0;
+      font-size: 0.8rem;
+      color: #949ba4;
     }
 
     .avatar.tiny {
@@ -1819,16 +1877,43 @@
       if (data.channel !== currentChannel) return;
 
       if (data.type === "history") {
-        for (const message of data.messages) {
+        shownMessages = data.messages;  // remembered, so we can redraw after edits and deletes
+        for (const message of shownMessages) {
           showMessage(message);
         }
       } else if (data.type === "message") {
         stopTyping(data.name);  // their message arrived, so they're done typing
+        shownMessages.push(data);
         showMessage(data);
+      } else if (data.type === "edited") {
+        // A message was edited: update it in our list (and quotes of it in replies), then redraw.
+        const edited = shownMessages.find((message) => message.id === data.message_id);
+        if (edited) {
+          edited.text = data.text;
+          edited.edited_at = data.edited_at;
+        }
+        for (const message of shownMessages) {
+          if (message.reply && message.reply.id === data.message_id && !message.reply.deleted) {
+            message.reply.text = data.text.slice(0, 100).replace(/<:\d*$/, "");  // like the server's quote
+          }
+        }
+        redrawMessages();
+      } else if (data.type === "deleted") {
+        // A message was deleted: take it out of our list, mark replies to it, and redraw.
+        shownMessages = shownMessages.filter((message) => message.id !== data.message_id);
+        for (const message of shownMessages) {
+          if (message.reply && message.reply.id === data.message_id) {
+            message.reply = { id: data.message_id, deleted: true };
+          }
+        }
+        if (editingId === data.message_id) editingId = null;
+        redrawMessages();
       } else if (data.type === "typing") {
         showTyping(data.name);
       } else if (data.type === "reactions") {
-        // A message's reactions changed: redraw just its chip row (if the message is on screen).
+        // A message's reactions changed: remember them (for redraws), and redraw just its chip row.
+        const reacted = shownMessages.find((message) => message.id === data.message_id);
+        if (reacted) reacted.reactions = data.reactions;
         const row = messages.querySelector(`[data-id="${data.message_id}"] .reactions`);
         if (row) {
           const distanceFromBottom = messages.scrollHeight - messages.scrollTop - messages.clientHeight;
@@ -1860,6 +1945,8 @@
     // (If we're disconnected right now, nothing is sent; we rejoin when we reconnect.)
     function joinCurrentChannel() {
       messages.replaceChildren();  // remove all the old messages
+      shownMessages = [];
+      editingId = null;
       lastShown = null;            // so the first message starts a fresh group (and date divider)
       clearReply();                // a reply belongs to the channel we just left
       clearTyping();
@@ -2070,6 +2157,15 @@
           return;
         }
       }
+      // ↑ in an empty text box: edit our last message (like Discord).
+      if (event.key === "ArrowUp" && input.value === "") {
+        const mine = shownMessages.filter((message) => message.user_id === myId);
+        if (mine.length) {
+          event.preventDefault();
+          startEdit(mine[mine.length - 1]);  // the last one in the list is the newest
+        }
+        return;
+      }
       if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
         event.preventDefault();  // no new line...
         form.requestSubmit();    // ...send instead (as if Send was clicked)
@@ -2239,29 +2335,41 @@
     const MAX_CUSTOM_EMOJI = 12;
     let pendingEmojiName = "";  // the name for the emoji being edited/uploaded
 
-    // Our own custom emoji, each with a Delete button, and "3/12".
+    // One custom emoji with its name (and, for others' emoji, whose it is) and a Delete button.
+    function makeEmojiItem(emoji, showOwner) {
+      const item = document.createElement("div");
+      item.className = "my-emoji-item";
+      item.appendChild(makeEmojiElement("custom:" + emoji.id));
+      const name = document.createElement("span");
+      name.textContent = ":" + emoji.name + ":" + (showOwner ? ` (${people.get(emoji.owner_id)?.name ?? "someone"})` : "");
+      item.appendChild(name);
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "secondary";
+      remove.textContent = "Delete";
+      remove.addEventListener("click", async () => {
+        const response = await fetch("/custom-emoji/" + emoji.id, { method: "DELETE" });
+        if (!response.ok) showStatus(emojiStatus, "Couldn't delete it.", "error");
+        // On success, the server sends everyone the new list, which redraws this.
+      });
+      item.appendChild(remove);
+      return item;
+    }
+
+    // Our own custom emoji, each with a Delete button, and "3/12". Admins also see everyone else's.
     function renderMyEmoji() {
       const mine = customEmoji.filter((emoji) => emoji.owner_id === myId);
       emojiCount.textContent = `Your emoji: ${mine.length}/${MAX_CUSTOM_EMOJI}. Everyone can react with them.`;
       myEmojiList.replaceChildren();
-      for (const emoji of mine) {
-        const item = document.createElement("div");
-        item.className = "my-emoji-item";
-        item.appendChild(makeEmojiElement("custom:" + emoji.id));
-        const name = document.createElement("span");
-        name.textContent = ":" + emoji.name + ":";
-        item.appendChild(name);
-        const remove = document.createElement("button");
-        remove.type = "button";
-        remove.className = "secondary";
-        remove.textContent = "Delete";
-        remove.addEventListener("click", async () => {
-          const response = await fetch("/custom-emoji/" + emoji.id, { method: "DELETE" });
-          if (!response.ok) showStatus(emojiStatus, "Couldn't delete it.", "error");
-          // On success, the server sends everyone the new list, which redraws this.
-        });
-        item.appendChild(remove);
-        myEmojiList.appendChild(item);
+      for (const emoji of mine) myEmojiList.appendChild(makeEmojiItem(emoji, false));
+
+      const others = customEmoji.filter((emoji) => emoji.owner_id !== myId);
+      if (amAdmin() && others.length) {
+        const heading = document.createElement("p");
+        heading.className = "admin-heading";
+        heading.textContent = "Everyone else's emoji (you can delete them as an admin):";
+        myEmojiList.appendChild(heading);
+        for (const emoji of others) myEmojiList.appendChild(makeEmojiItem(emoji, true));
       }
       addEmojiButton.disabled = mine.length >= MAX_CUSTOM_EMOJI;
     }
@@ -2901,6 +3009,12 @@
       profileBanner.replaceChildren(makeBanner(userId));
       profileAvatar.replaceChildren(makeAvatar(userId, person.name, "large"));
       profileName.textContent = person.name;
+      if (person.admin) {
+        const badge = document.createElement("span");
+        badge.className = "admin-badge";
+        badge.textContent = "Admin";
+        profileName.appendChild(badge);
+      }
       profileStatus.textContent = person.status || "";
       profileBio.textContent = person.bio || "";
       profileActionStatus.textContent = "";
@@ -3555,6 +3669,11 @@
     // The quote above a reply: "↪ (picture) kari: are you coming tonig…". Click it to jump there.
     function makeReplyLine(reply) {
       const line = document.createElement("div");
+      if (reply.deleted) {
+        line.className = "reply-line deleted";
+        line.textContent = "↪ Original message was deleted";
+        return line;
+      }
       line.className = "reply-line clickable";
       line.appendChild(document.createTextNode("↪ "));
       line.appendChild(makeAvatar(reply.user_id, reply.name, "tiny"));
@@ -3588,6 +3707,119 @@
       target.classList.remove("flash");
       void target.offsetWidth;
       target.classList.add("flash");
+    }
+
+    // ---------- Editing and deleting ----------
+
+    // The channel's messages, as the server sent them (and as edits/deletes/reactions changed them).
+    // Deleting one can change its neighbours (if the first of a group goes, the next needs its
+    // picture and name), so instead of patching the screen, we redraw everything from this list.
+    let shownMessages = [];
+    let editingId = null;  // the message being edited right now, if any
+    let editDraft = "";    // what's typed in its edit box (kept here, so a redraw doesn't lose it)
+
+    function amAdmin() {
+      return people.get(myId)?.admin === true;
+    }
+
+    // May we edit/delete this message? Our own, or anyone's if we're an admin.
+    function canModify(message) {
+      return message.user_id === myId || amAdmin();
+    }
+
+    // Redraw all messages from shownMessages, keeping the scroll position.
+    function redrawMessages() {
+      const atBottom = messages.scrollHeight - messages.scrollTop - messages.clientHeight < 50;
+      const scrollTop = messages.scrollTop;
+      messages.replaceChildren();
+      lastShown = null;
+      for (const message of shownMessages) showMessage(message);
+      messages.scrollTop = atBottom ? messages.scrollHeight : scrollTop;
+    }
+
+    // In the text, custom emoji are tokens like <:17>. In an edit box we show ":pog:" again.
+    function tokensToCodes(text) {
+      return text.replace(/<:(\d+)>/g, (token, id) => customById.has(Number(id)) ? emojiLabel("custom:" + id) : ":deleted:");
+    }
+
+    function startEdit(message) {
+      editingId = message.id;
+      editDraft = tokensToCodes(message.text);
+      redrawMessages();
+    }
+
+    function stopEditing() {
+      editingId = null;
+      redrawMessages();
+      input.focus();
+    }
+
+    function saveEdit(message) {
+      const text = editDraft.trim();
+      if (text === tokensToCodes(message.text).trim()) return stopEditing();  // nothing changed
+      if (!text && !message.file) {
+        // Emptied completely: that's really a delete (like on Discord).
+        stopEditing();
+        deleteMessage(message, false);
+        return;
+      }
+      sendToServer({ type: "edit", message_id: message.id, text: text });
+      stopEditing();  // the server's "edited" message will show the new text
+    }
+
+    function deleteMessage(message, skipConfirm) {
+      // confirm() shows the browser's own OK/Cancel box. Shift+click skips it.
+      if (skipConfirm || confirm("Delete this message?")) {
+        sendToServer({ type: "delete", message_id: message.id });
+      }
+    }
+
+    // The edit box shown in place of a message's text.
+    function makeEditor(message) {
+      const box = document.createElement("div");
+      box.className = "editor";
+      const area = document.createElement("textarea");
+      area.className = "edit-input";
+      area.maxLength = maxTextLength;
+      area.value = editDraft;
+      const grow = () => {
+        area.style.height = "auto";
+        area.style.height = area.scrollHeight + "px";
+      };
+      area.addEventListener("input", () => {
+        editDraft = area.value;
+        grow();
+      });
+      area.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
+          event.preventDefault();
+          saveEdit(message);
+        } else if (event.key === "Escape") {
+          stopEditing();
+        }
+      });
+      box.appendChild(area);
+
+      const hint = document.createElement("div");
+      hint.className = "editor-hint";
+      const save = document.createElement("button");
+      save.type = "button";
+      save.textContent = "save";
+      save.addEventListener("click", () => saveEdit(message));
+      const cancel = document.createElement("button");
+      cancel.type = "button";
+      cancel.textContent = "cancel";
+      cancel.addEventListener("click", stopEditing);
+      hint.append("Enter to ", save, " · Esc to ", cancel);  // append() takes text and elements
+      box.appendChild(hint);
+
+      // Once it's on the page: focus it, cursor at the end, right height.
+      setTimeout(() => {
+        area.focus();
+        area.selectionStart = area.selectionEnd = area.value.length;
+        grow();
+      }, 0);
+      return box;
     }
 
     // A line across the chat with the day in the middle, between messages from different days.
@@ -3639,6 +3871,19 @@
       reactButton.title = "Add reaction";
       reactButton.addEventListener("click", () => openEmojiPicker(message.id, reactButton));
       actions.append(reactButton, replyButton);
+      if (canModify(message)) {
+        const editButton = document.createElement("button");
+        editButton.type = "button";
+        editButton.textContent = "✏️";
+        editButton.title = "Edit";
+        editButton.addEventListener("click", () => startEdit(message));
+        const deleteButton = document.createElement("button");
+        deleteButton.type = "button";
+        deleteButton.textContent = "🗑️";
+        deleteButton.title = "Delete (hold Shift to skip the question)";
+        deleteButton.addEventListener("click", (event) => deleteMessage(message, event.shiftKey));
+        actions.append(editButton, deleteButton);
+      }
       div.appendChild(actions);
 
       const body = document.createElement("div");
@@ -3685,10 +3930,19 @@
         }
       }
 
-      if (message.text) {
+      if (editingId === message.id) {
+        body.appendChild(makeEditor(message));  // being edited: an edit box instead of the text
+      } else if (message.text) {
         const text = document.createElement("div");
         text.className = isOnlyEmoji(message.text) ? "message-text jumbo" : "message-text";
         fillWithEmoji(text, message.text);
+        if (message.edited_at) {
+          const label = document.createElement("span");
+          label.className = "edited-label";
+          label.textContent = " (edited)";
+          label.title = "Edited " + new Date(message.edited_at).toLocaleString();
+          text.appendChild(label);
+        }
         body.appendChild(text);
       }
       if (message.file) {

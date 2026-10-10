@@ -24,7 +24,7 @@
    - [x] Replies
    - [x] Reactions, with a full emoji picker (from Unicode's emoji list)
    - [x] Custom emoji (12 per person, also animated) as reactions
-   - [ ] Editing and deleting your own messages; admins can edit and delete anyone's
+   - [x] Editing and deleting your own messages; admins can edit and delete anyone's (tools/make_admin.py)
    - [ ] @mentions (stored by user id), with their own unread marker
    - [ ] Notifications (browser notifications, sound, count in the tab title)
    - [x] Custom emoji inside messages (typing :pog:, stored as <:id> tokens); emoji picker and jumbo emoji in messages; multi-line text box
