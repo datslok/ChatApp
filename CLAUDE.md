@@ -1,4 +1,4 @@
-# Our Chat: a small Discord-style app
+# ChatApp: a small Discord-style app
 
 A chat app for me, my girlfriend and our friends (about 5–20 people). It's a **fun learning project**:
 the point is for me to understand how it works, not just to have it done.

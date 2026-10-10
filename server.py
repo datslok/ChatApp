@@ -38,7 +38,7 @@ SMTP_HOST = os.environ.get("SMTP_HOST", "")
 SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
 SMTP_USER = os.environ.get("SMTP_USER", "")
 SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "")
-MAIL_FROM = os.environ.get("MAIL_FROM", "Our Chat <noreply@datslok.no>")
+MAIL_FROM = os.environ.get("MAIL_FROM", "ChatApp <noreply@datslok.no>")
 print(f"Using database {DATABASE_FILE} and upload folder {UPLOAD_DIR}/")
 if not INVITE_CODE:
     print("WARNING: no INVITE_CODE set, so anyone who can reach this server can create an account.")
@@ -808,14 +808,14 @@ async def forgot(data: ForgotRequest, request: Request, background_tasks: Backgr
         link = f"{PUBLIC_URL}/reset?token={token}"
         body = (
             f"Hi {username},\n\n"
-            "Someone (hopefully you) asked to reset your password for Our Chat.\n"
+            "Someone (hopefully you) asked to reset your password for ChatApp.\n"
             f"Open this link to choose a new one. It works once, for the next {RESET_MINUTES} minutes:\n\n"
             f"{link}\n\n"
             "If you didn't ask for this, just ignore this email. Your password stays the same.\n"
         )
         # Sent after we've answered: if we waited for it, a real address would answer slower
         # than a made-up one, and the timing would give away which emails exist.
-        background_tasks.add_task(send_email, email, "Reset your password for Our Chat", body)
+        background_tasks.add_task(send_email, email, "Reset your password for ChatApp", body)
 
     return {"ok": True}
 

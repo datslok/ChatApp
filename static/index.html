@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Our Chat</title>
+  <title>ChatApp</title>
   <style>
     body {
       margin: 0;
@@ -2140,7 +2140,7 @@
       openSidebarButton.classList.toggle(
         "has-unread", unread.size > 0 || mentionCounts.size > 0 || incomingIds.size > 0
       );
-      updateTitle();  // "(3) Our Chat"
+      updateTitle();  // "(3) ChatApp"
     }
 
     // ---------- Notifications ----------
@@ -2336,14 +2336,14 @@
       }
     }
 
-    // The tab title: "(3) Our Chat". Counts the red numbers, plus mentions that arrived in the
+    // The tab title: "(3) ChatApp". Counts the red numbers, plus mentions that arrived in the
     // channel we're in while we weren't looking.
     let missedWhileAway = 0;
 
     function updateTitle() {
       let total = missedWhileAway;
       for (const count of mentionCounts.values()) total += count;
-      document.title = total > 0 ? `(${total}) Our Chat` : "Our Chat";
+      document.title = total > 0 ? `(${total}) ChatApp` : "ChatApp";
     }
 
     // Back to the chat: those missed ones are seen now.
