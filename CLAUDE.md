@@ -31,6 +31,9 @@ the point is for me to understand how it works, not just to have it done.
 - `server.py`: FastAPI app. Serves the page and the `/ws` WebSocket endpoint that broadcasts messages.
 - `static/index.html`: the chat page (markup, styles and script in one file for now).
 - `static/login.html`: the login / create account page.
+- `static/reset.html`: "forgot password" (asks for a reset link) and, with `?token=`, choosing a new password.
+- Emails (reset links) go out through Resend's SMTP server, configured in `.env`. Without `SMTP_HOST`
+  (as in development) they're printed in the server window instead.
 - `uploads/`: uploaded files, saved under random names (git-ignored, like `chat.db`).
 - `ROADMAP.md`: the milestones, ticked off as they're done.
 - `setup.ps1`: creates the `chatapp` conda environment and installs `requirements.txt`.

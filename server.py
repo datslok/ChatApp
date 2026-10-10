@@ -1,14 +1,18 @@
+import hashlib
 import json
 import os
 import re
 import secrets
+import smtplib
 import sqlite3
+import ssl
 import time
+from email.message import EmailMessage
 from pathlib import Path
 
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
-from fastapi import FastAPI, HTTPException, Request, Response, WebSocket, WebSocketDisconnect
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, RedirectResponse
 from pydantic import BaseModel
 
@@ -23,9 +27,20 @@ SECURE_COOKIES = os.environ.get("SECURE_COOKIES") == "1"  # 1 = cookies only eve
 # so test messages never end up in the real chat.
 DATABASE_FILE = os.environ.get("DATABASE_FILE", "chat.db")
 UPLOAD_DIR = Path(os.environ.get("UPLOAD_DIR", "uploads"))
+# The site's own address, for links in emails. Never taken from the request: a request can
+# claim any host name, which would let someone make us email links to *their* site.
+PUBLIC_URL = os.environ.get("PUBLIC_URL", "http://localhost:8000").rstrip("/")
+# The mail server that sends our emails (password reset links). Empty = print emails here instead.
+SMTP_HOST = os.environ.get("SMTP_HOST", "")
+SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
+SMTP_USER = os.environ.get("SMTP_USER", "")
+SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "")
+MAIL_FROM = os.environ.get("MAIL_FROM", "Our Chat <noreply@datslok.no>")
 print(f"Using database {DATABASE_FILE} and upload folder {UPLOAD_DIR}/")
 if not INVITE_CODE:
     print("WARNING: no INVITE_CODE set, so anyone who can reach this server can create an account.")
+if not SMTP_HOST:
+    print("No SMTP_HOST set: emails will be printed here instead of sent.")
 
 CHANNELS = ["general", "memes"]  # add a name here to make a new channel
 MAX_TEXT_LENGTH = 2000
@@ -38,6 +53,10 @@ SESSION_COOKIE = "session"
 SESSION_DAYS = 30
 MAX_FAILURES = 5          # wrong passwords (or invite codes) allowed...
 FAILURE_WINDOW = 15 * 60  # ...within this many seconds, before we refuse to check more
+# Good enough to catch typos: something@something.something, no spaces.
+EMAIL_PATTERN = re.compile(r"[^@\s]+@[^@\s]+\.[^@\s]+")
+MAX_EMAIL_LENGTH = 254
+RESET_MINUTES = 60  # how long a password reset link works
 
 UPLOAD_DIR.mkdir(exist_ok=True)  # create the folder if it isn't there yet
 MAX_UPLOAD_SIZE = 10 * 1024 * 1024  # 10 MB, in bytes
@@ -80,7 +99,8 @@ db.execute("""
         id            INTEGER PRIMARY KEY,
         username      TEXT NOT NULL UNIQUE COLLATE NOCASE,
         password_hash TEXT NOT NULL,
-        created_at    TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        created_at    TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        email         TEXT  -- stored in lowercase; NULL for accounts made before emails existed
     )
 """)
 db.execute("""
@@ -99,6 +119,13 @@ db.execute("""
         PRIMARY KEY (username, channel)  -- one row per person per channel
     )
 """)
+db.execute("""
+    CREATE TABLE IF NOT EXISTS password_resets (
+        token_hash TEXT PRIMARY KEY,  -- a hash of the token in the emailed link, never the token itself
+        user_id    INTEGER NOT NULL REFERENCES users(id),
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+""")
 
 # Migrations: add columns that older databases don't have yet.
 columns = [row[1] for row in db.execute("PRAGMA table_info(messages)")]
@@ -110,6 +137,14 @@ if "attachment_id" not in columns:
     # From before uploads existed: old messages simply have no attachment (NULL).
     with db:
         db.execute("ALTER TABLE messages ADD COLUMN attachment_id TEXT REFERENCES attachments(id)")
+user_columns = [row[1] for row in db.execute("PRAGMA table_info(users)")]
+if "email" not in user_columns:
+    # From before emails existed: old accounts have none (NULL) until they add one in Settings.
+    with db:
+        db.execute("ALTER TABLE users ADD COLUMN email TEXT")
+# A unique index: a lookup table SQLite keeps next to the users table (fast "who has this email?"),
+# which also refuses a second account with the same email. Several NULLs are allowed.
+db.execute("CREATE UNIQUE INDEX IF NOT EXISTS users_email ON users (email)")
 
 
 # ---------- Messages ----------
@@ -188,7 +223,21 @@ class Credentials(BaseModel):
     """What the login page sends: FastAPI checks the JSON has these fields, as strings."""
     username: str
     password: str
+    email: str = ""   # only used when creating an account
     invite: str = ""  # only used when creating an account
+
+
+def clean_email(raw):
+    """A tidied-up email address (trimmed, lowercase), or None if it doesn't look like one."""
+    email = raw.strip().lower()
+    if len(email) > MAX_EMAIL_LENGTH or not EMAIL_PATTERN.fullmatch(email):
+        return None
+    return email
+
+
+def check_password_length(password):
+    if not MIN_PASSWORD_LENGTH <= len(password) <= MAX_PASSWORD_LENGTH:
+        raise HTTPException(400, f"Passwords need at least {MIN_PASSWORD_LENGTH} characters.")
 
 
 # Recent failed attempts, to stop password (and invite code) guessing:
@@ -265,17 +314,21 @@ async def register(credentials: Credentials, request: Request, response: Respons
     password = credentials.password
     if not USERNAME_PATTERN.fullmatch(username):
         raise HTTPException(400, "Usernames are 1–32 letters, digits, _ or -.")
-    if not MIN_PASSWORD_LENGTH <= len(password) <= MAX_PASSWORD_LENGTH:
-        raise HTTPException(400, f"Passwords need at least {MIN_PASSWORD_LENGTH} characters.")
+    check_password_length(password)
+    email = clean_email(credentials.email)
+    if email is None:
+        raise HTTPException(400, "Please enter a valid email address (it's used to reset your password).")
 
     password_hash = hasher.hash(password)  # salted and hashed; the password itself is never stored
     try:
         with db:
             cursor = db.execute(
-                "INSERT INTO users (username, password_hash) VALUES (?, ?)",
-                (username, password_hash),
+                "INSERT INTO users (username, password_hash, email) VALUES (?, ?, ?)",
+                (username, password_hash, email),
             )
-    except sqlite3.IntegrityError:  # the UNIQUE rule on username was broken
+    except sqlite3.IntegrityError as error:  # a UNIQUE rule was broken: username or email
+        if "email" in str(error):
+            raise HTTPException(400, "That email is already used by another account.")
         raise HTTPException(400, "That username is taken.")
 
     start_session(response, cursor.lastrowid)  # lastrowid: the id SQLite gave the new user
@@ -323,6 +376,185 @@ async def logout(request: Request, response: Response):
         with db:
             db.execute("DELETE FROM sessions WHERE token = ?", (token,))
     response.delete_cookie(SESSION_COOKIE, httponly=True, samesite="lax", secure=SECURE_COOKIES)
+    return {"ok": True}
+
+
+# ---------- Email and password resets ----------
+
+def send_email(to, subject, body):
+    """Send a plain-text email. This is slow (it talks to a mail server over the internet),
+    so it's only ever run in the background, after the response has gone out."""
+    if not SMTP_HOST:
+        # Development: no mail server, so just show the email in the server window.
+        print(f"\n----- EMAIL (not sent: no SMTP_HOST) -----\nTo: {to}\nSubject: {subject}\n\n{body}\n", flush=True)
+        return
+
+    message = EmailMessage()
+    message["From"] = MAIL_FROM
+    message["To"] = to
+    message["Subject"] = subject
+    message.set_content(body)
+    try:
+        # SMTP: the protocol mail servers use. starttls() switches the connection to encrypted
+        # before we log in, so the password and the email never travel in plain text.
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=30) as smtp:
+            smtp.starttls(context=ssl.create_default_context())
+            smtp.login(SMTP_USER, SMTP_PASSWORD)
+            smtp.send_message(message)
+    except Exception as error:
+        print(f"Couldn't send email to {to}: {error}", flush=True)
+
+
+def hash_token(token):
+    """Reset tokens are stored hashed: if the database leaked, the hashes couldn't be used as links.
+    A fast hash (SHA-256) is fine here, unlike for passwords: the token is long and random,
+    so there's nothing to guess."""
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
+class ForgotRequest(BaseModel):
+    email: str
+
+
+@app.post("/forgot")
+async def forgot(data: ForgotRequest, request: Request, background_tasks: BackgroundTasks):
+    """Email a reset link. The answer is always the same, whether or not the email belongs to
+    an account, so nobody can use this to find out whose email is registered."""
+    email = clean_email(data.email)
+    if email is None:
+        raise HTTPException(400, "That doesn't look like an email address.")
+
+    # At most a few requests per visitor and per email address, so nobody can flood an inbox.
+    # (Every request counts here, not just failed ones.)
+    ip_key = "forgot-ip:" + client_ip(request)
+    email_key = "forgot-email:" + email
+    if too_many_failures(ip_key) or too_many_failures(email_key):
+        raise HTTPException(429, "Too many requests. Try again in 15 minutes.")
+    record_failure(ip_key)
+    record_failure(email_key)
+
+    row = db.execute("SELECT id, username FROM users WHERE email = ?", (email,)).fetchone()
+    if row is not None:
+        user_id, username = row
+        token = secrets.token_urlsafe(32)
+        with db:
+            db.execute(
+                "INSERT INTO password_resets (token_hash, user_id) VALUES (?, ?)", (hash_token(token), user_id)
+            )
+        link = f"{PUBLIC_URL}/reset?token={token}"
+        body = (
+            f"Hi {username},\n\n"
+            "Someone (hopefully you) asked to reset your password for Our Chat.\n"
+            f"Open this link to choose a new one. It works once, for the next {RESET_MINUTES} minutes:\n\n"
+            f"{link}\n\n"
+            "If you didn't ask for this, just ignore this email. Your password stays the same.\n"
+        )
+        # Sent after we've answered: if we waited for it, a real address would answer slower
+        # than a made-up one, and the timing would give away which emails exist.
+        background_tasks.add_task(send_email, email, "Reset your password for Our Chat", body)
+
+    return {"ok": True}
+
+
+class ResetRequest(BaseModel):
+    token: str
+    password: str
+
+
+@app.post("/reset")
+async def reset(data: ResetRequest):
+    """Set a new password using the token from an emailed link."""
+    check_password_length(data.password)
+    row = db.execute(
+        """
+        SELECT password_resets.user_id, users.username
+        FROM password_resets JOIN users ON users.id = password_resets.user_id
+        WHERE password_resets.token_hash = ? AND password_resets.created_at > datetime('now', ?)
+        """,
+        (hash_token(data.token), f"-{RESET_MINUTES} minutes"),
+    ).fetchone()
+    if row is None:
+        raise HTTPException(400, "This reset link is invalid or has expired. Ask for a new one.")
+    user_id, username = row
+
+    with db:
+        db.execute("UPDATE users SET password_hash = ? WHERE id = ?", (hasher.hash(data.password), user_id))
+        db.execute("DELETE FROM password_resets WHERE user_id = ?", (user_id,))  # every link, used up
+        db.execute("DELETE FROM sessions WHERE user_id = ?", (user_id,))  # log out everywhere
+    failures.pop("login:" + username.lower(), None)  # a fresh start for logging in
+    await disconnect_user(username)  # close their open chat tabs too
+    return {"ok": True}
+
+
+# ---------- Settings (logged in) ----------
+
+def logged_in_user(request):
+    """(id, username, password_hash, email) of whoever is logged in, or a 401 error."""
+    username = user_from_token(request.cookies.get(SESSION_COOKIE))
+    if username is None:
+        raise HTTPException(401, "You're not logged in.")
+    return db.execute(
+        "SELECT id, username, password_hash, email FROM users WHERE username = ?", (username,)
+    ).fetchone()
+
+
+def check_current_password(username, password_hash, password):
+    """For changes that need your password. Wrong guesses count towards the login limit."""
+    key = "login:" + username.lower()
+    if too_many_failures(key):
+        raise HTTPException(429, "Too many attempts. Try again in 15 minutes.")
+    try:
+        hasher.verify(password_hash, password)
+    except VerifyMismatchError:
+        record_failure(key)
+        raise HTTPException(403, "Wrong password.")
+
+
+@app.get("/me")
+async def me(request: Request):
+    user_id, username, password_hash, email = logged_in_user(request)
+    return {"username": username, "email": email}
+
+
+class EmailChange(BaseModel):
+    email: str
+    password: str
+
+
+@app.post("/settings/email")
+async def change_email(data: EmailChange, request: Request):
+    user_id, username, password_hash, old_email = logged_in_user(request)
+    # Needs the password: otherwise someone at your unlocked laptop could set their own
+    # email and then "reset" your password to take over the account.
+    check_current_password(username, password_hash, data.password)
+    email = clean_email(data.email)
+    if email is None:
+        raise HTTPException(400, "That doesn't look like an email address.")
+    try:
+        with db:
+            db.execute("UPDATE users SET email = ? WHERE id = ?", (email, user_id))
+    except sqlite3.IntegrityError:
+        raise HTTPException(400, "That email is already used by another account.")
+    return {"ok": True, "email": email}
+
+
+class PasswordChange(BaseModel):
+    current_password: str
+    new_password: str
+
+
+@app.post("/settings/password")
+async def change_password(data: PasswordChange, request: Request):
+    user_id, username, password_hash, email = logged_in_user(request)
+    check_current_password(username, password_hash, data.current_password)
+    check_password_length(data.new_password)
+    with db:
+        db.execute("UPDATE users SET password_hash = ? WHERE id = ?", (hasher.hash(data.new_password), user_id))
+        # Log out every *other* session (other devices), but keep this one.
+        db.execute(
+            "DELETE FROM sessions WHERE user_id = ? AND token != ?",
+            (user_id, request.cookies.get(SESSION_COOKIE)),
+        )
     return {"ok": True}
 
 
@@ -438,6 +670,12 @@ async def login_page():
     return FileResponse("static/login.html")
 
 
+@app.get("/reset")
+async def reset_page():
+    # One page for both steps: "send me a link" (no token) and "choose a new password" (?token=...).
+    return FileResponse("static/reset.html")
+
+
 @app.get("/channels")
 async def channels():
     return CHANNELS
@@ -527,6 +765,17 @@ async def send(websocket, data):
         await websocket.send_json(data)
     except Exception:
         pass
+
+
+async def disconnect_user(username):
+    """Close every open chat tab of one user, with our "not logged in" code (the page then
+    goes to the login page). Used after a password reset."""
+    for websocket, client in list(clients.items()):
+        if client["username"] == username:
+            try:
+                await websocket.close(code=4001)
+            except Exception:
+                pass
 
 
 async def send_to_everyone(data):

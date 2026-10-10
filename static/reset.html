@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Reset password · Our Chat</title>
+  <style>
+    body {
+      margin: 0;
+      height: 100vh;   /* fallback for older browsers... */
+      height: 100dvh;  /* ...the part of the screen that's really visible */
+      display: flex;
+      align-items: center;      /* centre the box vertically */
+      justify-content: center;  /* ...and horizontally */
+      font-family: system-ui, sans-serif;
+      background: #313338;
+      color: #dbdee1;
+    }
+
+    form {
+      /* 384px wide, but never wider than the screen minus a 16px margin on each side */
+      width: min(384px, 100% - 32px);
+      box-sizing: border-box;  /* the padding counts inside that width */
+      padding: 32px;
+      border-radius: 8px;
+      background: #2b2d31;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    form[hidden] {
+      display: none;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 1.5rem;
+      color: white;
+      text-align: center;
+    }
+
+    p {
+      margin: 0;
+      font-size: 0.9rem;
+      line-height: 1.4;
+    }
+
+    label {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-size: 0.85rem;
+      color: #b5bac1;
+    }
+
+    input {
+      padding: 10px 12px;
+      border: none;
+      border-radius: 6px;
+      background: #1e1f22;
+      color: inherit;
+      font-size: 1rem;
+    }
+
+    .status {
+      min-height: 1.2em;  /* keep the space even when empty, so the form doesn't jump */
+      font-size: 0.9rem;
+    }
+
+    .status.error {
+      color: #f23f43;
+    }
+
+    .status.success {
+      color: #23a55a;
+    }
+
+    button {
+      padding: 10px;
+      border: none;
+      border-radius: 6px;
+      background: #5865f2;
+      color: white;
+      font-size: 1rem;
+      cursor: pointer;
+    }
+
+    a {
+      text-align: center;
+      font-size: 0.9rem;
+      color: #00a8fc;
+    }
+  </style>
+</head>
+<body>
+  <!-- Step 1 (no token in the address): ask for a reset link. -->
+  <form id="request-form" hidden>
+    <h1>Forgot password?</h1>
+    <p>Enter the email address of your account, and we'll send you a link to choose a new password.</p>
+    <label>
+      Email
+      <input id="email" type="email" autocomplete="email" required>
+    </label>
+    <div id="request-status" class="status"></div>
+    <button>Send reset link</button>
+    <a href="/login">Back to log in</a>
+  </form>
+
+  <!-- Step 2 (the link from the email, with ?token=...): choose a new password. -->
+  <form id="reset-form" hidden>
+    <h1>Choose a new password</h1>
+    <label>
+      New password
+      <input id="password" type="password" autocomplete="new-password" required>
+    </label>
+    <label>
+      New password again
+      <input id="password-again" type="password" autocomplete="new-password" required>
+    </label>
+    <div id="reset-status" class="status"></div>
+    <button>Save new password</button>
+    <a href="/login">Back to log in</a>
+  </form>
+
+  <script>
+    const requestForm = document.getElementById("request-form");
+    const resetForm = document.getElementById("reset-form");
+    const emailInput = document.getElementById("email");
+    const passwordInput = document.getElementById("password");
+    const passwordAgainInput = document.getElementById("password-again");
+    const requestStatus = document.getElementById("request-status");
+    const resetStatus = document.getElementById("reset-status");
+
+    // The address looks like /reset?token=abc... when it comes from the email.
+    // URLSearchParams reads the part after the "?".
+    const token = new URLSearchParams(location.search).get("token");
+    if (token) {
+      resetForm.hidden = false;
+    } else {
+      requestForm.hidden = false;
+    }
+
+    function showStatus(element, text, kind) {
+      element.className = "status " + kind;  // "error" (red) or "success" (green)
+      element.textContent = text;
+    }
+
+    // Send JSON to the server. Returns null on success, or the error message to show.
+    async function post(url, data) {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (response.ok) return null;
+      const error = await response.json().catch(() => ({}));
+      return typeof error.detail === "string" ? error.detail : "Something went wrong.";
+    }
+
+    requestForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const error = await post("/forgot", { email: emailInput.value });
+      if (error) {
+        showStatus(requestStatus, error, "error");
+        return;
+      }
+      // The same message whether or not the email has an account (the server doesn't tell us either).
+      showStatus(requestStatus, "If that email belongs to an account, we've sent a link. Check your inbox (and spam).", "success");
+    });
+
+    resetForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (passwordInput.value !== passwordAgainInput.value) {
+        showStatus(resetStatus, "The two passwords don't match.", "error");
+        return;
+      }
+      const error = await post("/reset", { token: token, password: passwordInput.value });
+      if (error) {
+        showStatus(resetStatus, error, "error");
+        return;
+      }
+      showStatus(resetStatus, "Password changed! Taking you to the login page…", "success");
+      setTimeout(() => { location.href = "/login"; }, 2000);
+    });
+  </script>
+</body>
+</html>

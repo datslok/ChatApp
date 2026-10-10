@@ -186,6 +186,92 @@
       border-radius: 8px;
     }
 
+    /* The Settings popup. */
+    #settings {
+      width: min(420px, 100% - 32px);
+      box-sizing: border-box;
+      max-height: 90vh;
+      overflow-y: auto;  /* scroll if it doesn't fit (small phones) */
+      padding: 24px;
+      border: none;
+      border-radius: 8px;
+      background: #2b2d31;
+      color: inherit;
+    }
+
+    #settings::backdrop {
+      background: rgba(0, 0, 0, 0.6);
+    }
+
+    #settings h2 {
+      margin: 0 0 16px;
+      color: white;
+    }
+
+    #settings h3 {
+      margin: 20px 0 8px;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      color: #949ba4;
+    }
+
+    #settings form {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    #settings label {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-size: 0.85rem;
+      color: #b5bac1;
+    }
+
+    #settings input {
+      padding: 10px 12px;
+      border: none;
+      border-radius: 6px;
+      background: #1e1f22;
+      color: inherit;
+      font-size: 1rem;
+    }
+
+    #settings button {
+      padding: 10px;
+      border: none;
+      border-radius: 6px;
+      background: #5865f2;
+      color: white;
+      font-size: 1rem;
+      cursor: pointer;
+    }
+
+    #settings #settings-close {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      width: 32px;
+      height: 32px;
+      padding: 0;
+      border-radius: 50%;
+      background: #1e1f22;
+    }
+
+    #settings .status {
+      min-height: 1.2em;
+      font-size: 0.9rem;
+    }
+
+    #settings .status.error {
+      color: #f23f43;
+    }
+
+    #settings .status.success {
+      color: #23a55a;
+    }
+
     #viewer-close {
       position: fixed;
       top: 16px;
@@ -452,6 +538,7 @@
       <h2 class="section-heading">Direct messages</h2>
       <div id="dm-list"></div>
     </div>
+    <button id="settings-button" class="channel">Settings</button>
     <button id="logout" class="channel">Log out</button>
   </nav>
 
@@ -488,6 +575,45 @@
     <ul id="online-list"></ul>
   </aside>
 
+  <!-- The Settings popup: your email and your password. -->
+  <dialog id="settings">
+    <button type="button" id="settings-close" title="Close">×</button>
+    <h2>Settings</h2>
+
+    <h3>Email</h3>
+    <form id="email-form">
+      <p>Current: <strong id="current-email">…</strong></p>
+      <label>
+        New email
+        <input id="new-email" type="email" autocomplete="email" required>
+      </label>
+      <label>
+        Your password (to confirm it's you)
+        <input id="email-password" type="password" autocomplete="current-password" required>
+      </label>
+      <div id="email-status" class="status"></div>
+      <button>Save email</button>
+    </form>
+
+    <h3>Password</h3>
+    <form id="password-form">
+      <label>
+        Current password
+        <input id="current-password" type="password" autocomplete="current-password" required>
+      </label>
+      <label>
+        New password
+        <input id="new-password" type="password" autocomplete="new-password" required>
+      </label>
+      <label>
+        New password again
+        <input id="new-password-again" type="password" autocomplete="new-password" required>
+      </label>
+      <div id="password-status" class="status"></div>
+      <button>Change password</button>
+    </form>
+  </dialog>
+
   <!-- Phones only: darkens the chat behind an open drawer. -->
   <div id="drawer-backdrop" hidden></div>
 
@@ -502,6 +628,19 @@
     const channelList = document.getElementById("channel-list");
     const dmList = document.getElementById("dm-list");
     const logoutButton = document.getElementById("logout");
+    const settingsButton = document.getElementById("settings-button");
+    const settingsDialog = document.getElementById("settings");
+    const settingsClose = document.getElementById("settings-close");
+    const emailForm = document.getElementById("email-form");
+    const currentEmail = document.getElementById("current-email");
+    const newEmailInput = document.getElementById("new-email");
+    const emailPasswordInput = document.getElementById("email-password");
+    const emailStatus = document.getElementById("email-status");
+    const passwordForm = document.getElementById("password-form");
+    const currentPasswordInput = document.getElementById("current-password");
+    const newPasswordInput = document.getElementById("new-password");
+    const newPasswordAgainInput = document.getElementById("new-password-again");
+    const passwordStatus = document.getElementById("password-status");
     const messages = document.getElementById("messages");
     const typingLine = document.getElementById("typing");
     const form = document.getElementById("chat-form");
@@ -708,6 +847,75 @@
     logoutButton.addEventListener("click", async () => {
       await fetch("/logout", { method: "POST" });
       location.href = "/login";
+    });
+
+    // ---------- Settings ----------
+
+    settingsButton.addEventListener("click", async () => {
+      closeDrawers();  // on a phone, the sidebar drawer was open
+      emailForm.reset();  // empty the fields from last time
+      passwordForm.reset();
+      emailStatus.textContent = "";
+      passwordStatus.textContent = "";
+      settingsDialog.showModal();
+
+      // Ask the server for our current email, to show it.
+      const response = await fetch("/me");
+      if (response.ok) {
+        const me = await response.json();  // {username, email}
+        currentEmail.textContent = me.email || "none yet";
+      }
+    });
+    settingsClose.addEventListener("click", () => settingsDialog.close());
+
+    function showStatus(element, text, kind) {
+      element.className = "status " + kind;  // "error" (red) or "success" (green)
+      element.textContent = text;
+    }
+
+    // Send JSON to the server. Returns {ok: true, data} or {ok: false, error: "message to show"}.
+    async function postJson(url, data) {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (response.ok) return { ok: true, data: result };
+      return { ok: false, error: typeof result.detail === "string" ? result.detail : "Something went wrong." };
+    }
+
+    emailForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const result = await postJson("/settings/email", {
+        email: newEmailInput.value,
+        password: emailPasswordInput.value,
+      });
+      if (!result.ok) {
+        showStatus(emailStatus, result.error, "error");
+        return;
+      }
+      currentEmail.textContent = result.data.email;
+      emailForm.reset();
+      showStatus(emailStatus, "Email saved.", "success");
+    });
+
+    passwordForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (newPasswordInput.value !== newPasswordAgainInput.value) {
+        showStatus(passwordStatus, "The two new passwords don't match.", "error");
+        return;
+      }
+      const result = await postJson("/settings/password", {
+        current_password: currentPasswordInput.value,
+        new_password: newPasswordInput.value,
+      });
+      if (!result.ok) {
+        showStatus(passwordStatus, result.error, "error");
+        return;
+      }
+      passwordForm.reset();
+      showStatus(passwordStatus, "Password changed. Your other devices have been logged out.", "success");
     });
 
     // ---------- People: DM list and online list ----------

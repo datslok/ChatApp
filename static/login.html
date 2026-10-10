@@ -78,6 +78,19 @@
     button[value="register"] {
       background: #4e5058;
     }
+
+    .new-account {
+      margin: 4px 0 0;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      color: #949ba4;
+    }
+
+    #forgot {
+      text-align: center;
+      font-size: 0.9rem;
+      color: #00a8fc;
+    }
   </style>
 </head>
 <body>
@@ -91,8 +104,13 @@
       Password
       <input id="password" type="password" autocomplete="current-password" required>
     </label>
+    <p class="new-account">Only for new accounts</p>
     <label>
-      Invite code (only for new accounts)
+      Email (for resetting your password)
+      <input id="email" type="email" autocomplete="email">
+    </label>
+    <label>
+      Invite code
       <input id="invite" autocomplete="off">
     </label>
     <div id="error"></div>
@@ -100,12 +118,14 @@
       <button value="login">Log in</button>
       <button value="register">Create account</button>
     </div>
+    <a id="forgot" href="/reset">Forgot password?</a>
   </form>
 
   <script>
     const form = document.getElementById("login-form");
     const usernameInput = document.getElementById("username");
     const passwordInput = document.getElementById("password");
+    const emailInput = document.getElementById("email");
     const inviteInput = document.getElementById("invite");
     const errorBox = document.getElementById("error");
 
@@ -122,7 +142,8 @@
         body: JSON.stringify({
           username: usernameInput.value,
           password: passwordInput.value,
-          invite: inviteInput.value,  // ignored when logging in
+          email: emailInput.value,    // these two are ignored when logging in
+          invite: inviteInput.value,
         }),
       });
 
