@@ -743,7 +743,7 @@
 
     /* The Settings popup. */
     #settings {
-      width: min(420px, 100% - 32px);
+      width: min(640px, 100% - 32px);
       box-sizing: border-box;
       max-height: 90vh;
       overflow-y: auto;  /* scroll if it doesn't fit (small phones) */
@@ -1077,7 +1077,7 @@
 
     /* Someone's profile, shown when you click their name or picture. */
     #profile {
-      width: min(340px, 100% - 32px);
+      width: min(500px, 100% - 32px);
       box-sizing: border-box;
       padding: 0;        /* the banner goes right to the edges... */
       overflow: hidden;  /* ...and gets the popup's rounded corners */
@@ -1093,7 +1093,7 @@
     }
 
     .profile-content {
-      padding: 0 24px 24px;
+      padding: 0 28px 28px;
     }
 
     /* A banner: always 3 times as wide as it's high. Either a picture, or a plain colour. */
@@ -1107,8 +1107,11 @@
     /* The profile picture overlaps the bottom of the banner, with a ring in the popup's colour. */
     #profile .avatar {
       position: relative;
-      margin: -48px auto 12px;  /* pulled up by half its height, and centred */
+      width: 124px;
+      height: 124px;
+      margin: -62px auto 14px;  /* pulled up by half its height, and centred */
       border: 6px solid #2b2d31;
+      font-size: 3rem;  /* (for the letter, when there's no picture) */
     }
 
     #settings-banner .banner {
