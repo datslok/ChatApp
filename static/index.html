@@ -152,6 +152,64 @@
       overflow-wrap: anywhere;
     }
 
+    /* A new group gets a little space above it; messages within a group sit close together. */
+    .message:not(.grouped) {
+      margin-top: 8px;
+    }
+
+    .message.grouped {
+      padding: 1px 0;
+    }
+
+    .message:hover {
+      background: #2e3035;  /* a slightly lighter row under the mouse */
+    }
+
+    .message-header {
+      display: flex;
+      align-items: baseline;  /* name and time sit on the same text line */
+      gap: 8px;
+    }
+
+    .message-time {
+      font-size: 0.75rem;
+      color: #949ba4;
+    }
+
+    /* In a grouped message, the time sits where the picture would be, and only shows on hover. */
+    .hover-time {
+      width: 40px;  /* the same width as a profile picture, so the text lines up */
+      flex-shrink: 0;
+      padding-top: 3px;
+      font-size: 0.7rem;
+      color: #949ba4;
+      text-align: center;
+      visibility: hidden;  /* invisible, but still takes up its space */
+    }
+
+    .message.grouped:hover .hover-time {
+      visibility: visible;
+    }
+
+    /* "──── Today ────": a line on both sides of the text, made with ::before and ::after. */
+    .date-divider {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 16px 0 4px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: #949ba4;
+    }
+
+    .date-divider::before,
+    .date-divider::after {
+      content: "";
+      flex: 1;  /* both lines stretch to fill the space on their side */
+      height: 1px;
+      background: #3f4147;
+    }
+
     .name {
       color: white;
       font-weight: 600;
@@ -1360,6 +1418,7 @@
     // (If we're disconnected right now, nothing is sent; we rejoin when we reconnect.)
     function joinCurrentChannel() {
       messages.replaceChildren();  // remove all the old messages
+      lastShown = null;            // so the first message starts a fresh group (and date divider)
       clearTyping();
       sendToServer({ type: "join", channel: currentChannel });
     }
@@ -2354,34 +2413,107 @@
       return link;
     }
 
+    // ---------- Times ----------
+    // Times arrive as "2026-10-10T14:03:12Z" (UTC). new Date(...) turns that into a moment in time,
+    // and the toLocale...String functions show it in the viewer's own time zone and language.
+
+    function formatClock(date) {
+      return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });  // "14:03"
+    }
+
+    function isSameDay(a, b) {
+      return a.toDateString() === b.toDateString();  // e.g. "Sat Oct 10 2026", in local time
+    }
+
+    function dayName(date) {
+      const today = new Date();
+      const yesterday = new Date();
+      yesterday.setDate(today.getDate() - 1);  // (setDate handles month and year changes too)
+      if (isSameDay(date, today)) return "Today";
+      if (isSameDay(date, yesterday)) return "Yesterday";
+      return date.toLocaleDateString([], { day: "numeric", month: "long", year: "numeric" });  // "10 October 2026"
+    }
+
+    // ---------- Messages ----------
+
+    // The last message drawn: its sender and time. A new message from the same sender, on the
+    // same day and within GROUP_MINUTES, joins its group (drawn without picture and name).
+    const GROUP_MINUTES = 5;
+    let lastShown = null;
+
+    // A line across the chat with the day in the middle, between messages from different days.
+    function makeDateDivider(date) {
+      const divider = document.createElement("div");
+      divider.className = "date-divider";
+      divider.textContent = dayName(date);
+      return divider;
+    }
+
     // Add one message to the bottom of the #messages box.
     // Built piece by piece with textContent, never innerHTML: names and text are
     // shown as-is, so neither can ever run as code.
     function showMessage(message) {
-      const div = document.createElement("div");
-      div.className = "message";
+      // Were we scrolled to (or near) the bottom before this message arrived?
+      // (Measured before adding anything, including a date divider.)
+      const distanceFromBottom = messages.scrollHeight - messages.scrollTop - messages.clientHeight;
+      const wasAtBottom = distanceFromBottom < 50;
 
-      // The sender's picture on the left. Pictures and names open their profile when clicked
-      // (except for messages from before accounts existed, which have no profile).
-      const avatar = makeAvatar(message.user_id, message.name, "");
-      div.appendChild(avatar);
+      const time = new Date(message.sent_at);
+      // Who sent it: the user id, or for messages from before accounts existed, the typed name.
+      const sender = message.user_id ?? "name:" + message.name;
+
+      // A new day? Then a date divider first.
+      const newDay = lastShown === null || !isSameDay(lastShown.time, time);
+      if (newDay) messages.appendChild(makeDateDivider(time));
+
+      // Part of the previous message's group? (time - time gives milliseconds.)
+      const grouped = !newDay && lastShown.sender === sender && time - lastShown.time < GROUP_MINUTES * 60 * 1000;
+      lastShown = { sender: sender, time: time };
+
+      const div = document.createElement("div");
+      div.className = grouped ? "message grouped" : "message";
+      div.dataset.id = message.id;  // so later features (replies, reactions, editing) can find it
 
       const body = document.createElement("div");
       body.className = "message-body";
 
-      const nameElement = document.createElement("div");
-      nameElement.className = "name";
-      nameElement.textContent = message.name;
-      body.appendChild(nameElement);
+      if (grouped) {
+        // No picture or name: just the time on the left, shown when hovering.
+        const hoverTime = document.createElement("span");
+        hoverTime.className = "hover-time";
+        hoverTime.textContent = formatClock(time);
+        hoverTime.title = time.toLocaleString();  // the full date and time, when hovering it
+        div.appendChild(hoverTime);
+      } else {
+        // The sender's picture on the left. Pictures and names open their profile when clicked
+        // (except for messages from before accounts existed, which have no profile).
+        const avatar = makeAvatar(message.user_id, message.name, "");
+        div.appendChild(avatar);
 
-      if (message.user_id) {
-        avatar.classList.add("clickable");
-        nameElement.classList.add("clickable");
-        // The click handler goes on the message, not on the picture: pictures get swapped
-        // for fresh ones when someone changes theirs, and a handler on the old one would be lost.
-        div.addEventListener("click", (event) => {
-          if (event.target.closest(".avatar, .name")) openProfile(message.user_id);
-        });
+        // The header: name, and when it was sent ("Today at 14:03").
+        const header = document.createElement("div");
+        header.className = "message-header";
+        const nameElement = document.createElement("span");
+        nameElement.className = "name";
+        nameElement.textContent = message.name;
+        header.appendChild(nameElement);
+        const timeElement = document.createElement("span");
+        timeElement.className = "message-time";
+        const day = dayName(time);
+        timeElement.textContent = (day === "Today" || day === "Yesterday" ? day + " at " : day + " ") + formatClock(time);
+        timeElement.title = time.toLocaleString();
+        header.appendChild(timeElement);
+        body.appendChild(header);
+
+        if (message.user_id) {
+          avatar.classList.add("clickable");
+          nameElement.classList.add("clickable");
+          // The click handler goes on the message, not on the picture: pictures get swapped
+          // for fresh ones when someone changes theirs, and a handler on the old one would be lost.
+          div.addEventListener("click", (event) => {
+            if (event.target.closest(".avatar, .name")) openProfile(message.user_id);
+          });
+        }
       }
 
       if (message.text) {
@@ -2393,10 +2525,6 @@
         body.appendChild(makeAttachment(message.file));
       }
       div.appendChild(body);
-
-      // Were we scrolled to (or near) the bottom before this message arrived?
-      const distanceFromBottom = messages.scrollHeight - messages.scrollTop - messages.clientHeight;
-      const wasAtBottom = distanceFromBottom < 50;
 
       // A picture only gets its real height once it has loaded, which pushes the
       // messages up after we've scrolled. So scroll again when it finishes loading.

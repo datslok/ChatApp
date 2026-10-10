@@ -326,14 +326,25 @@ def username_of(user_id):
 
 # ---------- Messages ----------
 
+def iso_time(sqlite_time):
+    """SQLite stores times as "2026-10-10 14:03:12" (in UTC, but without saying so). Browsers would
+    read that as *local* time. "2026-10-10T14:03:12Z" is the standard (ISO 8601) way to write it:
+    the Z means UTC, and every browser understands it."""
+    return sqlite_time.replace(" ", "T") + "Z"
+
+
 def save_message(channel, user_id, text, file):
+    """Save a message. Returns its id and time, so the live message matches the history exactly."""
     # "with db" commits the change when the block ends (or undoes it if something fails).
     # The ? placeholders keep user text as data, so it can never be run as SQL.
     with db:
-        db.execute(
+        cursor = db.execute(
             "INSERT INTO messages (channel, user_id, text, attachment_id) VALUES (?, ?, ?, ?)",
             (channel, user_id, text, file["id"] if file else None),
         )
+    message_id = cursor.lastrowid  # the id SQLite gave it
+    sent_at = db.execute("SELECT sent_at FROM messages WHERE id = ?", (message_id,)).fetchone()[0]
+    return message_id, iso_time(sent_at)
 
 
 def file_info(attachment_id, filename, size, content_type):
@@ -348,7 +359,8 @@ def recent_messages(channel):
     # before accounts existed, there's no user, so we show the name that was typed back then.
     rows = db.execute(
         """
-        SELECT messages.user_id, COALESCE(users.username, messages.legacy_name), messages.text,
+        SELECT messages.id, messages.sent_at,
+               messages.user_id, COALESCE(users.username, messages.legacy_name), messages.text,
                attachments.id, attachments.filename, attachments.size, attachments.content_type
         FROM messages
         LEFT JOIN users ON users.id = messages.user_id
@@ -361,12 +373,14 @@ def recent_messages(channel):
     rows.reverse()  # we fetched newest-first; chat reads oldest-first
     return [
         {
+            "id": message_id,
+            "sent_at": iso_time(sent_at),
             "user_id": user_id,  # None for messages from before accounts existed
             "name": name,
             "text": text,
             "file": file_info(file_id, filename, size, content_type) if file_id else None,
         }
-        for user_id, name, text, file_id, filename, size, content_type in rows
+        for message_id, sent_at, user_id, name, text, file_id, filename, size, content_type in rows
     ]
 
 
@@ -1292,12 +1306,12 @@ async def chat(websocket: WebSocket):
                         continue  # not their file, already sent, or doesn't exist
                 if not text and file is None:
                     continue  # nothing to send
-                save_message(channel, user_id, text, file)
+                message_id, sent_at = save_message(channel, user_id, text, file)
                 # The name comes from the login (looked up now, so it's always the current one),
                 # never from the client.
                 message = {
-                    "type": "message", "channel": channel, "user_id": user_id,
-                    "name": username_of(user_id), "text": text, "file": file,
+                    "type": "message", "channel": channel, "id": message_id, "sent_at": sent_at,
+                    "user_id": user_id, "name": username_of(user_id), "text": text, "file": file,
                 }
                 await send_to_channel(channel, message)  # everyone in the channel, including us
                 await announce_new_message(channel)  # mark it read or unread for everyone else

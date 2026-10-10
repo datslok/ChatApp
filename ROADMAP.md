@@ -19,7 +19,7 @@
    - [x] Separate development database (dev.db), so tests stay out of the real chat
 9. [ ] Nice-to-haves, in this order:
    - [x] Unread dots on channels and DMs (remembered by the server)
-   - [ ] Message ids and times on the page, and message grouping
+   - [x] Message ids and times on the page, message grouping and date dividers
    - [ ] Replies
    - [ ] Reactions
    - [ ] Editing and deleting your own messages; admins can edit and delete anyone's
