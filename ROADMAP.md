@@ -17,8 +17,8 @@
    - [x] Before going online: invite code for new accounts, login limits, HTTPS (wss://, secure cookies)
    - [x] Mobile-friendly layout (drawers for channels and the online list)
    - [x] Separate development database (dev.db), so tests stay out of the real chat
-9. [ ] Voice channels with WebRTC/LiveKit
-10. [ ] Video calls in DMs: 1-on-1, peer-to-peer WebRTC (signalling over our WebSocket, STUN/TURN),
+9. [ ] Nice-to-haves: reactions, replies, mentions, notifications, desktop app via Tauri
+   - [x] Unread dots on channels and DMs (remembered by the server)
+10. [ ] Voice channels with WebRTC/LiveKit
+11. [ ] Video calls in DMs: 1-on-1, peer-to-peer WebRTC (signalling over our WebSocket, STUN/TURN),
     only between friends; mute, camera on/off, hang up
-11. [ ] Nice-to-haves: reactions, replies, mentions, notifications, desktop app via Tauri
-    - [x] Unread dots on channels and DMs (remembered by the server)
