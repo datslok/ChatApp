@@ -1658,8 +1658,13 @@
         const file = fileInput.files[0];
         fileInput.value = "";  // so the same file can be picked again later
         if (!file) return;
+        // Animated GIFs are uploaded whole (the server crops them), so they may be bigger.
+        if (file.type === "image/gif" && file.size > 10 * 1024 * 1024) {
+          showStatus(profileStatusLine, "GIFs can be at most 10 MB.", "error");
+          return;
+        }
         try {
-          openCropper(await loadPicture(file), kind);
+          openCropper(await loadPicture(file), kind, file);
         } catch {
           showStatus(profileStatusLine, "Couldn't read that picture. Try a PNG or JPEG.", "error");
         }
@@ -1674,9 +1679,10 @@
     setUpPictureButtons("avatar", changeAvatarButton, removeAvatarButton, avatarInput);
     setUpPictureButtons("banner", changeBannerButton, removeBannerButton, bannerInput);
 
-    async function uploadPicture(kind, picture) {
+    // `query` is extra information for the address, like "?left=0&top=0&width=200&height=200".
+    async function uploadPicture(kind, picture, query = "") {
       showStatus(profileStatusLine, "Uploading…", "success");
-      const response = await fetch("/settings/" + kind, {
+      const response = await fetch("/settings/" + kind + query, {
         method: "POST",
         headers: { "Content-Type": picture.type },
         body: picture,
@@ -1738,13 +1744,17 @@
     let cropKind = "avatar";
     let cropShape = CROP_SHAPES.avatar;
     let cropImage = null;
+    let cropFile = null;   // the original file, if it's a GIF (sent whole, to keep the animation)
     let cropMinScale = 1;  // the zoom where the picture just covers the whole frame
     let cropScale = 1;
     let cropX = 0;
     let cropY = 0;
 
-    function openCropper(img, kind) {
+    function openCropper(img, kind, file) {
       cropKind = kind;
+      // A canvas only holds one still frame, so for a GIF the preview shows its first frame,
+      // and Save sends the original file instead of the canvas.
+      cropFile = file.type === "image/gif" ? file : null;
       cropShape = CROP_SHAPES[kind];
       cropTitle.textContent = cropShape.title;
 
@@ -1848,6 +1858,22 @@
       const width = cropShape.width / cropScale;
       const height = cropShape.height / cropScale;
       cropperDialog.close();
+
+      if (cropFile) {
+        // A GIF: send the whole file, with the rectangle (in whole pixels) in the address.
+        // The server cuts that rectangle out of every frame, keeping the animation.
+        // Math.floor/round give whole numbers; Math.min keeps the rectangle inside the picture.
+        const box = {
+          left: Math.floor(left),
+          top: Math.floor(top),
+          width: Math.min(Math.round(width), cropImage.naturalWidth - Math.floor(left)),
+          height: Math.min(Math.round(height), cropImage.naturalHeight - Math.floor(top)),
+        };
+        // URLSearchParams builds "left=12&top=0&width=300&height=300" from the object.
+        await uploadPicture(cropKind, cropFile, "?" + new URLSearchParams(box));
+        return;
+      }
+
       let picture;
       try {
         picture = await rectangleToFile(cropImage, left, top, width, height, cropShape.saveWidth, cropShape.saveHeight);

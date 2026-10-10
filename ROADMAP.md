@@ -8,6 +8,7 @@
    - [x] Email per account, password reset by email, Settings (change username, email, password)
    - [x] People identified by user id behind the scenes, so usernames can change
    - [x] Profiles: picture and banner (with a move/zoom editor), status, bio, profile popup
+   - [x] Animated GIFs as picture and banner (cropped frame by frame on the server with Pillow)
 5. [x] Online list and "is typing…" indicator
 6. [x] Direct messages: private two-person channels, opened from the sidebar
    - [x] Friends: requests, friends list, list of all users; DMs only between friends

@@ -1,3 +1,4 @@
+import asyncio
 import hashlib
 import json
 import os
@@ -7,6 +8,7 @@ import smtplib
 import sqlite3
 import ssl
 import time
+import warnings
 from email.message import EmailMessage
 from pathlib import Path
 
@@ -14,6 +16,7 @@ from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, RedirectResponse
+from PIL import Image, ImageSequence
 from pydantic import BaseModel
 
 # docs_url etc. = None: turn off FastAPI's automatic API explorer pages (/docs, /redoc),
@@ -68,13 +71,32 @@ IMAGE_TYPES = {"image/png", "image/jpeg", "image/gif", "image/webp"}
 # Profiles. The page crops and shrinks pictures before uploading (a profile picture to 256x256,
 # a banner to 960x320: a few KB each), so these limits are only for anyone uploading around the page.
 # For each kind: which column of the users table holds it, which folder its files go in, how big it may be.
+# `animated_size`: animated GIFs are cropped and shrunk here on the server instead (see
+# make_animated_webp), to this size. Banners are a bit smaller when animated, because all
+# frames are held in memory while they're processed.
 PICTURE_KINDS = {
-    "avatar": {"column": "avatar_id", "folder": UPLOAD_DIR / "avatars", "max_size": 1024 * 1024},      # 1 MB
-    "banner": {"column": "banner_id", "folder": UPLOAD_DIR / "banners", "max_size": 2 * 1024 * 1024},  # 2 MB
+    "avatar": {
+        "column": "avatar_id", "folder": UPLOAD_DIR / "avatars",
+        "max_size": 1024 * 1024, "animated_size": (256, 256),      # 1 MB
+    },
+    "banner": {
+        "column": "banner_id", "folder": UPLOAD_DIR / "banners",
+        "max_size": 2 * 1024 * 1024, "animated_size": (600, 200),  # 2 MB
+    },
 }
 for kind in PICTURE_KINDS.values():
     kind["folder"].mkdir(exist_ok=True)
 PICTURE_EXTENSIONS = {"image/png": "png", "image/jpeg": "jpg", "image/gif": "gif", "image/webp": "webp"}
+
+# Animated GIFs arrive uncropped (the browser can't crop an animation), so they may be bigger.
+# Images from users are a classic way to attack servers, so Pillow gets limits: file size,
+# number of frames, and pixels per frame (a tiny file can claim to be 50,000 x 50,000 pixels:
+# a "decompression bomb" that would fill the memory).
+MAX_GIF_SIZE = 10 * 1024 * 1024  # 10 MB
+MAX_GIF_FRAMES = 200
+Image.MAX_IMAGE_PIXELS = 25_000_000  # e.g. 5000 x 5000
+# Above that limit Pillow only *warns* (it refuses at twice the limit). Turn the warning into an error.
+warnings.simplefilter("error", Image.DecompressionBombWarning)
 MAX_STATUS_LENGTH = 60
 MAX_BIO_LENGTH = 300
 
@@ -946,8 +968,47 @@ async def get_upload(request: Request, file_id: str):
 # column, folder and size limit from PICTURE_KINDS. The column names in the SQL below come from
 # that table of ours, never from a request, so putting them into the SQL text is safe.
 
+def crop_box_from(request):
+    """The rectangle chosen in the editor, from the address (?left=..&top=..&width=..&height=..),
+    as four whole numbers. None if they're not there."""
+    try:
+        box = [int(request.query_params[name]) for name in ("left", "top", "width", "height")]
+    except (KeyError, ValueError):
+        return None
+    return box
+
+
+def make_animated_webp(source, destination, box, size):
+    """Crop an animated GIF to `box` (left, top, width, height) and shrink it to `size`,
+    frame by frame, and save it as an animated WebP (usually several times smaller than GIF).
+    Slow-ish, so it's run in a background thread. Raises ValueError if the GIF isn't acceptable."""
+    left, top, width, height = box
+    with Image.open(source) as gif:
+        if gif.format != "GIF":
+            raise ValueError("That isn't a GIF.")
+        if getattr(gif, "n_frames", 1) > MAX_GIF_FRAMES:
+            raise ValueError(f"GIFs can have at most {MAX_GIF_FRAMES} frames.")
+        if left < 0 or top < 0 or width < 1 or height < 1 or left + width > gif.width or top + height > gif.height:
+            raise ValueError("That crop doesn't fit the picture.")
+
+        frames, durations = [], []
+        for frame in ImageSequence.Iterator(gif):  # every frame, one after the other
+            # How long this frame shows, in milliseconds. Browsers treat tiny values as 100.
+            duration = frame.info.get("duration", 100)
+            durations.append(duration if duration >= 20 else 100)
+            # RGBA: full colour plus transparency, whatever the GIF's own colour format was.
+            cropped = frame.convert("RGBA").crop((left, top, left + width, top + height))
+            frames.append(cropped.resize(size, Image.Resampling.LANCZOS))  # LANCZOS: a sharp, smooth way to shrink
+
+    frames[0].save(
+        destination, format="WEBP", save_all=True, append_images=frames[1:],
+        duration=durations, loop=0, quality=80,  # loop=0: repeat forever
+    )
+
+
 async def set_picture(request, kind):
-    """Receive a new picture (the raw image is the body). The page has already cropped and shrunk it."""
+    """Receive a new picture (the raw image is the body). The page has already cropped and shrunk it,
+    except for animated GIFs: those come whole, with the chosen crop in the address."""
     user_id, username, password_hash, email = logged_in_user(request)
     settings = PICTURE_KINDS[kind]
     content_type = request.headers.get("content-type", "")
@@ -956,8 +1017,27 @@ async def set_picture(request, kind):
 
     # A new random name every time: browsers keep (cache) pictures they've seen, so if the new
     # picture had the old address, people would keep seeing the old one.
-    picture_id = secrets.token_urlsafe(16) + "." + PICTURE_EXTENSIONS[content_type]
-    await receive_file(request, settings["folder"] / picture_id, settings["max_size"])
+    box = crop_box_from(request)
+    if content_type == "image/gif" and box is not None:
+        # An animated GIF: save the upload under a temporary name, then crop and shrink every
+        # frame into an animated WebP. In a background thread, so the chat keeps running meanwhile.
+        picture_id = secrets.token_urlsafe(16) + ".webp"
+        upload = settings["folder"] / (picture_id + ".upload")
+        await receive_file(request, upload, MAX_GIF_SIZE)
+        try:
+            await asyncio.to_thread(
+                make_animated_webp, upload, settings["folder"] / picture_id, box, settings["animated_size"]
+            )
+        except ValueError as error:
+            raise HTTPException(400, str(error))
+        except Exception:  # Pillow couldn't read it at all (broken file, too many pixels, ...)
+            (settings["folder"] / picture_id).unlink(missing_ok=True)
+            raise HTTPException(400, "Couldn't read that GIF.")
+        finally:
+            upload.unlink(missing_ok=True)  # the original isn't kept
+    else:
+        picture_id = secrets.token_urlsafe(16) + "." + PICTURE_EXTENSIONS[content_type]
+        await receive_file(request, settings["folder"] / picture_id, settings["max_size"])
 
     old = db.execute(f"SELECT {settings['column']} FROM users WHERE id = ?", (user_id,)).fetchone()[0]
     with db:
