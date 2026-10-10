@@ -791,10 +791,65 @@
     }
 
     #chat-form {
+      position: relative;     /* so the autocomplete list can sit right above it */
       display: flex;
       align-items: flex-end;  /* when the text box grows taller, the buttons stay at the bottom */
       gap: 8px;
       padding: 8px 16px 16px;
+    }
+
+    /* Emoji suggestions while typing ":po", right above the text box. */
+    #autocomplete {
+      position: absolute;
+      left: 16px;
+      right: 16px;
+      bottom: 100%;  /* its bottom edge at the form's top edge */
+      z-index: 15;
+      display: flex;
+      flex-direction: column;
+      padding: 4px;
+      border: 1px solid #1e1f22;
+      border-radius: 8px;
+      background: #2b2d31;
+      box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.3);
+    }
+
+    #autocomplete[hidden] {
+      display: none;
+    }
+
+    /* "#chat-form #autocomplete button": more specific than the "#chat-form button" rule
+       (two ids beat one), so these list rows don't become blue Send-style buttons. */
+    #chat-form #autocomplete button {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 6px 8px;
+      border: none;
+      border-radius: 4px;
+      background: none;
+      color: #dbdee1;
+      font-size: 0.95rem;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    #chat-form #autocomplete button.active {
+      background: #404249;  /* the highlighted one: Enter or Tab picks it */
+    }
+
+    #autocomplete .custom-emoji,
+    #autocomplete .emoji {
+      width: 24px;
+      height: 24px;
+      font-size: 1.3rem;
+      text-align: center;
+    }
+
+    #autocomplete .detail {
+      margin-left: auto;  /* pushed to the right */
+      font-size: 0.8rem;
+      color: #949ba4;
     }
 
     #message-input {
@@ -1373,6 +1428,8 @@
       <button type="button" id="attach-button" title="Upload a file">+</button>
       <!-- The browser's own file picker. Hidden; the + button opens it. -->
       <input type="file" id="file-input" multiple hidden>
+      <!-- Emoji suggestions while typing ":po": shown just above the text box. -->
+      <div id="autocomplete" hidden></div>
       <!-- A textarea (not an input) so long messages can be several lines. It grows as you type. -->
       <textarea id="message-input" rows="1" autocomplete="off"></textarea>
       <button type="button" id="compose-emoji" class="emoji open-picker" title="Emoji">😀</button>
@@ -1656,6 +1713,7 @@
 
       firstChannel = channels[0];
       connect();
+      ensureEmojiData();  // in the background (no await): the autocomplete needs the emoji names
     }
 
     // Open the WebSocket. Called once at the start, and again each time the connection drops.
@@ -1844,13 +1902,149 @@
     function clearInput() {
       input.value = "";
       autoGrow();  // back to one line
+      closeAutocomplete();
     }
 
-    input.addEventListener("input", autoGrow);
+    // ---------- Emoji autocomplete (typing ":po") ----------
 
-    // Enter sends; Shift+Enter starts a new line (the textarea's normal Enter behaviour).
+    const autocompleteBox = document.getElementById("autocomplete");
+    const MAX_SUGGESTIONS = 10;
+    let suggestions = [];   // [{value, insert, label, detail}], what the list shows
+    let suggestionIndex = 0;  // which one is highlighted
+    let codeStart = 0;      // where the ":" of the code being typed is, in the text
+
+    // A colon at the start or after a space, then name characters, right up to the cursor.
+    // (Only after a space, so links like https://… and times like 14:30 don't pop the list up.)
+    const TYPING_CODE = /(^|\s):([A-Za-z0-9_]{1,32})$/;
+
+    function updateAutocomplete() {
+      const cursor = input.selectionStart;
+      const match = input.value.slice(0, cursor).match(TYPING_CODE);
+      if (!match || input.selectionEnd !== cursor) return closeAutocomplete();  // (nothing selected)
+      const query = match[2].toLowerCase();
+      codeStart = cursor - query.length - 1;  // the ":" just before what was typed
+      suggestions = findSuggestions(query);
+      if (suggestions.length === 0) return closeAutocomplete();
+      suggestionIndex = 0;
+      renderAutocomplete();
+    }
+
+    // Custom emoji first (names starting with the search, then names containing it),
+    // then normal emoji (same idea, using their names: "smil" finds "smiling face").
+    function findSuggestions(query) {
+      const results = [];
+      const ownerName = (id) => people.get(id)?.name ?? "";
+      const customStarts = customEmoji.filter((e) => e.name.toLowerCase().startsWith(query));
+      const customContains = customEmoji.filter((e) => !e.name.toLowerCase().startsWith(query) && e.name.toLowerCase().includes(query));
+      for (const emoji of [...customStarts, ...customContains]) {
+        results.push({
+          value: "custom:" + emoji.id, insert: ":" + emoji.name + ": ",
+          label: ":" + emoji.name + ":", detail: ownerName(emoji.owner_id),
+        });
+      }
+
+      if (emojiGroups && results.length < MAX_SUGGESTIONS) {
+        const words = query.replaceAll("_", " ");  // ":thumbs_up" searches "thumbs up"
+        const ranked = [];
+        for (const group of emojiGroups) {
+          for (const [emoji, name] of group.emoji) {
+            // 0: exactly the name; 1: the name starts with it; 2: a later word starts with it;
+            // 3: it's somewhere inside
+            let rank = null;
+            if (name === words) rank = 0;
+            else if (name.startsWith(words)) rank = 1;
+            else if (name.includes(" " + words)) rank = 2;
+            else if (name.includes(words)) rank = 3;
+            if (rank !== null) ranked.push({ rank: rank, emoji: emoji, name: name });
+          }
+        }
+        // Best rank first; within a rank, shorter names first (usually the more basic emoji:
+        // "fire" before "firecracker").
+        ranked.sort((a, b) => a.rank - b.rank || a.name.length - b.name.length);
+        for (const { emoji, name } of ranked) {  // { } here takes these two fields out of each item
+          results.push({ value: emoji, insert: emoji, label: name, detail: "" });
+        }
+      }
+      return results.slice(0, MAX_SUGGESTIONS);
+    }
+
+    function renderAutocomplete() {
+      autocompleteBox.replaceChildren();
+      suggestions.forEach((suggestion, index) => {
+        const row = document.createElement("button");
+        row.type = "button";
+        if (index === suggestionIndex) row.className = "active";
+        row.appendChild(makeEmojiElement(suggestion.value));
+        const label = document.createElement("span");
+        label.textContent = suggestion.label;
+        row.appendChild(label);
+        if (suggestion.detail) {
+          const detail = document.createElement("span");
+          detail.className = "detail";
+          detail.textContent = suggestion.detail;
+          row.appendChild(detail);
+        }
+        // mousedown + preventDefault: clicking doesn't take the focus away from the text box.
+        row.addEventListener("mousedown", (event) => event.preventDefault());
+        row.addEventListener("click", () => pickSuggestion(index));
+        autocompleteBox.appendChild(row);
+      });
+      autocompleteBox.hidden = false;
+    }
+
+    // Replace the typed ":po" with the chosen ":pog: " (or the emoji itself), cursor after it.
+    function pickSuggestion(index) {
+      const suggestion = suggestions[index];
+      const cursor = input.selectionStart;
+      input.value = input.value.slice(0, codeStart) + suggestion.insert + input.value.slice(cursor);
+      input.selectionStart = input.selectionEnd = codeStart + suggestion.insert.length;
+      closeAutocomplete();
+      autoGrow();
+      input.focus();
+    }
+
+    function closeAutocomplete() {
+      autocompleteBox.hidden = true;
+      suggestions = [];
+    }
+
+    // Check after every change, and when the cursor moves (clicking, or arrow keys sideways).
+    input.addEventListener("input", () => {
+      autoGrow();
+      updateAutocomplete();
+    });
+    input.addEventListener("click", updateAutocomplete);
+    input.addEventListener("keyup", (event) => {
+      if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) updateAutocomplete();
+    });
+    input.addEventListener("blur", closeAutocomplete);  // the text box lost focus
+
+    // The keys. While the list is open, ↑ ↓ Enter Tab Esc belong to it.
+    // Enter (without Shift) otherwise sends; Shift+Enter starts a new line.
     // isComposing: typing with an input method (e.g. Japanese), where Enter confirms a character.
     input.addEventListener("keydown", (event) => {
+      if (!autocompleteBox.hidden) {
+        if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+          event.preventDefault();  // don't move the cursor
+          const step = event.key === "ArrowDown" ? 1 : -1;
+          // % wraps around: past the last goes back to the first (and the other way round)
+          suggestionIndex = (suggestionIndex + step + suggestions.length) % suggestions.length;
+          renderAutocomplete();
+          return;
+        }
+        if ((event.key === "Enter" || event.key === "Tab") && !event.isComposing) {
+          event.preventDefault();  // don't send / don't move focus
+          pickSuggestion(suggestionIndex);
+          return;
+        }
+        if (event.key === "Escape") {
+          // stopImmediatePropagation: the other Esc handler on the text box (which cancels a reply)
+          // doesn't get this keypress. Esc closes the list first; a second Esc cancels the reply.
+          event.stopImmediatePropagation();
+          closeAutocomplete();
+          return;
+        }
+      }
       if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
         event.preventDefault();  // no new line...
         form.requestSubmit();    // ...send instead (as if Send was clicked)
@@ -3025,16 +3219,24 @@
     // "insert" (from the text box's 😀: clicking an emoji types it into the message).
     let pickerMode = "react";
 
-    async function openEmojiPicker(messageId, button, mode = "react") {
-      pickerMessageId = messageId;
-      pickerMode = mode;
-      if (!emojiGroups) {
+    // Load the list of all emoji (once). Used by the picker and by the autocomplete.
+    let emojiDataLoading = null;
+    function ensureEmojiData() {
+      // The first call starts loading; later calls get the same Promise, so it's only fetched once.
+      emojiDataLoading ??= (async () => {  // ??= : "assign only if it's still null/undefined"
         const response = await fetch("/emoji.json");
         emojiGroups = (await response.json()).groups;
         for (const group of emojiGroups) {
           for (const [emoji, name] of group.emoji) emojiNames.set(emoji, name);
         }
-      }
+      })();
+      return emojiDataLoading;
+    }
+
+    async function openEmojiPicker(messageId, button, mode = "react") {
+      pickerMessageId = messageId;
+      pickerMode = mode;
+      await ensureEmojiData();
       buildCategoryButtons();  // (every time: the ⭐ button depends on the mode)
       emojiSearch.value = "";
       renderEmojiGrid("");
