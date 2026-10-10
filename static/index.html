@@ -792,18 +792,24 @@
 
     #chat-form {
       display: flex;
+      align-items: flex-end;  /* when the text box grows taller, the buttons stay at the bottom */
       gap: 8px;
       padding: 8px 16px 16px;
     }
 
     #message-input {
       flex: 1;
+      max-height: 50vh;  /* grows up to half the screen, then scrolls inside itself */
       padding: 10px 12px;
       border: none;
       border-radius: 8px;
       background: #383a40;
       color: inherit;
+      font: inherit;     /* textareas don't use the page's font by default */
       font-size: 1rem;
+      line-height: 1.4;
+      resize: none;      /* no drag handle in the corner: it sizes itself */
+      overflow-y: auto;
     }
 
     #chat-form button {
@@ -816,12 +822,25 @@
       cursor: pointer;
     }
 
-    #chat-form #attach-button {
+    #chat-form #attach-button,
+    #chat-form #compose-emoji {
       padding: 10px 14px;
       background: #383a40;
       color: #dbdee1;
       font-size: 1.2rem;
       line-height: 1;
+    }
+
+    /* Message text keeps its line breaks (written with Shift+Enter). */
+    .message-text {
+      white-space: pre-wrap;
+    }
+
+    /* A message that's only emoji: shown big, like Discord's "jumbo" emoji. */
+    .message-text.jumbo {
+      font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif;
+      font-size: 2.6rem;
+      line-height: 1.2;
     }
 
     #members {
@@ -1349,7 +1368,9 @@
       <button type="button" id="attach-button" title="Upload a file">+</button>
       <!-- The browser's own file picker. Hidden; the + button opens it. -->
       <input type="file" id="file-input" multiple hidden>
-      <input id="message-input" autocomplete="off">
+      <!-- A textarea (not an input) so long messages can be several lines. It grows as you type. -->
+      <textarea id="message-input" rows="1" autocomplete="off"></textarea>
+      <button type="button" id="compose-emoji" class="emoji open-picker" title="Emoji">😀</button>
       <button>Send</button>
     </form>
 
@@ -1806,6 +1827,50 @@
     openMembersButton.addEventListener("click", () => openDrawer(membersElement));
     drawerBackdrop.addEventListener("click", closeDrawers);
 
+    // ---------- The text box ----------
+
+    // A textarea doesn't grow by itself. Shrink it to nothing ("auto"), then make it as tall as
+    // its text needs (scrollHeight). The CSS max-height stops it at half the screen.
+    function autoGrow() {
+      input.style.height = "auto";
+      input.style.height = input.scrollHeight + "px";
+    }
+
+    function clearInput() {
+      input.value = "";
+      autoGrow();  // back to one line
+    }
+
+    input.addEventListener("input", autoGrow);
+
+    // Enter sends; Shift+Enter starts a new line (the textarea's normal Enter behaviour).
+    // isComposing: typing with an input method (e.g. Japanese), where Enter confirms a character.
+    input.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
+        event.preventDefault();  // no new line...
+        form.requestSubmit();    // ...send instead (as if Send was clicked)
+      }
+    });
+
+    // The 😀 next to the text box: opens the picker in "insert" mode (or closes it again).
+    const composeEmojiButton = document.getElementById("compose-emoji");
+    composeEmojiButton.addEventListener("click", () => {
+      if (!emojiPicker.hidden && pickerMode === "insert") {
+        closeEmojiPicker();
+      } else {
+        openEmojiPicker(null, composeEmojiButton, "insert");
+      }
+    });
+
+    // Put text where the cursor is in the text box (replacing anything selected), cursor after it.
+    function insertAtCursor(text) {
+      const start = input.selectionStart;
+      const end = input.selectionEnd;
+      input.value = input.value.slice(0, start) + text + input.value.slice(end);
+      input.selectionStart = input.selectionEnd = start + text.length;
+      autoGrow();
+    }
+
     // The user pressed Enter or clicked Send.
     form.addEventListener("submit", (event) => {
       event.preventDefault();  // stop the browser from reloading the page
@@ -1822,7 +1887,7 @@
       // Only the text: the server knows who we are and which channel we're in.
       // If we're disconnected, keep the text in the box so it can be sent later.
       if (!sendToServer({ type: "message", text: text, reply_to: replyingTo?.id })) return;
-      input.value = "";
+      clearInput();
       clearReply();
       lastTypingSent = 0;  // so typing the next message is announced straight away
     });
@@ -2728,7 +2793,7 @@
         clearReply();  // the reply went with this first file
         if (caption) {
           caption = "";      // the caption went with this file, so it's used up
-          input.value = "";
+          clearInput();
         }
       }
 
@@ -2951,16 +3016,21 @@
       sendToServer({ type: "react", message_id: messageId, emoji: emoji });
     }
 
-    async function openEmojiPicker(messageId, button) {
+    // The picker has two modes: "react" (from a message's 😀: clicking an emoji reacts) and
+    // "insert" (from the text box's 😀: clicking an emoji types it into the message).
+    let pickerMode = "react";
+
+    async function openEmojiPicker(messageId, button, mode = "react") {
       pickerMessageId = messageId;
+      pickerMode = mode;
       if (!emojiGroups) {
         const response = await fetch("/emoji.json");
         emojiGroups = (await response.json()).groups;
         for (const group of emojiGroups) {
           for (const [emoji, name] of group.emoji) emojiNames.set(emoji, name);
         }
-        buildCategoryButtons();
       }
+      buildCategoryButtons();  // (every time: the ⭐ button depends on the mode)
       emojiSearch.value = "";
       renderEmojiGrid("");
       emojiPicker.hidden = false;
@@ -2995,7 +3065,7 @@
     function buildCategoryButtons() {
       emojiCategories.replaceChildren();
       const categories = [];
-      if (customEmoji.length) categories.push(["⭐", "Custom", "emoji-group-custom"]);
+      if (customEmoji.length && pickerMode === "react") categories.push(["⭐", "Custom", "emoji-group-custom"]);
       emojiGroups.forEach((group, index) => {  // forEach: like a for loop, but also gives the position
         categories.push([group.emoji[0][0], group.name, "emoji-group-" + index]);
       });
@@ -3051,19 +3121,26 @@
           button.appendChild(makeEmojiElement(emoji));
           button.title = name;
           button.addEventListener("click", () => {
-            react(pickerMessageId, emoji);
             rememberRecent(emoji);
-            closeEmojiPicker();
+            if (pickerMode === "insert") {
+              insertAtCursor(emoji);  // the picker stays open, to add more
+            } else {
+              react(pickerMessageId, emoji);
+              closeEmojiPicker();
+            }
           });
           row.appendChild(button);
         }
         emojiGrid.appendChild(row);
       }
 
+      // Custom emoji can't go inside messages yet (that's on the roadmap), only be reactions.
+      const showCustom = pickerMode === "react";
+
       const search = query.trim().toLowerCase();
       if (search) {
         const results = [];
-        for (const emoji of customEmoji) {  // custom emoji first: they're what people search for most
+        for (const emoji of showCustom ? customEmoji : []) {  // custom emoji first: what people search for most
           if (emoji.name.toLowerCase().includes(search)) results.push(["custom:" + emoji.id, ":" + emoji.name + ":"]);
         }
         for (const group of emojiGroups) {
@@ -3075,9 +3152,9 @@
         return;
       }
 
-      const recent = loadRecent().filter(emojiExists);
+      const recent = loadRecent().filter(emojiExists).filter((emoji) => showCustom || !emoji.startsWith("custom:"));
       if (recent.length) section("Recently used", recent.map((emoji) => [emoji, emojiLabel(emoji)]));
-      customSections().forEach(([title, list], index) => {
+      (showCustom ? customSections() : []).forEach(([title, list], index) => {
         section(title, list, index === 0 ? "emoji-group-custom" : null);  // the ⭐ button scrolls to the first
       });
       emojiGroups.forEach((group, index) => section(group.name, group.emoji, "emoji-group-" + index));
@@ -3113,6 +3190,21 @@
         chip.addEventListener("click", () => react(messageId, reaction.emoji));
         container.appendChild(chip);
       }
+    }
+
+    // Is this text only emoji (and spaces)? Then it's shown big ("jumbo"), like Discord.
+    // \p{...} in a regular expression (with the u flag) matches a whole Unicode category:
+    // Extended_Pictographic = emoji pictures, Regional_Indicator = the letters flags are made of.
+    // Also removed: skin tones (1F3FB-1F3FF), the "glue" between combined emoji (200D), the
+    // "show as emoji" mark (FE0F) and the keycap mark (20E3). Anything left over = not only emoji.
+    // (Digits aren't removed: "123" is not jumbo, even though 1️⃣ is made from a digit.)
+    const EMOJI_PICTURE = /\p{Extended_Pictographic}|\p{Regional_Indicator}{2}/gu;
+    const EMOJI_PARTS = /\p{Extended_Pictographic}|\p{Regional_Indicator}|[\u{1F3FB}-\u{1F3FF}]|‍|️|⃣|\s/gu;
+    const MAX_JUMBO_EMOJI = 27;
+
+    function isOnlyEmoji(text) {
+      const count = (text.match(EMOJI_PICTURE) || []).length;  // match() gives null when there's none
+      return count > 0 && count <= MAX_JUMBO_EMOJI && text.replace(EMOJI_PARTS, "") === "";
     }
 
     // ---------- Times ----------
@@ -3295,6 +3387,7 @@
 
       if (message.text) {
         const text = document.createElement("div");
+        text.className = isOnlyEmoji(message.text) ? "message-text jumbo" : "message-text";
         text.textContent = message.text;
         body.appendChild(text);
       }
