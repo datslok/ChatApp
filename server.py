@@ -65,6 +65,15 @@ MAX_FILENAME_LENGTH = 200
 # Everything else (including SVG, which can) is only ever offered as a download.
 IMAGE_TYPES = {"image/png", "image/jpeg", "image/gif", "image/webp"}
 
+# Profiles. The page shrinks profile pictures to 256x256 before uploading (a few KB),
+# so 1 MB is plenty; the limit is for anyone uploading around the page.
+AVATAR_DIR = UPLOAD_DIR / "avatars"
+AVATAR_DIR.mkdir(exist_ok=True)
+MAX_AVATAR_SIZE = 1024 * 1024  # 1 MB
+AVATAR_EXTENSIONS = {"image/png": "png", "image/jpeg": "jpg", "image/gif": "gif", "image/webp": "webp"}
+MAX_STATUS_LENGTH = 60
+MAX_BIO_LENGTH = 300
+
 hasher = PasswordHasher()
 
 # Every open connection (one per browser tab) and what we know about it:
@@ -85,7 +94,10 @@ db.execute("""
         username      TEXT NOT NULL UNIQUE COLLATE NOCASE,
         password_hash TEXT NOT NULL,
         created_at    TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        email         TEXT  -- stored in lowercase; NULL for accounts made before emails existed
+        email         TEXT,  -- stored in lowercase; NULL for accounts made before emails existed
+        avatar_id     TEXT,  -- profile picture's file name in AVATAR_DIR, like "Xk9...a.webp"; NULL = none
+        status        TEXT,  -- a short line like "playing Minecraft"; NULL = none
+        bio           TEXT   -- a few lines about yourself; NULL = none
     )
 """)
 db.execute("""
@@ -153,6 +165,11 @@ if "email" not in table_columns("users"):
     # From before emails existed: old accounts have none (NULL) until they add one in Settings.
     with db:
         db.execute("ALTER TABLE users ADD COLUMN email TEXT")
+for column in ("avatar_id", "status", "bio"):
+    if column not in table_columns("users"):
+        # From before profiles existed: everyone starts with no picture, status or bio (NULL).
+        with db:
+            db.execute(f"ALTER TABLE users ADD COLUMN {column} TEXT")
 # A unique index: a lookup table SQLite keeps next to the users table (fast "who has this email?"),
 # which also refuses a second account with the same email. Several NULLs are allowed.
 db.execute("CREATE UNIQUE INDEX IF NOT EXISTS users_email ON users (email)")
@@ -287,7 +304,7 @@ def recent_messages(channel):
     # before accounts existed, there's no user, so we show the name that was typed back then.
     rows = db.execute(
         """
-        SELECT COALESCE(users.username, messages.legacy_name), messages.text,
+        SELECT messages.user_id, COALESCE(users.username, messages.legacy_name), messages.text,
                attachments.id, attachments.filename, attachments.size, attachments.content_type
         FROM messages
         LEFT JOIN users ON users.id = messages.user_id
@@ -300,11 +317,12 @@ def recent_messages(channel):
     rows.reverse()  # we fetched newest-first; chat reads oldest-first
     return [
         {
+            "user_id": user_id,  # None for messages from before accounts existed
             "name": name,
             "text": text,
             "file": file_info(file_id, filename, size, content_type) if file_id else None,
         }
-        for name, text, file_id, filename, size, content_type in rows
+        for user_id, name, text, file_id, filename, size, content_type in rows
     ]
 
 
@@ -633,7 +651,8 @@ def check_current_password(username, password_hash, password):
 @app.get("/me")
 async def me(request: Request):
     user_id, username, password_hash, email = logged_in_user(request)
-    return {"username": username, "email": email}
+    avatar, status, bio = db.execute("SELECT avatar_id, status, bio FROM users WHERE id = ?", (user_id,)).fetchone()
+    return {"username": username, "email": email, "avatar": avatar, "status": status, "bio": bio}
 
 
 class EmailChange(BaseModel):
@@ -708,6 +727,26 @@ async def change_password(data: PasswordChange, request: Request):
 
 # ---------- Uploads ----------
 
+async def receive_file(request, path, max_size):
+    """Save the request's body (a raw file) to `path`, reading it piece by piece as it arrives,
+    so we can stop as soon as it's too big. Returns the size in bytes."""
+    size = 0
+    try:
+        with open(path, "wb") as out:  # "wb": write, in binary mode (bytes, not text)
+            async for chunk in request.stream():
+                size += len(chunk)
+                if size > max_size:
+                    raise HTTPException(413, f"Files can be at most {max_size // (1024 * 1024)} MB.")
+                out.write(chunk)
+        if size == 0:
+            raise HTTPException(400, "That file is empty.")
+    except BaseException:
+        # Whatever went wrong (too big, empty, the upload was cancelled...), don't keep half a file.
+        path.unlink(missing_ok=True)
+        raise
+    return size
+
+
 @app.post("/upload")
 async def upload(request: Request, filename: str):
     """Receive one file. The body is the raw file; its name comes in the URL: /upload?filename=cat.png"""
@@ -725,23 +764,7 @@ async def upload(request: Request, filename: str):
     # On disk the file gets a random name, never the one the user gave
     # (a name like "../../server.py" could otherwise overwrite our own files).
     file_id = secrets.token_urlsafe(16)
-    path = UPLOAD_DIR / file_id
-
-    # Read the body piece by piece as it arrives, so we can stop as soon as it's too big.
-    size = 0
-    try:
-        with open(path, "wb") as out:  # "wb": write, in binary mode (bytes, not text)
-            async for chunk in request.stream():
-                size += len(chunk)
-                if size > MAX_UPLOAD_SIZE:
-                    raise HTTPException(413, "Files can be at most 10 MB.")
-                out.write(chunk)
-        if size == 0:
-            raise HTTPException(400, "That file is empty.")
-    except BaseException:
-        # Whatever went wrong (too big, empty, the upload was cancelled...), don't keep half a file.
-        path.unlink(missing_ok=True)
-        raise
+    size = await receive_file(request, UPLOAD_DIR / file_id, MAX_UPLOAD_SIZE)
 
     with db:
         db.execute(
@@ -799,6 +822,90 @@ async def get_upload(request: Request, file_id: str):
     )
 
 
+# ---------- Profiles ----------
+
+def remove_avatar_file(avatar_id):
+    if avatar_id:
+        (AVATAR_DIR / avatar_id).unlink(missing_ok=True)
+
+
+@app.post("/settings/avatar")
+async def change_avatar(request: Request):
+    """Receive a new profile picture (the raw image is the body). The page has already shrunk it."""
+    user_id, username, password_hash, email = logged_in_user(request)
+    content_type = request.headers.get("content-type", "")
+    if content_type not in AVATAR_EXTENSIONS:
+        raise HTTPException(400, "Profile pictures must be PNG, JPEG, GIF or WebP.")
+
+    # A new random name every time: browsers keep (cache) pictures they've seen, so if the new
+    # picture had the old address, people would keep seeing the old one.
+    avatar_id = secrets.token_urlsafe(16) + "." + AVATAR_EXTENSIONS[content_type]
+    await receive_file(request, AVATAR_DIR / avatar_id, MAX_AVATAR_SIZE)
+
+    old_avatar = db.execute("SELECT avatar_id FROM users WHERE id = ?", (user_id,)).fetchone()[0]
+    with db:
+        db.execute("UPDATE users SET avatar_id = ? WHERE id = ?", (avatar_id, user_id))
+    remove_avatar_file(old_avatar)
+    await send_to_everyone(users_message())  # everyone's page shows the new picture
+    return {"ok": True, "avatar": avatar_id}
+
+
+@app.delete("/settings/avatar")
+async def remove_avatar(request: Request):
+    user_id, username, password_hash, email = logged_in_user(request)
+    old_avatar = db.execute("SELECT avatar_id FROM users WHERE id = ?", (user_id,)).fetchone()[0]
+    with db:
+        db.execute("UPDATE users SET avatar_id = NULL WHERE id = ?", (user_id,))
+    remove_avatar_file(old_avatar)
+    await send_to_everyone(users_message())
+    return {"ok": True}
+
+
+class ProfileChange(BaseModel):
+    status: str
+    bio: str
+
+
+@app.post("/settings/profile")
+async def change_profile(data: ProfileChange, request: Request):
+    """Status and bio. No password needed: nothing about the account's security depends on them."""
+    user_id, username, password_hash, email = logged_in_user(request)
+    status = data.status.strip()
+    bio = data.bio.strip()
+    if len(status) > MAX_STATUS_LENGTH:
+        raise HTTPException(400, f"Your status can be at most {MAX_STATUS_LENGTH} characters.")
+    if len(bio) > MAX_BIO_LENGTH:
+        raise HTTPException(400, f"Your bio can be at most {MAX_BIO_LENGTH} characters.")
+    with db:
+        # `status or None`: an empty text is stored as NULL, meaning "none".
+        db.execute("UPDATE users SET status = ?, bio = ? WHERE id = ?", (status or None, bio or None, user_id))
+    await send_to_everyone(users_message())
+    return {"ok": True}
+
+
+@app.get("/avatars/{avatar_id}")
+async def get_avatar(request: Request, avatar_id: str):
+    """A profile picture, for logged-in people only."""
+    row = db.execute("SELECT 1 FROM users WHERE avatar_id = ?", (avatar_id,)).fetchone()
+    if current_user(request) is None or row is None:
+        raise HTTPException(404, "Not found.")
+    # Our own table said this name exists, so it's safe to use as a file name. Its extension
+    # (which we chose ourselves when saving) gives the type.
+    extension = avatar_id.rsplit(".", 1)[-1]
+    content_type = {ext: type_ for type_, ext in AVATAR_EXTENSIONS.items()}[extension]
+    return FileResponse(
+        AVATAR_DIR / avatar_id,
+        media_type=content_type,
+        headers={
+            "X-Content-Type-Options": "nosniff",
+            # A picture's address never changes what's behind it (a new picture gets a new address),
+            # so the browser may keep it for a year without asking again. "private": only in
+            # the person's own browser, not in shared caches along the way.
+            "Cache-Control": "private, max-age=31536000, immutable",
+        },
+    )
+
+
 # ---------- Pages ----------
 
 @app.get("/")
@@ -832,12 +939,18 @@ def online_user_ids():
 
 
 def users_message():
-    """Every account, each marked online or not: [{"id": 3, "name": "axel", "online": True}, ...]"""
+    """Every account with its profile, each marked online or not:
+    [{"id": 3, "name": "axel", "online": True, "avatar": "Xk9...webp", "status": "...", "bio": "..."}, ...]"""
     online = online_user_ids()
-    rows = db.execute("SELECT id, username FROM users ORDER BY username COLLATE NOCASE").fetchall()
+    rows = db.execute(
+        "SELECT id, username, avatar_id, status, bio FROM users ORDER BY username COLLATE NOCASE"
+    ).fetchall()
     return {
         "type": "users",
-        "users": [{"id": user_id, "name": name, "online": user_id in online} for user_id, name in rows],
+        "users": [
+            {"id": user_id, "name": name, "online": user_id in online, "avatar": avatar, "status": status, "bio": bio}
+            for user_id, name, avatar, status, bio in rows
+        ],
     }
 
 
@@ -989,7 +1102,10 @@ async def chat(websocket: WebSocket):
                 save_message(channel, user_id, text, file)
                 # The name comes from the login (looked up now, so it's always the current one),
                 # never from the client.
-                message = {"type": "message", "channel": channel, "name": username_of(user_id), "text": text, "file": file}
+                message = {
+                    "type": "message", "channel": channel, "user_id": user_id,
+                    "name": username_of(user_id), "text": text, "file": file,
+                }
                 await send_to_channel(channel, message)  # everyone in the channel, including us
                 await announce_new_message(channel)  # mark it read or unread for everyone else
 

@@ -140,12 +140,98 @@
       padding: 16px;
     }
 
+    /* A message: picture on the left; name, text and attachment stacked on the right. */
     .message {
-      padding: 4px 0;
+      display: flex;
+      gap: 12px;
+      padding: 6px 0;
+    }
+
+    .message-body {
+      min-width: 0;  /* lets long words wrap instead of stretching the message */
+      overflow-wrap: anywhere;
     }
 
     .name {
       color: white;
+      font-weight: 600;
+    }
+
+    /* Names and pictures you can click to see someone's profile. */
+    .clickable {
+      cursor: pointer;
+    }
+
+    .name.clickable:hover {
+      text-decoration: underline;
+    }
+
+    /* Profile pictures: round, and cropped to fill the circle. Three sizes. */
+    .avatar {
+      width: 40px;
+      height: 40px;
+      flex-shrink: 0;  /* never squashed by the text next to it */
+      border-radius: 50%;
+      object-fit: cover;
+    }
+
+    .avatar.small {
+      width: 24px;
+      height: 24px;
+      font-size: 0.75rem;
+    }
+
+    .avatar.large {
+      width: 96px;
+      height: 96px;
+      font-size: 2.5rem;
+    }
+
+    /* No picture: a coloured circle with the first letter of the name. */
+    .avatar.letter {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: 600;
+    }
+
+    /* A person in the DM list or online list: picture (with online dot), name, status. */
+    .person {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .person-picture {
+      position: relative;  /* so the online dot can sit on its corner */
+      display: flex;
+    }
+
+    .person-picture .dot {
+      position: absolute;
+      right: -2px;
+      bottom: -2px;
+      width: 10px;
+      height: 10px;
+      margin: 0;
+      border: 2px solid #2b2d31;  /* a ring in the sidebar's colour, to separate it from the picture */
+    }
+
+    .person-text {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+
+    .person-status {
+      overflow: hidden;         /* a long status gets cut off... */
+      text-overflow: ellipsis;  /* ...with "…" */
+      white-space: nowrap;
+      font-size: 0.75rem;
+      font-weight: normal;
+      color: #949ba4;
     }
 
     .attachment-image {
@@ -418,6 +504,166 @@
     #online-list li {
       padding: 4px 0;
     }
+
+    /* Someone's profile, shown when you click their name or picture. */
+    #profile {
+      width: min(340px, 100% - 32px);
+      box-sizing: border-box;
+      padding: 24px;
+      border: none;
+      border-radius: 8px;
+      background: #2b2d31;
+      color: inherit;
+      text-align: center;
+    }
+
+    #profile::backdrop {
+      background: rgba(0, 0, 0, 0.6);
+    }
+
+    #profile .avatar {
+      margin: 0 auto 12px;  /* centred */
+    }
+
+    #profile-name {
+      margin: 0;
+      font-size: 1.3rem;
+      color: white;
+    }
+
+    #profile-status {
+      margin: 4px 0 0;
+      color: #949ba4;
+    }
+
+    #profile-bio {
+      margin: 16px 0 0;
+      white-space: pre-wrap;  /* keep the line breaks the person typed */
+      text-align: left;
+    }
+
+    #profile-message {
+      margin-top: 20px;
+      width: 100%;
+      padding: 10px;
+      border: none;
+      border-radius: 6px;
+      background: #5865f2;
+      color: white;
+      font-size: 1rem;
+      cursor: pointer;
+    }
+
+    #profile-close {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      width: 32px;
+      height: 32px;
+      border: none;
+      border-radius: 50%;
+      background: #1e1f22;
+      color: white;
+      cursor: pointer;
+    }
+
+    /* The picture editor. */
+    #cropper {
+      width: min(340px, 100% - 32px);
+      box-sizing: border-box;
+      padding: 24px;
+      border: none;
+      border-radius: 8px;
+      background: #2b2d31;
+      color: inherit;
+      text-align: center;
+    }
+
+    #cropper::backdrop {
+      background: rgba(0, 0, 0, 0.7);
+    }
+
+    #cropper h2 {
+      margin: 0 0 4px;
+      color: white;
+    }
+
+    .crop-hint {
+      margin: 0 0 16px;
+      font-size: 0.85rem;
+      color: #949ba4;
+    }
+
+    #crop-canvas {
+      display: block;
+      width: min(256px, 100%);  /* the canvas has 256 pixels, but may be shown smaller on phones */
+      aspect-ratio: 1;          /* always square: height follows width */
+      margin: 0 auto;
+      border-radius: 50%;       /* shown as a circle, like the finished picture */
+      background: #1e1f22;
+      cursor: grab;
+      touch-action: none;       /* phones: dragging moves the picture instead of scrolling the page */
+    }
+
+    .crop-zoom {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-top: 16px;
+      font-size: 0.85rem;
+      color: #b5bac1;
+    }
+
+    .crop-zoom input {
+      flex: 1;
+    }
+
+    .crop-buttons {
+      display: flex;
+      gap: 8px;
+      margin-top: 20px;
+    }
+
+    .crop-buttons button {
+      flex: 1;
+      padding: 10px;
+      border: none;
+      border-radius: 6px;
+      background: #5865f2;
+      color: white;
+      font-size: 1rem;
+      cursor: pointer;
+    }
+
+    .crop-buttons #crop-cancel {
+      background: #4e5058;
+    }
+
+    /* Settings: your picture with its two buttons next to it. */
+    #avatar-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    #settings #avatar-row button {
+      padding: 8px 12px;
+      font-size: 0.9rem;
+    }
+
+    #settings #remove-avatar {
+      background: #4e5058;
+    }
+
+    #settings textarea {
+      padding: 10px 12px;
+      border: none;
+      border-radius: 6px;
+      background: #1e1f22;
+      color: inherit;
+      font: inherit;  /* textareas don't use the page's font by default */
+      resize: vertical;
+    }
     /* The top bar and the drawer backdrop only exist on phones (see below). */
     #topbar,
     #drawer-backdrop {
@@ -580,6 +826,26 @@
     <button type="button" id="settings-close" title="Close">×</button>
     <h2>Settings</h2>
 
+    <h3>Profile</h3>
+    <form id="profile-form">
+      <div id="avatar-row">
+        <span id="settings-avatar"></span>
+        <button type="button" id="change-avatar">Change picture</button>
+        <button type="button" id="remove-avatar">Remove</button>
+        <input type="file" id="avatar-input" accept="image/*" hidden>
+      </div>
+      <label>
+        Status
+        <input id="status-input" maxlength="60" placeholder="e.g. 🎮 playing Minecraft">
+      </label>
+      <label>
+        Bio
+        <textarea id="bio-input" maxlength="300" rows="3" placeholder="A few words about yourself"></textarea>
+      </label>
+      <div id="profile-status-line" class="status"></div>
+      <button>Save profile</button>
+    </form>
+
     <h3>Username</h3>
     <form id="username-form">
       <p>Current: <strong id="current-username">…</strong></p>
@@ -629,6 +895,31 @@
     </form>
   </dialog>
 
+  <!-- The picture editor: move and zoom a new profile picture before it's uploaded. -->
+  <dialog id="cropper">
+    <h2>Edit picture</h2>
+    <p class="crop-hint">Drag to move. Zoom with the slider (or the scroll wheel).</p>
+    <canvas id="crop-canvas" width="256" height="256"></canvas>
+    <label class="crop-zoom">
+      Zoom
+      <input type="range" id="crop-zoom" min="1" max="4" step="0.01" value="1">
+    </label>
+    <div class="crop-buttons">
+      <button type="button" id="crop-cancel">Cancel</button>
+      <button type="button" id="crop-save">Save</button>
+    </div>
+  </dialog>
+
+  <!-- Someone's profile: opened by clicking a name or picture. -->
+  <dialog id="profile">
+    <button type="button" id="profile-close" title="Close">×</button>
+    <div id="profile-avatar"></div>
+    <h2 id="profile-name"></h2>
+    <p id="profile-status"></p>
+    <p id="profile-bio"></p>
+    <button type="button" id="profile-message">Send message</button>
+  </dialog>
+
   <!-- Phones only: darkens the chat behind an open drawer. -->
   <div id="drawer-backdrop" hidden></div>
 
@@ -645,6 +936,26 @@
     const logoutButton = document.getElementById("logout");
     const settingsButton = document.getElementById("settings-button");
     const settingsDialog = document.getElementById("settings");
+    const profileForm = document.getElementById("profile-form");
+    const settingsAvatar = document.getElementById("settings-avatar");
+    const changeAvatarButton = document.getElementById("change-avatar");
+    const removeAvatarButton = document.getElementById("remove-avatar");
+    const avatarInput = document.getElementById("avatar-input");
+    const statusInput = document.getElementById("status-input");
+    const bioInput = document.getElementById("bio-input");
+    const profileStatusLine = document.getElementById("profile-status-line");
+    const cropperDialog = document.getElementById("cropper");
+    const cropCanvas = document.getElementById("crop-canvas");
+    const cropZoom = document.getElementById("crop-zoom");
+    const cropCancel = document.getElementById("crop-cancel");
+    const cropSave = document.getElementById("crop-save");
+    const profileDialog = document.getElementById("profile");
+    const profileClose = document.getElementById("profile-close");
+    const profileAvatar = document.getElementById("profile-avatar");
+    const profileName = document.getElementById("profile-name");
+    const profileStatus = document.getElementById("profile-status");
+    const profileBio = document.getElementById("profile-bio");
+    const profileMessage = document.getElementById("profile-message");
     const usernameForm = document.getElementById("username-form");
     const currentUsername = document.getElementById("current-username");
     const newUsernameInput = document.getElementById("new-username");
@@ -896,17 +1207,216 @@
       passwordForm.reset();
       emailStatus.textContent = "";
       passwordStatus.textContent = "";
+      profileStatusLine.textContent = "";
       settingsDialog.showModal();
 
-      // Ask the server for our current email, to show it.
+      // Ask the server for our current details, to show them.
       const response = await fetch("/me");
       if (response.ok) {
-        const me = await response.json();  // {username, email}
+        const me = await response.json();  // {username, email, avatar, status, bio}
         currentUsername.textContent = me.username;
         currentEmail.textContent = me.email || "none yet";
+        statusInput.value = me.status || "";
+        bioInput.value = me.bio || "";
+        settingsAvatar.replaceChildren(makeAvatar(myId, me.username, "large"));
       }
     });
     settingsClose.addEventListener("click", () => settingsDialog.close());
+
+    // ---------- Settings: profile ----------
+
+    profileForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const result = await postJson("/settings/profile", { status: statusInput.value, bio: bioInput.value });
+      if (result.ok) {
+        showStatus(profileStatusLine, "Profile saved.", "success");
+      } else {
+        showStatus(profileStatusLine, result.error, "error");
+      }
+    });
+
+    changeAvatarButton.addEventListener("click", () => avatarInput.click());
+
+    // Picking a picture opens the editor (move and zoom); nothing is uploaded until Save.
+    avatarInput.addEventListener("change", async () => {
+      const file = avatarInput.files[0];
+      avatarInput.value = "";  // so the same file can be picked again later
+      if (!file) return;
+      try {
+        openCropper(await loadPicture(file));
+      } catch {
+        showStatus(profileStatusLine, "Couldn't read that picture. Try a PNG or JPEG.", "error");
+      }
+    });
+
+    async function uploadAvatar(picture) {
+      showStatus(profileStatusLine, "Uploading…", "success");
+      const response = await fetch("/settings/avatar", {
+        method: "POST",
+        headers: { "Content-Type": picture.type },
+        body: picture,
+      });
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        showStatus(profileStatusLine, typeof error.detail === "string" ? error.detail : "Upload failed.", "error");
+        return;
+      }
+      // The server sends everyone (us too) an updated "users" list, which redraws the pictures.
+      // The one in Settings isn't part of that, so we redraw it when the list arrives (see showUsers).
+      showStatus(profileStatusLine, "Picture changed.", "success");
+    }
+
+    removeAvatarButton.addEventListener("click", async () => {
+      const response = await fetch("/settings/avatar", { method: "DELETE" });
+      if (response.ok) showStatus(profileStatusLine, "Picture removed.", "success");
+    });
+
+    // Load a picture file so it can be drawn. Fails if the browser can't read it.
+    async function loadPicture(file) {
+      const url = URL.createObjectURL(file);  // a temporary local address for the file
+      const img = new Image();
+      img.src = url;
+      try {
+        await img.decode();  // wait until the browser has loaded the picture
+      } finally {
+        URL.revokeObjectURL(url);  // once loaded, the picture stays usable without it
+      }
+      return img;
+    }
+
+    // Cut a square out of the original picture (left, top, side: in the picture's own pixels)
+    // and shrink it to 256x256 on a <canvas>, then save that as a small image file.
+    // A phone photo of several MB becomes a few KB.
+    function squareToFile(img, left, top, side) {
+      const size = 256;
+      const canvas = document.createElement("canvas");
+      canvas.width = size;
+      canvas.height = size;
+      // drawImage(picture, cut out x, y, width, height, ..., draw at x, y, width, height)
+      canvas.getContext("2d").drawImage(img, left, top, side, side, 0, 0, size, size);
+
+      // toBlob turns the canvas into an image file. It reports back through a callback
+      // instead of returning, so we wrap it in a Promise to be able to "await" it.
+      // (Browsers that can't make WebP give us a PNG instead; the server accepts both.)
+      return new Promise((resolve, reject) => {
+        canvas.toBlob((blob) => (blob ? resolve(blob) : reject()), "image/webp", 0.85);
+      });
+    }
+
+    // ---------- Picture editor (move and zoom before uploading) ----------
+    //
+    // The preview canvas is VIEW x VIEW pixels and shown as a circle. Three numbers describe
+    // where the picture is: `cropScale` (how much it's enlarged: canvas pixels per picture pixel)
+    // and `cropX`, `cropY` (where its top-left corner is, in canvas pixels; 0 or negative).
+
+    const VIEW = 256;
+    const MAX_ZOOM = 4;
+    let cropImage = null;
+    let cropMinScale = 1;  // the zoom where the picture's shorter side just fills the circle
+    let cropScale = 1;
+    let cropX = 0;
+    let cropY = 0;
+
+    function openCropper(img) {
+      cropImage = img;
+      // Start like the automatic crop: the shorter side fills the circle, centred.
+      cropMinScale = VIEW / Math.min(img.naturalWidth, img.naturalHeight);
+      cropScale = cropMinScale;
+      cropX = (VIEW - img.naturalWidth * cropScale) / 2;
+      cropY = (VIEW - img.naturalHeight * cropScale) / 2;
+      cropZoom.value = 1;
+      drawCrop();
+      cropperDialog.showModal();
+    }
+
+    // Keep the picture covering the whole circle: its left edge may not move right of the
+    // canvas's left edge (x <= 0), and its right edge may not move left of the canvas's right
+    // edge (x >= VIEW - width). The same for top and bottom.
+    function clampCrop() {
+      const width = cropImage.naturalWidth * cropScale;
+      const height = cropImage.naturalHeight * cropScale;
+      cropX = Math.min(0, Math.max(VIEW - width, cropX));
+      cropY = Math.min(0, Math.max(VIEW - height, cropY));
+    }
+
+    function drawCrop() {
+      clampCrop();
+      const context = cropCanvas.getContext("2d");
+      context.clearRect(0, 0, VIEW, VIEW);
+      context.drawImage(
+        cropImage, cropX, cropY, cropImage.naturalWidth * cropScale, cropImage.naturalHeight * cropScale
+      );
+    }
+
+    // Zoom to `factor` times the minimum (1 to MAX_ZOOM), keeping the middle of the view in place:
+    // find which point of the picture is in the middle now, then put that same point
+    // back in the middle at the new zoom.
+    function setZoom(factor) {
+      factor = Math.min(MAX_ZOOM, Math.max(1, factor));
+      const middleX = (VIEW / 2 - cropX) / cropScale;  // in the picture's own pixels
+      const middleY = (VIEW / 2 - cropY) / cropScale;
+      cropScale = cropMinScale * factor;
+      cropX = VIEW / 2 - middleX * cropScale;
+      cropY = VIEW / 2 - middleY * cropScale;
+      cropZoom.value = factor;
+      drawCrop();
+    }
+
+    cropZoom.addEventListener("input", () => setZoom(Number(cropZoom.value)));
+
+    // The scroll wheel zooms too. { passive: false } is needed to be allowed to call
+    // preventDefault() (which stops the wheel from also scrolling the page).
+    cropCanvas.addEventListener("wheel", (event) => {
+      event.preventDefault();
+      const current = cropScale / cropMinScale;
+      setZoom(event.deltaY < 0 ? current * 1.1 : current / 1.1);  // deltaY < 0: wheel turned up
+    }, { passive: false });
+
+    // Dragging, with pointer events: one set of events for mouse, finger and pen alike.
+    let dragFrom = null;  // where the pointer was last time, while dragging
+
+    cropCanvas.addEventListener("pointerdown", (event) => {
+      // Keep receiving this pointer's moves even if it slides off the canvas mid-drag.
+      cropCanvas.setPointerCapture(event.pointerId);
+      dragFrom = { x: event.clientX, y: event.clientY };
+    });
+
+    cropCanvas.addEventListener("pointermove", (event) => {
+      if (!dragFrom) return;
+      // The pointer moves in screen pixels, but the canvas may be shown smaller than its
+      // VIEW pixels (on a phone), so convert: canvas pixels per screen pixel.
+      const ratio = VIEW / cropCanvas.getBoundingClientRect().width;
+      cropX += (event.clientX - dragFrom.x) * ratio;
+      cropY += (event.clientY - dragFrom.y) * ratio;
+      dragFrom = { x: event.clientX, y: event.clientY };
+      drawCrop();
+    });
+
+    function stopDragging() {
+      dragFrom = null;
+    }
+    cropCanvas.addEventListener("pointerup", stopDragging);
+    cropCanvas.addEventListener("pointercancel", stopDragging);  // e.g. the phone took over the touch
+
+    cropCancel.addEventListener("click", () => cropperDialog.close());
+
+    cropSave.addEventListener("click", async () => {
+      // Which square of the original picture is inside the circle? Turn canvas pixels back
+      // into picture pixels: the circle's corner (0, 0) is at -cropX / cropScale in the picture,
+      // and the circle's VIEW pixels cover VIEW / cropScale picture pixels.
+      const left = -cropX / cropScale;
+      const top = -cropY / cropScale;
+      const side = VIEW / cropScale;
+      cropperDialog.close();
+      let picture;
+      try {
+        picture = await squareToFile(cropImage, left, top, side);
+      } catch {
+        showStatus(profileStatusLine, "Couldn't save that picture.", "error");
+        return;
+      }
+      await uploadAvatar(picture);
+    });
 
     function showStatus(element, text, kind) {
       element.className = "status " + kind;  // "error" (red) or "success" (green)
@@ -981,8 +1491,82 @@
       return dot;
     }
 
-    // `users` is every account: [{id: 3, name: "axel", online: true}, ...]
+    // Everyone we know about, by id: {3 => {id, name, online, avatar, status, bio}, ...}.
+    // Filled from the server's "users" list. Messages only carry the sender's id, and look
+    // up the picture here, so a changed picture shows up everywhere at once.
+    const people = new Map();
+
+    // Colours for the letter circles. Each person always gets the same one (their id picks it).
+    const LETTER_COLOURS = ["#5865f2", "#3ba55c", "#faa61a", "#ed4245", "#eb459e", "#9b59b6", "#1abc9c"];
+
+    // A profile picture: the real one if the person has one, otherwise a coloured circle with
+    // their first letter. `size` is "small", "" (normal) or "large".
+    // userId can be null: messages from before accounts existed (we only have the typed name).
+    function makeAvatar(userId, name, size) {
+      const person = people.get(userId);
+      let avatar;
+      if (person && person.avatar) {
+        avatar = document.createElement("img");
+        avatar.src = "/avatars/" + encodeURIComponent(person.avatar);
+        avatar.alt = "";  // decorative: the name is always shown next to it
+      } else {
+        avatar = document.createElement("div");
+        avatar.classList.add("letter");
+        avatar.textContent = (name || "?").charAt(0).toUpperCase();
+        avatar.style.background = userId ? LETTER_COLOURS[userId % LETTER_COLOURS.length] : "#4e5058";
+      }
+      avatar.classList.add("avatar");
+      if (size) avatar.classList.add(size);
+      // Remember whose picture this is, so it can be redrawn when they change it.
+      avatar.dataset.avatarFor = userId ?? "";  // ?? means "or, if it's null/undefined"
+      avatar.dataset.avatarName = name || "";
+      avatar.dataset.avatarSize = size || "";
+      return avatar;
+    }
+
+    // After a "users" update: replace every picture on the page with a fresh one, so changed
+    // pictures appear on old messages too, without reloading anything.
+    function redrawAvatars() {
+      for (const old of document.querySelectorAll("[data-avatar-for]")) {
+        if (old.dataset.avatarFor === "") continue;  // pre-account messages never change
+        const userId = Number(old.dataset.avatarFor);
+        const fresh = makeAvatar(userId, old.dataset.avatarName, old.dataset.avatarSize);
+        if (old.classList.contains("clickable")) fresh.classList.add("clickable");
+        old.replaceWith(fresh);
+      }
+    }
+
+    // A row for one person: picture with an online dot, name, and status underneath.
+    function makePerson(user) {
+      const row = document.createElement("span");
+      row.className = "person";
+
+      const picture = document.createElement("span");
+      picture.className = "person-picture";
+      picture.appendChild(makeAvatar(user.id, user.name, "small"));
+      picture.appendChild(makeDot(user.online));
+      row.appendChild(picture);
+
+      const text = document.createElement("span");
+      text.className = "person-text";
+      const name = document.createElement("span");
+      name.textContent = user.name;
+      text.appendChild(name);
+      if (user.status) {
+        const status = document.createElement("span");
+        status.className = "person-status";
+        status.textContent = user.status;
+        text.appendChild(status);
+      }
+      row.appendChild(text);
+      return row;
+    }
+
+    // `users` is every account: [{id: 3, name: "axel", online: true, avatar, status, bio}, ...]
     function showUsers(users) {
+      people.clear();
+      for (const user of users) people.set(user.id, user);
+
       // DM list in the sidebar: everyone except us.
       dmList.replaceChildren();
       for (const user of users) {
@@ -990,24 +1574,50 @@
         const button = document.createElement("button");
         button.className = "channel";
         button.dataset.channel = dmChannel(user.id);
-        button.appendChild(makeDot(user.online));
-        button.appendChild(document.createTextNode(user.name));
+        button.appendChild(makePerson(user));
         button.addEventListener("click", () => switchChannel(dmChannel(user.id), "@" + user.name));
         dmList.appendChild(button);
       }
       updateSidebar();  // the buttons are new, so mark the active and unread ones again
 
-      // Online list on the right: only the people who are online.
+      // Online list on the right: only the people who are online. Click one for their profile.
       const online = users.filter((user) => user.online);
       onlineHeading.textContent = `Online — ${online.length}`;
       onlineList.replaceChildren();
       for (const user of online) {
         const item = document.createElement("li");
-        item.appendChild(makeDot(true));
-        item.appendChild(document.createTextNode(user.name));
+        item.classList.add("clickable");
+        item.appendChild(makePerson(user));
+        item.addEventListener("click", () => openProfile(user.id));
         onlineList.appendChild(item);
       }
+
+      redrawAvatars();  // messages, the profile popup and Settings
     }
+
+    // ---------- Profile popup ----------
+
+    let profileUserId = null;  // whose profile is open
+
+    function openProfile(userId) {
+      const person = people.get(userId);
+      if (!person) return;  // pre-account messages have no profile
+      profileUserId = userId;
+      closeDrawers();
+      profileAvatar.replaceChildren(makeAvatar(userId, person.name, "large"));
+      profileName.textContent = person.name;
+      profileStatus.textContent = person.status || "";
+      profileBio.textContent = person.bio || "";
+      profileMessage.hidden = userId === myId;  // no DMs with yourself
+      profileDialog.showModal();
+    }
+
+    profileMessage.addEventListener("click", () => {
+      const person = people.get(profileUserId);
+      profileDialog.close();
+      switchChannel(dmChannel(profileUserId), "@" + person.name);
+    });
+    profileClose.addEventListener("click", () => profileDialog.close());
 
     // ---------- "is typing…" ----------
 
@@ -1300,17 +1910,38 @@
       const div = document.createElement("div");
       div.className = "message";
 
-      const nameElement = document.createElement("strong");
+      // The sender's picture on the left. Pictures and names open their profile when clicked
+      // (except for messages from before accounts existed, which have no profile).
+      const avatar = makeAvatar(message.user_id, message.name, "");
+      div.appendChild(avatar);
+
+      const body = document.createElement("div");
+      body.className = "message-body";
+
+      const nameElement = document.createElement("div");
       nameElement.className = "name";
       nameElement.textContent = message.name;
-      div.appendChild(nameElement);
+      body.appendChild(nameElement);
+
+      if (message.user_id) {
+        avatar.classList.add("clickable");
+        nameElement.classList.add("clickable");
+        // The click handler goes on the message, not on the picture: pictures get swapped
+        // for fresh ones when someone changes theirs, and a handler on the old one would be lost.
+        div.addEventListener("click", (event) => {
+          if (event.target.closest(".avatar, .name")) openProfile(message.user_id);
+        });
+      }
 
       if (message.text) {
-        div.appendChild(document.createTextNode(": " + message.text));
+        const text = document.createElement("div");
+        text.textContent = message.text;
+        body.appendChild(text);
       }
       if (message.file) {
-        div.appendChild(makeAttachment(message.file));
+        body.appendChild(makeAttachment(message.file));
       }
+      div.appendChild(body);
 
       // Were we scrolled to (or near) the bottom before this message arrived?
       const distanceFromBottom = messages.scrollHeight - messages.scrollTop - messages.clientHeight;
@@ -1318,7 +1949,8 @@
 
       // A picture only gets its real height once it has loaded, which pushes the
       // messages up after we've scrolled. So scroll again when it finishes loading.
-      const img = div.querySelector("img");
+      // (Only the attached picture: profile pictures always have the same fixed size.)
+      const img = div.querySelector(".attachment-image");
       if (img && wasAtBottom) {
         img.addEventListener("load", () => {
           messages.scrollTop = messages.scrollHeight;
