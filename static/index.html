@@ -580,6 +580,21 @@
     <button type="button" id="settings-close" title="Close">×</button>
     <h2>Settings</h2>
 
+    <h3>Username</h3>
+    <form id="username-form">
+      <p>Current: <strong id="current-username">…</strong></p>
+      <label>
+        New username
+        <input id="new-username" autocomplete="username" required>
+      </label>
+      <label>
+        Your password (to confirm it's you)
+        <input id="username-password" type="password" autocomplete="current-password" required>
+      </label>
+      <div id="username-status" class="status"></div>
+      <button>Change username</button>
+    </form>
+
     <h3>Email</h3>
     <form id="email-form">
       <p>Current: <strong id="current-email">…</strong></p>
@@ -630,6 +645,11 @@
     const logoutButton = document.getElementById("logout");
     const settingsButton = document.getElementById("settings-button");
     const settingsDialog = document.getElementById("settings");
+    const usernameForm = document.getElementById("username-form");
+    const currentUsername = document.getElementById("current-username");
+    const newUsernameInput = document.getElementById("new-username");
+    const usernamePasswordInput = document.getElementById("username-password");
+    const usernameStatus = document.getElementById("username-status");
     const settingsClose = document.getElementById("settings-close");
     const emailForm = document.getElementById("email-form");
     const currentEmail = document.getElementById("current-email");
@@ -737,6 +757,15 @@
         myId = data.id;
         return;
       }
+      if (data.type === "renamed") {
+        // Someone changed their username. The DM list already updated (from the "users"
+        // message); reload the messages on screen so old messages show the new name too.
+        if (data.id !== myId && currentChannel === dmChannel(data.id)) {
+          setLabel("@" + data.username);  // we're in a DM with them
+        }
+        if (currentChannel !== null) joinCurrentChannel();
+        return;
+      }
       if (data.type === "users") {
         showUsers(data.users);
         return;
@@ -765,13 +794,18 @@
       }
     }
 
+    // Show where we are: in the text box's placeholder, and in the phone top bar.
+    function setLabel(label) {
+      input.placeholder = "Message " + label;
+      topbarTitle.textContent = label;
+    }
+
     // Switch channel or DM. `label` is what to show in the text box, like "#general" or "@kari".
     function switchChannel(channel, label) {
       closeDrawers();  // on a phone: picking a channel closes the drawer
       if (channel === currentChannel) return;
       currentChannel = channel;
-      input.placeholder = "Message " + label;
-      topbarTitle.textContent = label;  // the phone top bar shows where we are
+      setLabel(label);
       unread.delete(channel);  // opening it means we've seen it
       updateSidebar();
       joinCurrentChannel();
@@ -856,7 +890,9 @@
 
     settingsButton.addEventListener("click", async () => {
       closeDrawers();  // on a phone, the sidebar drawer was open
-      emailForm.reset();  // empty the fields from last time
+      usernameForm.reset();  // empty the fields from last time
+      usernameStatus.textContent = "";
+      emailForm.reset();
       passwordForm.reset();
       emailStatus.textContent = "";
       passwordStatus.textContent = "";
@@ -866,6 +902,7 @@
       const response = await fetch("/me");
       if (response.ok) {
         const me = await response.json();  // {username, email}
+        currentUsername.textContent = me.username;
         currentEmail.textContent = me.email || "none yet";
       }
     });
@@ -887,6 +924,21 @@
       if (response.ok) return { ok: true, data: result };
       return { ok: false, error: typeof result.detail === "string" ? result.detail : "Something went wrong." };
     }
+
+    usernameForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const result = await postJson("/settings/username", {
+        username: newUsernameInput.value,
+        password: usernamePasswordInput.value,
+      });
+      if (!result.ok) {
+        showStatus(usernameStatus, result.error, "error");
+        return;
+      }
+      currentUsername.textContent = result.data.username;
+      usernameForm.reset();
+      showStatus(usernameStatus, "Username changed.", "success");
+    });
 
     emailForm.addEventListener("submit", async (event) => {
       event.preventDefault();

@@ -658,6 +658,34 @@ async def change_email(data: EmailChange, request: Request):
     return {"ok": True, "email": email}
 
 
+class UsernameChange(BaseModel):
+    username: str
+    password: str
+
+
+@app.post("/settings/username")
+async def change_username(data: UsernameChange, request: Request):
+    user_id, username, password_hash, email = logged_in_user(request)
+    check_current_password(username, password_hash, data.password)
+    new_username = data.username.strip()
+    if not USERNAME_PATTERN.fullmatch(new_username):
+        raise HTTPException(400, "Usernames are 1–32 letters, digits, _ or -.")
+    try:
+        # Everything else refers to people by id, so this one row is all that changes.
+        # (Changing only the case of your own name, axel -> Axel, is fine: the UNIQUE rule
+        # only compares against *other* rows.)
+        with db:
+            db.execute("UPDATE users SET username = ? WHERE id = ?", (new_username, user_id))
+    except sqlite3.IntegrityError:
+        raise HTTPException(400, "That username is taken.")
+
+    # Tell every open page: the DM list and online list get the new name, and pages reload
+    # the messages they're showing, so the new name appears on old messages too.
+    await send_to_everyone(users_message())
+    await send_to_everyone({"type": "renamed", "id": user_id, "username": new_username})
+    return {"ok": True, "username": new_username}
+
+
 class PasswordChange(BaseModel):
     current_password: str
     new_password: str
