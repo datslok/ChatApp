@@ -425,7 +425,8 @@ def reply_preview(original_id, user_id, name, text, attachment_id):
         "id": original_id,
         "user_id": user_id,
         "name": name,
-        "text": text[:REPLY_PREVIEW_LENGTH],
+        # Cut to length, then drop a custom emoji token that got cut in half at the end ("<:1").
+        "text": re.sub(r"<:\d*$", "", text[:REPLY_PREVIEW_LENGTH]),
         "file": attachment_id is not None,  # the page shows "Attachment" if there's no text
     }
 
@@ -1210,6 +1211,22 @@ def custom_emoji_message():
     }
 
 
+CUSTOM_EMOJI_CODE = re.compile(r":([A-Za-z0-9_]{2,32}):")  # :pog: in a message's text
+
+
+def expand_custom_emoji(text):
+    """Turn every :name: of an existing custom emoji into a token with its id, like <:17>.
+    Messages store the id, not the name, so a deleted (or one day renamed) emoji can never turn
+    into a different one that later gets the same name. Anything else (":)", ":nope:") stays text."""
+    ids = {name.lower(): emoji_id for emoji_id, name in db.execute("SELECT id, name FROM custom_emoji")}
+
+    def replace(match):  # called for each :name: found; returns what to put in its place
+        emoji_id = ids.get(match[1].lower())
+        return f"<:{emoji_id}>" if emoji_id else match[0]
+
+    return CUSTOM_EMOJI_CODE.sub(replace, text)
+
+
 def custom_emoji_exists(reaction):
     """Is this a reference to a custom emoji that exists, like "custom:17"?"""
     match = re.fullmatch(r"custom:(\d{1,10})", reaction)
@@ -1602,6 +1619,7 @@ async def chat(websocket: WebSocket):
                         continue  # not their file, already sent, or doesn't exist
                 if not text and file is None:
                     continue  # nothing to send
+                text = expand_custom_emoji(text)  # :pog: -> <:17>
                 reply_to = check_reply(data.get("reply_to"), channel)
                 message_id, sent_at = save_message(channel, user_id, text, file, reply_to)
                 # The name comes from the login (looked up now, so it's always the current one),

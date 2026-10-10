@@ -843,6 +843,11 @@
       line-height: 1.2;
     }
 
+    .message-text.jumbo .custom-emoji {
+      width: 48px;
+      height: 48px;
+    }
+
     #members {
       width: 200px;
       padding: 16px;
@@ -3065,7 +3070,7 @@
     function buildCategoryButtons() {
       emojiCategories.replaceChildren();
       const categories = [];
-      if (customEmoji.length && pickerMode === "react") categories.push(["⭐", "Custom", "emoji-group-custom"]);
+      if (customEmoji.length) categories.push(["⭐", "Custom", "emoji-group-custom"]);
       emojiGroups.forEach((group, index) => {  // forEach: like a for loop, but also gives the position
         categories.push([group.emoji[0][0], group.name, "emoji-group-" + index]);
       });
@@ -3123,7 +3128,8 @@
           button.addEventListener("click", () => {
             rememberRecent(emoji);
             if (pickerMode === "insert") {
-              insertAtCursor(emoji);  // the picker stays open, to add more
+              // A custom emoji is typed as its code (":pog:"), which the server turns into the picture.
+              insertAtCursor(emoji.startsWith("custom:") ? emojiLabel(emoji) : emoji);  // the picker stays open
             } else {
               react(pickerMessageId, emoji);
               closeEmojiPicker();
@@ -3134,13 +3140,10 @@
         emojiGrid.appendChild(row);
       }
 
-      // Custom emoji can't go inside messages yet (that's on the roadmap), only be reactions.
-      const showCustom = pickerMode === "react";
-
       const search = query.trim().toLowerCase();
       if (search) {
         const results = [];
-        for (const emoji of showCustom ? customEmoji : []) {  // custom emoji first: what people search for most
+        for (const emoji of customEmoji) {  // custom emoji first: they're what people search for most
           if (emoji.name.toLowerCase().includes(search)) results.push(["custom:" + emoji.id, ":" + emoji.name + ":"]);
         }
         for (const group of emojiGroups) {
@@ -3152,9 +3155,9 @@
         return;
       }
 
-      const recent = loadRecent().filter(emojiExists).filter((emoji) => showCustom || !emoji.startsWith("custom:"));
+      const recent = loadRecent().filter(emojiExists);
       if (recent.length) section("Recently used", recent.map((emoji) => [emoji, emojiLabel(emoji)]));
-      (showCustom ? customSections() : []).forEach(([title, list], index) => {
+      customSections().forEach(([title, list], index) => {
         section(title, list, index === 0 ? "emoji-group-custom" : null);  // the ⭐ button scrolls to the first
       });
       emojiGroups.forEach((group, index) => section(group.name, group.emoji, "emoji-group-" + index));
@@ -3202,9 +3205,34 @@
     const EMOJI_PARTS = /\p{Extended_Pictographic}|\p{Regional_Indicator}|[\u{1F3FB}-\u{1F3FF}]|‍|️|⃣|\s/gu;
     const MAX_JUMBO_EMOJI = 27;
 
+    // A custom emoji in a message's text: a token with its id, like <:17> (the server turned
+    // ":pog:" into that when it was sent).
+    const CUSTOM_EMOJI_TOKEN = /<:\d+>/g;
+
     function isOnlyEmoji(text) {
-      const count = (text.match(EMOJI_PICTURE) || []).length;  // match() gives null when there's none
-      return count > 0 && count <= MAX_JUMBO_EMOJI && text.replace(EMOJI_PARTS, "") === "";
+      // match() gives null when there's nothing, hence the || [].
+      const count = (text.match(EMOJI_PICTURE) || []).length + (text.match(CUSTOM_EMOJI_TOKEN) || []).length;
+      const leftover = text.replace(CUSTOM_EMOJI_TOKEN, "").replace(EMOJI_PARTS, "");
+      return count > 0 && count <= MAX_JUMBO_EMOJI && leftover === "";
+    }
+
+    // Put message text into an element, with custom emoji tokens shown as their pictures.
+    // Still never innerHTML: the text goes in as text nodes, the pictures as <img> elements.
+    function fillWithEmoji(element, text) {
+      element.replaceChildren();
+      // split() with a (group) in the pattern keeps what the group matched: the ids end up at the
+      // odd positions, the text around them at the even ones. "hi <:17> !" -> ["hi ", "17", " !"]
+      text.split(/<:(\d+)>/).forEach((part, index) => {
+        if (index % 2 === 0) {
+          if (part) element.appendChild(document.createTextNode(part));
+        } else if (customById.has(Number(part))) {
+          const picture = makeEmojiElement("custom:" + part);
+          picture.title = emojiLabel("custom:" + part);  // ":pog:" when hovering it
+          element.appendChild(picture);
+        } else {
+          element.appendChild(document.createTextNode(":deleted:"));  // that emoji no longer exists
+        }
+      });
     }
 
     // ---------- Times ----------
@@ -3267,7 +3295,11 @@
       line.appendChild(name);
       const text = document.createElement("span");
       text.className = "reply-text";
-      text.textContent = reply.text || (reply.file ? "📎 Attachment" : "");
+      if (reply.text) {
+        fillWithEmoji(text, reply.text);
+      } else {
+        text.textContent = reply.file ? "📎 Attachment" : "";
+      }
       line.appendChild(text);
       line.addEventListener("click", () => jumpToMessage(reply.id));
       return line;
@@ -3388,7 +3420,7 @@
       if (message.text) {
         const text = document.createElement("div");
         text.className = isOnlyEmoji(message.text) ? "message-text jumbo" : "message-text";
-        text.textContent = message.text;
+        fillWithEmoji(text, message.text);
         body.appendChild(text);
       }
       if (message.file) {

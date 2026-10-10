@@ -27,7 +27,7 @@
    - [ ] Editing and deleting your own messages; admins can edit and delete anyone's
    - [ ] @mentions (stored by user id), with their own unread marker
    - [ ] Notifications (browser notifications, sound, count in the tab title)
-   - [ ] Custom emoji inside messages (typing :pog:)
+   - [x] Custom emoji inside messages (typing :pog:, stored as <:id> tokens); emoji picker and jumbo emoji in messages; multi-line text box
    - [ ] Desktop app via Tauri
 10. [ ] Voice channels with WebRTC/LiveKit
 11. [ ] Video calls in DMs: 1-on-1, peer-to-peer WebRTC (signalling over our WebSocket, STUN/TURN),
