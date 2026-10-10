@@ -7,6 +7,7 @@
 4. [x] Accounts and login (hashed passwords, sessions)
    - [x] Email per account, password reset by email, Settings (change username, email, password)
    - [x] People identified by user id behind the scenes, so usernames can change
+   - [x] Profiles: picture and banner (with a move/zoom editor), status, bio, profile popup
 5. [x] Online list and "is typing…" indicator
 6. [x] Direct messages: private two-person channels, opened from the sidebar
 7. [x] Image and file uploads (with a preview tray, drag-and-drop and pasting)

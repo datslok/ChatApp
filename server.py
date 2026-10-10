@@ -65,12 +65,16 @@ MAX_FILENAME_LENGTH = 200
 # Everything else (including SVG, which can) is only ever offered as a download.
 IMAGE_TYPES = {"image/png", "image/jpeg", "image/gif", "image/webp"}
 
-# Profiles. The page shrinks profile pictures to 256x256 before uploading (a few KB),
-# so 1 MB is plenty; the limit is for anyone uploading around the page.
-AVATAR_DIR = UPLOAD_DIR / "avatars"
-AVATAR_DIR.mkdir(exist_ok=True)
-MAX_AVATAR_SIZE = 1024 * 1024  # 1 MB
-AVATAR_EXTENSIONS = {"image/png": "png", "image/jpeg": "jpg", "image/gif": "gif", "image/webp": "webp"}
+# Profiles. The page crops and shrinks pictures before uploading (a profile picture to 256x256,
+# a banner to 960x320: a few KB each), so these limits are only for anyone uploading around the page.
+# For each kind: which column of the users table holds it, which folder its files go in, how big it may be.
+PICTURE_KINDS = {
+    "avatar": {"column": "avatar_id", "folder": UPLOAD_DIR / "avatars", "max_size": 1024 * 1024},      # 1 MB
+    "banner": {"column": "banner_id", "folder": UPLOAD_DIR / "banners", "max_size": 2 * 1024 * 1024},  # 2 MB
+}
+for kind in PICTURE_KINDS.values():
+    kind["folder"].mkdir(exist_ok=True)
+PICTURE_EXTENSIONS = {"image/png": "png", "image/jpeg": "jpg", "image/gif": "gif", "image/webp": "webp"}
 MAX_STATUS_LENGTH = 60
 MAX_BIO_LENGTH = 300
 
@@ -95,7 +99,8 @@ db.execute("""
         password_hash TEXT NOT NULL,
         created_at    TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         email         TEXT,  -- stored in lowercase; NULL for accounts made before emails existed
-        avatar_id     TEXT,  -- profile picture's file name in AVATAR_DIR, like "Xk9...a.webp"; NULL = none
+        avatar_id     TEXT,  -- profile picture's file name in uploads/avatars, like "Xk9...a.webp"; NULL = none
+        banner_id     TEXT,  -- profile banner's file name in uploads/banners; NULL = none
         status        TEXT,  -- a short line like "playing Minecraft"; NULL = none
         bio           TEXT   -- a few lines about yourself; NULL = none
     )
@@ -165,9 +170,9 @@ if "email" not in table_columns("users"):
     # From before emails existed: old accounts have none (NULL) until they add one in Settings.
     with db:
         db.execute("ALTER TABLE users ADD COLUMN email TEXT")
-for column in ("avatar_id", "status", "bio"):
+for column in ("avatar_id", "banner_id", "status", "bio"):
     if column not in table_columns("users"):
-        # From before profiles existed: everyone starts with no picture, status or bio (NULL).
+        # From before profiles existed: everyone starts with no picture, banner, status or bio (NULL).
         with db:
             db.execute(f"ALTER TABLE users ADD COLUMN {column} TEXT")
 # A unique index: a lookup table SQLite keeps next to the users table (fast "who has this email?"),
@@ -651,8 +656,10 @@ def check_current_password(username, password_hash, password):
 @app.get("/me")
 async def me(request: Request):
     user_id, username, password_hash, email = logged_in_user(request)
-    avatar, status, bio = db.execute("SELECT avatar_id, status, bio FROM users WHERE id = ?", (user_id,)).fetchone()
-    return {"username": username, "email": email, "avatar": avatar, "status": status, "bio": bio}
+    avatar, banner, status, bio = db.execute(
+        "SELECT avatar_id, banner_id, status, bio FROM users WHERE id = ?", (user_id,)
+    ).fetchone()
+    return {"username": username, "email": email, "avatar": avatar, "banner": banner, "status": status, "bio": bio}
 
 
 class EmailChange(BaseModel):
@@ -824,41 +831,95 @@ async def get_upload(request: Request, file_id: str):
 
 # ---------- Profiles ----------
 
-def remove_avatar_file(avatar_id):
-    if avatar_id:
-        (AVATAR_DIR / avatar_id).unlink(missing_ok=True)
+# Profile pictures and banners work the same way; `kind` ("avatar" or "banner") picks the
+# column, folder and size limit from PICTURE_KINDS. The column names in the SQL below come from
+# that table of ours, never from a request, so putting them into the SQL text is safe.
+
+async def set_picture(request, kind):
+    """Receive a new picture (the raw image is the body). The page has already cropped and shrunk it."""
+    user_id, username, password_hash, email = logged_in_user(request)
+    settings = PICTURE_KINDS[kind]
+    content_type = request.headers.get("content-type", "")
+    if content_type not in PICTURE_EXTENSIONS:
+        raise HTTPException(400, "Pictures must be PNG, JPEG, GIF or WebP.")
+
+    # A new random name every time: browsers keep (cache) pictures they've seen, so if the new
+    # picture had the old address, people would keep seeing the old one.
+    picture_id = secrets.token_urlsafe(16) + "." + PICTURE_EXTENSIONS[content_type]
+    await receive_file(request, settings["folder"] / picture_id, settings["max_size"])
+
+    old = db.execute(f"SELECT {settings['column']} FROM users WHERE id = ?", (user_id,)).fetchone()[0]
+    with db:
+        db.execute(f"UPDATE users SET {settings['column']} = ? WHERE id = ?", (picture_id, user_id))
+    if old:
+        (settings["folder"] / old).unlink(missing_ok=True)
+    await send_to_everyone(users_message())  # everyone's page shows the new picture
+    return {"ok": True, kind: picture_id}
+
+
+async def remove_picture(request, kind):
+    user_id, username, password_hash, email = logged_in_user(request)
+    settings = PICTURE_KINDS[kind]
+    old = db.execute(f"SELECT {settings['column']} FROM users WHERE id = ?", (user_id,)).fetchone()[0]
+    with db:
+        db.execute(f"UPDATE users SET {settings['column']} = NULL WHERE id = ?", (user_id,))
+    if old:
+        (settings["folder"] / old).unlink(missing_ok=True)
+    await send_to_everyone(users_message())
+    return {"ok": True}
+
+
+def serve_picture(request, kind, picture_id):
+    """A profile picture or banner, for logged-in people only."""
+    settings = PICTURE_KINDS[kind]
+    row = db.execute(f"SELECT 1 FROM users WHERE {settings['column']} = ?", (picture_id,)).fetchone()
+    if current_user(request) is None or row is None:
+        raise HTTPException(404, "Not found.")
+    # Our own table said this name exists, so it's safe to use as a file name. Its extension
+    # (which we chose ourselves when saving) gives the type.
+    extension = picture_id.rsplit(".", 1)[-1]
+    content_type = {ext: type_ for type_, ext in PICTURE_EXTENSIONS.items()}[extension]
+    return FileResponse(
+        settings["folder"] / picture_id,
+        media_type=content_type,
+        headers={
+            "X-Content-Type-Options": "nosniff",
+            # A picture's address never changes what's behind it (a new picture gets a new address),
+            # so the browser may keep it for a year without asking again. "private": only in
+            # the person's own browser, not in shared caches along the way.
+            "Cache-Control": "private, max-age=31536000, immutable",
+        },
+    )
 
 
 @app.post("/settings/avatar")
 async def change_avatar(request: Request):
-    """Receive a new profile picture (the raw image is the body). The page has already shrunk it."""
-    user_id, username, password_hash, email = logged_in_user(request)
-    content_type = request.headers.get("content-type", "")
-    if content_type not in AVATAR_EXTENSIONS:
-        raise HTTPException(400, "Profile pictures must be PNG, JPEG, GIF or WebP.")
-
-    # A new random name every time: browsers keep (cache) pictures they've seen, so if the new
-    # picture had the old address, people would keep seeing the old one.
-    avatar_id = secrets.token_urlsafe(16) + "." + AVATAR_EXTENSIONS[content_type]
-    await receive_file(request, AVATAR_DIR / avatar_id, MAX_AVATAR_SIZE)
-
-    old_avatar = db.execute("SELECT avatar_id FROM users WHERE id = ?", (user_id,)).fetchone()[0]
-    with db:
-        db.execute("UPDATE users SET avatar_id = ? WHERE id = ?", (avatar_id, user_id))
-    remove_avatar_file(old_avatar)
-    await send_to_everyone(users_message())  # everyone's page shows the new picture
-    return {"ok": True, "avatar": avatar_id}
+    return await set_picture(request, "avatar")
 
 
 @app.delete("/settings/avatar")
 async def remove_avatar(request: Request):
-    user_id, username, password_hash, email = logged_in_user(request)
-    old_avatar = db.execute("SELECT avatar_id FROM users WHERE id = ?", (user_id,)).fetchone()[0]
-    with db:
-        db.execute("UPDATE users SET avatar_id = NULL WHERE id = ?", (user_id,))
-    remove_avatar_file(old_avatar)
-    await send_to_everyone(users_message())
-    return {"ok": True}
+    return await remove_picture(request, "avatar")
+
+
+@app.get("/avatars/{picture_id}")
+async def get_avatar(request: Request, picture_id: str):
+    return serve_picture(request, "avatar", picture_id)
+
+
+@app.post("/settings/banner")
+async def change_banner(request: Request):
+    return await set_picture(request, "banner")
+
+
+@app.delete("/settings/banner")
+async def remove_banner(request: Request):
+    return await remove_picture(request, "banner")
+
+
+@app.get("/banners/{picture_id}")
+async def get_banner(request: Request, picture_id: str):
+    return serve_picture(request, "banner", picture_id)
 
 
 class ProfileChange(BaseModel):
@@ -881,29 +942,6 @@ async def change_profile(data: ProfileChange, request: Request):
         db.execute("UPDATE users SET status = ?, bio = ? WHERE id = ?", (status or None, bio or None, user_id))
     await send_to_everyone(users_message())
     return {"ok": True}
-
-
-@app.get("/avatars/{avatar_id}")
-async def get_avatar(request: Request, avatar_id: str):
-    """A profile picture, for logged-in people only."""
-    row = db.execute("SELECT 1 FROM users WHERE avatar_id = ?", (avatar_id,)).fetchone()
-    if current_user(request) is None or row is None:
-        raise HTTPException(404, "Not found.")
-    # Our own table said this name exists, so it's safe to use as a file name. Its extension
-    # (which we chose ourselves when saving) gives the type.
-    extension = avatar_id.rsplit(".", 1)[-1]
-    content_type = {ext: type_ for type_, ext in AVATAR_EXTENSIONS.items()}[extension]
-    return FileResponse(
-        AVATAR_DIR / avatar_id,
-        media_type=content_type,
-        headers={
-            "X-Content-Type-Options": "nosniff",
-            # A picture's address never changes what's behind it (a new picture gets a new address),
-            # so the browser may keep it for a year without asking again. "private": only in
-            # the person's own browser, not in shared caches along the way.
-            "Cache-Control": "private, max-age=31536000, immutable",
-        },
-    )
 
 
 # ---------- Pages ----------
@@ -943,13 +981,16 @@ def users_message():
     [{"id": 3, "name": "axel", "online": True, "avatar": "Xk9...webp", "status": "...", "bio": "..."}, ...]"""
     online = online_user_ids()
     rows = db.execute(
-        "SELECT id, username, avatar_id, status, bio FROM users ORDER BY username COLLATE NOCASE"
+        "SELECT id, username, avatar_id, banner_id, status, bio FROM users ORDER BY username COLLATE NOCASE"
     ).fetchall()
     return {
         "type": "users",
         "users": [
-            {"id": user_id, "name": name, "online": user_id in online, "avatar": avatar, "status": status, "bio": bio}
-            for user_id, name, avatar, status, bio in rows
+            {
+                "id": user_id, "name": name, "online": user_id in online,
+                "avatar": avatar, "banner": banner, "status": status, "bio": bio,
+            }
+            for user_id, name, avatar, banner, status, bio in rows
         ],
     }
 

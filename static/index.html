@@ -509,7 +509,8 @@
     #profile {
       width: min(340px, 100% - 32px);
       box-sizing: border-box;
-      padding: 24px;
+      padding: 0;        /* the banner goes right to the edges... */
+      overflow: hidden;  /* ...and gets the popup's rounded corners */
       border: none;
       border-radius: 8px;
       background: #2b2d31;
@@ -521,8 +522,41 @@
       background: rgba(0, 0, 0, 0.6);
     }
 
+    .profile-content {
+      padding: 0 24px 24px;
+    }
+
+    /* A banner: always 3 times as wide as it's high. Either a picture, or a plain colour. */
+    .banner {
+      display: block;
+      width: 100%;
+      aspect-ratio: 3 / 1;
+      object-fit: cover;
+    }
+
+    /* The profile picture overlaps the bottom of the banner, with a ring in the popup's colour. */
     #profile .avatar {
-      margin: 0 auto 12px;  /* centred */
+      position: relative;
+      margin: -48px auto 12px;  /* pulled up by half its height, and centred */
+      border: 6px solid #2b2d31;
+    }
+
+    #settings-banner .banner {
+      border-radius: 6px;
+    }
+
+    .banner-buttons {
+      display: flex;
+      gap: 12px;
+    }
+
+    #settings .banner-buttons button {
+      padding: 8px 12px;
+      font-size: 0.9rem;
+    }
+
+    #settings #remove-banner {
+      background: #4e5058;
     }
 
     #profile-name {
@@ -594,15 +628,18 @@
       color: #949ba4;
     }
 
+    /* Its size and shape (width, aspect-ratio) are set from JavaScript, per kind of picture. */
     #crop-canvas {
       display: block;
-      width: min(256px, 100%);  /* the canvas has 256 pixels, but may be shown smaller on phones */
-      aspect-ratio: 1;          /* always square: height follows width */
       margin: 0 auto;
-      border-radius: 50%;       /* shown as a circle, like the finished picture */
+      border-radius: 8px;
       background: #1e1f22;
       cursor: grab;
-      touch-action: none;       /* phones: dragging moves the picture instead of scrolling the page */
+      touch-action: none;  /* phones: dragging moves the picture instead of scrolling the page */
+    }
+
+    #crop-canvas.round {
+      border-radius: 50%;  /* profile pictures: shown as a circle, like the finished picture */
     }
 
     .crop-zoom {
@@ -834,6 +871,12 @@
         <button type="button" id="remove-avatar">Remove</button>
         <input type="file" id="avatar-input" accept="image/*" hidden>
       </div>
+      <div id="settings-banner"></div>
+      <div class="banner-buttons">
+        <button type="button" id="change-banner">Change banner</button>
+        <button type="button" id="remove-banner">Remove</button>
+        <input type="file" id="banner-input" accept="image/*" hidden>
+      </div>
       <label>
         Status
         <input id="status-input" maxlength="60" placeholder="e.g. 🎮 playing Minecraft">
@@ -895,9 +938,9 @@
     </form>
   </dialog>
 
-  <!-- The picture editor: move and zoom a new profile picture before it's uploaded. -->
+  <!-- The picture editor: move and zoom a new profile picture or banner before it's uploaded. -->
   <dialog id="cropper">
-    <h2>Edit picture</h2>
+    <h2 id="crop-title">Edit picture</h2>
     <p class="crop-hint">Drag to move. Zoom with the slider (or the scroll wheel).</p>
     <canvas id="crop-canvas" width="256" height="256"></canvas>
     <label class="crop-zoom">
@@ -913,11 +956,14 @@
   <!-- Someone's profile: opened by clicking a name or picture. -->
   <dialog id="profile">
     <button type="button" id="profile-close" title="Close">×</button>
-    <div id="profile-avatar"></div>
-    <h2 id="profile-name"></h2>
-    <p id="profile-status"></p>
-    <p id="profile-bio"></p>
-    <button type="button" id="profile-message">Send message</button>
+    <div id="profile-banner"></div>
+    <div class="profile-content">
+      <div id="profile-avatar"></div>
+      <h2 id="profile-name"></h2>
+      <p id="profile-status"></p>
+      <p id="profile-bio"></p>
+      <button type="button" id="profile-message">Send message</button>
+    </div>
   </dialog>
 
   <!-- Phones only: darkens the chat behind an open drawer. -->
@@ -944,6 +990,12 @@
     const statusInput = document.getElementById("status-input");
     const bioInput = document.getElementById("bio-input");
     const profileStatusLine = document.getElementById("profile-status-line");
+    const settingsBanner = document.getElementById("settings-banner");
+    const changeBannerButton = document.getElementById("change-banner");
+    const removeBannerButton = document.getElementById("remove-banner");
+    const bannerInput = document.getElementById("banner-input");
+    const profileBanner = document.getElementById("profile-banner");
+    const cropTitle = document.getElementById("crop-title");
     const cropperDialog = document.getElementById("cropper");
     const cropCanvas = document.getElementById("crop-canvas");
     const cropZoom = document.getElementById("crop-zoom");
@@ -1219,6 +1271,7 @@
         statusInput.value = me.status || "";
         bioInput.value = me.bio || "";
         settingsAvatar.replaceChildren(makeAvatar(myId, me.username, "large"));
+        settingsBanner.replaceChildren(makeBanner(myId));
       }
     });
     settingsClose.addEventListener("click", () => settingsDialog.close());
@@ -1235,23 +1288,34 @@
       }
     });
 
-    changeAvatarButton.addEventListener("click", () => avatarInput.click());
+    // Profile picture ("avatar") and banner work the same way. Picking a file opens the editor
+    // (move and zoom); nothing is uploaded until Save there.
+    function setUpPictureButtons(kind, changeButton, removeButton, fileInput) {
+      changeButton.addEventListener("click", () => fileInput.click());
 
-    // Picking a picture opens the editor (move and zoom); nothing is uploaded until Save.
-    avatarInput.addEventListener("change", async () => {
-      const file = avatarInput.files[0];
-      avatarInput.value = "";  // so the same file can be picked again later
-      if (!file) return;
-      try {
-        openCropper(await loadPicture(file));
-      } catch {
-        showStatus(profileStatusLine, "Couldn't read that picture. Try a PNG or JPEG.", "error");
-      }
-    });
+      fileInput.addEventListener("change", async () => {
+        const file = fileInput.files[0];
+        fileInput.value = "";  // so the same file can be picked again later
+        if (!file) return;
+        try {
+          openCropper(await loadPicture(file), kind);
+        } catch {
+          showStatus(profileStatusLine, "Couldn't read that picture. Try a PNG or JPEG.", "error");
+        }
+      });
 
-    async function uploadAvatar(picture) {
+      removeButton.addEventListener("click", async () => {
+        const response = await fetch("/settings/" + kind, { method: "DELETE" });
+        if (response.ok) showStatus(profileStatusLine, "Removed.", "success");
+      });
+    }
+
+    setUpPictureButtons("avatar", changeAvatarButton, removeAvatarButton, avatarInput);
+    setUpPictureButtons("banner", changeBannerButton, removeBannerButton, bannerInput);
+
+    async function uploadPicture(kind, picture) {
       showStatus(profileStatusLine, "Uploading…", "success");
-      const response = await fetch("/settings/avatar", {
+      const response = await fetch("/settings/" + kind, {
         method: "POST",
         headers: { "Content-Type": picture.type },
         body: picture,
@@ -1261,15 +1325,10 @@
         showStatus(profileStatusLine, typeof error.detail === "string" ? error.detail : "Upload failed.", "error");
         return;
       }
-      // The server sends everyone (us too) an updated "users" list, which redraws the pictures.
-      // The one in Settings isn't part of that, so we redraw it when the list arrives (see showUsers).
-      showStatus(profileStatusLine, "Picture changed.", "success");
+      // The server sends everyone (us too) an updated "users" list, which redraws the pictures,
+      // including the ones in Settings and the profile popup (see showUsers).
+      showStatus(profileStatusLine, kind === "banner" ? "Banner changed." : "Picture changed.", "success");
     }
-
-    removeAvatarButton.addEventListener("click", async () => {
-      const response = await fetch("/settings/avatar", { method: "DELETE" });
-      if (response.ok) showStatus(profileStatusLine, "Picture removed.", "success");
-    });
 
     // Load a picture file so it can be drawn. Fails if the browser can't read it.
     async function loadPicture(file) {
@@ -1284,16 +1343,15 @@
       return img;
     }
 
-    // Cut a square out of the original picture (left, top, side: in the picture's own pixels)
-    // and shrink it to 256x256 on a <canvas>, then save that as a small image file.
-    // A phone photo of several MB becomes a few KB.
-    function squareToFile(img, left, top, side) {
-      const size = 256;
+    // Cut a rectangle out of the original picture (left, top, width, height: in the picture's
+    // own pixels) and shrink it to saveWidth x saveHeight on a <canvas>, then save that as a
+    // small image file. A phone photo of several MB becomes a few KB.
+    function rectangleToFile(img, left, top, width, height, saveWidth, saveHeight) {
       const canvas = document.createElement("canvas");
-      canvas.width = size;
-      canvas.height = size;
+      canvas.width = saveWidth;
+      canvas.height = saveHeight;
       // drawImage(picture, cut out x, y, width, height, ..., draw at x, y, width, height)
-      canvas.getContext("2d").drawImage(img, left, top, side, side, 0, 0, size, size);
+      canvas.getContext("2d").drawImage(img, left, top, width, height, 0, 0, saveWidth, saveHeight);
 
       // toBlob turns the canvas into an image file. It reports back through a callback
       // instead of returning, so we wrap it in a Promise to be able to "await" it.
@@ -1305,44 +1363,64 @@
 
     // ---------- Picture editor (move and zoom before uploading) ----------
     //
-    // The preview canvas is VIEW x VIEW pixels and shown as a circle. Three numbers describe
-    // where the picture is: `cropScale` (how much it's enlarged: canvas pixels per picture pixel)
-    // and `cropX`, `cropY` (where its top-left corner is, in canvas pixels; 0 or negative).
+    // The preview canvas is a frame of `cropShape.width` x `cropShape.height` pixels: a circle
+    // for profile pictures, a wide rectangle for banners. Three numbers describe where the picture
+    // is: `cropScale` (how much it's enlarged: canvas pixels per picture pixel) and `cropX`, `cropY`
+    // (where its top-left corner is, in canvas pixels; 0 or negative).
 
-    const VIEW = 256;
+    const CROP_SHAPES = {
+      avatar: { title: "Edit picture", width: 256, height: 256, round: true, saveWidth: 256, saveHeight: 256 },
+      // Banners are shown wide, so they're saved bigger than the frame to stay sharp.
+      banner: { title: "Edit banner", width: 300, height: 100, round: false, saveWidth: 960, saveHeight: 320 },
+    };
     const MAX_ZOOM = 4;
+    let cropKind = "avatar";
+    let cropShape = CROP_SHAPES.avatar;
     let cropImage = null;
-    let cropMinScale = 1;  // the zoom where the picture's shorter side just fills the circle
+    let cropMinScale = 1;  // the zoom where the picture just covers the whole frame
     let cropScale = 1;
     let cropX = 0;
     let cropY = 0;
 
-    function openCropper(img) {
+    function openCropper(img, kind) {
+      cropKind = kind;
+      cropShape = CROP_SHAPES[kind];
+      cropTitle.textContent = cropShape.title;
+
+      // Size the canvas for this shape: its own pixels, and how big it's shown on the page.
+      cropCanvas.width = cropShape.width;
+      cropCanvas.height = cropShape.height;
+      cropCanvas.style.width = `min(${cropShape.width}px, 100%)`;
+      cropCanvas.style.aspectRatio = `${cropShape.width} / ${cropShape.height}`;
+      cropCanvas.classList.toggle("round", cropShape.round);
+
       cropImage = img;
-      // Start like the automatic crop: the shorter side fills the circle, centred.
-      cropMinScale = VIEW / Math.min(img.naturalWidth, img.naturalHeight);
+      // The smallest zoom where the picture still covers the whole frame: enough to fill the
+      // width AND the height, so the larger of the two. (For a square frame, that's simply
+      // "the shorter side fills it".) Start there, centred.
+      cropMinScale = Math.max(cropShape.width / img.naturalWidth, cropShape.height / img.naturalHeight);
       cropScale = cropMinScale;
-      cropX = (VIEW - img.naturalWidth * cropScale) / 2;
-      cropY = (VIEW - img.naturalHeight * cropScale) / 2;
+      cropX = (cropShape.width - img.naturalWidth * cropScale) / 2;
+      cropY = (cropShape.height - img.naturalHeight * cropScale) / 2;
       cropZoom.value = 1;
       drawCrop();
       cropperDialog.showModal();
     }
 
-    // Keep the picture covering the whole circle: its left edge may not move right of the
-    // canvas's left edge (x <= 0), and its right edge may not move left of the canvas's right
-    // edge (x >= VIEW - width). The same for top and bottom.
+    // Keep the picture covering the whole frame: its left edge may not move right of the
+    // frame's left edge (x <= 0), and its right edge may not move left of the frame's right
+    // edge (x >= frame width - picture width). The same for top and bottom.
     function clampCrop() {
       const width = cropImage.naturalWidth * cropScale;
       const height = cropImage.naturalHeight * cropScale;
-      cropX = Math.min(0, Math.max(VIEW - width, cropX));
-      cropY = Math.min(0, Math.max(VIEW - height, cropY));
+      cropX = Math.min(0, Math.max(cropShape.width - width, cropX));
+      cropY = Math.min(0, Math.max(cropShape.height - height, cropY));
     }
 
     function drawCrop() {
       clampCrop();
       const context = cropCanvas.getContext("2d");
-      context.clearRect(0, 0, VIEW, VIEW);
+      context.clearRect(0, 0, cropShape.width, cropShape.height);
       context.drawImage(
         cropImage, cropX, cropY, cropImage.naturalWidth * cropScale, cropImage.naturalHeight * cropScale
       );
@@ -1353,11 +1431,11 @@
     // back in the middle at the new zoom.
     function setZoom(factor) {
       factor = Math.min(MAX_ZOOM, Math.max(1, factor));
-      const middleX = (VIEW / 2 - cropX) / cropScale;  // in the picture's own pixels
-      const middleY = (VIEW / 2 - cropY) / cropScale;
+      const middleX = (cropShape.width / 2 - cropX) / cropScale;  // in the picture's own pixels
+      const middleY = (cropShape.height / 2 - cropY) / cropScale;
       cropScale = cropMinScale * factor;
-      cropX = VIEW / 2 - middleX * cropScale;
-      cropY = VIEW / 2 - middleY * cropScale;
+      cropX = cropShape.width / 2 - middleX * cropScale;
+      cropY = cropShape.height / 2 - middleY * cropScale;
       cropZoom.value = factor;
       drawCrop();
     }
@@ -1383,9 +1461,9 @@
 
     cropCanvas.addEventListener("pointermove", (event) => {
       if (!dragFrom) return;
-      // The pointer moves in screen pixels, but the canvas may be shown smaller than its
-      // VIEW pixels (on a phone), so convert: canvas pixels per screen pixel.
-      const ratio = VIEW / cropCanvas.getBoundingClientRect().width;
+      // The pointer moves in screen pixels, but the canvas may be shown smaller than its own
+      // pixels (on a phone), so convert: canvas pixels per screen pixel.
+      const ratio = cropShape.width / cropCanvas.getBoundingClientRect().width;
       cropX += (event.clientX - dragFrom.x) * ratio;
       cropY += (event.clientY - dragFrom.y) * ratio;
       dragFrom = { x: event.clientX, y: event.clientY };
@@ -1401,21 +1479,22 @@
     cropCancel.addEventListener("click", () => cropperDialog.close());
 
     cropSave.addEventListener("click", async () => {
-      // Which square of the original picture is inside the circle? Turn canvas pixels back
-      // into picture pixels: the circle's corner (0, 0) is at -cropX / cropScale in the picture,
-      // and the circle's VIEW pixels cover VIEW / cropScale picture pixels.
+      // Which part of the original picture is inside the frame? Turn canvas pixels back into
+      // picture pixels: the frame's corner (0, 0) is at -cropX / cropScale in the picture,
+      // and the frame's width in canvas pixels covers width / cropScale picture pixels.
       const left = -cropX / cropScale;
       const top = -cropY / cropScale;
-      const side = VIEW / cropScale;
+      const width = cropShape.width / cropScale;
+      const height = cropShape.height / cropScale;
       cropperDialog.close();
       let picture;
       try {
-        picture = await squareToFile(cropImage, left, top, side);
+        picture = await rectangleToFile(cropImage, left, top, width, height, cropShape.saveWidth, cropShape.saveHeight);
       } catch {
         showStatus(profileStatusLine, "Couldn't save that picture.", "error");
         return;
       }
-      await uploadAvatar(picture);
+      await uploadPicture(cropKind, picture);
     });
 
     function showStatus(element, text, kind) {
@@ -1499,6 +1578,26 @@
     // Colours for the letter circles. Each person always gets the same one (their id picks it).
     const LETTER_COLOURS = ["#5865f2", "#3ba55c", "#faa61a", "#ed4245", "#eb459e", "#9b59b6", "#1abc9c"];
 
+    function colourFor(userId) {
+      return userId ? LETTER_COLOURS[userId % LETTER_COLOURS.length] : "#4e5058";
+    }
+
+    // A profile banner: the picture if the person has one, otherwise a plain strip in their colour.
+    function makeBanner(userId) {
+      const person = people.get(userId);
+      let banner;
+      if (person && person.banner) {
+        banner = document.createElement("img");
+        banner.src = "/banners/" + encodeURIComponent(person.banner);
+        banner.alt = "";
+      } else {
+        banner = document.createElement("div");
+        banner.style.background = colourFor(userId);
+      }
+      banner.classList.add("banner");
+      return banner;
+    }
+
     // A profile picture: the real one if the person has one, otherwise a coloured circle with
     // their first letter. `size` is "small", "" (normal) or "large".
     // userId can be null: messages from before accounts existed (we only have the typed name).
@@ -1513,7 +1612,7 @@
         avatar = document.createElement("div");
         avatar.classList.add("letter");
         avatar.textContent = (name || "?").charAt(0).toUpperCase();
-        avatar.style.background = userId ? LETTER_COLOURS[userId % LETTER_COLOURS.length] : "#4e5058";
+        avatar.style.background = colourFor(userId);
       }
       avatar.classList.add("avatar");
       if (size) avatar.classList.add(size);
@@ -1593,6 +1692,9 @@
       }
 
       redrawAvatars();  // messages, the profile popup and Settings
+      // Banners only appear in two places, so those are simply redrawn if they're open.
+      if (profileDialog.open) renderProfile(profileUserId);
+      if (settingsDialog.open) settingsBanner.replaceChildren(makeBanner(myId));
     }
 
     // ---------- Profile popup ----------
@@ -1600,16 +1702,23 @@
     let profileUserId = null;  // whose profile is open
 
     function openProfile(userId) {
-      const person = people.get(userId);
-      if (!person) return;  // pre-account messages have no profile
+      if (!people.has(userId)) return;  // pre-account messages have no profile
       profileUserId = userId;
       closeDrawers();
+      renderProfile(userId);
+      profileDialog.showModal();
+    }
+
+    // Fill the popup with someone's profile. Also used to refresh it while it's open.
+    function renderProfile(userId) {
+      const person = people.get(userId);
+      if (!person) return;
+      profileBanner.replaceChildren(makeBanner(userId));
       profileAvatar.replaceChildren(makeAvatar(userId, person.name, "large"));
       profileName.textContent = person.name;
       profileStatus.textContent = person.status || "";
       profileBio.textContent = person.bio || "";
       profileMessage.hidden = userId === myId;  // no DMs with yourself
-      profileDialog.showModal();
     }
 
     profileMessage.addEventListener("click", () => {
