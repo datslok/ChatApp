@@ -161,8 +161,117 @@
       padding: 1px 0;
     }
 
+    .message {
+      position: relative;  /* so the action buttons can sit in its top-right corner */
+    }
+
     .message:hover {
       background: #2e3035;  /* a slightly lighter row under the mouse */
+    }
+
+    /* The buttons in a message's top-right corner, shown when hovering it (or tapping, on phones). */
+    .message-actions {
+      position: absolute;
+      top: -12px;
+      right: 8px;
+      z-index: 1;  /* above the message below it */
+      display: none;
+      gap: 2px;
+      padding: 2px;
+      border: 1px solid #1e1f22;
+      border-radius: 6px;
+      background: #313338;
+    }
+
+    .message:hover .message-actions {
+      display: flex;
+    }
+
+    .message-actions button {
+      padding: 4px 8px;
+      border: none;
+      border-radius: 4px;
+      background: none;
+      color: #b5bac1;
+      font-size: 0.8rem;
+      cursor: pointer;
+    }
+
+    .message-actions button:hover {
+      background: #404249;
+      color: white;
+    }
+
+    /* The quote above a reply. */
+    .reply-line {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      margin-bottom: 2px;
+      min-width: 0;
+      font-size: 0.8rem;
+      color: #949ba4;
+    }
+
+    .reply-line strong {
+      flex-shrink: 0;
+      color: #b5bac1;
+    }
+
+    .reply-text {
+      overflow: hidden;         /* one line only, cut off with "…" */
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .reply-line:hover .reply-text {
+      color: white;
+    }
+
+    .avatar.tiny {
+      width: 16px;
+      height: 16px;
+      font-size: 0.55rem;
+    }
+
+    /* Jumping to a message: its background lights up and fades out over 2 seconds. */
+    @keyframes flash {
+      from { background: rgba(88, 101, 242, 0.35); }
+      to { background: transparent; }
+    }
+
+    .message.flash {
+      animation: flash 2s ease-out;
+    }
+
+    /* "Replying to kari ×", above the text box. */
+    #reply-bar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin: 0 16px;
+      padding: 6px 12px;
+      border-radius: 8px 8px 0 0;
+      background: #2b2d31;
+      font-size: 0.85rem;
+      color: #b5bac1;
+    }
+
+    #reply-bar[hidden] {
+      display: none;
+    }
+
+    #reply-bar strong {
+      color: white;
+    }
+
+    #reply-cancel {
+      margin-left: auto;  /* pushed to the right end */
+      border: none;
+      background: none;
+      color: #b5bac1;
+      font-size: 1rem;
+      cursor: pointer;
     }
 
     .message-header {
@@ -1046,6 +1155,12 @@
 
     <div id="tray" hidden></div>
 
+    <!-- Shown while replying to a message. -->
+    <div id="reply-bar" hidden>
+      Replying to <strong id="reply-name"></strong>
+      <button type="button" id="reply-cancel" title="Cancel reply (Esc)">×</button>
+    </div>
+
     <form id="chat-form">
       <!-- type="button": clicking it must not submit (send) the form -->
       <button type="button" id="attach-button" title="Upload a file">+</button>
@@ -1275,6 +1390,9 @@
     const uploadStatus = document.getElementById("upload-status");
     const dropOverlay = document.getElementById("drop-overlay");
     const trayElement = document.getElementById("tray");
+    const replyBar = document.getElementById("reply-bar");
+    const replyName = document.getElementById("reply-name");
+    const replyCancel = document.getElementById("reply-cancel");
     const viewer = document.getElementById("image-viewer");
     const viewerImage = document.getElementById("viewer-image");
     const viewerClose = document.getElementById("viewer-close");
@@ -1419,6 +1537,7 @@
     function joinCurrentChannel() {
       messages.replaceChildren();  // remove all the old messages
       lastShown = null;            // so the first message starts a fresh group (and date divider)
+      clearReply();                // a reply belongs to the channel we just left
       clearTyping();
       sendToServer({ type: "join", channel: currentChannel });
     }
@@ -1479,8 +1598,9 @@
       if (text === "") return;
       // Only the text: the server knows who we are and which channel we're in.
       // If we're disconnected, keep the text in the box so it can be sent later.
-      if (!sendToServer({ type: "message", text: text })) return;
+      if (!sendToServer({ type: "message", text: text, reply_to: replyingTo?.id })) return;
       input.value = "";
+      clearReply();
       lastTypingSent = 0;  // so typing the next message is announced straight away
     });
 
@@ -2267,12 +2387,14 @@
 
       for (const item of [...tray]) {  // a copy, since we take items out as we go
         const fileId = await uploadFile(item.file);
-        const sent = fileId !== null && sendToServer({ type: "message", text: caption, file: fileId });
+        const sent = fileId !== null &&
+          sendToServer({ type: "message", text: caption, file: fileId, reply_to: replyingTo?.id });
         if (!sent) {
           item.failed = true;  // keep it in the tray, outlined in red
           continue;
         }
         takeFromTray(item);
+        clearReply();  // the reply went with this first file
         if (caption) {
           caption = "";      // the caption went with this file, so it's used up
           input.value = "";
@@ -2441,6 +2563,61 @@
     const GROUP_MINUTES = 5;
     let lastShown = null;
 
+    // ---------- Replies ----------
+
+    let replyingTo = null;  // {id, name} of the message we're replying to, or null
+
+    function startReply(messageId, name) {
+      replyingTo = { id: messageId, name: name };
+      replyName.textContent = name;
+      replyBar.hidden = false;
+      input.focus();  // ready to type the reply
+    }
+
+    function clearReply() {
+      replyingTo = null;
+      replyBar.hidden = true;
+    }
+
+    replyCancel.addEventListener("click", clearReply);
+    input.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && replyingTo) clearReply();
+    });
+
+    // The quote above a reply: "↪ (picture) kari: are you coming tonig…". Click it to jump there.
+    function makeReplyLine(reply) {
+      const line = document.createElement("div");
+      line.className = "reply-line clickable";
+      line.appendChild(document.createTextNode("↪ "));
+      line.appendChild(makeAvatar(reply.user_id, reply.name, "tiny"));
+      const name = document.createElement("strong");
+      name.textContent = reply.name;
+      line.appendChild(name);
+      const text = document.createElement("span");
+      text.className = "reply-text";
+      text.textContent = reply.text || (reply.file ? "📎 Attachment" : "");
+      line.appendChild(text);
+      line.addEventListener("click", () => jumpToMessage(reply.id));
+      return line;
+    }
+
+    // Scroll to a message and light it up briefly, if it's on the page.
+    function jumpToMessage(messageId) {
+      // The id is a number from the server, so it's safe to put in a CSS selector.
+      const target = messages.querySelector(`[data-id="${messageId}"]`);
+      if (!target) {
+        // Only the newest messages are loaded, so older ones can't be shown (yet).
+        showUploadError("That message is too old to show here.");
+        return;
+      }
+      target.scrollIntoView({ block: "center", behavior: "smooth" });
+      // Restart the highlight animation, even if it was already running: remove the class,
+      // make the browser notice (reading offsetWidth forces it to work out the layout), add it back.
+      target.classList.remove("flash");
+      void target.offsetWidth;
+      target.classList.add("flash");
+    }
+
     // A line across the chat with the day in the middle, between messages from different days.
     function makeDateDivider(date) {
       const divider = document.createElement("div");
@@ -2467,15 +2644,28 @@
       if (newDay) messages.appendChild(makeDateDivider(time));
 
       // Part of the previous message's group? (time - time gives milliseconds.)
-      const grouped = !newDay && lastShown.sender === sender && time - lastShown.time < GROUP_MINUTES * 60 * 1000;
+      // A reply always starts a new group, so its quote line sits above a name, not mid-group.
+      const grouped = !newDay && !message.reply && lastShown.sender === sender &&
+        time - lastShown.time < GROUP_MINUTES * 60 * 1000;
       lastShown = { sender: sender, time: time };
 
       const div = document.createElement("div");
       div.className = grouped ? "message grouped" : "message";
-      div.dataset.id = message.id;  // so later features (replies, reactions, editing) can find it
+      div.dataset.id = message.id;  // so features like replies (jumping to the original) can find it
+
+      // The buttons that appear when hovering a message (more will join Reply later).
+      const actions = document.createElement("div");
+      actions.className = "message-actions";
+      const replyButton = document.createElement("button");
+      replyButton.type = "button";
+      replyButton.textContent = "↩ Reply";
+      replyButton.addEventListener("click", () => startReply(message.id, message.name));
+      actions.appendChild(replyButton);
+      div.appendChild(actions);
 
       const body = document.createElement("div");
       body.className = "message-body";
+      if (message.reply) body.appendChild(makeReplyLine(message.reply));
 
       if (grouped) {
         // No picture or name: just the time on the left, shown when hovering.
@@ -2511,6 +2701,7 @@
           // The click handler goes on the message, not on the picture: pictures get swapped
           // for fresh ones when someone changes theirs, and a handler on the old one would be lost.
           div.addEventListener("click", (event) => {
+            if (event.target.closest(".reply-line")) return;  // the quote line jumps instead (its tiny picture too)
             if (event.target.closest(".avatar, .name")) openProfile(message.user_id);
           });
         }

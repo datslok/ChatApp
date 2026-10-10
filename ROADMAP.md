@@ -20,7 +20,7 @@
 9. [ ] Nice-to-haves, in this order:
    - [x] Unread dots on channels and DMs (remembered by the server)
    - [x] Message ids and times on the page, message grouping and date dividers
-   - [ ] Replies
+   - [x] Replies
    - [ ] Reactions
    - [ ] Editing and deleting your own messages; admins can edit and delete anyone's
    - [ ] @mentions (stored by user id), with their own unread marker

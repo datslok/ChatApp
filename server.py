@@ -113,7 +113,8 @@ db.execute("""
         legacy_name   TEXT,  -- only for messages from before accounts existed (no user_id)
         text          TEXT NOT NULL,
         sent_at       TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        attachment_id TEXT REFERENCES attachments(id)
+        attachment_id TEXT REFERENCES attachments(id),
+        reply_to      INTEGER REFERENCES messages(id)   -- the message this one replies to; NULL = none
     )
 """)
 db.execute("""
@@ -318,6 +319,12 @@ if not table_exists("friendships"):
         (UPLOAD_DIR / attachment_id).unlink(missing_ok=True)
     print(f"Friends added: old DMs removed ({len(dm_files)} files).")
 
+if "reply_to" not in table_columns("messages"):
+    # From before replies existed: no old message is a reply (NULL). This one comes last,
+    # after the table rebuild above, which would otherwise drop the new column again.
+    with db:
+        db.execute("ALTER TABLE messages ADD COLUMN reply_to INTEGER REFERENCES messages(id)")
+
 
 def username_of(user_id):
     row = db.execute("SELECT username FROM users WHERE id = ?", (user_id,)).fetchone()
@@ -333,14 +340,14 @@ def iso_time(sqlite_time):
     return sqlite_time.replace(" ", "T") + "Z"
 
 
-def save_message(channel, user_id, text, file):
+def save_message(channel, user_id, text, file, reply_to):
     """Save a message. Returns its id and time, so the live message matches the history exactly."""
     # "with db" commits the change when the block ends (or undoes it if something fails).
     # The ? placeholders keep user text as data, so it can never be run as SQL.
     with db:
         cursor = db.execute(
-            "INSERT INTO messages (channel, user_id, text, attachment_id) VALUES (?, ?, ?, ?)",
-            (channel, user_id, text, file["id"] if file else None),
+            "INSERT INTO messages (channel, user_id, text, attachment_id, reply_to) VALUES (?, ?, ?, ?, ?)",
+            (channel, user_id, text, file["id"] if file else None, reply_to),
         )
     message_id = cursor.lastrowid  # the id SQLite gave it
     sent_at = db.execute("SELECT sent_at FROM messages WHERE id = ?", (message_id,)).fetchone()[0]
@@ -352,19 +359,69 @@ def file_info(attachment_id, filename, size, content_type):
     return {"id": attachment_id, "filename": filename, "size": size, "image": content_type in IMAGE_TYPES}
 
 
+REPLY_PREVIEW_LENGTH = 100
+
+
+def reply_preview(original_id, user_id, name, text, attachment_id):
+    """The small quote shown above a reply: who wrote the original, and the start of it."""
+    if original_id is None:
+        return None  # not a reply (or the original no longer exists)
+    return {
+        "id": original_id,
+        "user_id": user_id,
+        "name": name,
+        "text": text[:REPLY_PREVIEW_LENGTH],
+        "file": attachment_id is not None,  # the page shows "Attachment" if there's no text
+    }
+
+
+def check_reply(reply_to, channel):
+    """The id of the message being replied to, if it's valid: a number, of a message that exists
+    *in this same channel*. (Otherwise anyone could quote a DM they can't see, just by guessing
+    its id.) None if it isn't valid; the message is then sent as a normal one."""
+    # bool is a kind of int in Python (True == 1), so it has to be ruled out separately.
+    if not isinstance(reply_to, int) or isinstance(reply_to, bool):
+        return None
+    row = db.execute("SELECT id FROM messages WHERE id = ? AND channel = ?", (reply_to, channel)).fetchone()
+    return row[0] if row else None
+
+
+def live_reply_preview(original_id):
+    """The quote for a reply that's being sent right now (the history gets it from its JOIN instead)."""
+    if original_id is None:
+        return None
+    row = db.execute(
+        """
+        SELECT messages.id, messages.user_id, COALESCE(users.username, messages.legacy_name),
+               messages.text, messages.attachment_id
+        FROM messages LEFT JOIN users ON users.id = messages.user_id
+        WHERE messages.id = ?
+        """,
+        (original_id,),
+    ).fetchone()
+    return reply_preview(*row) if row else None  # *row: the row's five values as five arguments
+
+
 def recent_messages(channel):
     """The channel's newest messages, oldest first, in the same shape as live messages."""
-    # Two LEFT JOINs: each message, plus its sender's *current* username, plus its attachment
+    # LEFT JOINs: each message, plus its sender's *current* username, plus its attachment
     # (NULLs where there's none). COALESCE(a, b) means "a, or b if a is NULL": for messages from
     # before accounts existed, there's no user, so we show the name that was typed back then.
+    #
+    # For replies, the messages table is joined with *itself*: "original" is a second copy of it
+    # (an alias), holding the message being replied to, and "original_sender" its sender.
     rows = db.execute(
         """
         SELECT messages.id, messages.sent_at,
                messages.user_id, COALESCE(users.username, messages.legacy_name), messages.text,
-               attachments.id, attachments.filename, attachments.size, attachments.content_type
+               attachments.id, attachments.filename, attachments.size, attachments.content_type,
+               original.id, original.user_id, COALESCE(original_sender.username, original.legacy_name),
+               original.text, original.attachment_id
         FROM messages
         LEFT JOIN users ON users.id = messages.user_id
         LEFT JOIN attachments ON attachments.id = messages.attachment_id
+        LEFT JOIN messages AS original ON original.id = messages.reply_to
+        LEFT JOIN users AS original_sender ON original_sender.id = original.user_id
         WHERE messages.channel = ?
         ORDER BY messages.id DESC LIMIT ?
         """,
@@ -379,8 +436,9 @@ def recent_messages(channel):
             "name": name,
             "text": text,
             "file": file_info(file_id, filename, size, content_type) if file_id else None,
+            "reply": reply_preview(*original),
         }
-        for message_id, sent_at, user_id, name, text, file_id, filename, size, content_type in rows
+        for (message_id, sent_at, user_id, name, text, file_id, filename, size, content_type, *original) in rows
     ]
 
 
@@ -1306,12 +1364,14 @@ async def chat(websocket: WebSocket):
                         continue  # not their file, already sent, or doesn't exist
                 if not text and file is None:
                     continue  # nothing to send
-                message_id, sent_at = save_message(channel, user_id, text, file)
+                reply_to = check_reply(data.get("reply_to"), channel)
+                message_id, sent_at = save_message(channel, user_id, text, file, reply_to)
                 # The name comes from the login (looked up now, so it's always the current one),
                 # never from the client.
                 message = {
                     "type": "message", "channel": channel, "id": message_id, "sent_at": sent_at,
                     "user_id": user_id, "name": username_of(user_id), "text": text, "file": file,
+                    "reply": live_reply_preview(reply_to),
                 }
                 await send_to_channel(channel, message)  # everyone in the channel, including us
                 await announce_new_message(channel)  # mark it read or unread for everyone else
