@@ -735,6 +735,16 @@
       color: #f23f43;
     }
 
+    .status-right {
+      display: flex;
+      gap: 12px;
+    }
+
+    /* "1850 / 2000" near the limit; red at the limit. */
+    #char-count.limit {
+      color: #f23f43;
+    }
+
     /* Files waiting to be sent, shown just above the text box. */
     #tray {
       display: flex;
@@ -1412,7 +1422,10 @@
     <div id="messages"></div>
     <div id="status-line">
       <span id="typing"></span>
-      <span id="upload-status"></span>
+      <span class="status-right">
+        <span id="char-count"></span>
+        <span id="upload-status"></span>
+      </span>
     </div>
 
     <div id="tray" hidden></div>
@@ -1431,7 +1444,9 @@
       <!-- Emoji suggestions while typing ":po": shown just above the text box. -->
       <div id="autocomplete" hidden></div>
       <!-- A textarea (not an input) so long messages can be several lines. It grows as you type. -->
-      <textarea id="message-input" rows="1" autocomplete="off"></textarea>
+      <!-- maxlength: the browser itself refuses typing or pasting beyond this. The page sets it to
+           the server's limit when it connects; 2000 is just the starting value. -->
+      <textarea id="message-input" rows="1" maxlength="2000" autocomplete="off"></textarea>
       <button type="button" id="compose-emoji" class="emoji open-picker" title="Emoji">😀</button>
       <button>Send</button>
     </form>
@@ -1762,6 +1777,8 @@
 
       if (data.type === "welcome") {
         myId = data.id;
+        maxTextLength = data.max_text_length;
+        input.maxLength = maxTextLength;  // the textarea's maxlength, from the server's limit
         return;
       }
       if (data.type === "renamed") {
@@ -1903,6 +1920,7 @@
       input.value = "";
       autoGrow();  // back to one line
       closeAutocomplete();
+      updateCharCount();
     }
 
     // ---------- Emoji autocomplete (typing ":po") ----------
@@ -1996,7 +2014,13 @@
     function pickSuggestion(index) {
       const suggestion = suggestions[index];
       const cursor = input.selectionStart;
-      input.value = input.value.slice(0, codeStart) + suggestion.insert + input.value.slice(cursor);
+      const newText = input.value.slice(0, codeStart) + suggestion.insert + input.value.slice(cursor);
+      if (newText.length > maxTextLength) {  // maxlength only stops typing, not values set by code
+        closeAutocomplete();
+        updateCharCount("No room for that emoji: character limit reached");
+        return;
+      }
+      input.value = newText;
       input.selectionStart = input.selectionEnd = codeStart + suggestion.insert.length;
       closeAutocomplete();
       autoGrow();
@@ -2012,6 +2036,7 @@
     input.addEventListener("input", () => {
       autoGrow();
       updateAutocomplete();
+      updateCharCount();
     });
     input.addEventListener("click", updateAutocomplete);
     input.addEventListener("keyup", (event) => {
@@ -2065,10 +2090,51 @@
     function insertAtCursor(text) {
       const start = input.selectionStart;
       const end = input.selectionEnd;
-      input.value = input.value.slice(0, start) + text + input.value.slice(end);
+      const newText = input.value.slice(0, start) + text + input.value.slice(end);
+      if (newText.length > maxTextLength) {  // maxlength only stops typing, not values set by code
+        updateCharCount("No room for that emoji: character limit reached");
+        return;
+      }
+      input.value = newText;
       input.selectionStart = input.selectionEnd = start + text.length;
       autoGrow();
+      updateCharCount();
     }
+
+    // ---------- The character limit ----------
+
+    let maxTextLength = 2000;  // replaced by the server's limit when we connect (see "welcome")
+    const COUNT_FROM = 200;    // show the counter once this close to the limit
+    const charCount = document.getElementById("char-count");
+
+    // Show "1850 / 2000" near the limit, and a red warning at it (or `note`, a specific warning).
+    // .length counts UTF-16 units: many emoji count as 2 here but as 1 on the server, so the page
+    // reaches the limit a little early, never late. That's the safe direction.
+    function updateCharCount(note) {
+      const length = input.value.length;
+      if (note) {
+        charCount.textContent = note;
+        charCount.className = "limit";
+      } else if (length >= maxTextLength) {
+        charCount.textContent = `Character limit reached (${maxTextLength})`;
+        charCount.className = "limit";
+      } else if (length >= maxTextLength - COUNT_FROM) {
+        charCount.textContent = `${length} / ${maxTextLength}`;
+        charCount.className = "";
+      } else {
+        charCount.textContent = "";
+      }
+    }
+
+    // Pasting more than fits: the browser cuts it off (because of maxlength). Say so.
+    input.addEventListener("paste", (event) => {
+      const pasted = event.clipboardData.getData("text");
+      const selected = input.selectionEnd - input.selectionStart;  // a selection gets replaced
+      if (input.value.length - selected + pasted.length > maxTextLength) {
+        // After the paste has happened (setTimeout 0 = "right after this event"), show the warning.
+        setTimeout(() => updateCharCount(`Pasted text was cut off at ${maxTextLength} characters`), 0);
+      }
+    });
 
     // The user pressed Enter or clicked Send.
     form.addEventListener("submit", (event) => {

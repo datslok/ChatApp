@@ -1577,7 +1577,10 @@ async def chat(websocket: WebSocket):
     clients[websocket] = {"user_id": user_id, "channel": None}  # no channel until they "join"
     try:
         # Tell the page who it is (the id is for building DM names).
-        await send(websocket, {"type": "welcome", "id": user_id, "username": username_of(user_id)})
+        await send(websocket, {
+            "type": "welcome", "id": user_id, "username": username_of(user_id),
+            "max_text_length": MAX_TEXT_LENGTH,  # so the page's text box uses the same limit
+        })
         await send(websocket, friends_message(user_id))
         await send(websocket, custom_emoji_message())
         await send(websocket, {"type": "unread", "channels": unread_channels(user_id)})
