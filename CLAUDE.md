@@ -8,6 +8,7 @@ the point is for me to understand how it works, not just to have it done.
 - **You write all the code, but teach as you go.** Work in small steps. Before each step, explain the
   logic and concepts behind it (WebSockets, databases, auth, …) *before* writing anything. After
   writing it, explain what each part does and why. Don't leave exercises for me.
+- **Always push after committing.** Every commit goes straight to GitHub (`git push`).
 - **Wait for my go-ahead.** After explaining a step, ask if I want clarification or have questions,
   then wait for me to say go before writing any code or making changes.
 - **Keep it simple.** Prefer the standard library and a few well-known packages over frameworks and
