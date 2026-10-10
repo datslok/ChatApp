@@ -56,6 +56,7 @@ MAX_TEXT_LENGTH = 2000
 HISTORY_LIMIT = 50  # how many old messages a new connection gets
 
 USERNAME_PATTERN = re.compile(r"[A-Za-z0-9_-]{1,32}")  # 1-32 letters, digits, _ or -
+RESERVED_NAMES = {"everyone", "here"}  # would be confused with @everyone
 MIN_PASSWORD_LENGTH = 8
 MAX_PASSWORD_LENGTH = 200
 SESSION_COOKIE = "session"
@@ -189,6 +190,13 @@ db.execute("""
         -- All three together: each person can use each emoji once per message
         -- (but several different emoji).
         PRIMARY KEY (message_id, user_id, emoji)
+    )
+""")
+db.execute("""
+    CREATE TABLE IF NOT EXISTS mentions (
+        message_id INTEGER NOT NULL REFERENCES messages(id),
+        user_id    INTEGER NOT NULL REFERENCES users(id),  -- someone mentioned (by name, or by @everyone)
+        PRIMARY KEY (message_id, user_id)
     )
 """)
 db.execute("""
@@ -668,6 +676,8 @@ async def register(credentials: Credentials, request: Request, response: Respons
     password = credentials.password
     if not USERNAME_PATTERN.fullmatch(username):
         raise HTTPException(400, "Usernames are 1–32 letters, digits, _ or -.")
+    if username.lower() in RESERVED_NAMES:
+        raise HTTPException(400, "That name is reserved.")
     check_password_length(password)
     email = clean_email(credentials.email)
     if email is None:
@@ -907,6 +917,8 @@ async def change_username(data: UsernameChange, request: Request):
     new_username = data.username.strip()
     if not USERNAME_PATTERN.fullmatch(new_username):
         raise HTTPException(400, "Usernames are 1–32 letters, digits, _ or -.")
+    if new_username.lower() in RESERVED_NAMES:
+        raise HTTPException(400, "That name is reserved.")
     try:
         # Everything else refers to people by id, so this one row is all that changes.
         # (Changing only the case of your own name, axel -> Axel, is fine: the UNIQUE rule
@@ -1248,6 +1260,65 @@ def expand_custom_emoji(text):
     return CUSTOM_EMOJI_CODE.sub(replace, text)
 
 
+# "@kari" in a message: an @ at the start or after a space ((?<!\S) = "not right after a non-space"),
+# so email addresses like me@gmail.com stay text. Then a username's characters.
+MENTION_CODE = re.compile(r"(?<!\S)@([A-Za-z0-9_-]{1,32})")
+
+
+def expand_mentions(text):
+    """Turn "@kari" into <@2> (her user id) and "@everyone" into <@everyone>, like custom emoji:
+    by id, so a renamed person's old mentions show their new name. Returns the new text,
+    the ids mentioned by name, and whether @everyone was used."""
+    ids = {name.lower(): user_id for user_id, name in db.execute("SELECT id, username FROM users")}
+    mentioned = set()
+    everyone = False
+
+    def replace(match):
+        nonlocal everyone  # (lets this inner function change `everyone` from the outer one)
+        name = match[1].lower()
+        if name == "everyone":
+            everyone = True
+            return "<@everyone>"
+        if name in ids:
+            mentioned.add(ids[name])
+            return f"<@{ids[name]}>"
+        return match[0]  # not a user: stays text
+
+    return MENTION_CODE.sub(replace, text), mentioned, everyone
+
+
+def save_mentions(message_id, channel, sender_id, mentioned, everyone):
+    """Remember who a message mentions (replacing what was there, for edits). Only people who can
+    see the channel, and never the sender themselves. @everyone = everyone who can see it."""
+    if everyone:
+        mentioned = {user_id for (user_id,) in db.execute("SELECT id FROM users")}
+    people = [user_id for user_id in mentioned if user_id != sender_id and can_join(channel, user_id)]
+    with db:
+        db.execute("DELETE FROM mentions WHERE message_id = ?", (message_id,))
+        db.executemany(  # executemany: the same INSERT once for each item in the list
+            "INSERT INTO mentions (message_id, user_id) VALUES (?, ?)", [(message_id, user_id) for user_id in people]
+        )
+    return people
+
+
+def unread_mentions(user_id, channel=None):
+    """How many unread messages mention this user, per channel: {"memes": 2, ...}.
+    Unread = newer than the last message they've seen there (last_read), like the unread dots."""
+    rows = db.execute(
+        """
+        SELECT messages.channel, COUNT(*)
+        FROM mentions
+        JOIN messages ON messages.id = mentions.message_id
+        LEFT JOIN last_read ON last_read.user_id = mentions.user_id AND last_read.channel = messages.channel
+        WHERE mentions.user_id = ? AND messages.id > COALESCE(last_read.message_id, 0)
+        GROUP BY messages.channel
+        """,
+        (user_id,),
+    )
+    counts = {name: count for name, count in rows if can_join(name, user_id)}
+    return counts if channel is None else {channel: counts.get(channel, 0)}
+
+
 def custom_emoji_exists(reaction):
     """Is this a reference to a custom emoji that exists, like "custom:17"?"""
     match = re.fullmatch(r"custom:(\d{1,10})", reaction)
@@ -1538,15 +1609,19 @@ def unread_channels(user_id):
     ]
 
 
-async def announce_new_message(channel):
+async def announce_new_message(channel, mentioned=()):
     """After a new message: it counts as read for whoever is looking at the channel, and
-    everyone else who can see the channel gets an "unread" for it."""
+    everyone else who can see the channel gets an "unread" for it. People it mentioned also
+    get their new count of unread mentions there."""
     viewers = {client["user_id"] for client in clients.values() if client["channel"] == channel}
     for user_id in viewers:
         mark_read(user_id, channel)
     for websocket, client in list(clients.items()):
         if client["user_id"] not in viewers and can_join(channel, client["user_id"]):
-            await send(websocket, {"type": "unread", "channels": [channel]})
+            update = {"type": "unread", "channels": [channel]}
+            if client["user_id"] in mentioned:
+                update["mentions"] = unread_mentions(client["user_id"], channel)  # {"memes": 2}
+            await send(websocket, update)
 
 
 async def send(websocket, data):
@@ -1604,7 +1679,9 @@ async def chat(websocket: WebSocket):
         })
         await send(websocket, friends_message(user_id))
         await send(websocket, custom_emoji_message())
-        await send(websocket, {"type": "unread", "channels": unread_channels(user_id)})
+        await send(websocket, {
+            "type": "unread", "channels": unread_channels(user_id), "mentions": unread_mentions(user_id),
+        })
         if was_online:
             await send(websocket, users_message())  # just this tab
         else:
@@ -1644,8 +1721,10 @@ async def chat(websocket: WebSocket):
                 if not text and file is None:
                     continue  # nothing to send
                 text = expand_custom_emoji(text)  # :pog: -> <:17>
+                text, mentioned, everyone = expand_mentions(text)  # @kari -> <@2>
                 reply_to = check_reply(data.get("reply_to"), channel)
                 message_id, sent_at = save_message(channel, user_id, text, file, reply_to)
+                mentioned_people = save_mentions(message_id, channel, user_id, mentioned, everyone)
                 # The name comes from the login (looked up now, so it's always the current one),
                 # never from the client.
                 message = {
@@ -1656,7 +1735,7 @@ async def chat(websocket: WebSocket):
                     "edited_at": None,
                 }
                 await send_to_channel(channel, message)  # everyone in the channel, including us
-                await announce_new_message(channel)  # mark it read or unread for everyone else
+                await announce_new_message(channel, mentioned_people)  # read/unread (and mentions) for everyone else
 
             elif kind == "react":
                 # {"type": "react", "message_id": 57, "emoji": "👍"}: add our reaction, or remove it
@@ -1709,11 +1788,14 @@ async def chat(websocket: WebSocket):
                     if text is None or (not text and attachment_id is None):
                         continue  # too long, or empty without a file to keep the message
                     text = expand_custom_emoji(text)  # :pog: -> <:17>, as for new messages
+                    text, mentioned, everyone = expand_mentions(text)
                     with db:
                         db.execute(
                             "UPDATE messages SET text = ?, edited_at = CURRENT_TIMESTAMP WHERE id = ?",
                             (text, message_id),
                         )
+                    # The mentions follow the new text (an edit doesn't send new unread counts, like Discord).
+                    save_mentions(message_id, message_channel, author_id, mentioned, everyone)
                     edited_at = db.execute("SELECT edited_at FROM messages WHERE id = ?", (message_id,)).fetchone()[0]
                     await send_to_channel(message_channel, {
                         "type": "edited", "channel": message_channel, "message_id": message_id,
@@ -1726,6 +1808,7 @@ async def chat(websocket: WebSocket):
                         file = db.execute("SELECT id FROM attachments WHERE id = ?", (attachment_id,)).fetchone()
                     with db:
                         db.execute("DELETE FROM reactions WHERE message_id = ?", (message_id,))
+                        db.execute("DELETE FROM mentions WHERE message_id = ?", (message_id,))
                         db.execute("DELETE FROM messages WHERE id = ?", (message_id,))
                         if attachment_id:
                             db.execute("DELETE FROM attachments WHERE id = ?", (attachment_id,))

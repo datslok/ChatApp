@@ -402,6 +402,49 @@
       color: white;
     }
 
+    /* "@kari" in a message. */
+    .mention {
+      padding: 0 2px;
+      border-radius: 3px;
+      background: rgba(88, 101, 242, 0.3);
+      color: #c9cdfb;
+      font-weight: 500;
+    }
+
+    .mention.clickable:hover {
+      background: #5865f2;
+      color: white;
+    }
+
+    /* A message that mentions us: a yellowish background and a line on the left.
+       (box-shadow "inset" draws the line inside the row, so nothing shifts sideways.) */
+    .message.mentions-me {
+      background: rgba(240, 178, 50, 0.08);
+      box-shadow: inset 2px 0 0 #f0b232;
+    }
+
+    .message.mentions-me:hover {
+      background: rgba(240, 178, 50, 0.14);
+    }
+
+    /* The red number of unread mentions on a sidebar button. */
+    .mention-badge {
+      position: absolute;
+      top: 50%;
+      right: 8px;
+      transform: translateY(-50%);  /* exactly in the middle, vertically */
+      min-width: 16px;
+      padding: 0 5px;
+      box-sizing: border-box;
+      border-radius: 8px;
+      background: #f23f43;
+      color: white;
+      font-size: 0.7rem;
+      font-weight: 700;
+      line-height: 16px;
+      text-align: center;
+    }
+
     .reply-line.deleted {
       font-style: italic;
     }
@@ -1769,6 +1812,7 @@
     let myId = null;            // our own user id; the server tells us in its "welcome"
     let reconnectDelay = 1000;  // milliseconds to wait before the next reconnect attempt
     const unread = new Set();   // channels and DMs with messages we haven't seen
+    const mentionCounts = new Map();  // channel -> how many unread messages there mention us
 
     // Ask the server which channels exist, make a sidebar button for each, then connect.
     async function start() {
@@ -1868,6 +1912,11 @@
         for (const channel of data.channels) {
           if (channel !== currentChannel) unread.add(channel);  // where we are is never unread
         }
+        // Unread mentions, like {"memes": 2}. Object.entries turns it into [["memes", 2], ...].
+        for (const [channel, count] of Object.entries(data.mentions || {})) {
+          if (channel === currentChannel || count === 0) mentionCounts.delete(channel);
+          else mentionCounts.set(channel, count);
+        }
         updateSidebar();
         return;
       }
@@ -1937,6 +1986,7 @@
       currentChannel = channel;
       setLabel(label);
       unread.delete(channel);  // opening it means we've seen it
+      mentionCounts.delete(channel);
       updateSidebar();
       joinCurrentChannel();
     }
@@ -1970,9 +2020,20 @@
       for (const button of document.querySelectorAll("[data-channel]")) {
         button.classList.toggle("active", button.dataset.channel === currentChannel);
         button.classList.toggle("unread", unread.has(button.dataset.channel));
+        // A red number for unread mentions there (stronger than the white dot).
+        button.querySelector(".mention-badge")?.remove();
+        const count = mentionCounts.get(button.dataset.channel);
+        if (count) {
+          const badge = document.createElement("span");
+          badge.className = "mention-badge";
+          badge.textContent = count;
+          button.appendChild(badge);
+        }
       }
       // Phones: a dot on ☰ if anything is unread, since the sidebar is hidden there.
-      openSidebarButton.classList.toggle("has-unread", unread.size > 0 || incomingIds.size > 0);
+      openSidebarButton.classList.toggle(
+        "has-unread", unread.size > 0 || mentionCounts.size > 0 || incomingIds.size > 0
+      );
     }
 
     // ---------- Phone drawers ----------
@@ -2022,16 +2083,53 @@
     // (Only after a space, so links like https://… and times like 14:30 don't pop the list up.)
     const TYPING_CODE = /(^|\s):([A-Za-z0-9_]{1,32})$/;
 
+    // An @ at the start or after a space, then (maybe already) part of a name, up to the cursor.
+    // {0,32}: the list already shows right after typing "@".
+    const TYPING_MENTION = /(^|\s)@([A-Za-z0-9_-]{0,32})$/;
+
     function updateAutocomplete() {
       const cursor = input.selectionStart;
-      const match = input.value.slice(0, cursor).match(TYPING_CODE);
-      if (!match || input.selectionEnd !== cursor) return closeAutocomplete();  // (nothing selected)
+      if (input.selectionEnd !== cursor) return closeAutocomplete();  // (text is selected)
+      const before = input.value.slice(0, cursor);
+      const mention = before.match(TYPING_MENTION);
+      const code = before.match(TYPING_CODE);
+      const match = mention || code;
+      if (!match) return closeAutocomplete();
       const query = match[2].toLowerCase();
-      codeStart = cursor - query.length - 1;  // the ":" just before what was typed
-      suggestions = findSuggestions(query);
+      codeStart = cursor - query.length - 1;  // the "@" or ":" just before what was typed
+      suggestions = mention ? findPeople(query) : findSuggestions(query);
       if (suggestions.length === 0) return closeAutocomplete();
       suggestionIndex = 0;
       renderAutocomplete();
+    }
+
+    // People for "@ka": whoever can see this channel (in a DM: just the other person),
+    // names starting with it first, then names containing it; and @everyone.
+    function findPeople(query) {
+      const partner = dmPartner(currentChannel);
+      const candidates = [...people.values()].filter((person) =>
+        person.id !== myId && (partner === null || person.id === partner)
+      );
+      const name = (person) => person.name.toLowerCase();
+      const ordered = [
+        ...candidates.filter((person) => name(person).startsWith(query)),
+        ...candidates.filter((person) => !name(person).startsWith(query) && name(person).includes(query)),
+      ];
+      const results = ordered.map((person) => ({
+        icon: () => makeAvatar(person.id, person.name, "tiny"),
+        insert: "@" + person.name + " ",
+        label: person.name,
+        detail: person.status || (person.online ? "online" : ""),
+      }));
+      if ("everyone".startsWith(query)) {
+        results.push({
+          icon: () => document.createTextNode("📣"),
+          insert: "@everyone ",
+          label: "everyone",
+          detail: "Notify everyone who can see this channel",
+        });
+      }
+      return results.slice(0, MAX_SUGGESTIONS);
     }
 
     // Custom emoji first (names starting with the search, then names containing it),
@@ -2043,7 +2141,7 @@
       const customContains = customEmoji.filter((e) => !e.name.toLowerCase().startsWith(query) && e.name.toLowerCase().includes(query));
       for (const emoji of [...customStarts, ...customContains]) {
         results.push({
-          value: "custom:" + emoji.id, insert: ":" + emoji.name + ": ",
+          icon: () => makeEmojiElement("custom:" + emoji.id), insert: ":" + emoji.name + ": ",
           label: ":" + emoji.name + ":", detail: ownerName(emoji.owner_id),
         });
       }
@@ -2067,7 +2165,7 @@
         // "fire" before "firecracker").
         ranked.sort((a, b) => a.rank - b.rank || a.name.length - b.name.length);
         for (const { emoji, name } of ranked) {  // { } here takes these two fields out of each item
-          results.push({ value: emoji, insert: emoji, label: name, detail: "" });
+          results.push({ icon: () => makeEmojiElement(emoji), insert: emoji, label: name, detail: "" });
         }
       }
       return results.slice(0, MAX_SUGGESTIONS);
@@ -2079,7 +2177,7 @@
         const row = document.createElement("button");
         row.type = "button";
         if (index === suggestionIndex) row.className = "active";
-        row.appendChild(makeEmojiElement(suggestion.value));
+        row.appendChild(suggestion.icon());  // an emoji, or a person's picture
         const label = document.createElement("span");
         label.textContent = suggestion.label;
         row.appendChild(label);
@@ -3598,23 +3696,55 @@
       return count > 0 && count <= MAX_JUMBO_EMOJI && leftover === "";
     }
 
-    // Put message text into an element, with custom emoji tokens shown as their pictures.
-    // Still never innerHTML: the text goes in as text nodes, the pictures as <img> elements.
+    // Put message text into an element, with tokens shown as what they mean: custom emoji (<:17>)
+    // as their pictures, mentions (<@2>, <@everyone>) as @name chips.
+    // Still never innerHTML: the text goes in as text nodes, the rest as elements.
     function fillWithEmoji(element, text) {
       element.replaceChildren();
-      // split() with a (group) in the pattern keeps what the group matched: the ids end up at the
-      // odd positions, the text around them at the even ones. "hi <:17> !" -> ["hi ", "17", " !"]
-      text.split(/<:(\d+)>/).forEach((part, index) => {
+      // split() with a (group) in the pattern keeps what the group matched: the tokens' insides end
+      // up at the odd positions, the text around them at the even ones.
+      // "hi <:17> and <@2>!" -> ["hi ", ":17", " and ", "@2", "!"]
+      text.split(/<(:\d+|@\d+|@everyone)>/).forEach((part, index) => {
         if (index % 2 === 0) {
           if (part) element.appendChild(document.createTextNode(part));
-        } else if (customById.has(Number(part))) {
-          const picture = makeEmojiElement("custom:" + part);
-          picture.title = emojiLabel("custom:" + part);  // ":pog:" when hovering it
-          element.appendChild(picture);
+        } else if (part.startsWith(":")) {
+          const id = part.slice(1);
+          if (customById.has(Number(id))) {
+            const picture = makeEmojiElement("custom:" + id);
+            picture.title = emojiLabel("custom:" + id);  // ":pog:" when hovering it
+            element.appendChild(picture);
+          } else {
+            element.appendChild(document.createTextNode(":deleted:"));  // that emoji no longer exists
+          }
         } else {
-          element.appendChild(document.createTextNode(":deleted:"));  // that emoji no longer exists
+          element.appendChild(makeMentionChip(part.slice(1)));  // "2" or "everyone"
         }
       });
+    }
+
+    // "@kari", highlighted. Shows the person's *current* name; click for their profile.
+    function makeMentionChip(who) {
+      const chip = document.createElement("span");
+      chip.className = "mention";
+      if (who === "everyone") {
+        chip.textContent = "@everyone";
+        return chip;
+      }
+      const person = people.get(Number(who));
+      chip.textContent = "@" + (person ? person.name : "unknown");
+      if (person) {
+        chip.classList.add("clickable");
+        chip.addEventListener("click", (event) => {
+          event.stopPropagation();  // just this, not also the message's own click handling
+          openProfile(person.id);
+        });
+      }
+      return chip;
+    }
+
+    // Does this text mention us (by name, or with @everyone)?
+    function mentionsMe(text) {
+      return text.includes(`<@${myId}>`) || text.includes("<@everyone>");
     }
 
     // ---------- Times ----------
@@ -3738,8 +3868,12 @@
     }
 
     // In the text, custom emoji are tokens like <:17>. In an edit box we show ":pog:" again.
+    // (And mentions: <@2> -> "@kari", <@everyone> -> "@everyone".)
     function tokensToCodes(text) {
-      return text.replace(/<:(\d+)>/g, (token, id) => customById.has(Number(id)) ? emojiLabel("custom:" + id) : ":deleted:");
+      return text
+        .replace(/<:(\d+)>/g, (token, id) => customById.has(Number(id)) ? emojiLabel("custom:" + id) : ":deleted:")
+        .replace(/<@everyone>/g, "@everyone")
+        .replace(/<@(\d+)>/g, (token, id) => "@" + (people.get(Number(id))?.name ?? "unknown"));
     }
 
     function startEdit(message) {
@@ -3855,6 +3989,7 @@
 
       const div = document.createElement("div");
       div.className = grouped ? "message grouped" : "message";
+      if (mentionsMe(message.text)) div.classList.add("mentions-me");  // highlighted for us
       div.dataset.id = message.id;  // so features like replies (jumping to the original) can find it
 
       // The buttons that appear when hovering a message (more will join Reply later).
