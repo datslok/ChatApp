@@ -5,6 +5,8 @@
 2. [x] Save messages in SQLite and load history when someone joins
 3. [x] Channels (#general, #memes, …) and a sidebar to switch between them
 4. [x] Accounts and login (hashed passwords, sessions)
+   - [x] Email per account, password reset by email, Settings (change username, email, password)
+   - [x] People identified by user id behind the scenes, so usernames can change
 5. [x] Online list and "is typing…" indicator
 6. [x] Direct messages: private two-person channels, opened from the sidebar
 7. [x] Image and file uploads (with a preview tray, drag-and-drop and pasting)
