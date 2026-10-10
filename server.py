@@ -89,7 +89,14 @@ PICTURE_KINDS = {
         "column": "banner_id", "folder": UPLOAD_DIR / "banners",
         "max_size": 2 * 1024 * 1024, "animated_size": (600, 200),  # 2 MB
     },
+    # Custom emoji aren't a column of users (they have their own table), but are received the same way.
+    "emoji": {
+        "column": None, "folder": UPLOAD_DIR / "emoji",
+        "max_size": 512 * 1024, "animated_size": (128, 128),       # 512 KB
+    },
 }
+MAX_CUSTOM_EMOJI = 12  # per person
+EMOJI_NAME_PATTERN = re.compile(r"[A-Za-z0-9_]{2,32}")
 for kind in PICTURE_KINDS.values():
     kind["folder"].mkdir(exist_ok=True)
 PICTURE_EXTENSIONS = {"image/png": "png", "image/jpeg": "jpg", "image/gif": "gif", "image/webp": "webp"}
@@ -180,6 +187,15 @@ db.execute("""
         -- All three together: each person can use each emoji once per message
         -- (but several different emoji).
         PRIMARY KEY (message_id, user_id, emoji)
+    )
+""")
+db.execute("""
+    CREATE TABLE IF NOT EXISTS custom_emoji (
+        id         INTEGER PRIMARY KEY,
+        name       TEXT NOT NULL UNIQUE COLLATE NOCASE,  -- one :pog: for everyone, whatever the case
+        file       TEXT NOT NULL,                        -- its file name in uploads/emoji
+        owner_id   INTEGER NOT NULL REFERENCES users(id),
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     )
 """)
 db.execute("""
@@ -1046,10 +1062,10 @@ def make_animated_webp(source, destination, box, size):
     )
 
 
-async def set_picture(request, kind):
-    """Receive a new picture (the raw image is the body). The page has already cropped and shrunk it,
-    except for animated GIFs: those come whole, with the chosen crop in the address."""
-    user_id, username, password_hash, email = logged_in_user(request)
+async def receive_picture(request, kind):
+    """Receive a picture of this kind (the raw image is the body) and save it in its folder under
+    a new random name, which is returned. The page has already cropped and shrunk it, except for
+    animated GIFs: those come whole, with the chosen crop in the address."""
     settings = PICTURE_KINDS[kind]
     content_type = request.headers.get("content-type", "")
     if content_type not in PICTURE_EXTENSIONS:
@@ -1078,6 +1094,14 @@ async def set_picture(request, kind):
     else:
         picture_id = secrets.token_urlsafe(16) + "." + PICTURE_EXTENSIONS[content_type]
         await receive_file(request, settings["folder"] / picture_id, settings["max_size"])
+    return picture_id
+
+
+async def set_picture(request, kind):
+    """A new profile picture or banner."""
+    user_id, username, password_hash, email = logged_in_user(request)
+    settings = PICTURE_KINDS[kind]
+    picture_id = await receive_picture(request, kind)
 
     old = db.execute(f"SELECT {settings['column']} FROM users WHERE id = ?", (user_id,)).fetchone()[0]
     with db:
@@ -1173,6 +1197,93 @@ async def change_profile(data: ProfileChange, request: Request):
         db.execute("UPDATE users SET status = ?, bio = ? WHERE id = ?", (status or None, bio or None, user_id))
     await send_to_everyone(users_message())
     return {"ok": True}
+
+
+# ---------- Custom emoji ----------
+
+def custom_emoji_message():
+    """Every custom emoji: {"type": "custom_emoji", "emoji": [{"id", "name", "file", "owner_id"}, ...]}."""
+    rows = db.execute("SELECT id, name, file, owner_id FROM custom_emoji ORDER BY name COLLATE NOCASE")
+    return {
+        "type": "custom_emoji",
+        "emoji": [{"id": emoji_id, "name": name, "file": file, "owner_id": owner_id} for emoji_id, name, file, owner_id in rows],
+    }
+
+
+def custom_emoji_exists(reaction):
+    """Is this a reference to a custom emoji that exists, like "custom:17"?"""
+    match = re.fullmatch(r"custom:(\d{1,10})", reaction)
+    if match is None:
+        return False
+    return db.execute("SELECT 1 FROM custom_emoji WHERE id = ?", (int(match[1]),)).fetchone() is not None
+
+
+@app.post("/custom-emoji")
+async def add_custom_emoji(request: Request, name: str):
+    """Add a custom emoji: the picture is the body (like a profile picture), the name is in the address."""
+    user_id, username, password_hash, email = logged_in_user(request)
+    name = name.strip()
+    if not EMOJI_NAME_PATTERN.fullmatch(name):
+        raise HTTPException(400, "Emoji names are 2–32 letters, digits or _.")
+    count = db.execute("SELECT COUNT(*) FROM custom_emoji WHERE owner_id = ?", (user_id,)).fetchone()[0]
+    if count >= MAX_CUSTOM_EMOJI:
+        raise HTTPException(400, f"You have {MAX_CUSTOM_EMOJI} emoji. Delete one to add another.")
+    if db.execute("SELECT 1 FROM custom_emoji WHERE name = ?", (name,)).fetchone():
+        raise HTTPException(400, f"There's already an emoji called :{name}:.")  # (checked again below)
+
+    file = await receive_picture(request, "emoji")
+    try:
+        with db:
+            db.execute("INSERT INTO custom_emoji (name, file, owner_id) VALUES (?, ?, ?)", (name, file, user_id))
+    except sqlite3.IntegrityError:
+        # Someone took the name while our picture was uploading: the UNIQUE rule caught it.
+        (PICTURE_KINDS["emoji"]["folder"] / file).unlink(missing_ok=True)
+        raise HTTPException(400, f"There's already an emoji called :{name}:.")
+    await send_to_everyone(custom_emoji_message())  # it appears in everyone's picker
+    return {"ok": True}
+
+
+@app.delete("/custom-emoji/{emoji_id}")
+async def delete_custom_emoji(request: Request, emoji_id: int):
+    """Delete one of your own custom emoji, and the reactions that used it."""
+    user_id, username, password_hash, email = logged_in_user(request)
+    row = db.execute("SELECT file FROM custom_emoji WHERE id = ? AND owner_id = ?", (emoji_id, user_id)).fetchone()
+    if row is None:
+        raise HTTPException(404, "That's not one of your emoji.")
+    reaction = f"custom:{emoji_id}"
+    # Which messages had it as a reaction, so their chips can be updated afterwards.
+    affected = db.execute(
+        "SELECT DISTINCT reactions.message_id, messages.channel FROM reactions "
+        "JOIN messages ON messages.id = reactions.message_id WHERE reactions.emoji = ?",
+        (reaction,),
+    ).fetchall()
+    with db:
+        db.execute("DELETE FROM reactions WHERE emoji = ?", (reaction,))
+        db.execute("DELETE FROM custom_emoji WHERE id = ?", (emoji_id,))
+    (PICTURE_KINDS["emoji"]["folder"] / row[0]).unlink(missing_ok=True)
+
+    await send_to_everyone(custom_emoji_message())
+    for message_id, channel in affected:
+        await send_to_channel(channel, {
+            "type": "reactions", "channel": channel, "message_id": message_id,
+            "reactions": reactions_for([message_id])[message_id],
+        })
+    return {"ok": True}
+
+
+@app.get("/custom-emoji/files/{file}")
+async def get_custom_emoji(request: Request, file: str):
+    """A custom emoji's picture, for logged-in people only."""
+    row = db.execute("SELECT 1 FROM custom_emoji WHERE file = ?", (file,)).fetchone()
+    if current_user(request) is None or row is None:
+        raise HTTPException(404, "Not found.")
+    extension = file.rsplit(".", 1)[-1]  # our own table said this name exists, so it's safe to use
+    content_type = {ext: type_ for type_, ext in PICTURE_EXTENSIONS.items()}[extension]
+    return FileResponse(
+        PICTURE_KINDS["emoji"]["folder"] / file,
+        media_type=content_type,
+        headers={"X-Content-Type-Options": "nosniff", "Cache-Control": "private, max-age=31536000, immutable"},
+    )
 
 
 # ---------- Friends ----------
@@ -1451,6 +1562,7 @@ async def chat(websocket: WebSocket):
         # Tell the page who it is (the id is for building DM names).
         await send(websocket, {"type": "welcome", "id": user_id, "username": username_of(user_id)})
         await send(websocket, friends_message(user_id))
+        await send(websocket, custom_emoji_message())
         await send(websocket, {"type": "unread", "channels": unread_channels(user_id)})
         if was_online:
             await send(websocket, users_message())  # just this tab
@@ -1510,7 +1622,8 @@ async def chat(websocket: WebSocket):
                 emoji = data.get("emoji")
                 if not isinstance(message_id, int) or isinstance(message_id, bool):
                     continue
-                if not isinstance(emoji, str) or emoji not in ALLOWED_EMOJI:
+                # A Unicode emoji from the list, or a custom one ("custom:17") that exists.
+                if not isinstance(emoji, str) or not (emoji in ALLOWED_EMOJI or custom_emoji_exists(emoji)):
                     continue
                 row = db.execute("SELECT channel FROM messages WHERE id = ?", (message_id,)).fetchone()
                 if row is None or not can_join(row[0], user_id):

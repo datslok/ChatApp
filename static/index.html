@@ -208,6 +208,54 @@
       font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif;
     }
 
+    /* A custom emoji is a small picture, sized like text by default. */
+    .custom-emoji {
+      width: 1.3em;
+      height: 1.3em;
+      object-fit: contain;  /* the whole picture, never cropped or stretched */
+      vertical-align: middle;
+    }
+
+    .reaction-chip .custom-emoji {
+      width: 18px;
+      height: 18px;
+    }
+
+    .emoji-row .custom-emoji {
+      width: 28px;
+      height: 28px;
+    }
+
+    /* Settings: your custom emoji, each with its name and a Delete button. */
+    #my-emoji {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .my-emoji-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .my-emoji-item .custom-emoji {
+      width: 32px;
+      height: 32px;
+    }
+
+    #settings .my-emoji-item button {
+      margin-left: auto;  /* pushed to the right end */
+      padding: 4px 10px;
+      font-size: 0.85rem;
+      background: #4e5058;
+    }
+
+    #settings button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
     /* Reaction chips under a message: "👍 3". */
     .reactions {
       display: flex;
@@ -1346,6 +1394,20 @@
       <button>Save profile</button>
     </form>
 
+    <h3>Emoji</h3>
+    <form id="emoji-form">
+      <p id="emoji-count"></p>
+      <div id="my-emoji"></div>
+      <label>
+        Name for a new emoji
+        <input id="emoji-name" maxlength="32" placeholder="e.g. pog" autocomplete="off">
+      </label>
+      <!-- Picking a picture opens the editor; Save there uploads it with this name. -->
+      <button type="button" id="add-emoji">Choose picture…</button>
+      <input type="file" id="emoji-input" accept="image/*" hidden>
+      <div id="emoji-status" class="status"></div>
+    </form>
+
     <h3>Username</h3>
     <form id="username-form">
       <p>Current: <strong id="current-username">…</strong></p>
@@ -1470,6 +1532,12 @@
     const bioInput = document.getElementById("bio-input");
     const profileStatusLine = document.getElementById("profile-status-line");
     const settingsBanner = document.getElementById("settings-banner");
+    const emojiCount = document.getElementById("emoji-count");
+    const myEmojiList = document.getElementById("my-emoji");
+    const emojiNameInput = document.getElementById("emoji-name");
+    const addEmojiButton = document.getElementById("add-emoji");
+    const emojiInput = document.getElementById("emoji-input");
+    const emojiStatus = document.getElementById("emoji-status");
     const changeBannerButton = document.getElementById("change-banner");
     const removeBannerButton = document.getElementById("remove-banner");
     const bannerInput = document.getElementById("banner-input");
@@ -1619,6 +1687,10 @@
           setLabel("@" + data.username);  // we're in a DM with them
         }
         if (currentChannel !== null) joinCurrentChannel();
+        return;
+      }
+      if (data.type === "custom_emoji") {
+        setCustomEmoji(data.emoji);
         return;
       }
       if (data.type === "friends") {
@@ -1772,6 +1844,8 @@
       emailStatus.textContent = "";
       passwordStatus.textContent = "";
       profileStatusLine.textContent = "";
+      emojiStatus.textContent = "";
+      renderMyEmoji();
       settingsDialog.showModal();
 
       // Ask the server for our current details, to show them.
@@ -1830,22 +1904,102 @@
     setUpPictureButtons("avatar", changeAvatarButton, removeAvatarButton, avatarInput);
     setUpPictureButtons("banner", changeBannerButton, removeBannerButton, bannerInput);
 
-    // `query` is extra information for the address, like "?left=0&top=0&width=200&height=200".
-    async function uploadPicture(kind, picture, query = "") {
-      showStatus(profileStatusLine, "Uploading…", "success");
-      const response = await fetch("/settings/" + kind + query, {
+    // ---------- Settings: custom emoji ----------
+
+    const MAX_CUSTOM_EMOJI = 12;
+    let pendingEmojiName = "";  // the name for the emoji being edited/uploaded
+
+    // Our own custom emoji, each with a Delete button, and "3/12".
+    function renderMyEmoji() {
+      const mine = customEmoji.filter((emoji) => emoji.owner_id === myId);
+      emojiCount.textContent = `Your emoji: ${mine.length}/${MAX_CUSTOM_EMOJI}. Everyone can react with them.`;
+      myEmojiList.replaceChildren();
+      for (const emoji of mine) {
+        const item = document.createElement("div");
+        item.className = "my-emoji-item";
+        item.appendChild(makeEmojiElement("custom:" + emoji.id));
+        const name = document.createElement("span");
+        name.textContent = ":" + emoji.name + ":";
+        item.appendChild(name);
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "secondary";
+        remove.textContent = "Delete";
+        remove.addEventListener("click", async () => {
+          const response = await fetch("/custom-emoji/" + emoji.id, { method: "DELETE" });
+          if (!response.ok) showStatus(emojiStatus, "Couldn't delete it.", "error");
+          // On success, the server sends everyone the new list, which redraws this.
+        });
+        item.appendChild(remove);
+        myEmojiList.appendChild(item);
+      }
+      addEmojiButton.disabled = mine.length >= MAX_CUSTOM_EMOJI;
+    }
+
+    addEmojiButton.addEventListener("click", () => {
+      // Check the name first (the server checks again), so nobody crops a picture for nothing.
+      const name = emojiNameInput.value.trim();
+      if (!/^[A-Za-z0-9_]{2,32}$/.test(name)) {
+        showStatus(emojiStatus, "Names are 2–32 letters, digits or _.", "error");
+        return;
+      }
+      if (customEmoji.some((emoji) => emoji.name.toLowerCase() === name.toLowerCase())) {
+        showStatus(emojiStatus, `There's already an emoji called :${name}:.`, "error");
+        return;
+      }
+      pendingEmojiName = name;
+      emojiStatus.textContent = "";
+      emojiInput.click();
+    });
+
+    emojiInput.addEventListener("change", async () => {
+      const file = emojiInput.files[0];
+      emojiInput.value = "";
+      if (!file) return;
+      if (file.type === "image/gif" && file.size > 10 * 1024 * 1024) {
+        showStatus(emojiStatus, "GIFs can be at most 10 MB.", "error");
+        return;
+      }
+      try {
+        openCropper(await loadPicture(file), "emoji", file);
+      } catch {
+        showStatus(emojiStatus, "Couldn't read that picture. Try a PNG or JPEG.", "error");
+      }
+    });
+
+    // Where messages about an upload go: the Emoji section's line for emoji, the Profile one otherwise.
+    function statusLineFor(kind) {
+      return kind === "emoji" ? emojiStatus : profileStatusLine;
+    }
+
+    // Upload a finished picture: a profile picture or banner (to /settings/...), or a custom emoji
+    // (to /custom-emoji, with its name). `params` is extra information for the address,
+    // like {left: 0, top: 0, width: 200, height: 200} for a GIF's crop.
+    async function uploadPicture(kind, picture, params = {}) {
+      const statusLine = statusLineFor(kind);
+      if (kind === "emoji") params = { name: pendingEmojiName, ...params };  // ...params: copy in the rest
+      const query = new URLSearchParams(params).toString();  // "name=pog&left=0&..."
+      const url = (kind === "emoji" ? "/custom-emoji" : "/settings/" + kind) + (query ? "?" + query : "");
+
+      showStatus(statusLine, "Uploading…", "success");
+      const response = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": picture.type },
         body: picture,
       });
       if (!response.ok) {
         const error = await response.json().catch(() => ({}));
-        showStatus(profileStatusLine, typeof error.detail === "string" ? error.detail : "Upload failed.", "error");
+        showStatus(statusLine, typeof error.detail === "string" ? error.detail : "Upload failed.", "error");
         return;
       }
-      // The server sends everyone (us too) an updated "users" list, which redraws the pictures,
-      // including the ones in Settings and the profile popup (see showUsers).
-      showStatus(profileStatusLine, kind === "banner" ? "Banner changed." : "Picture changed.", "success");
+      // The server sends everyone (us too) an updated list (users, or custom emoji), which
+      // redraws the pictures, including the ones in Settings.
+      if (kind === "emoji") {
+        showStatus(statusLine, `Added :${pendingEmojiName}:`, "success");
+        emojiNameInput.value = "";
+      } else {
+        showStatus(statusLine, kind === "banner" ? "Banner changed." : "Picture changed.", "success");
+      }
     }
 
     // Load a picture file so it can be drawn. Fails if the browser can't read it.
@@ -1890,6 +2044,7 @@
       avatar: { title: "Edit picture", width: 256, height: 256, round: true, saveWidth: 256, saveHeight: 256 },
       // Banners are shown wide, so they're saved bigger than the frame to stay sharp.
       banner: { title: "Edit banner", width: 300, height: 100, round: false, saveWidth: 960, saveHeight: 320 },
+      emoji: { title: "Edit emoji", width: 160, height: 160, round: false, saveWidth: 128, saveHeight: 128 },
     };
     const MAX_ZOOM = 4;
     let cropKind = "avatar";
@@ -2020,8 +2175,7 @@
           width: Math.min(Math.round(width), cropImage.naturalWidth - Math.floor(left)),
           height: Math.min(Math.round(height), cropImage.naturalHeight - Math.floor(top)),
         };
-        // URLSearchParams builds "left=12&top=0&width=300&height=300" from the object.
-        await uploadPicture(cropKind, cropFile, "?" + new URLSearchParams(box));
+        await uploadPicture(cropKind, cropFile, box);
         return;
       }
 
@@ -2029,7 +2183,7 @@
       try {
         picture = await rectangleToFile(cropImage, left, top, width, height, cropShape.saveWidth, cropShape.saveHeight);
       } catch {
-        showStatus(profileStatusLine, "Couldn't save that picture.", "error");
+        showStatus(statusLineFor(cropKind), "Couldn't save that picture.", "error");
         return;
       }
       await uploadPicture(cropKind, picture);
@@ -2721,6 +2875,54 @@
 
     let emojiGroups = null;       // [{name, emoji: [[emoji, name], ...]}, ...], loaded once from /emoji.json
     const emojiNames = new Map(); // emoji -> its name, for tooltips and search
+
+    // Custom emoji, from the server's "custom_emoji" message: [{id, name, file, owner_id}, ...].
+    // A reaction refers to one as "custom:17" (its id), so renaming would never break anything.
+    let customEmoji = [];
+    const customById = new Map();
+
+    function setCustomEmoji(list) {
+      customEmoji = list;
+      customById.clear();
+      for (const emoji of list) customById.set(emoji.id, emoji);
+      if (!emojiPicker.hidden) {  // the picker is open: show the new list straight away
+        buildCategoryButtons();
+        renderEmojiGrid(emojiSearch.value);
+      }
+      if (settingsDialog.open) renderMyEmoji();
+    }
+
+    // How to show an emoji: a custom one as a little picture, a normal one as text.
+    function makeEmojiElement(value) {
+      if (value.startsWith("custom:")) {
+        const custom = customById.get(Number(value.slice("custom:".length)));
+        const img = document.createElement("img");
+        img.className = "custom-emoji";
+        if (custom) {
+          img.src = "/custom-emoji/files/" + encodeURIComponent(custom.file);
+          img.alt = ":" + custom.name + ":";
+        }
+        return img;
+      }
+      const span = document.createElement("span");
+      span.className = "emoji";
+      span.textContent = value;
+      return span;
+    }
+
+    // The name shown when hovering an emoji: "grinning face", or ":pog:".
+    function emojiLabel(value) {
+      if (value.startsWith("custom:")) {
+        const custom = customById.get(Number(value.slice("custom:".length)));
+        return custom ? ":" + custom.name + ":" : "deleted emoji";
+      }
+      return emojiNames.get(value) || value;
+    }
+
+    // Is this emoji still usable? (A custom one may have been deleted since.)
+    function emojiExists(value) {
+      return value.startsWith("custom:") ? customById.has(Number(value.slice("custom:".length))) : emojiNames.has(value);
+    }
     let pickerMessageId = null;   // which message the open picker is for
     const RECENT_KEY = "recentEmoji";
     const MAX_RECENT = 24;
@@ -2789,23 +2991,46 @@
     }
 
     // One button per category (showing its first emoji) that scrolls the grid to that category.
+    // A ⭐ button for the custom emoji comes first, if there are any.
     function buildCategoryButtons() {
       emojiCategories.replaceChildren();
+      const categories = [];
+      if (customEmoji.length) categories.push(["⭐", "Custom", "emoji-group-custom"]);
       emojiGroups.forEach((group, index) => {  // forEach: like a for loop, but also gives the position
+        categories.push([group.emoji[0][0], group.name, "emoji-group-" + index]);
+      });
+      for (const [icon, name, anchorId] of categories) {
         const button = document.createElement("button");
         button.type = "button";
         button.className = "emoji";
-        button.textContent = group.emoji[0][0];
-        button.title = group.name;
+        button.textContent = icon;
+        button.title = name;
         button.addEventListener("click", () => {
           if (emojiSearch.value) {
             emojiSearch.value = "";
             renderEmojiGrid("");
           }
-          document.getElementById("emoji-group-" + index).scrollIntoView({ block: "start" });
+          document.getElementById(anchorId).scrollIntoView({ block: "start" });
         });
         emojiCategories.appendChild(button);
+      }
+    }
+
+    // The custom emoji grouped by who added them: ours first, then everyone else's by name.
+    // Returns [[title, [[value, name], ...]], ...].
+    function customSections() {
+      const byOwner = new Map();
+      for (const emoji of customEmoji) {
+        if (!byOwner.has(emoji.owner_id)) byOwner.set(emoji.owner_id, []);
+        byOwner.get(emoji.owner_id).push(["custom:" + emoji.id, ":" + emoji.name + ":"]);
+      }
+      const ownerName = (id) => people.get(id)?.name ?? "someone";
+      const owners = [...byOwner.keys()].sort((a, b) => {
+        if (a === myId) return -1;  // ours first
+        if (b === myId) return 1;
+        return ownerName(a).localeCompare(ownerName(b));  // then alphabetical
       });
+      return owners.map((id) => [id === myId ? "Your emoji" : `${ownerName(id)}'s emoji`, byOwner.get(id)]);
     }
 
     // Fill the grid: search results, or "Recently used" plus every category.
@@ -2823,8 +3048,7 @@
         for (const [emoji, name] of list) {
           const button = document.createElement("button");
           button.type = "button";
-          button.className = "emoji";
-          button.textContent = emoji;
+          button.appendChild(makeEmojiElement(emoji));
           button.title = name;
           button.addEventListener("click", () => {
             react(pickerMessageId, emoji);
@@ -2839,6 +3063,9 @@
       const search = query.trim().toLowerCase();
       if (search) {
         const results = [];
+        for (const emoji of customEmoji) {  // custom emoji first: they're what people search for most
+          if (emoji.name.toLowerCase().includes(search)) results.push(["custom:" + emoji.id, ":" + emoji.name + ":"]);
+        }
         for (const group of emojiGroups) {
           for (const entry of group.emoji) {
             if (entry[1].includes(search)) results.push(entry);
@@ -2848,8 +3075,11 @@
         return;
       }
 
-      const recent = loadRecent().filter((emoji) => emojiNames.has(emoji));
-      if (recent.length) section("Recently used", recent.map((emoji) => [emoji, emojiNames.get(emoji)]));
+      const recent = loadRecent().filter(emojiExists);
+      if (recent.length) section("Recently used", recent.map((emoji) => [emoji, emojiLabel(emoji)]));
+      customSections().forEach(([title, list], index) => {
+        section(title, list, index === 0 ? "emoji-group-custom" : null);  // the ⭐ button scrolls to the first
+      });
       emojiGroups.forEach((group, index) => section(group.name, group.emoji, "emoji-group-" + index));
     }
 
@@ -2874,14 +3104,12 @@
         chip.type = "button";
         chip.className = "reaction-chip";
         if (reaction.user_ids.includes(myId)) chip.classList.add("mine");
-        const emoji = document.createElement("span");
-        emoji.className = "emoji";
-        emoji.textContent = reaction.emoji;
         const count = document.createElement("span");
         count.textContent = reaction.user_ids.length;
-        chip.append(emoji, count);
-        // Who reacted, by their *current* names. ?. and ??: "someone" if we don't know them.
-        chip.title = reaction.user_ids.map((id) => people.get(id)?.name ?? "someone").join(", ");
+        chip.append(makeEmojiElement(reaction.emoji), count);
+        // Which emoji, and who reacted, by their *current* names. ?. and ??: "someone" if we don't know them.
+        const names = reaction.user_ids.map((id) => people.get(id)?.name ?? "someone").join(", ");
+        chip.title = reaction.emoji.startsWith("custom:") ? `${emojiLabel(reaction.emoji)} ${names}` : names;
         chip.addEventListener("click", () => react(messageId, reaction.emoji));
         container.appendChild(chip);
       }

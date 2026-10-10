@@ -23,7 +23,7 @@
    - [x] Message ids and times on the page, message grouping and date dividers
    - [x] Replies
    - [x] Reactions, with a full emoji picker (from Unicode's emoji list)
-   - [ ] Custom emoji (12 per person, also animated) as reactions
+   - [x] Custom emoji (12 per person, also animated) as reactions
    - [ ] Editing and deleting your own messages; admins can edit and delete anyone's
    - [ ] @mentions (stored by user id), with their own unread marker
    - [ ] Notifications (browser notifications, sound, count in the tab title)
