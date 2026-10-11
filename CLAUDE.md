@@ -49,8 +49,7 @@ the point is for me to understand how it works, not just to have it done.
   notifications (notification plugin, allowed for the site in `src-tauri/capabilities/default.json`)
   and automatic updates at startup (updater plugin). `npm run tauri dev` in `desktop/` to try it.
 - `icon/`: the app icon, made by Niamh Hannon (1024×1024). `fin2.png` is her drawing; `fin2_round.png`
-  is the one in use (the oval made a circle, stray marks outside it removed; `fin_icon.png` is an older
-  version). `npm run tauri icon ../icon/fin2_round.png` in `desktop/` makes every size (delete the android/ios/Store/Mac ones); `static/favicon.ico` is a copy of
+  is the one in use (the oval made a circle, stray marks outside it removed). `npm run tauri icon ../icon/fin2_round.png` in `desktop/` makes every size (delete the android/ios/Store/Mac ones); `static/favicon.ico` is a copy of
   the resulting `icon.ico`, served at `/favicon.ico` for the browser tab.
 - `static/download.html`: the download page (`/download`, no login), linked from the login page and
   Settings (hidden inside the app). `/download/windows` always redirects to the newest installer.
