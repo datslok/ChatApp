@@ -79,6 +79,12 @@ registered at domene.shop with its DNS on Cloudflare. `datslok.no` and `www.dats
 the chat through a Cloudflare Redirect Rule (their DNS records are proxied placeholders, 192.0.2.1).
 `app.datslok.no` redirects (302) the same way, to https://chat.datslok.no/download.
 
+Voice: the tunnel also carries `voice.datslok.no` → http://localhost:7880 (LiveKit's signalling; a
+"published application route" in Cloudflare's Zero Trust dashboard, Networks → Tunnels → chatapp).
+The audio can't go through the tunnel (UDP), so the router (http://192.168.10.1) forwards UDP 7882
+(`livekit_udp`) and TCP 7881 (`livekit_tcp`) to this PC, 192.168.10.110, and two Windows Firewall rules
+("LiveKit voice (UDP 7882)" / "(TCP 7881)") let them in, only to `livekit\livekit-server.exe`.
+
 ## Running it
 
 Python comes from Anaconda; conda is already hooked into PowerShell. First time (or after changing
