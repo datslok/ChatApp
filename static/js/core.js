@@ -107,6 +107,7 @@ const viewerClose = document.getElementById("viewer-close");
 let socket = null;         // our WebSocket (replaced with a new one if it drops)
 let currentChannel = null;  // the channel (or DM) we're looking at
 let firstChannel = null;    // where to start: the first channel in the list
+let channelNames = [];      // every channel, from the server: ["general", "memes"]
 // The Friends page counts as a "channel" of its own here: it's highlighted in the sidebar
 // and is a step for the back button like any channel. (The server never hears this name.)
 const FRIENDS = "friends";
@@ -133,6 +134,7 @@ async function start() {
   }
 
   firstChannel = channels[0];
+  channelNames = channels;
   connect();
   ensureEmojiData();  // in the background (no await): the autocomplete needs the emoji names
 }
@@ -150,7 +152,9 @@ function connect() {
     banner.hidden = true;
     sendVoiceState();  // a new connection: the server doesn't know we're in voice yet
     if (currentChannel === null) {
-      switchChannel(firstChannel, "#" + firstChannel);  // first time: open the first channel
+      // First time: the channel we were in before a reload (F5), else the first channel.
+      const start = channelBeforeReload() ?? firstChannel;
+      switchChannel(start, channelLabel(start));
     } else {
       joinCurrentChannel();  // reconnected: rejoin where we were, which reloads the history
     }
@@ -168,6 +172,19 @@ function connect() {
     setTimeout(connect, reconnectDelay);
     reconnectDelay = Math.min(reconnectDelay * 2, 10000);
   });
+}
+
+// The channel this tab was in before a reload, or null. switchChannel saves every channel in the
+// browser's history for the back button ({channel: "memes"}), and the browser keeps that through
+// a reload. Only something that still exists counts: a channel the server lists, Friends, Lounge,
+// or a DM (one with someone who's no longer a friend is left again once the friend list arrives).
+function channelBeforeReload() {
+  const channel = history.state?.channel;
+  if (typeof channel !== "string") return null;
+  if (channelNames.includes(channel) || channel === FRIENDS || channel === LOUNGE || channel.startsWith("dm:")) {
+    return channel;
+  }
+  return null;
 }
 
 // Send something to the server, but only if we're connected. Returns true if it was sent.
@@ -212,6 +229,9 @@ function handleServerMessage(event) {
   if (data.type === "users") {
     showUsers(data.users);
     renderVoiceMembers();  // (names may have changed)
+    // A DM's name ("@kari") needs the people: after a reload straight into a DM, they only
+    // arrive now, so the label said "@someone" until this.
+    if (currentChannel !== null) setLabel(channelLabel(currentChannel));
     return;
   }
   if (data.type === "call" || data.type === "call_answered" || data.type === "call_ended") {
