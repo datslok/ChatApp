@@ -1576,6 +1576,26 @@ body {
   color: #00a8fc;
 }
 
+/* While the desktop app downloads a file (messages.js): a thin bar under its name.
+   "appearance: none" drops the system's own look, so the colours below apply; the bar's
+   filled part is "::-webkit-progress-value", the groove "::-webkit-progress-bar". */
+.attachment-file progress {
+  display: block;
+  width: 100%;
+  height: 4px;
+  margin-top: 6px;
+  appearance: none;
+  border: none;
+}
+.attachment-file progress::-webkit-progress-bar {
+  border-radius: 2px;
+  background: #1e1f22;
+}
+.attachment-file progress::-webkit-progress-value {
+  border-radius: 2px;
+  background: #00a8fc;
+}
+
 /* "kari is typing…" on the left, "Uploading cat.png…" on the right */
 #status-line {
   height: 1.2em;  /* keep the space even when empty, so the page doesn't jump */

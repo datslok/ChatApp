@@ -253,8 +253,56 @@ function makeAttachment(file) {
   } else {
     link.className = "attachment-file";
     link.textContent = `📄 ${file.filename} (${formatSize(file.size)})`;
+    // In the desktop app a plain download happens silently, so the page downloads it itself and
+    // shows how far along it is. (Browsers have their own downloads bubble: there, a normal link.)
+    if (inDesktopApp) {
+      link.addEventListener("click", (event) => {
+        event.preventDefault();
+        downloadWithProgress(link, url, file);
+      });
+    }
   }
   return link;
+}
+
+// Download a file in the page, with a progress bar in its box, then save it like a normal
+// download (the app then shows it in Explorer).
+async function downloadWithProgress(link, url, file) {
+  if (link.querySelector("progress")) return;  // already downloading: no second copy
+  const bar = document.createElement("progress");
+  bar.value = 0;  // 0 to 1 (a <progress> without max counts to 1)
+  link.appendChild(bar);
+
+  try {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(response.status);
+    // The body arrives in pieces: read them one at a time, counting the bytes. The total is the
+    // size the message already knows (Cloudflare doesn't always send it along with the file).
+    const reader = response.body.getReader();
+    const chunks = [];
+    let received = 0;
+    while (true) {
+      const { done, value } = await reader.read();  // value: the next piece, as bytes
+      if (done) break;
+      chunks.push(value);
+      received += value.length;
+      bar.value = received / file.size;
+    }
+
+    // All here: put the pieces together as a Blob (a lump of bytes in memory), give it a temporary
+    // address, and click an invisible link to it. "download" means: save it under this name.
+    const blob = new Blob(chunks);
+    const blobUrl = URL.createObjectURL(blob);
+    const saver = document.createElement("a");
+    saver.href = blobUrl;
+    saver.download = file.filename;
+    saver.click();
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);  // then let the memory go
+  } catch {
+    showUploadError(`Couldn't download ${file.filename}`);
+  } finally {
+    bar.remove();  // finally: runs either way, done or failed
+  }
 }
 
 // ---------- Reactions ----------
