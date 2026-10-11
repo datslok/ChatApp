@@ -78,8 +78,8 @@ the point is for me to understand how it works, not just to have it done.
   the newest one to `~\ChatApp-backups` over SSH. Restoring: README, "Backups".
 - From the development PC (after `scripts\server-connect.ps1` once: an SSH key and the name `chatserver` in
   `~/.ssh/config`): `scripts\deploy.ps1` pushes if needed and runs `scripts\server\update.ps1` on the server over SSH;
-  `scripts\release-upload.ps1` copies a new desktop app release into the server's `releases\` and then
-  runs deploy.ps1 (the restart makes open apps reconnect and update);
+  `scripts\release-upload.ps1` copies a new desktop app release into the server's `releases\`, deletes
+  the older installers there and locally (only the one latest.json names stays), and then runs deploy.ps1 (the restart makes open apps reconnect and update);
   `scripts\usage.ps1` shows the space used there (runs `scripts\server\usage.ps1`: database, uploads by
   kind, releases, logs, leftover .db/.zip files, backups, free disk; only reads). The server
   PC's SSH server (step 7 of scripts\server\install.ps1) only accepts the home network.

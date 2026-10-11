@@ -6,7 +6,8 @@
 #
 # It copies what releases\latest.json points to (the installer and its .sig), then latest.json
 # itself, last: so an app that checks in the meantime never sees a version whose installer isn't
-# there yet. Uses SSH's file copy (scp), set up once with scripts\server-connect.ps1.
+# there yet. Uses SSH's file copy (scp), set up once with scripts\server-connect.ps1. Then it deletes
+# the older versions, there and in this PC's releases\.
 #
 # Then it restarts the chat (with scripts\deploy.ps1, so newly pushed code goes along): every open
 # app reconnects, looks for an update and installs it (someone in a call: once they leave it).
@@ -28,6 +29,16 @@ if ($LASTEXITCODE -ne 0) { Write-Host "Copying failed (see above)."; exit 1 }
 Write-Host "Copying latest.json..."
 scp releases\latest.json "chatserver:$ServerFolder/releases/"
 if ($LASTEXITCODE -ne 0) { Write-Host "Copying latest.json failed (see above)."; exit 1 }
+
+# Only the newest version is needed (apps only ever update upwards), so the older installers go,
+# on the server and here. Only now, after latest.json: until then, apps could still be sent to the
+# old one. (The server's nightly backup keeps every version in E:\ChatApp-backups\releases.)
+# The command runs in the server's PowerShell; KEEP becomes the new installer's name. Single quotes
+# only inside it: double quotes don't survive the trip through ssh from Windows PowerShell.
+Write-Host "Removing older versions..."
+$cleanup = "Get-ChildItem $ServerFolder/releases -File -Filter 'ChatApp_*' | Where-Object { `$_.Name -notin 'KEEP', 'KEEP.sig' } | Remove-Item -Verbose"
+ssh chatserver $cleanup.Replace("KEEP", $installer)
+Get-ChildItem releases -File -Filter "ChatApp_*" | Where-Object { $_.Name -notin $installer, "$installer.sig" } | Remove-Item
 
 Write-Host "Restarting the chat, so the open apps reconnect and update..."
 & .\scripts\deploy.ps1

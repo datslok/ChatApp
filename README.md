@@ -23,7 +23,7 @@ Run them in PowerShell, from the project folder (`E:\Code\ChatApp` on the develo
 | `start.ps1` | development PC | the chat for development (http://localhost:8001, `dev.db`) | [Development](#running-it-for-development) |
 | `voice.ps1 -Dev` | development PC | voice for development (localhost only) | [Development](#running-it-for-development) |
 | `scripts\deploy.ps1` | development PC | puts the newest code on the server and restarts the chat (`-Voice`: also voice) | [Day to day](#day-to-day) |
-| `scripts\release-upload.ps1` | development PC | puts a new desktop app version on the server and restarts the chat (open apps update) | [The desktop app](#the-desktop-app) |
+| `scripts\release-upload.ps1` | development PC | puts a new desktop app version on the server (removing the older ones) and restarts the chat (open apps update) | [The desktop app](#the-desktop-app) |
 | `scripts\backup-fetch.ps1` | development PC | fetches the server's newest backup (`-Install`: every day) | [Backups](#backups) |
 | `scripts\usage.ps1` | development PC | how much space the chat takes on the server (database, uploads, backups, free disk) | [Day to day](#day-to-day) |
 | `scripts\server-connect.ps1` | development PC | once: SSH access to the server (`ssh chatserver`) | [4b](#4b-on-the-development-pc-connect-to-the-new-one) |
@@ -323,7 +323,9 @@ the restart in step 5, or after their call, the others at their next start):
    contents of the `.sig` file).
 5. Commit the version change, then put it on the server. `release-upload.ps1` ends by running
    `scripts\deploy.ps1` (which pushes the commit and restarts the chat), so every open app reconnects
-   and looks for the new version (someone in a call: once they leave it):
+   and looks for the new version (someone in a call: once they leave it). Before that it deletes the
+   older versions, on the server and in your own `releases\`, keeping only the new one: the apps only
+   ever update upwards, and the server's nightly backup keeps every version (`E:\ChatApp-backups\releases`):
    ```powershell
    git add desktop; git commit -m "Desktop app <version>: ..."
    .\scripts\release-upload.ps1
