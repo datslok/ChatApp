@@ -7,6 +7,7 @@
 #   5. Power settings: never sleep on the charger, and closing the lid does nothing
 #   6. Two scheduled tasks, "ChatApp" and "ChatApp voice": start serve.ps1 and voice.ps1 at boot
 #      (even before anyone logs in), hidden, logging to logs\, and restarting them if they crash
+#      or aren't running (checked every 5 minutes); and Task Scheduler's history switched on
 #   7. Windows' SSH server, so the development PC can update this one (scripts\deploy.ps1)
 #   8. A nightly backup ("ChatApp backup", 04:00) onto a second disk, with scripts\server\backup.ps1
 #
@@ -159,12 +160,21 @@ foreach ($task in @(@{ Name = "ChatApp"; Script = "serve.ps1"; Log = "logs\chat.
                     @{ Name = "ChatApp voice"; Script = "voice.ps1"; Log = "logs\voice.log" })) {
     $arguments = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$root\$($task.Script)`" -LogFile `"$root\$($task.Log)`""
     $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument $arguments -WorkingDirectory $root
-    $trigger = New-ScheduledTaskTrigger -AtStartup
-    $trigger.Delay = "PT30S"  # 30 seconds after boot: the network is up by then (LiveKit looks up our IP)
-    Register-ScheduledTask -TaskName $task.Name -Action $action -Trigger $trigger -Settings $settings `
+    $atBoot = New-ScheduledTaskTrigger -AtStartup
+    $atBoot.Delay = "PT30S"  # 30 seconds after boot: the network is up by then (LiveKit looks up our IP)
+    # A safety net: also every 5 minutes, from now on. While it's running that does nothing (a task
+    # ignores a new start while one is running: "MultipleInstances IgnoreNew", the default), but if
+    # it isn't, it starts. Windows once skipped voice's boot start after an update, for no reason it
+    # wrote down; with this, the worst is 5 minutes without it. (Stopping one on purpose: it comes back.)
+    $every5Minutes = New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Minutes 5)
+    Register-ScheduledTask -TaskName $task.Name -Action $action -Trigger $atBoot, $every5Minutes -Settings $settings `
         -User $credential.UserName -Password $credential.GetNetworkCredential().Password -RunLevel Limited -Force -ErrorAction Stop | Out-Null
-    Write-Host "  Task '$($task.Name)': runs $($task.Script) at boot, log in $($task.Log)"
+    Write-Host "  Task '$($task.Name)': runs $($task.Script) at boot (and starts it again if it isn't running), log in $($task.Log)"
 }
+# Task Scheduler's history (off by default): what it started, when, and why something didn't run.
+# Read it in Task Scheduler (taskschd.msc), a task's History tab.
+wevtutil set-log Microsoft-Windows-TaskScheduler/Operational /enabled:true
+Write-Host "  Task Scheduler's history is on."
 
 # --- 7. SSH
 Step "7. SSH server (so the development PC can update this one)"

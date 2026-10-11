@@ -67,7 +67,8 @@ the point is for me to understand how it works, not just to have it done.
 - Moving the server to its own PC (README, "Running the server on its own PC"): `scripts\server\export.ps1`
   (old PC: `chatapp-data.zip` with chat.db, uploads/, releases/, .env), `scripts\server\import.ps1` (new PC),
   `scripts\server\install.ps1` (new PC, as admin: Python + `.venv`, LiveKit, cloudflared service, firewall,
-  power settings, scheduled tasks "ChatApp" and "ChatApp voice" at boot, logs in `logs\`), and
+  power settings, scheduled tasks "ChatApp" and "ChatApp voice" at boot and every 5 minutes if not
+  running, Task Scheduler's history on, logs in `logs\`), and
   `scripts\server\update.ps1` (git pull, packages, restart the chat; `-Voice` also LiveKit).
   `tools/copy_db.py` makes a safe copy of a live database (SQLite's backup function).
 - Backups: on the server PC, `scripts/server/backup.ps1` (scheduled task "ChatApp backup", 04:00, from

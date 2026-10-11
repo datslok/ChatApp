@@ -133,7 +133,8 @@ cd C:\ChatApp
 
 It installs Python (and the packages, in `.venv`), LiveKit and `cloudflared`, adds the firewall
 rules, sets the power options (never sleep on the charger, closing the lid does nothing), and
-makes the two scheduled tasks. It asks for two things:
+makes the two scheduled tasks (at boot, and every 5 minutes if they aren't running), with
+Task Scheduler's history switched on. It asks for two things:
 
 - **The tunnel's token.** In Cloudflare's [Zero Trust dashboard](https://one.dash.cloudflare.com/):
   Networks → Tunnels → **chatapp** → *Add a connector* (or *Configure*). The command shown there
@@ -242,6 +243,14 @@ Get-Content logs\backup.log -Tail 5
 # Restart by hand (deploy.ps1 does this too).
 Stop-ScheduledTask ChatApp; Start-ScheduledTask ChatApp
 Stop-ScheduledTask "ChatApp voice"; Start-ScheduledTask "ChatApp voice"
+
+# The tasks start again by themselves within 5 minutes when they aren't running (also if Windows
+# skipped the start at boot). To keep one off for a while, disable it, and enable it afterwards:
+Disable-ScheduledTask "ChatApp voice"; Stop-ScheduledTask "ChatApp voice"
+Enable-ScheduledTask "ChatApp voice"
+
+# What Task Scheduler did (started, stopped, failed), newest first. Also in taskschd.msc, History.
+Get-WinEvent Microsoft-Windows-TaskScheduler/Operational -MaxEvents 20 | Format-Table TimeCreated, Message -Wrap
 
 # A backup now, besides the nightly one.
 .\scripts\server\backup.ps1 -Destination E:\ChatApp-backups
