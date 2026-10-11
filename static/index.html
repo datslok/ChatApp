@@ -205,6 +205,9 @@
       box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
       z-index: 100;
     }
+    #incoming-call::backdrop {
+      background: rgba(0, 0, 0, 0.4);  /* the page behind it, a little darker */
+    }
     #incoming-call-avatar .avatar {
       margin: 0 auto;
     }
@@ -2170,8 +2173,8 @@
     </div>
   </dialog>
 
-  <!-- Someone is calling: who, with Accept and Decline. A <dialog> opened with show(), not
-       showModal(), so the chat behind it still works while it rings. -->
+  <!-- Someone is calling: who, with Accept and Decline. A modal <dialog> (showModal), so it's
+       always on top and clickable, even when another popup is open. -->
   <dialog id="incoming-call">
     <div id="incoming-call-avatar"></div>
     <p><strong id="incoming-call-name"></strong> is calling…</p>
@@ -2910,7 +2913,8 @@
     let pressedOutside = false;
 
     for (const dialog of document.querySelectorAll("dialog")) {
-      if (dialog === cropperDialog) continue;
+      // Not the picture editor, and not an incoming call (a stray click mustn't silence or decline it).
+      if (dialog === cropperDialog || dialog.id === "incoming-call") continue;
       dialog.addEventListener("pointerdown", (event) => {
         pressedOutside = isOutside(dialog, event);
       });
@@ -3750,7 +3754,9 @@
       incomingCall = call;
       incomingCallName.textContent = call.name;
       incomingCallAvatar.replaceChildren(makeAvatar(call.from, call.name, "large"));
-      incomingCallDialog.show();
+      // showModal(): on the browser's top layer, above any other popup that's open (Settings, a
+      // profile...), which would otherwise cover it and make Accept unclickable.
+      incomingCallDialog.showModal();
       playRingtone();
       ringTimer = setInterval(playRingtone, 2000);
       // Not looking at the chat: a desktop notification too (clicking it brings the window forward).
@@ -3784,6 +3790,9 @@
       switchChannel(call.channel, channelLabel(call.channel));
       joinVoice(call.channel, channelLabel(call.channel));  // (leaves Lounge or another call first)
     });
+
+    // Esc closes a modal dialog by itself (its "cancel" event): not this one, only Accept or Decline.
+    incomingCallDialog.addEventListener("cancel", (event) => event.preventDefault());
 
     callDeclineButton.addEventListener("click", () => {
       const call = incomingCall;
