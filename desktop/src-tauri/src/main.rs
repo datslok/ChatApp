@@ -18,8 +18,10 @@ fn main() {
         // which should always appear centred at its own size.
         .plugin(tauri_plugin_window_state::Builder::default().with_denylist(&["update"]).build())
         // Opens links in the default browser. Only our Rust code below uses it: the page isn't
-        // allowed to (capabilities/default.json only gives it notifications).
-        .plugin(tauri_plugin_opener::init())
+        // allowed to (capabilities/default.json only gives it notifications). Without
+        // open_js_links_on_click(false) the plugin adds a script to the page that catches left
+        // clicks on links and asks for that from the page instead, which is refused: nothing happened.
+        .plugin(tauri_plugin_opener::Builder::new().open_js_links_on_click(false).build())
         .setup(|app| {
             // The chat window, from its settings in tauri.conf.json ("create": false there, so that
             // we make it here, with a handler added): it shows https://chat.datslok.no.
