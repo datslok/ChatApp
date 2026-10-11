@@ -77,7 +77,7 @@ body {
 }
 
 #sidebar-lists {
-  flex: 1;  /* take up the free space, which pushes the logout button to the bottom */
+  flex: 1;  /* take up the free space, which pushes the voice bar and your panel to the bottom */
   overflow-y: auto;  /* scroll if there are many channels and people */
 }
 
@@ -762,9 +762,192 @@ body {
 .voice-button:hover {
   background: #35373c;
 }
-/* Muted: the microphone button turns red. */
-#voice-mute.off {
+/* You, at the very bottom of the sidebar: [picture● name/status] 🎤 🎧 ⚙️ (like Discord). */
+#user-panel {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin: 0 -8px -16px;  /* to the sidebar's edges and bottom, through its padding */
+  padding: 6px 8px;
+  background: #232428;  /* a little darker than the sidebar */
+}
+
+/* Your picture, name and status: takes the free space (flex: 1), and gets squeezed first
+   (min-width: 0), so a long name ends in "…" instead of pushing the buttons out. */
+#user-panel-me {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  padding: 4px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: #f2f3f5;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+#user-panel-me:hover {
+  background: #35373c;
+}
+#user-panel-me .person-text span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#user-panel .person-picture .dot {
+  border-color: #232428;  /* the ring around the dot in the panel's colour */
+}
+
+.user-panel-button {
+  position: relative;  /* for the 🔕 in the corner of ⚙️ */
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+.user-panel-button:hover {
+  background: #35373c;
+}
+/* Muted or deafened: the button turns red. */
+.user-panel-button.off {
   background: #da373c;
+}
+/* Notifications muted: a small 🔕 on the corner of ⚙️. */
+#muted-icon {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  font-size: 0.6rem;
+}
+
+/* Next to someone in voice. Deafened: the 🎧 with a red line through it. */
+.voice-state.deafened {
+  position: relative;
+}
+.voice-state.deafened::after {
+  content: "";
+  position: absolute;
+  left: -1px;
+  right: -1px;
+  top: 50%;
+  height: 2px;
+  background: #f23f43;
+  transform: rotate(-45deg);  /* a diagonal stroke */
+}
+
+/* Your own popup, above the panel (people.js sets left and bottom), like the connection popup. */
+#me-popup {
+  position: fixed;
+  inset: auto;
+  width: min(300px, 100vw - 16px);
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid #1e1f22;
+  border-radius: 8px;
+  background: #232428;
+  color: #dbdee1;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+#me-popup::backdrop {
+  background: transparent;
+}
+.me-content {
+  padding: 0 14px 14px;
+}
+/* The picture overlaps the banner, like in the profile popup, but on the left. */
+#me-avatar .avatar {
+  position: relative;
+  width: 80px;
+  height: 80px;
+  margin: -40px 0 8px;
+  border: 5px solid #232428;
+  font-size: 2rem;
+}
+#me-name {
+  margin: 0;
+  font-size: 1.2rem;
+  color: white;
+}
+#me-status {
+  margin: 2px 0 0;
+  font-size: 0.85rem;
+  color: #b5bac1;
+}
+#me-status:empty {
+  display: none;
+}
+
+/* "In voice": a card with where and who, and "Open call". */
+#me-call {
+  margin-top: 12px;
+  padding: 10px;
+  border-radius: 8px;
+  background: #2b2d31;
+}
+#me-call[hidden] {
+  display: none;
+}
+#me-call h3 {
+  margin: 0 0 8px;
+  font-size: 0.75rem;
+  color: #b5bac1;
+}
+#me-call-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+#me-call-pictures {
+  display: flex;
+}
+/* The pictures overlap a little, like a stack. */
+#me-call-pictures .avatar + .avatar {
+  margin-left: -8px;
+}
+#me-call button,
+.me-menu button {
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 6px;
+  background: #35373c;
+  color: #dbdee1;
+  font: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+#me-call button:hover,
+.me-menu button:hover {
+  background: #404249;
+}
+
+/* Edit profile and Log out: a list of plain rows in a box. */
+.me-menu {
+  display: flex;
+  flex-direction: column;
+  margin-top: 12px;
+  padding: 4px;
+  border-radius: 8px;
+  background: #2b2d31;
+}
+.me-menu button {
+  background: none;
+  text-align: left;
+}
+.me-menu button:hover {
+  background: #35373c;
 }
 
 /* A small round status dot: grey for offline, green for online. */

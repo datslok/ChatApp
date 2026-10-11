@@ -119,6 +119,7 @@ function showUsers(users) {
   fillPeopleList(offlineList, offline);
 
   redrawAvatars();  // messages, the profile popup and Settings
+  renderUserPanel();  // you, at the bottom left
   // Banners only appear in two places, so those are simply redrawn if they're open.
   if (profileDialog.open) renderProfile(profileUserId);
   if (settingsDialog.open) settingsBanner.replaceChildren(makeBanner(myId));
@@ -343,6 +344,78 @@ profileVolumeSlider.addEventListener("input", () => {
 });
 
 profileClose.addEventListener("click", () => profileDialog.close());
+
+// ---------- You, at the bottom left (like Discord) ----------
+//
+// The panel: your picture (with the online dot), name and status, then 🎤 mute, 🎧 deafen and
+// ⚙️ Settings. Clicking your picture or name opens #me-popup just above it: your profile, the
+// call you're in (with "Open call"), Edit profile and Log out.
+
+const userPanelMe = document.getElementById("user-panel-me");
+const userMuteButton = document.getElementById("user-mute");
+const userDeafenButton = document.getElementById("user-deafen");
+const mePopup = document.getElementById("me-popup");
+
+// Drawn again whenever something in it changes: the people list (your name, picture, status)
+// and mute or deafen (rooms.js, showMuteButton).
+function renderUserPanel() {
+  const me = people.get(myId);
+  if (me) userPanelMe.replaceChildren(makePerson(me));  // (the same as in the online list)
+  userMuteButton.classList.toggle("off", micMuted);
+  userMuteButton.title = micMuted ? "Unmute" : "Mute";
+  userMuteButton.setAttribute("aria-label", userMuteButton.title);
+  userDeafenButton.classList.toggle("off", deafened);
+  userDeafenButton.title = deafened ? "Undeafen" : "Deafen";
+  userDeafenButton.setAttribute("aria-label", userDeafenButton.title);
+  if (mePopup.open) renderMePopup();
+}
+
+userMuteButton.addEventListener("click", toggleMute);
+userDeafenButton.addEventListener("click", toggleDeafen);
+
+function renderMePopup() {
+  const me = people.get(myId);
+  if (!me) return;
+  document.getElementById("me-banner").replaceChildren(makeBanner(myId));
+  document.getElementById("me-avatar").replaceChildren(makeAvatar(myId, me.name, "large"));
+  document.getElementById("me-name").textContent = me.name;
+  document.getElementById("me-status").textContent = me.status || "";
+
+  // In voice: where ("Lounge", "@mongri") and the pictures of who's there (the server's lists:
+  // voiceMembers for Lounge, dmCalls for a DM's call).
+  const callSection = document.getElementById("me-call");
+  callSection.hidden = !voiceRoomName;
+  if (!voiceRoomName) return;
+  const where = voiceRoomName === "lounge" ? LOUNGE : voiceRoomName;
+  const members = (voiceRoomName === "lounge" ? voiceMembers.lounge : dmCalls[voiceRoomName]) || [];
+  document.getElementById("me-call-where").textContent = channelLabel(where);
+  document.getElementById("me-call-pictures").replaceChildren(
+    ...members.slice(0, 5).map(({ id }) => makeAvatar(id, people.get(id)?.name, "small")),
+  );
+}
+
+// Open it just above the panel, at the panel's left edge (like the connection popup, voice.js).
+userPanelMe.addEventListener("click", () => {
+  renderMePopup();
+  mePopup.showModal();
+  const panel = document.getElementById("user-panel").getBoundingClientRect();
+  mePopup.style.left = Math.max(8, Math.min(panel.left, innerWidth - mePopup.offsetWidth - 8)) + "px";
+  mePopup.style.bottom = (innerHeight - panel.top + 8) + "px";
+});
+
+// "Open call": to the Lounge page, or the DM the call is in.
+document.getElementById("me-open-call").addEventListener("click", () => {
+  mePopup.close();
+  const where = voiceRoomName === "lounge" ? LOUNGE : voiceRoomName;
+  if (where) switchChannel(where, channelLabel(where));
+});
+
+// "Edit profile": Settings, straight on the Profile tab.
+document.getElementById("me-edit-profile").addEventListener("click", () => {
+  mePopup.close();
+  settingsButton.click();
+  showSettingsPage("profile");
+});
 
 // ---------- "is typing…" ----------
 

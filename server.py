@@ -141,8 +141,8 @@ MAX_BIO_LENGTH = 300
 hasher = PasswordHasher()
 
 # Every open connection (one per browser tab) and what we know about it: the channel it's looking
-# at, and the voice room it says it's in (and whether it's muted there).
-# {websocket: {"user_id": 3, "channel": "memes", "voice": "lounge", "muted": False}}
+# at, and the voice room it says it's in (and whether it's muted or deafened there).
+# {websocket: {"user_id": 3, "channel": "memes", "voice": "lounge", "muted": False, "deafened": False}}
 clients = {}
 
 
@@ -1819,20 +1819,22 @@ def make_voice_token(user_id, name, room):
     })
 
 
+def members_in(room):
+    """Who's in a voice room (in the order their tabs connected), and whether they're muted or
+    deafened (hear nobody): [{"id": 3, "muted": False, "deafened": False}, ...]. Someone in it from
+    two tabs is listed once (muted or deafened only if they are in all of them)."""
+    members = {}  # user id -> their entry (a dict keeps the order things were added: who came first)
+    for client in clients.values():
+        if client["voice"] == room:
+            member = members.setdefault(client["user_id"], {"id": client["user_id"], "muted": True, "deafened": True})
+            member["muted"] = member["muted"] and client["muted"]
+            member["deafened"] = member["deafened"] and client["deafened"]
+    return list(members.values())
+
+
 def voice_members_message():
-    """Who's in each voice channel (in the order their tabs connected), and whether they're muted:
-    {"type": "voice_members", "rooms": {"lounge": [{"id": 3, "muted": false}, ...]}}.
-    Someone in it from two tabs is listed once (muted only if muted in all of them)."""
-    rooms = {room: {} for room in VOICE_ROOMS}  # room -> {user id: muted}
-    for client in clients.values():  # (a dict keeps the order things were added: who connected first)
-        members = rooms.get(client["voice"])
-        if members is not None:
-            members[client["user_id"]] = members.get(client["user_id"], True) and client["muted"]
-    return {
-        "type": "voice_members",
-        "rooms": {room: [{"id": user_id, "muted": muted} for user_id, muted in members.items()]
-                  for room, members in rooms.items()},
-    }
+    """Who's in each voice channel: {"type": "voice_members", "rooms": {"lounge": [...members_in]}}."""
+    return {"type": "voice_members", "rooms": {room: members_in(room) for room in VOICE_ROOMS}}
 
 
 # ---------- DM calls ----------
@@ -1855,14 +1857,9 @@ calls = {}
 
 
 def dm_call_message(channel):
-    """Who's in a DM's call right now (and muted or not), for the call banner and "Join call":
-    {"type": "dm_call", "channel": "dm:3:7", "members": [{"id": 7, "muted": false}]}."""
-    members = {}  # user id -> muted (only if muted in all their tabs, as in voice_members_message)
-    for client in clients.values():
-        if client["voice"] == channel:
-            members[client["user_id"]] = members.get(client["user_id"], True) and client["muted"]
-    return {"type": "dm_call", "channel": channel,
-            "members": [{"id": user_id, "muted": muted} for user_id, muted in members.items()]}
+    """Who's in a DM's call right now, for the call banner and "Join call":
+    {"type": "dm_call", "channel": "dm:3:7", "members": [{"id": 7, "muted": false, "deafened": false}]}."""
+    return {"type": "dm_call", "channel": channel, "members": members_in(channel)}
 
 
 async def announce_dm_call(channel):
@@ -2083,7 +2080,7 @@ async def chat(websocket: WebSocket):
     await websocket.accept()
     was_online = user_id in online_user_ids()  # already open in another tab?
     # No channel until they "join", no voice room until they say they joined one.
-    clients[websocket] = {"user_id": user_id, "channel": None, "voice": None, "muted": False}
+    clients[websocket] = {"user_id": user_id, "channel": None, "voice": None, "muted": False, "deafened": False}
     try:
         # Tell the page who it is (the id is for building DM names).
         await send(websocket, {
@@ -2258,8 +2255,8 @@ async def chat(websocket: WebSocket):
 
             elif kind == "voice":
                 # The page joined a voice room ({"room": "lounge"}), left it ({"room": null}), or
-                # muted or unmuted ({"muted": true}). Only for showing who's in voice: getting into
-                # the audio itself still needs a ticket from /voice-token.
+                # muted, unmuted or deafened ({"muted": true, "deafened": false}). Only for showing
+                # who's in voice: getting into the audio itself still needs a ticket from /voice-token.
                 room = data.get("room")
                 if room is not None and room not in VOICE_ROOMS and not (
                     isinstance(room, str) and room.startswith("dm:") and can_join(room, user_id)
@@ -2268,6 +2265,7 @@ async def chat(websocket: WebSocket):
                 old_room = clients[websocket]["voice"]
                 clients[websocket]["voice"] = room
                 clients[websocket]["muted"] = data.get("muted") is True
+                clients[websocket]["deafened"] = data.get("deafened") is True
                 # Everyone sees who's in the voice channels; DM calls stay private.
                 if old_room in VOICE_ROOMS or room in VOICE_ROOMS:
                     await send_to_everyone(voice_members_message())

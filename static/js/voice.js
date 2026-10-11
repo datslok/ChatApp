@@ -20,7 +20,6 @@
 const voiceBar = document.getElementById("voice-bar");
 const voiceStatus = document.getElementById("voice-status");
 const voiceWhere = document.getElementById("voice-where");
-const voiceMuteButton = document.getElementById("voice-mute");
 const voiceLeaveButton = document.getElementById("voice-leave");
 const voiceAudio = document.getElementById("voice-audio");
 const voiceInputSelect = document.getElementById("voice-input");
@@ -39,6 +38,8 @@ const voiceTestButton = document.getElementById("voice-test");
 let voiceRoom = null;       // the LiveKit Room we're in (or joining), or null
 let voiceRoomName = null;   // its name: "lounge", or a DM's "dm:3:7"
 let micMuted = false;       // stays the same between calls, like Discord
+let deafened = false;       // hearing nobody (and muted too), like Discord's 🎧 button
+let mutedBeforeDeafen = false;  // what the mute was before deafening: back to that afterwards
 let cameraOn = false;       // always off when joining, like Discord
 const voiceCameraButton = document.getElementById("voice-camera");
 let micPublication = null;  // our microphone track as LiveKit sends it, while in a room
@@ -255,8 +256,9 @@ function setPersonVolume(userId, percent) {
 
 // How loud one person is for us: everyone's volume (Settings) times their own (profile popup).
 // 150% × 120% = 180%: LiveKit's GainNode for them simply multiplies the sound by 1.8.
+// Deafened: times 0. (Their own volume stays as it was, for when we undeafen.)
 function applyVolume(participant) {
-  const volume = (voiceSettings.outputVolume / 100) * (personVolume(participant.identity) / 100);
+  const volume = deafened ? 0 : (voiceSettings.outputVolume / 100) * (personVolume(participant.identity) / 100);
   participant.setVolume(volume);  // their voice
   // ...and the sound of their shared screen (LiveKit keeps a volume per source).
   participant.setVolume(volume, LivekitClient.Track.Source.ScreenShareAudio);
@@ -267,16 +269,27 @@ function applyVolume(participant) {
 let voiceMembers = {};        // from the server: {"lounge": [{id: 3, muted: false}, ...]}
 let speakingIds = new Set();  // identities (user ids as text) talking right now, from LiveKit
 
-// Tell our server where we are in voice and whether we're muted, so everyone's sidebar shows it.
-// Only once really connected: "Connecting…" doesn't count.
+// Tell our server where we are in voice and whether we're muted or deafened, so everyone's
+// sidebar shows it. Only once really connected: "Connecting…" doesn't count.
 function sendVoiceState() {
   const connected = voiceRoom && voiceRoom.state === "connected";
-  sendToServer({ type: "voice", room: connected ? voiceRoomName : null, muted: micMuted });
+  sendToServer({ type: "voice", room: connected ? voiceRoomName : null, muted: micMuted, deafened });
+}
+
+// Next to someone in voice: 🔇 when muted, a crossed-out 🎧 when deafened (they can't hear you
+// either), or nothing (null).
+function makeVoiceStateIcon({ muted, deafened }) {
+  if (!muted && !deafened) return null;
+  const icon = document.createElement("span");
+  icon.className = deafened ? "voice-state deafened" : "voice-state";
+  icon.textContent = deafened ? "🎧" : "🔇";
+  icon.title = deafened ? "Deafened" : "Muted";
+  return icon;
 }
 
 function renderVoiceMembers() {
   for (const box of document.querySelectorAll(".voice-members")) {
-    const rows = (voiceMembers[box.dataset.room] || []).map(({ id, muted }) => {
+    const rows = (voiceMembers[box.dataset.room] || []).map(({ id, muted, deafened }) => {
       const name = people.has(id) ? people.get(id).name : "?";
       const row = document.createElement("button");
       row.type = "button";
@@ -286,12 +299,8 @@ function renderVoiceMembers() {
       label.className = "voice-member-name";
       label.textContent = name;
       row.append(makeAvatar(id, name, "small"), label);
-      if (muted) {
-        const icon = document.createElement("span");
-        icon.textContent = "🔇";
-        icon.title = "Muted";
-        row.append(icon);
-      }
+      const icon = makeVoiceStateIcon({ muted, deafened });
+      if (icon) row.append(icon);
       // Click (or right-click, instead of the browser's own menu): their profile, with the volume.
       row.addEventListener("click", () => openProfile(id));
       row.addEventListener("contextmenu", (event) => {

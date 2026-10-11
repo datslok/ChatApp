@@ -20,12 +20,11 @@ function markVoiceChannel() {
   showDmHeader();  // "📞 In call" when it's this DM's call
 }
 
+// After a change to mute or deafen: every button that shows it, and everyone else's view of us.
 function showMuteButton() {
-  voiceMuteButton.classList.toggle("off", micMuted);
-  voiceMuteButton.title = micMuted ? "Unmute" : "Mute";
-  voiceMuteButton.setAttribute("aria-label", voiceMuteButton.title);
-  sendVoiceState();  // the 🔇 next to our name
-  renderCallPanel();  // ...and in the call banner
+  renderUserPanel();  // the 🎤 and 🎧 at the bottom left (people.js)
+  sendVoiceState();  // the 🔇 or 🎧 next to our name
+  renderCallPanel();  // ...and in the call banner (and on the Lounge page)
 }
 
 // LiveKit's library normally loads with the page (the <script> tag near the top). If that went
@@ -230,8 +229,9 @@ for (const button of document.querySelectorAll(".voice-channel")) {
 
 voiceLeaveButton.addEventListener("click", leaveVoice);
 
-voiceMuteButton.addEventListener("click", async () => {
-  micMuted = !micMuted;
+// Mute or unmute. Works outside voice too (then it counts from the next time we join).
+async function setMicMuted(muted) {
+  micMuted = muted;
   showMuteButton();
   const room = voiceRoom;
   if (!room || room.state !== "connected") return;  // takes effect once connected
@@ -246,7 +246,38 @@ voiceMuteButton.addEventListener("click", async () => {
   } catch {
     if (voiceRoom === room) showNoMicrophone();
   }
-});
+}
+
+// The 🎤 buttons (bottom left, call banner, Lounge page). Unmuting while deafened undeafens too,
+// like Discord: you can't talk without hearing.
+function toggleMute() {
+  if (deafened) {
+    deafened = false;
+    applyAllVolumes();
+    setMicMuted(false);
+    return;
+  }
+  setMicMuted(!micMuted);
+}
+
+// The 🎧 button: hear nobody, and be muted while at it. Undeafening puts the mute back to what it
+// was before, so someone who was muted already stays muted.
+function toggleDeafen() {
+  deafened = !deafened;
+  applyAllVolumes();
+  if (deafened) {
+    mutedBeforeDeafen = micMuted;
+    setMicMuted(true);
+  } else {
+    setMicMuted(mutedBeforeDeafen);
+  }
+}
+
+// Everyone's volume again (after deafening: 0, after undeafening: back to what it was).
+function applyAllVolumes() {
+  if (!voiceRoom) return;
+  for (const participant of voiceRoom.remoteParticipants.values()) applyVolume(participant);
+}
 
 // Clicking the status ("Voice connected"): the connection details, like the signal icon. Except
 // in the "Tap here to turn on sound" case: that click lets the browser play the others' audio.
@@ -317,9 +348,10 @@ function renderCallPanel() {
   const screens = inCall ? [myId, partner].filter((id) => screenTrack(id)).map(makeScreenTile) : [];
   showTiles(callTiles, [
     ...screens,
-    makeTile(myId, { muted: inCall && micMuted, video: inCall ? cameraTrack(myId) : null, away: !inCall }),
+    makeTile(myId, { muted: inCall && micMuted, deafened: inCall && deafened, video: inCall ? cameraTrack(myId) : null, away: !inCall }),
     makeTile(partner, {
       muted: partnerHere && Boolean(partnerMember && partnerMember.muted),
+      deafened: partnerHere && Boolean(partnerMember && partnerMember.deafened),
       video: inCall && partnerHere ? cameraTrack(partner) : null,  // (only while we're in the call too)
       away: !partnerHere,
       note: !partnerHere && outgoingCall === channel ? "Calling…" : "",
@@ -337,7 +369,7 @@ function renderCallPanel() {
   showSpeaking();  // the rings
 }
 
-callPanelMute.addEventListener("click", () => voiceMuteButton.click());  // the same as the voice bar's
+callPanelMute.addEventListener("click", toggleMute);  // the same as the 🎤 at the bottom left
 callPanelCamera.addEventListener("click", toggleCamera);
 callPanelEnd.addEventListener("click", leaveVoice);
 callPanelJoin.addEventListener("click", () => joinVoice(currentChannel, channelLabel(currentChannel)));
@@ -549,7 +581,7 @@ function renderLoungeView() {
     const screens = inLounge ? members.filter(({ id }) => screenTrack(id)).map(({ id }) => makeScreenTile(id)) : [];
     showTiles(loungeTiles, [
       ...screens,
-      ...members.map(({ id, muted }) => makeTile(id, { muted, video: inLounge ? cameraTrack(id) : null })),
+      ...members.map(({ id, muted, deafened }) => makeTile(id, { muted, deafened, video: inLounge ? cameraTrack(id) : null })),
     ]);
   }
   loungeFullscreen.hidden = !inLounge;
@@ -568,7 +600,7 @@ function renderLoungeView() {
 // (`video`, a track, or null), or their picture in the middle; their name in the corner.
 // `away`: not in the call (yet), so the picture is faded; `note` replaces the name ("Calling…").
 // Click: focus it (or back to the grid); right-click: their profile (and volume).
-function makeTile(id, { muted = false, video = null, away = false, note = "" } = {}) {
+function makeTile(id, { muted = false, deafened = false, video = null, away = false, note = "" } = {}) {
   const name = people.has(id) ? people.get(id).name : "?";
   const tile = document.createElement("div");
   tile.className = away ? "call-tile away" : "call-tile";
@@ -577,7 +609,10 @@ function makeTile(id, { muted = false, video = null, away = false, note = "" } =
   tile.append(video ? videoFor(video, id === myId) : makeAvatar(id, name, "large"));
   const label = document.createElement("span");
   label.className = "tile-name";
-  label.textContent = note || (muted ? "🔇 " + name : name);
+  // "Calling…", or the name with 🔇 or a crossed-out 🎧 in front (voice.js, makeVoiceStateIcon).
+  const icon = note ? null : makeVoiceStateIcon({ muted, deafened });
+  if (icon) label.append(icon, " ");
+  label.append(note || name);  // (append adds text as plain text, like textContent)
   tile.append(label);
   tile.addEventListener("click", () => toggleFocus(tile));
   // "contextmenu": a right-click. preventDefault: no browser menu on top of the profile.
@@ -725,7 +760,7 @@ function stopResizing() {
 callResize.addEventListener("pointerup", stopResizing);
 callResize.addEventListener("pointercancel", stopResizing);  // e.g. the phone took over the touch
 
-loungeMute.addEventListener("click", () => voiceMuteButton.click());  // the same as the voice bar's
+loungeMute.addEventListener("click", toggleMute);  // the same as the 🎤 at the bottom left
 loungeCamera.addEventListener("click", toggleCamera);
 loungeLeave.addEventListener("click", leaveVoice);
 loungeJoin.addEventListener("click", () => joinVoice("lounge", "Lounge"));

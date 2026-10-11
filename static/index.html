@@ -38,15 +38,22 @@
         </div>
         <span id="voice-where"></span>
       </div>
-      <button type="button" id="voice-mute" class="voice-button" title="Mute" aria-label="Mute">🎤</button>
       <button type="button" id="voice-camera" class="voice-button" title="Turn on camera" aria-label="Turn on camera">📷</button>
       <button type="button" id="voice-share" class="voice-button share-button" title="Share your screen" aria-label="Share your screen">🖥️</button>
       <button type="button" id="voice-leave" class="voice-button" title="Leave voice" aria-label="Leave voice">📞</button>
     </div>
     <!-- The other people's voices play through <audio> elements in here (never shown). -->
     <div id="voice-audio" hidden></div>
-    <button id="settings-button" class="channel">Settings <span id="muted-icon" title="Notifications are muted" hidden>🔕</span></button>
-    <button id="logout" class="channel">Log out</button>
+    <!-- You, at the bottom (like Discord): picture, name and status (click: #me-popup), then
+         mute, deafen and Settings. Filled in by people.js (renderUserPanel). -->
+    <div id="user-panel">
+      <button type="button" id="user-panel-me" title="Your profile"></button>
+      <button type="button" id="user-mute" class="user-panel-button" title="Mute" aria-label="Mute">🎤</button>
+      <button type="button" id="user-deafen" class="user-panel-button" title="Deafen" aria-label="Deafen">🎧</button>
+      <button type="button" id="settings-button" class="user-panel-button" title="Settings" aria-label="Settings">
+        ⚙️<span id="muted-icon" title="Notifications are muted" hidden>🔕</span>
+      </button>
+    </div>
   </nav>
 
   <main id="chat">
@@ -161,6 +168,30 @@
     <h2 id="offline-heading" class="section-heading">Offline</h2>
     <ul id="offline-list"></ul>
   </aside>
+
+  <!-- Your own popup, from the bottom-left panel: your profile, the call you're in, Edit profile and
+       Log out. Filled in by people.js (renderMePopup). -->
+  <dialog id="me-popup">
+    <div id="me-banner"></div>
+    <div class="me-content">
+      <div id="me-avatar"></div>
+      <h2 id="me-name"></h2>
+      <p id="me-status"></p>
+      <!-- Only while you're in voice: where, who's there, and a way back to it. -->
+      <section id="me-call" hidden>
+        <h3>In voice</h3>
+        <div id="me-call-row">
+          <span id="me-call-pictures"></span>
+          <span id="me-call-where"></span>
+        </div>
+        <button type="button" id="me-open-call">Open call</button>
+      </section>
+      <div class="me-menu">
+        <button type="button" id="me-edit-profile">✏️ Edit profile</button>
+        <button type="button" id="logout">↪️ Log out</button>
+      </div>
+    </div>
+  </dialog>
 
   <!-- The voice connection's details (like Discord's): a graph of the ping over the last 5
        minutes and the latest numbers. Opened from the voice bar, filled in by voice.js. -->
