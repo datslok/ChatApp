@@ -10,6 +10,7 @@ import ssl
 import time
 import warnings
 from email.message import EmailMessage
+from email.utils import formatdate, make_msgid
 from pathlib import Path
 
 from argon2 import PasswordHasher
@@ -758,6 +759,9 @@ def send_email(to, subject, body):
     message["From"] = MAIL_FROM
     message["To"] = to
     message["Subject"] = subject
+    # Every normal email has a date and a unique id; spam filters distrust emails without them.
+    message["Date"] = formatdate(localtime=True)
+    message["Message-ID"] = make_msgid(domain="datslok.no")
     message.set_content(body)
     try:
         # SMTP: the protocol mail servers use. starttls() switches the connection to encrypted
