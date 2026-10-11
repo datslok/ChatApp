@@ -162,7 +162,8 @@ db.execute("""
         sent_at       TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         attachment_id TEXT REFERENCES attachments(id),
         reply_to      INTEGER REFERENCES messages(id),  -- the message this one replies to; NULL = none
-        edited_at     TEXT                              -- when it was last edited; NULL = never
+        edited_at     TEXT,                             -- when it was last edited; NULL = never
+        kind          TEXT                              -- NULL = a normal message, "call" = a call note
     )
 """)
 db.execute("""
@@ -405,6 +406,11 @@ if "edited_at" not in table_columns("messages"):
     with db:
         db.execute("ALTER TABLE messages ADD COLUMN edited_at TEXT")
 
+if "kind" not in table_columns("messages"):
+    # From before call notes existed: every message is a normal one (NULL).
+    with db:
+        db.execute("ALTER TABLE messages ADD COLUMN kind TEXT")
+
 if "is_admin" not in table_columns("users"):
     # From before admins existed: nobody is one, until tools/make_admin.py says so.
     with db:
@@ -431,14 +437,15 @@ def iso_time(sqlite_time):
     return sqlite_time.replace(" ", "T") + "Z"
 
 
-def save_message(channel, user_id, text, file, reply_to):
-    """Save a message. Returns its id and time, so the live message matches the history exactly."""
+def save_message(channel, user_id, text, file, reply_to, kind=None):
+    """Save a message (kind: None for a normal one, "call" for a call note). Returns its id and
+    time, so the live message matches the history exactly."""
     # "with db" commits the change when the block ends (or undoes it if something fails).
     # The ? placeholders keep user text as data, so it can never be run as SQL.
     with db:
         cursor = db.execute(
-            "INSERT INTO messages (channel, user_id, text, attachment_id, reply_to) VALUES (?, ?, ?, ?, ?)",
-            (channel, user_id, text, file["id"] if file else None, reply_to),
+            "INSERT INTO messages (channel, user_id, text, attachment_id, reply_to, kind) VALUES (?, ?, ?, ?, ?, ?)",
+            (channel, user_id, text, file["id"] if file else None, reply_to, kind),
         )
     message_id = cursor.lastrowid  # the id SQLite gave it
     sent_at = db.execute("SELECT sent_at FROM messages WHERE id = ?", (message_id,)).fetchone()[0]
@@ -525,7 +532,7 @@ def recent_messages(channel):
     # (an alias), holding the message being replied to, and "original_sender" its sender.
     rows = db.execute(
         """
-        SELECT messages.id, messages.sent_at, messages.edited_at, messages.reply_to,
+        SELECT messages.id, messages.sent_at, messages.edited_at, messages.reply_to, messages.kind,
                messages.user_id, COALESCE(users.username, messages.legacy_name), messages.text,
                attachments.id, attachments.filename, attachments.size, attachments.content_type,
                original.id, original.user_id, COALESCE(original_sender.username, original.legacy_name),
@@ -554,8 +561,9 @@ def recent_messages(channel):
             # A reply whose original has been deleted: reply_to is still set, but the JOIN found nothing.
             "reply": reply_preview(*original) or ({"id": reply_to, "deleted": True} if reply_to else None),
             "reactions": reactions[message_id],
+            "kind": kind,  # None, or "call" for a call note
         }
-        for (message_id, sent_at, edited_at, reply_to, user_id, name, text,
+        for (message_id, sent_at, edited_at, reply_to, kind, user_id, name, text,
              file_id, filename, size, content_type, *original) in rows
     ]
 
@@ -1741,6 +1749,116 @@ def voice_members_message():
     }
 
 
+# ---------- DM calls ----------
+#
+# A DM call is a LiveKit room named after the DM ("dm:3:7"). Our server only does the ringing,
+# over the chat's WebSocket:
+#   caller's page:  {"type": "call", "channel": "dm:3:7"}                 (and joins the room)
+#   callee's tabs:  {"type": "call", "channel": ..., "from": 3, "name": "axel"}  (they ring)
+#   callee's page:  {"type": "call_answer", "channel": ..., "accept": true}      (and joins)
+#   both:           {"type": "call_answered", "channel": ...}  (every tab stops ringing)
+#   or              {"type": "call_ended", "channel": ..., "reason": "no_answer"}
+# When it's over, a call note goes into the DM: "📞 Call · 12 min", or "📞 Missed call".
+
+RING_SECONDS = 30
+
+# The calls ringing or going on, by DM:
+# {"dm:3:7": {"caller": 3, "callee": 7, "started": None while ringing (then the time it was answered),
+#             "caller_joined": True once the caller's page is in the room, "ring": the 30 s timer}}
+calls = {}
+
+
+def voice_user_ids(room):
+    """Everyone whose page says it's in this voice room."""
+    return {client["user_id"] for client in clients.values() if client["voice"] == room}
+
+
+def call_message(channel):
+    call = calls[channel]
+    return {"type": "call", "channel": channel, "from": call["caller"], "name": username_of(call["caller"])}
+
+
+async def start_call(channel, caller):
+    if not (isinstance(channel, str) and channel.startswith("dm:") and can_join(channel, caller)):
+        return  # only in your own DMs with friends
+    call = calls.get(channel)
+    if call is not None:
+        if call["started"] is None and call["callee"] == caller:
+            await answer_call(channel, caller, True)  # they called each other at once: that's an answer
+        return  # already ringing or going on: the page just joins the room
+    first, second = (int(part) for part in channel.split(":")[1:])
+    callee = second if caller == first else first
+    calls[channel] = {
+        "caller": caller, "callee": callee, "started": None, "caller_joined": False,
+        # A background task that ends the call if nobody answers in time. (asyncio runs it while
+        # we wait for other things, like the next WebSocket message.)
+        "ring": asyncio.create_task(ring_timeout(channel)),
+    }
+    await send_to_user(callee, call_message(channel))  # every tab and device they have open rings
+
+
+async def ring_timeout(channel):
+    await asyncio.sleep(RING_SECONDS)
+    call = calls.get(channel)
+    if call is not None and call["started"] is None:
+        await end_call(channel, "no_answer")
+
+
+async def answer_call(channel, user_id, accept):
+    call = calls.get(channel)
+    if call is None or call["started"] is not None or call["callee"] != user_id:
+        return  # not ringing, or not for them
+    if not accept:
+        await end_call(channel, "declined")
+        return
+    call["ring"].cancel()
+    call["started"] = time.time()
+    for person in (call["caller"], call["callee"]):
+        await send_to_user(person, {"type": "call_answered", "channel": channel})
+
+
+async def end_call(channel, reason):
+    """reason: "no_answer", "declined", "cancelled" (hung up before an answer) or "ended"."""
+    call = calls.pop(channel, None)
+    if call is None:
+        return
+    if call["ring"] is not asyncio.current_task():  # (cancelling ourselves would stop us right here)
+        call["ring"].cancel()
+    for person in (call["caller"], call["callee"]):
+        await send_to_user(person, {"type": "call_ended", "channel": channel, "reason": reason})
+
+    if call["started"] is None:
+        text = "📞 Declined call" if reason == "declined" else "📞 Missed call"
+    else:
+        minutes = round((time.time() - call["started"]) / 60)
+        text = f"📞 Call · {minutes} min" if minutes >= 1 else "📞 Call · under a minute"
+    # The note comes from the caller, and is saved and sent like any message (so it gets unread
+    # dots and stays in the history).
+    message_id, sent_at = save_message(channel, call["caller"], text, None, None, kind="call")
+    message = {
+        "type": "message", "channel": channel, "id": message_id, "sent_at": sent_at,
+        "user_id": call["caller"], "name": username_of(call["caller"]), "text": text, "file": None,
+        "reply": None, "reactions": [], "edited_at": None, "kind": "call",
+    }
+    await send_to_channel(channel, message)
+    await announce_new_message(channel)
+
+
+async def check_call(channel):
+    """After someone's voice room changed: has this DM's call been called off, or ended?"""
+    call = calls.get(channel)
+    if call is None:
+        return
+    in_room = voice_user_ids(channel)
+    if call["started"] is None:  # still ringing
+        if call["caller"] in in_room:
+            call["caller_joined"] = True
+        elif call["caller_joined"]:
+            await end_call(channel, "cancelled")  # the caller hung up (or closed the tab)
+    elif not in_room:
+        await end_call(channel, "ended")  # the last one left
+
+
 @app.get("/voice-token")
 async def voice_token(room: str, request: Request):
     """Where the LiveKit server is, and a ticket into this voice room. The page asks for this when
@@ -1832,6 +1950,13 @@ async def send_to_everyone(data):
         await send(websocket, data)
 
 
+async def send_to_user(user_id, data):
+    """Send to every open tab of one person (the desktop app and their phone, say)."""
+    for websocket, client in list(clients.items()):
+        if client["user_id"] == user_id:
+            await send(websocket, data)
+
+
 async def send_to_channel(channel, data, except_user_id=None):
     """Send to everyone viewing a channel, optionally leaving out one user (all their tabs)."""
     for websocket, client in list(clients.items()):
@@ -1870,6 +1995,9 @@ async def chat(websocket: WebSocket):
         else:
             await send_to_everyone(users_message())  # they came online
         await send(websocket, voice_members_message())  # who's in the voice channels right now
+        for channel, call in list(calls.items()):  # opened while someone is calling them: ring here too
+            if call["callee"] == user_id and call["started"] is None:
+                await send(websocket, call_message(channel))
 
         while True:
             data = parse_json(await websocket.receive_text())
@@ -1921,6 +2049,7 @@ async def chat(websocket: WebSocket):
                     "reply": live_reply_preview(reply_to),
                     "reactions": [],  # a brand new message has none yet
                     "edited_at": None,
+                    "kind": None,
                 }
                 await send_to_channel(channel, message)  # everyone in the channel, including us
                 await announce_new_message(channel, mentioned_people, message)  # read/unread, mentions, notifications
@@ -1961,11 +2090,13 @@ async def chat(websocket: WebSocket):
                 if not isinstance(message_id, int) or isinstance(message_id, bool):
                     continue
                 row = db.execute(
-                    "SELECT channel, user_id, attachment_id FROM messages WHERE id = ?", (message_id,)
+                    "SELECT channel, user_id, attachment_id, kind FROM messages WHERE id = ?", (message_id,)
                 ).fetchone()
                 if row is None:
                     continue
-                message_channel, author_id, attachment_id = row
+                message_channel, author_id, attachment_id, message_kind = row
+                if kind == "edit" and message_kind is not None:
+                    continue  # call notes are written by the server, not edited
                 if not can_join(message_channel, user_id):
                     continue  # a message we can't even see
                 if author_id != user_id and not is_admin(user_id):
@@ -2026,9 +2157,24 @@ async def chat(websocket: WebSocket):
                 old_room = clients[websocket]["voice"]
                 clients[websocket]["voice"] = room
                 clients[websocket]["muted"] = data.get("muted") is True
-                # Everyone sees who's in the voice channels; DM calls stay private (step 9).
+                # Everyone sees who's in the voice channels; DM calls stay private.
                 if old_room in VOICE_ROOMS or room in VOICE_ROOMS:
                     await send_to_everyone(voice_members_message())
+                for changed in {old_room, room}:  # a DM call may have started or ended
+                    if changed in calls:
+                        await check_call(changed)
+
+            elif kind == "call":
+                await start_call(data.get("channel"), user_id)
+
+            elif kind == "call_answer":
+                await answer_call(data.get("channel"), user_id, data.get("accept") is True)
+
+            elif kind == "call_cancel":
+                # The caller hung up before an answer (also when their page never got into the room).
+                call = calls.get(data.get("channel"))
+                if call is not None and call["caller"] == user_id and call["started"] is None:
+                    await end_call(data.get("channel"), "cancelled")
     except WebSocketDisconnect:
         pass
     finally:
@@ -2038,3 +2184,5 @@ async def chat(websocket: WebSocket):
             await send_to_everyone(users_message())
         if voice_room in VOICE_ROOMS:  # closed the tab while in voice: they're out
             await send_to_everyone(voice_members_message())
+        if voice_room in calls:  # ...or out of a DM call
+            await check_call(voice_room)

@@ -156,6 +156,78 @@
       font-weight: 600;
     }
 
+    /* A call note in a DM: quieter than a normal message. */
+    .call-note .message-text {
+      color: #949ba4;
+      font-style: italic;
+    }
+
+    /* The bar at the top of a DM: the name on the left, the call button on the right. */
+    #dm-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 16px;
+      border-bottom: 1px solid #1e1f22;
+      font-weight: 600;
+    }
+    #dm-header[hidden] {
+      display: none;
+    }
+    #call-button {
+      padding: 6px 12px;
+      border: none;
+      border-radius: 6px;
+      background: #248046;
+      color: white;
+      font-size: 0.9rem;
+      cursor: pointer;
+    }
+    #call-button:hover {
+      background: #1a6334;
+    }
+    #call-button:disabled {
+      background: #4e5058;
+      cursor: default;
+    }
+
+    /* "Mia is calling…": a box in the top middle of the window, on top of everything. */
+    #incoming-call {
+      position: fixed;
+      top: 24px;
+      margin: 0 auto;
+      padding: 20px 24px;
+      border: none;
+      border-radius: 12px;
+      background: #2b2d31;
+      color: #dbdee1;
+      text-align: center;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+      z-index: 100;
+    }
+    #incoming-call-avatar .avatar {
+      margin: 0 auto;
+    }
+    .incoming-call-buttons {
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+    }
+    .incoming-call-buttons button {
+      padding: 8px 16px;
+      border: none;
+      border-radius: 6px;
+      color: white;
+      font-size: 0.95rem;
+      cursor: pointer;
+    }
+    #call-accept {
+      background: #248046;
+    }
+    #call-decline {
+      background: #da373c;
+    }
+
     /* Who's in a voice channel, listed under it, a little indented. */
     .voice-members {
       display: flex;
@@ -1841,6 +1913,11 @@
 
     <!-- A channel or DM: the messages and everything for writing one. -->
     <div id="channel-view">
+      <!-- Only in DMs: who it's with, and the call button. -->
+      <header id="dm-header" hidden>
+        <span id="dm-header-name"></span>
+        <button type="button" id="call-button">📞 Call</button>
+      </header>
       <div id="messages"></div>
       <div id="status-line">
         <span id="typing"></span>
@@ -2087,6 +2164,17 @@
     </div>
   </dialog>
 
+  <!-- Someone is calling: who, with Accept and Decline. A <dialog> opened with show(), not
+       showModal(), so the chat behind it still works while it rings. -->
+  <dialog id="incoming-call">
+    <div id="incoming-call-avatar"></div>
+    <p><strong id="incoming-call-name"></strong> is calling…</p>
+    <div class="incoming-call-buttons">
+      <button type="button" id="call-accept">📞 Accept</button>
+      <button type="button" id="call-decline">Decline</button>
+    </div>
+  </dialog>
+
   <!-- The emoji picker for reactions: one element, reused for every message. -->
   <div id="emoji-picker" hidden>
     <input id="emoji-search" placeholder="Search emoji" autocomplete="off">
@@ -2312,6 +2400,10 @@
         renderVoiceMembers();  // (names may have changed)
         return;
       }
+      if (data.type === "call" || data.type === "call_answered" || data.type === "call_ended") {
+        handleCallMessage(data);
+        return;
+      }
       if (data.type === "voice_members") {
         voiceMembers = data.rooms;
         renderVoiceMembers();
@@ -2398,6 +2490,7 @@
     function setLabel(label) {
       input.placeholder = "Message " + label;
       topbarTitle.textContent = label;
+      showDmHeader();  // the call bar, in DMs
     }
 
     // Switch channel or DM. `label` is what to show in the text box, like "#general" or "@kari".
@@ -3377,6 +3470,7 @@
       for (const button of document.querySelectorAll(".voice-channel")) {
         button.classList.toggle("in-voice", button.dataset.room === voiceRoomName);
       }
+      showDmHeader();  // "📞 In call" when it's this DM's call
     }
 
     function showMuteButton() {
@@ -3460,7 +3554,7 @@
         room.disconnect();  // we left while it was connecting
         return;
       }
-      setVoiceStatus("Voice connected");
+      setVoiceStatus(outgoingCall === roomName ? "Calling…" : "Voice connected");
       sendVoiceState();  // we're in: show us under the channel
 
       // The microphone. The first time, the browser asks whether we may use it. Without it you can
@@ -3475,6 +3569,10 @@
     }
 
     function leaveVoice() {
+      if (outgoingCall) {
+        sendToServer({ type: "call_cancel", channel: outgoingCall });  // hung up before an answer
+        outgoingCall = null;
+      }
       const room = voiceRoom;
       voiceRoom = null;
       voiceRoomName = null;
@@ -3522,6 +3620,151 @@
       voiceStatus.classList.remove("clickable");
       setVoiceStatus("Voice connected");
     });
+
+    // ----- DM calls
+    //
+    // A DM call is a voice room named after the DM ("dm:3:7"), joined like Lounge. What's new is the
+    // ringing, which our server passes along over the chat's WebSocket (see "DM calls" in server.py).
+
+    const dmHeader = document.getElementById("dm-header");
+    const dmHeaderName = document.getElementById("dm-header-name");
+    const callButton = document.getElementById("call-button");
+    const incomingCallDialog = document.getElementById("incoming-call");
+    const incomingCallAvatar = document.getElementById("incoming-call-avatar");
+    const incomingCallName = document.getElementById("incoming-call-name");
+    const callAcceptButton = document.getElementById("call-accept");
+    const callDeclineButton = document.getElementById("call-decline");
+
+    let outgoingCall = null;      // the DM we're calling, while it rings
+    let incomingCall = null;      // {channel, from, name}: ringing for us
+    let ringTimer = null;         // repeats the ringtone every 2 seconds
+    let callNotification = null;  // the desktop notification for it
+
+    // The bar at the top of a DM, with the call button ("In call" while we're in that DM's call).
+    function showDmHeader() {
+      const inDm = dmPartner(currentChannel) !== null;
+      dmHeader.hidden = !inDm;
+      if (!inDm) return;
+      dmHeaderName.textContent = channelLabel(currentChannel);
+      const inThisCall = voiceRoomName === currentChannel;
+      callButton.disabled = inThisCall;
+      callButton.textContent = inThisCall ? "📞 In call" : "📞 Call";
+    }
+
+    callButton.addEventListener("click", async () => {
+      const channel = currentChannel;
+      if (voiceRoom) leaveVoice();  // leave Lounge (or another call) first, so leaving doesn't hang up this one
+      outgoingCall = channel;
+      sendToServer({ type: "call", channel });  // their tabs start ringing
+      await joinVoice(channel, channelLabel(channel));
+      if (outgoingCall !== channel) return;  // answered, declined or hung up meanwhile
+      if (voiceRoomName === channel) {
+        setVoiceStatus("Calling…", "waiting");
+      } else {
+        sendToServer({ type: "call_cancel", channel });  // we couldn't get in: stop their ringing
+        outgoingCall = null;
+      }
+    });
+
+    // A two-tone ring, generated like the notification ping (it uses the same AudioContext).
+    function playRingtone() {
+      if (isMuted() || notificationVolume <= 0) return;
+      try {
+        audio ??= new AudioContext();
+        const now = audio.currentTime;
+        const peak = 0.12 * (notificationVolume / 100);
+        // [when, pitch]: two short "ring-ring"s.
+        for (const [start, pitch] of [[0, 660], [0.25, 880], [0.6, 660], [0.85, 880]]) {
+          const tone = audio.createOscillator();
+          const volume = audio.createGain();
+          tone.frequency.value = pitch;
+          volume.gain.setValueAtTime(0.0001, now + start);
+          volume.gain.exponentialRampToValueAtTime(peak, now + start + 0.02);
+          volume.gain.exponentialRampToValueAtTime(0.0001, now + start + 0.22);
+          tone.connect(volume).connect(audio.destination);
+          tone.start(now + start);
+          tone.stop(now + start + 0.25);
+        }
+      } catch {}
+    }
+
+    function startRinging(call) {
+      if (incomingCall && incomingCall.channel === call.channel) return;  // already ringing
+      incomingCall = call;
+      incomingCallName.textContent = call.name;
+      incomingCallAvatar.replaceChildren(makeAvatar(call.from, call.name, "large"));
+      incomingCallDialog.show();
+      playRingtone();
+      ringTimer = setInterval(playRingtone, 2000);
+      // Not looking at the chat: a desktop notification too (clicking it brings the window forward).
+      if (!isLooking() && desktopNotifications && !isMuted() && "Notification" in window &&
+          Notification.permission === "granted") {
+        try {
+          const avatar = people.get(call.from)?.avatar;
+          callNotification = new Notification(call.name, {
+            body: "📞 is calling you",
+            icon: avatar ? "/avatars/" + encodeURIComponent(avatar) : undefined,
+            tag: "call-" + call.channel,
+          });
+          callNotification.addEventListener("click", () => window.focus());
+        } catch {}
+      }
+    }
+
+    function stopRinging() {
+      incomingCall = null;
+      incomingCallDialog.close();
+      clearInterval(ringTimer);
+      if (callNotification) callNotification.close();
+      callNotification = null;
+    }
+
+    callAcceptButton.addEventListener("click", () => {
+      const call = incomingCall;
+      if (!call) return;
+      stopRinging();
+      sendToServer({ type: "call_answer", channel: call.channel, accept: true });
+      switchChannel(call.channel, channelLabel(call.channel));
+      joinVoice(call.channel, channelLabel(call.channel));  // (leaves Lounge or another call first)
+    });
+
+    callDeclineButton.addEventListener("click", () => {
+      const call = incomingCall;
+      if (!call) return;
+      stopRinging();
+      sendToServer({ type: "call_answer", channel: call.channel, accept: false });
+    });
+
+    // A short message in the voice bar after a call ends without an answer, gone after 4 seconds.
+    function showCallNotice(channel, text) {
+      if (voiceRoom) return;  // in another room: don't cover its bar
+      voiceBar.hidden = false;
+      voiceWhere.textContent = channelLabel(channel);
+      setVoiceStatus(text, "error");
+      setTimeout(() => {
+        if (!voiceRoom) voiceBar.hidden = true;
+      }, 4000);
+    }
+
+    // The server's call messages (from handleServerMessage).
+    function handleCallMessage(data) {
+      if (data.type === "call") {
+        startRinging(data);
+      } else if (data.type === "call_answered") {
+        if (incomingCall && incomingCall.channel === data.channel) stopRinging();  // answered on another device
+        if (outgoingCall === data.channel) {
+          outgoingCall = null;
+          if (voiceRoomName === data.channel && voiceRoom.state === "connected") setVoiceStatus("Voice connected");
+        }
+      } else if (data.type === "call_ended") {
+        if (incomingCall && incomingCall.channel === data.channel) stopRinging();
+        if (outgoingCall === data.channel) {
+          outgoingCall = null;
+          leaveVoice();  // nobody answered: hang up
+          showCallNotice(data.channel, data.reason === "declined" ? "Declined" : "No answer");
+        }
+      }
+    }
 
     // ----- Settings: Voice & audio
 
@@ -5295,6 +5538,7 @@
       const div = document.createElement("div");
       div.className = grouped ? "message grouped" : "message";
       if (mentionsMe(message.text)) div.classList.add("mentions-me");  // highlighted for us
+      if (message.kind === "call") div.classList.add("call-note");     // "📞 Call · 12 min", written by the server
       div.dataset.id = message.id;  // so features like replies (jumping to the original) can find it
 
       // The buttons that appear when hovering a message (more will join Reply later).
@@ -5317,6 +5561,7 @@
         editButton.textContent = "✏️";
         editButton.title = "Edit";
         editButton.addEventListener("click", () => startEdit(message));
+        if (message.kind === "call") editButton.hidden = true;  // call notes can be deleted, not edited
         const deleteButton = document.createElement("button");
         deleteButton.type = "button";
         deleteButton.textContent = "🗑️";
