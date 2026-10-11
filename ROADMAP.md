@@ -45,6 +45,7 @@
     - [x] Camera button, and video in the DM call banner
     - [x] A Lounge page with a tile for everyone (video or picture)
     - [x] Choosing the camera in Settings, with a preview
+    - [x] Tiles sized to fit, focus view (click a tile: big, the others as thumbnails; right-click: profile), fullscreen, and a resizable DM call banner
 12. [x] Screen sharing in calls and Lounge (through LiveKit, like the camera): 720p/1080p/1440p, 30/60 fps, with sound
 13. [x] Start the chat (serve.ps1) and voice (voice.ps1) automatically with Windows, without open windows
     - [x] Scripts to run the server on its own PC (scripts\server\: install, export, import, update; scheduled tasks; README)
@@ -52,6 +53,12 @@
 14. [x] Backups of chat.db and uploads/: nightly onto the server PC's second disk (30 days), and a copy fetched to the development PC
 15. [ ] Everyday chat gaps, in this order:
     - [x] Clickable links in messages
+    - [x] Clicking a notification goes to the message (browser and desktop app)
+    - [x] F5 keeps you in the channel you were in
+    - [x] Desktop app downloads: "Download this file?", a progress bar, then Explorer with the file selected
+    - [x] Custom emoji: replace the picture (old messages and reactions keep working); GIFs animate in the picture editor
+    - [x] A "get the Windows app" banner, and the download first in Settings
+    - [ ] Automatic restart of the app when a new update is available after a disconnect
     - [ ] Loading older messages when scrolling up (past the newest 50)
     - [ ] Text formatting: **bold**, *italic*, `code`, code blocks, > quotes, ||spoilers||, ~~strikethrough~~
     - [ ] Link previews (title and picture for pasted links, fetched safely by the server)
