@@ -38,6 +38,7 @@ $publicKey = (Get-Content "$key.pub" -Raw).Trim()
 # (not in their own .ssh folder), and SSH ignores that file unless only Administrators and SYSTEM
 # may change it. Other accounts: ~\.ssh\authorized_keys. This runs there, in PowerShell.
 $remoteScript = @"
+`$ProgressPreference = 'SilentlyContinue'  # no progress bars sent back over SSH (they arrive as noise)
 `$key = '$publicKey'
 `$isAdmin = (whoami /groups) -match 'S-1-5-32-544'
 if (`$isAdmin) { `$file = 'C:\ProgramData\ssh\administrators_authorized_keys' }
@@ -45,7 +46,12 @@ else { New-Item -ItemType Directory "`$HOME\.ssh" -Force | Out-Null; `$file = "`
 if (-not ((Test-Path `$file) -and (Select-String -Path `$file -SimpleMatch `$key -Quiet))) {
     Add-Content -Path `$file -Value `$key -Encoding ascii
 }
-if (`$isAdmin) { icacls `$file /inheritance:r /grant 'Administrators:F' /grant 'SYSTEM:F' | Out-Null }
+# Only Administrators and SYSTEM, by their SIDs (fixed IDs, the same in every language: a Norwegian
+# Windows calls the group "Administratorer", and the English name doesn't exist there).
+if (`$isAdmin) {
+    icacls `$file /inheritance:r /grant '*S-1-5-32-544:F' /grant '*S-1-5-18:F' | Out-Null
+    if (`$LASTEXITCODE -ne 0) { 'Setting the key file permissions failed.'; exit 1 }
+}
 'The key is installed on the server.'
 "@
 # Sent as -EncodedCommand (the script in base64), so no quotes or line breaks get mangled on the way.
