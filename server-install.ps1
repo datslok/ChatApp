@@ -7,6 +7,7 @@
 #   5. Power settings: never sleep on the charger, and closing the lid does nothing
 #   6. Two scheduled tasks, "ChatApp" and "ChatApp voice": start serve.ps1 and voice.ps1 at boot
 #      (even before anyone logs in), hidden, logging to logs\, and restarting them if they crash
+#   7. Windows' SSH server, so the development PC can update this one (deploy.ps1)
 #
 # Run it in PowerShell *as administrator* (right-click PowerShell, "Run as administrator"),
 # from this folder:   .\server-install.ps1
@@ -25,7 +26,7 @@ function Step($text) { Write-Host ""; Write-Host "== $text" -ForegroundColor Cya
 
 # winget installs programs and adds them to PATH, but only new windows see the new PATH. Read it
 # again from Windows' settings, so this window finds them too.
-function Refresh-Path {
+function Update-Path {
     $env:Path = [Environment]::GetEnvironmentVariable("Path", "Machine") + ";" +
                 [Environment]::GetEnvironmentVariable("Path", "User")
 }
@@ -47,11 +48,11 @@ if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
 Step "1. Python"
 # "py" is the Python launcher that comes with Python from python.org. (Plain "python" can be
 # Windows' stand-in that only opens the Microsoft Store, so we don't trust that.)
-Refresh-Path
+Update-Path
 if (-not (Get-Command py -ErrorAction SilentlyContinue)) {
     Write-Host "Installing Python 3.13 (for all users)..."
     winget install --exact --id Python.Python.3.13 --scope machine --silent --accept-package-agreements --accept-source-agreements
-    Refresh-Path
+    Update-Path
 }
 if (-not (Test-Path .venv\Scripts\python.exe)) {
     Write-Host "Making the virtual environment (.venv)..."
@@ -92,11 +93,11 @@ if ($installed -match [regex]::Escape($LiveKitVersion)) {
 
 # --- 3. The Cloudflare Tunnel
 Step "3. Cloudflare Tunnel"
-Refresh-Path
+Update-Path
 if (-not (Get-Command cloudflared -ErrorAction SilentlyContinue)) {
     Write-Host "Installing cloudflared..."
     winget install --exact --id Cloudflare.cloudflared --silent --accept-package-agreements --accept-source-agreements
-    Refresh-Path
+    Update-Path
 }
 if (Get-Service Cloudflared -ErrorAction SilentlyContinue) {
     Write-Host "The tunnel service is already installed."
@@ -157,6 +158,33 @@ foreach ($task in @(@{ Name = "ChatApp"; Script = "serve.ps1"; Log = "logs\chat.
         -User $credential.UserName -Password $credential.GetNetworkCredential().Password -RunLevel Limited -Force | Out-Null
     Write-Host "  Task '$($task.Name)': runs $($task.Script) at boot, log in $($task.Log)"
 }
+
+# --- 7. SSH
+Step "7. SSH server (so the development PC can update this one)"
+# Windows' own SSH server ("OpenSSH"): it only needs switching on. The development PC then runs
+# commands here with deploy.ps1 and copies desktop app releases with release-upload.ps1.
+$sshServer = Get-WindowsCapability -Online -Name "OpenSSH.Server*" | Select-Object -First 1
+if ($sshServer.State -ne "Installed") {
+    Write-Host "Switching on Windows' SSH server (this can take a minute)..."
+    Add-WindowsCapability -Online -Name $sshServer.Name | Out-Null
+}
+Set-Service sshd -StartupType Automatic  # start with Windows
+Start-Service sshd
+# The shell you get over SSH: PowerShell, instead of the old cmd.
+New-Item -Path "HKLM:\SOFTWARE\OpenSSH" -Force | Out-Null
+New-ItemProperty -Path "HKLM:\SOFTWARE\OpenSSH" -Name DefaultShell -PropertyType String -Force `
+    -Value "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" | Out-Null
+# The firewall: SSH (port 22) only from this home network. (The router doesn't forward port 22,
+# so the internet can't reach it anyway.)
+if (Get-NetFirewallRule -Name "OpenSSH-Server-In-TCP" -ErrorAction SilentlyContinue) {
+    Set-NetFirewallRule -Name "OpenSSH-Server-In-TCP" -RemoteAddress LocalSubnet
+} else {
+    New-NetFirewallRule -Name "OpenSSH-Server-In-TCP" -DisplayName "OpenSSH Server (sshd)" -Direction Inbound `
+        -Protocol TCP -LocalPort 22 -Action Allow -RemoteAddress LocalSubnet | Out-Null
+}
+$address = (Get-NetIPAddress -AddressFamily IPv4 |
+    Where-Object { $_.IPAddress -like "192.168.*" -or $_.IPAddress -like "10.*" } | Select-Object -First 1).IPAddress
+Write-Host "SSH is on. On the development PC, run:  .\server-connect.ps1 $address $env:USERNAME"
 
 # --- Start them now (if there's something to start)
 Step "Starting"

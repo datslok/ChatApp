@@ -52,6 +52,10 @@ the point is for me to understand how it works, not just to have it done.
   power settings, scheduled tasks "ChatApp" and "ChatApp voice" at boot, logs in `logs\`), and
   `server-update.ps1` (git pull, packages, restart the chat; `-Voice` also LiveKit).
   `tools/copy_db.py` makes a safe copy of a live database (SQLite's backup function).
+- From the development PC (after `server-connect.ps1` once: an SSH key and the name `chatserver` in
+  `~/.ssh/config`): `deploy.ps1` pushes if needed and runs `server-update.ps1` on the server over SSH;
+  `release-upload.ps1` copies a new desktop app release into the server's `releases\`. The server
+  PC's SSH server (step 7 of server-install.ps1) only accepts the home network.
 - `.env.example`: template for `.env` (INVITE_CODE, SECURE_COOKIES). `.env` itself is never committed.
 - `desktop/`: the Windows app (Tauri). A window around https://chat.datslok.no, with real Windows
   notifications (notification plugin, allowed for the site in `src-tauri/capabilities/default.json`)
@@ -131,6 +135,8 @@ Only needed when the app itself changes (icon, plugins, Rust code); chat changes
 3. Copy `ChatApp_<version>_x64-setup.exe` and its `.sig` from `desktop/src-tauri/target/release/bundle/nsis/`
    into `releases/`.
 4. In `releases/latest.json`, set `version`, the installer's `url`, and `signature` (the .sig file's contents).
+5. Once the real chat runs on its own server PC: `.\release-upload.ps1` copies the installer, its `.sig`
+   and `latest.json` there (over SSH).
 
 ## Roadmap
 
