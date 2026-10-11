@@ -437,12 +437,18 @@ function startRinging(call) {
       Notification.permission === "granted") {
     try {
       const avatar = people.get(call.from)?.avatar;
-      callNotification = new Notification(call.name, {
+      const notification = new Notification(call.name, {
         body: "📞 is calling you",
         icon: avatar ? "/avatars/" + encodeURIComponent(avatar) : undefined,
         tag: "call-" + call.channel,
       });
-      callNotification.addEventListener("click", () => window.focus());
+      // In the desktop app, Notification is the notification plugin's stand-in: it shows the
+      // notification, but what it gives back has no click event and no close() (a click brings
+      // the window forward by itself, in main.rs). Only a browser's real one is kept, to close it.
+      if (!inDesktopApp) {
+        notification.addEventListener("click", () => window.focus());
+        callNotification = notification;
+      }
     } catch {}
   }
 }
