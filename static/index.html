@@ -171,7 +171,7 @@
 
   <!-- Your own popup, from the bottom-left panel: your profile, the call you're in, Edit profile and
        Log out. Filled in by people.js (renderMePopup). -->
-  <dialog id="me-popup">
+  <dialog id="me-popup" autofocus>  <!-- autofocus: the popup itself gets the focus, not its first button -->
     <div id="me-banner"></div>
     <div class="me-content">
       <div id="me-avatar"></div>
@@ -195,7 +195,7 @@
 
   <!-- The voice connection's details (like Discord's): a graph of the ping over the last 5
        minutes and the latest numbers. Opened from the voice bar, filled in by voice.js. -->
-  <dialog id="voice-stats">
+  <dialog id="voice-stats" autofocus>
     <h2>Connection</h2>
     <svg id="ping-graph" viewBox="0 0 260 90" aria-label="Ping over the last 5 minutes"></svg>
     <p id="stat-server"></p>
