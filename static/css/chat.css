@@ -1483,6 +1483,13 @@ body {
   margin: 0;
 }
 
+/* Bug / idea side by side, or under each other when there's no room (a phone). */
+#feedback-kinds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+}
+
 .settings-help {
   margin: 0;
   font-size: 0.8rem;

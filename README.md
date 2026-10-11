@@ -35,6 +35,7 @@ Run them in PowerShell, from the project folder (`E:\Code\ChatApp` on the develo
 | `scripts\server\usage.ps1` | server PC | what `usage.ps1` runs there: the sizes, only reading | [Handy commands](#handy-commands-on-the-server) |
 | `serve.ps1`, `voice.ps1` | server PC | the chat and voice; the scheduled tasks start them | [Day to day](#day-to-day) |
 | `tools\make_admin.py` | server PC | make someone an admin (or take it away) | [Handy commands](#handy-commands-on-the-server) |
+| `tools\feedback.py` | server PC | the bug reports and ideas from Settings → Bugs & ideas; mark them done | [Handy commands](#handy-commands-on-the-server) |
 
 ## Running it for development
 
@@ -223,6 +224,12 @@ administrator); then `cd C:\ChatApp`. Or sit at the server PC itself, in PowerSh
 .venv\Scripts\python.exe tools\make_admin.py mongri              # make mongri an admin
 .venv\Scripts\python.exe tools\make_admin.py mongri --remove     # take it away again
 
+# Bug reports and ideas (Settings → Bugs & ideas). Each one is also emailed to every admin
+# with an email address, the moment it's sent.
+.venv\Scripts\python.exe tools\feedback.py                       # the ones not done yet
+.venv\Scripts\python.exe tools\feedback.py --done 12             # tick off #12 (--undo 12: back again)
+.venv\Scripts\python.exe tools\feedback.py --all                 # every one, done ones too
+
 # Is everything running? (ChatApp and ChatApp voice: Running. ChatApp backup: Ready.)
 Get-ScheduledTask ChatApp*
 
@@ -246,7 +253,7 @@ Stop-ScheduledTask "ChatApp voice"; Start-ScheduledTask "ChatApp voice"
 
 (Stopping a task can leave its program running; if a restart doesn't seem to take, use
 `.\scripts\server\update.ps1`, which also ends those.) On the development PC, `tools\make_admin.py`
-works the same with `--db dev.db`, for the development chat.
+and `tools\feedback.py` work the same with `--db dev.db`, for the development chat.
 
 ### Backups
 

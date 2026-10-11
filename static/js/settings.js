@@ -15,6 +15,7 @@ settingsButton.addEventListener("click", async () => {
   passwordStatus.textContent = "";
   profileStatusLine.textContent = "";
   emojiStatus.textContent = "";
+  feedbackStatus.textContent = "";  // (a half-written report stays, in case Settings was closed by mistake)
   renderMyEmoji();
   showNotificationSettings();  // (the browser's permission may have changed since)
   settingsDialog.showModal();
@@ -501,4 +502,26 @@ passwordForm.addEventListener("submit", async (event) => {
   }
   passwordForm.reset();
   showStatus(passwordStatus, "Password changed. Your other devices have been logged out.", "success");
+});
+
+// ---------- Settings: bugs & ideas ----------
+
+const feedbackForm = document.getElementById("feedback-form");
+const feedbackText = document.getElementById("feedback-text");
+const feedbackStatus = document.getElementById("feedback-status");
+const feedbackSendButton = feedbackForm.querySelector("button");
+
+feedbackForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  // The chosen radio button: ":checked" finds the one that's ticked.
+  const kind = feedbackForm.querySelector('input[name="feedback-kind"]:checked').value;
+  feedbackSendButton.disabled = true;  // no second copy from a double click
+  const result = await postJson("/feedback", { kind, text: feedbackText.value });
+  feedbackSendButton.disabled = false;
+  if (!result.ok) {
+    showStatus(feedbackStatus, result.error, "error");
+    return;
+  }
+  feedbackForm.reset();  // empties the text (and goes back to "bug")
+  showStatus(feedbackStatus, kind === "bug" ? "Thanks! The bug report is sent." : "Thanks! Your idea is sent.", "success");
 });

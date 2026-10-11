@@ -241,6 +241,17 @@ db.execute("""
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     )
 """)
+db.execute("""
+    CREATE TABLE IF NOT EXISTS feedback (
+        id         INTEGER PRIMARY KEY,
+        user_id    INTEGER NOT NULL REFERENCES users(id),  -- who sent it
+        kind       TEXT NOT NULL,                          -- "bug" or "idea"
+        text       TEXT NOT NULL,
+        user_agent TEXT,  -- which browser (or the app) it was sent from, handy for bugs
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        done       INTEGER NOT NULL DEFAULT 0  -- 1 = dealt with (tools/feedback.py --done)
+    )
+""")
 
 
 def create_friendships_table():
@@ -1304,6 +1315,63 @@ async def change_profile(data: ProfileChange, request: Request):
         # `status or None`: an empty text is stored as NULL, meaning "none".
         db.execute("UPDATE users SET status = ?, bio = ? WHERE id = ?", (status or None, bio or None, user_id))
     await send_to_everyone(users_message())
+    return {"ok": True}
+
+
+# ---------- Feedback: bug reports and ideas (Settings → Feedback) ----------
+
+FEEDBACK_KINDS = {"bug": "Bug report", "idea": "Idea"}
+MAX_FEEDBACK_LENGTH = 4000
+
+
+class Feedback(BaseModel):
+    kind: str
+    text: str
+
+
+@app.post("/feedback")
+async def send_feedback(data: Feedback, request: Request, background_tasks: BackgroundTasks):
+    """Save a bug report or idea, and email it to every admin (tools/make_admin.py) with an email.
+    Saved first, so nothing is lost if the email can't be sent; tools/feedback.py lists them."""
+    user_id, username, password_hash, email = logged_in_user(request)
+    if data.kind not in FEEDBACK_KINDS:
+        raise HTTPException(400, "Choose bug or idea.")
+    text = data.text.strip()
+    if not text:
+        raise HTTPException(400, "Write something first.")
+    if len(text) > MAX_FEEDBACK_LENGTH:
+        raise HTTPException(400, f"That's a bit long: at most {MAX_FEEDBACK_LENGTH} characters.")
+    # A few per person at a time, so a stuck button (or a prank) can't fill the admins' inboxes.
+    # Every report counts here, like with /forgot.
+    key = f"feedback:{user_id}"
+    if too_many_failures(key):
+        raise HTTPException(429, "That's a lot of feedback! Try again in 15 minutes.")
+    record_failure(key)
+
+    # The browser says what it is in every request (the User-Agent header): which browser, which
+    # version, which system. The app's window (WebView2) counts as Edge there.
+    user_agent = request.headers.get("user-agent", "")[:300]
+    with db:
+        cursor = db.execute(
+            "INSERT INTO feedback (user_id, kind, text, user_agent) VALUES (?, ?, ?, ?)",
+            (user_id, data.kind, text, user_agent),
+        )
+    feedback_id = cursor.lastrowid
+
+    admin_emails = [e for (e,) in db.execute("SELECT email FROM users WHERE is_admin = 1 AND email IS NOT NULL")]
+    # The subject shows the start of the text. An email header must be one line, so newlines go.
+    preview = " ".join(text.split())[:60]
+    subject = f"{FEEDBACK_KINDS[data.kind]} from {username}: {preview}"
+    body = (
+        f"{FEEDBACK_KINDS[data.kind]} #{feedback_id} from {username}:\n\n"
+        f"{text}\n\n"
+        f"Sent from: {user_agent or 'unknown'}\n"
+        "(All of them: python tools/feedback.py on the server PC.)\n"
+    )
+    for admin_email in admin_emails:
+        background_tasks.add_task(send_email, admin_email, subject, body)
+    if not admin_emails:
+        print(f"Feedback #{feedback_id} saved, but no admin has an email to send it to.", flush=True)
     return {"ok": True}
 
 
