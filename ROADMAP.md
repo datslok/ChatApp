@@ -34,7 +34,7 @@
     - [x] Voice tickets from our server (/voice-token: a JWT signed with the standard library)
     - [ ] Lounge voice channel: join, mute, leave (built; tick after the live test)
     - [ ] Voice settings: input and output device, mic and output volume, sensitivity (noise gate) (built; tick after the live test)
-    - [ ] Volume per person
+    - [ ] Volume per person (built; tick after the live test)
     - [ ] Who is in voice (in the sidebar) and a speaking ring
     - [ ] Calls in DMs: ringing, accept/decline
     - [ ] Microphone and call notifications in the desktop app

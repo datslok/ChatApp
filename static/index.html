@@ -676,6 +676,22 @@
       text-align: right;
     }
 
+    /* "Voice volume [——o——] 150%" in the profile popup. */
+    #profile-volume-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-top: 12px;
+      font-size: 0.85rem;
+      color: #b5bac1;
+    }
+    #profile-volume-row[hidden] {
+      display: none;
+    }
+    #profile-volume-row input {
+      flex: 1;
+    }
+
     /* The microphone's level meter: a dark bar that fills from the left as you get louder (grey,
        or green while your voice gets through), with the sensitivity line on top. */
     #voice-meter {
@@ -2021,6 +2037,12 @@
       <!-- Message / Add friend / Accept / ... depending on how you two are connected. -->
       <div id="profile-actions" class="friend-actions"></div>
       <p id="profile-action-status" class="action-status"></p>
+      <!-- How loud this person is for you in voice (not on your own profile). -->
+      <label id="profile-volume-row" hidden>
+        Voice volume
+        <input type="range" id="profile-volume" min="0" max="200" step="5">
+        <span id="profile-volume-value" class="slider-value"></span>
+      </label>
     </div>
   </dialog>
 
@@ -3210,9 +3232,36 @@
 
     // ----- Volumes
 
-    // How loud one person is for us. (Step 7 adds a volume per person on top of this.)
+    // Each person's own volume for us, in %, by user id: {"7": 150}. Also remembered in this browser.
+    // Only the ones that aren't 100% are kept.
+    let personVolumes = {};
+    try {
+      personVolumes = JSON.parse(localStorage.getItem("voicePersonVolumes")) || {};
+    } catch {}
+
+    function personVolume(userId) {
+      return personVolumes[userId] ?? 100;  // ?? : the value on the right if the left is missing
+    }
+
+    function setPersonVolume(userId, percent) {
+      if (percent === 100) {
+        delete personVolumes[userId];
+      } else {
+        personVolumes[userId] = percent;
+      }
+      try {
+        localStorage.setItem("voicePersonVolumes", JSON.stringify(personVolumes));
+      } catch {}
+      // In a call with them: louder or quieter straight away. LiveKit knows people by their
+      // "identity", which our server set to their user id (the token's "sub").
+      const participant = voiceRoom && voiceRoom.remoteParticipants.get(String(userId));
+      if (participant) applyVolume(participant);
+    }
+
+    // How loud one person is for us: everyone's volume (Settings) times their own (profile popup).
+    // 150% × 120% = 180%: LiveKit's GainNode for them simply multiplies the sound by 1.8.
     function applyVolume(participant) {
-      participant.setVolume(voiceSettings.outputVolume / 100);
+      participant.setVolume((voiceSettings.outputVolume / 100) * (personVolume(participant.identity) / 100));
     }
 
     // ----- Joining and leaving
@@ -4200,6 +4249,10 @@
 
     // ---------- Profile popup ----------
 
+    const profileVolumeRow = document.getElementById("profile-volume-row");
+    const profileVolumeSlider = document.getElementById("profile-volume");
+    const profileVolumeValue = document.getElementById("profile-volume-value");
+
     let profileUserId = null;  // whose profile is open
 
     function openProfile(userId) {
@@ -4228,7 +4281,21 @@
       profileActionStatus.textContent = "";
       // Message / Add friend / Accept / ... (nothing on your own profile).
       profileActions.replaceChildren(...(userId === myId ? [] : makeFriendButtons(userId, profileActionStatus)));
+      // How loud they are for you in voice (see "Voice"). Not for yourself.
+      profileVolumeRow.hidden = userId === myId;
+      showProfileVolume(personVolume(userId));
     }
+
+    function showProfileVolume(percent) {
+      profileVolumeSlider.value = percent;
+      profileVolumeValue.textContent = percent + "%";
+    }
+
+    profileVolumeSlider.addEventListener("input", () => {
+      const percent = Number(profileVolumeSlider.value);
+      showProfileVolume(percent);
+      setPersonVolume(profileUserId, percent);
+    });
 
     profileClose.addEventListener("click", () => profileDialog.close());
 
