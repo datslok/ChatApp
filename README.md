@@ -183,6 +183,35 @@ the server PC): LiveKit looks up the IP when it starts.
 New desktop app versions are still built on the development PC (it has the signing key), then
 `scripts\release-upload.ps1` puts them on the server (see CLAUDE.md, "Releasing").
 
+### Backups
+
+Every night at 04:00 the server PC backs itself up onto its second disk (`E:\ChatApp-backups`; the
+scheduled task **ChatApp backup**, from step 8 of `install.ps1`):
+
+- `2026-10-11\chat.db` and `.env`: a safe copy of the database (and the settings) per day, the last 30 kept
+- `uploads\` and `releases\`: every file, new ones added each night, nothing deleted
+
+And the development PC fetches the newest one, so there's a copy outside the server PC too. Once:
+
+```powershell
+.\scripts\backup-fetch.ps1 -Install    # a daily task (05:00, or as soon as this PC is on)
+.\scripts\backup-fetch.ps1             # fetch now
+```
+
+That copy is in `~\ChatApp-backups` (your user folder). Logs: `logs\backup.log` on the server,
+`~\ChatApp-backups\fetch.log` here.
+
+**Restoring** (on the server PC, PowerShell as administrator, in `C:\ChatApp`):
+
+```powershell
+Stop-ScheduledTask ChatApp                               # stop the chat (voice can keep running)
+Copy-Item E:\ChatApp-backups\2026-10-11\chat.db chat.db  # the day to go back to
+robocopy E:\ChatApp-backups\uploads uploads /E           # brings back missing uploads
+Start-ScheduledTask ChatApp
+```
+
+Everything after that day's 04:00 is lost (messages, accounts, settings changed since).
+
 ## Roadmap
 
 See [ROADMAP.md](ROADMAP.md) for what's planned and what's done.

@@ -49,4 +49,4 @@
 13. [x] Start the chat (serve.ps1) and voice (voice.ps1) automatically with Windows, without open windows
     - [x] Scripts to run the server on its own PC (scripts\server\: install, export, import, update; scheduled tasks; README)
     - [x] Set up on the laptop and tested (a restart brings everything back by itself)
-14. [ ] Backups of chat.db and uploads/
+14. [ ] Backups of chat.db and uploads/: nightly onto the server PC's second disk (30 days), and a copy fetched to the development PC (built; tick after it has run on the server)

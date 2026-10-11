@@ -8,6 +8,7 @@
 #   6. Two scheduled tasks, "ChatApp" and "ChatApp voice": start serve.ps1 and voice.ps1 at boot
 #      (even before anyone logs in), hidden, logging to logs\, and restarting them if they crash
 #   7. Windows' SSH server, so the development PC can update this one (scripts\deploy.ps1)
+#   8. A nightly backup ("ChatApp backup", 04:00) onto a second disk, with scripts\server\backup.ps1
 #
 # Run it in PowerShell *as administrator* (right-click PowerShell, "Run as administrator"),
 # from the project folder:   .\scripts\server\install.ps1
@@ -185,6 +186,30 @@ if (Get-NetFirewallRule -Name "OpenSSH-Server-In-TCP" -ErrorAction SilentlyConti
 $address = (Get-NetIPAddress -AddressFamily IPv4 |
     Where-Object { $_.IPAddress -like "192.168.*" -or $_.IPAddress -like "10.*" } | Select-Object -First 1).IPAddress
 Write-Host "SSH is on. On the development PC, run:  .\scripts\server-connect.ps1 $address $env:USERNAME"
+
+# --- 8. The nightly backup
+Step "8. Nightly backup (onto a second disk)"
+$drive = (Read-Host "The backup disk's drive letter (Enter for E)").Trim().TrimEnd(":", "\")
+if (-not $drive) { $drive = "E" }
+if (-not (Test-Path "${drive}:\")) {
+    Write-Host "There's no drive ${drive}: here. Skipped: run this script again with the right letter." -ForegroundColor Yellow
+} else {
+    $backups = "${drive}:\ChatApp-backups"
+    New-Item -ItemType Directory $backups -Force | Out-Null
+    $arguments = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$root\scripts\server\backup.ps1`" -Destination `"$backups`""
+    $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument $arguments -WorkingDirectory $root
+    $trigger = New-ScheduledTaskTrigger -Daily -At "04:00"
+    # StartWhenAvailable: if the PC was off at 04:00, back up as soon as it's on again.
+    $backupSettings = New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatteries `
+        -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Hours 1)
+    Register-ScheduledTask -TaskName "ChatApp backup" -Action $action -Trigger $trigger -Settings $backupSettings `
+        -User $credential.UserName -Password $credential.GetNetworkCredential().Password -RunLevel Limited -Force | Out-Null
+    Write-Host "  Task 'ChatApp backup': every night at 04:00 into $backups (log in logs\backup.log)"
+    if (Test-Path chat.db) {
+        Start-ScheduledTask -TaskName "ChatApp backup"  # the first backup, now
+        Write-Host "  The first backup is running now."
+    }
+}
 
 # --- Start them now (if there's something to start)
 Step "Starting"

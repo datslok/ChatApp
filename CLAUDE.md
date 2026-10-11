@@ -60,6 +60,11 @@ the point is for me to understand how it works, not just to have it done.
   power settings, scheduled tasks "ChatApp" and "ChatApp voice" at boot, logs in `logs\`), and
   `scripts\server\update.ps1` (git pull, packages, restart the chat; `-Voice` also LiveKit).
   `tools/copy_db.py` makes a safe copy of a live database (SQLite's backup function).
+- Backups: on the server PC, `scripts/server/backup.ps1` (scheduled task "ChatApp backup", 04:00, from
+  install.ps1 step 8) puts a dated `chat.db` + `.env` (last 30 days) and all of `uploads/` and `releases/`
+  (robocopy, nothing deleted) in `E:\ChatApp-backups` on its second disk; log `logs/backup.log`. On the
+  development PC, `scripts/backup-fetch.ps1` (task "ChatApp backup fetch", 05:00, from `-Install`) copies
+  the newest one to `~\ChatApp-backups` over SSH. Restoring: README, "Backups".
 - From the development PC (after `scripts\server-connect.ps1` once: an SSH key and the name `chatserver` in
   `~/.ssh/config`): `scripts\deploy.ps1` pushes if needed and runs `scripts\server\update.ps1` on the server over SSH;
   `scripts\release-upload.ps1` copies a new desktop app release into the server's `releases\`. The server
