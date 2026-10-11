@@ -1768,6 +1768,24 @@ RING_SECONDS = 30
 calls = {}
 
 
+def dm_call_message(channel):
+    """Who's in a DM's call right now (and muted or not), for the call banner and "Join call":
+    {"type": "dm_call", "channel": "dm:3:7", "members": [{"id": 7, "muted": false}]}."""
+    members = {}  # user id -> muted (only if muted in all their tabs, as in voice_members_message)
+    for client in clients.values():
+        if client["voice"] == channel:
+            members[client["user_id"]] = members.get(client["user_id"], True) and client["muted"]
+    return {"type": "dm_call", "channel": channel,
+            "members": [{"id": user_id, "muted": muted} for user_id, muted in members.items()]}
+
+
+async def announce_dm_call(channel):
+    """Tell the two people in this DM (and nobody else) who's in its call."""
+    message = dm_call_message(channel)
+    for person in (int(part) for part in channel.split(":")[1:]):
+        await send_to_user(person, message)
+
+
 def voice_user_ids(room):
     """Everyone whose page says it's in this voice room."""
     return {client["user_id"] for client in clients.values() if client["voice"] == room}
@@ -1995,6 +2013,11 @@ async def chat(websocket: WebSocket):
         else:
             await send_to_everyone(users_message())  # they came online
         await send(websocket, voice_members_message())  # who's in the voice channels right now
+        # Their DM calls that someone is in right now (so the banner can offer "Join call").
+        dm_rooms = {c["voice"] for c in clients.values() if isinstance(c["voice"], str) and c["voice"].startswith("dm:")}
+        for room in dm_rooms:
+            if user_id in (int(part) for part in room.split(":")[1:]):
+                await send(websocket, dm_call_message(room))
         for channel, call in list(calls.items()):  # opened while someone is calling them: ring here too
             if call["callee"] == user_id and call["started"] is None:
                 await send(websocket, call_message(channel))
@@ -2160,8 +2183,10 @@ async def chat(websocket: WebSocket):
                 # Everyone sees who's in the voice channels; DM calls stay private.
                 if old_room in VOICE_ROOMS or room in VOICE_ROOMS:
                     await send_to_everyone(voice_members_message())
-                for changed in {old_room, room}:  # a DM call may have started or ended
-                    if changed in calls:
+                for changed in {old_room, room}:
+                    if isinstance(changed, str) and changed.startswith("dm:"):
+                        await announce_dm_call(changed)  # the two of them see who's in their call
+                    if changed in calls:  # a DM call may have been called off, or ended
                         await check_call(changed)
 
             elif kind == "call":
@@ -2184,5 +2209,7 @@ async def chat(websocket: WebSocket):
             await send_to_everyone(users_message())
         if voice_room in VOICE_ROOMS:  # closed the tab while in voice: they're out
             await send_to_everyone(voice_members_message())
-        if voice_room in calls:  # ...or out of a DM call
+        if isinstance(voice_room, str) and voice_room.startswith("dm:"):  # ...or out of a DM call
+            await announce_dm_call(voice_room)
+        if voice_room in calls:
             await check_call(voice_room)

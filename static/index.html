@@ -191,6 +191,86 @@
       cursor: default;
     }
 
+    /* The call banner at the top of a DM: a dark area with both pictures, buttons below them. */
+    #call-panel {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      padding: 24px 16px 16px;
+      background: #111214;
+    }
+    #call-panel[hidden] {
+      display: none;
+    }
+    #call-people {
+      display: flex;
+      gap: 32px;
+    }
+    .call-person {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.85rem;
+      color: #b5bac1;
+    }
+    .avatar.huge {
+      width: 80px;
+      height: 80px;
+      font-size: 2rem;
+    }
+    .call-person .avatar {
+      transition: box-shadow 0.1s;
+    }
+    .call-person.speaking .avatar {
+      box-shadow: 0 0 0 3px #23a55a;  /* the same green ring as in the sidebar, a little thicker */
+    }
+    .call-person.away .avatar {
+      opacity: 0.35;  /* not in the call (yet) */
+    }
+    #call-buttons {
+      display: flex;
+      gap: 12px;
+    }
+    #call-buttons [hidden] {
+      display: none;
+    }
+    /* Round buttons, like Discord's. */
+    .call-round {
+      width: 48px;
+      height: 48px;
+      border: none;
+      border-radius: 50%;
+      background: #2b2d31;
+      font-size: 1.2rem;
+      cursor: pointer;
+    }
+    .call-round:hover {
+      background: #35373c;
+    }
+    .call-round.off {
+      background: #da373c;  /* muted */
+    }
+    .call-round.end {
+      background: #da373c;
+    }
+    .call-round.end:hover {
+      background: #a12828;
+    }
+    #call-panel-join {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 24px;
+      background: #248046;
+      color: white;
+      font-size: 0.95rem;
+      cursor: pointer;
+    }
+    #call-panel-join:hover {
+      background: #1a6334;
+    }
+
     /* "Mia is calling…": a box in the top middle of the window, on top of everything. */
     #incoming-call {
       position: fixed;
@@ -1925,6 +2005,15 @@
         <span id="dm-header-name"></span>
         <button type="button" id="call-button">📞 Call</button>
       </header>
+      <!-- While this DM has a call: both pictures (a green ring for whoever talks), and the buttons. -->
+      <section id="call-panel" hidden>
+        <div id="call-people"></div>
+        <div id="call-buttons">
+          <button type="button" id="call-panel-mute" class="call-round" title="Mute" aria-label="Mute">🎤</button>
+          <button type="button" id="call-panel-end" class="call-round end" title="End call" aria-label="End call">📞</button>
+          <button type="button" id="call-panel-join">📞 Join call</button>
+        </div>
+      </section>
       <div id="messages"></div>
       <div id="status-line">
         <span id="typing"></span>
@@ -2411,6 +2500,13 @@
       }
       if (data.type === "call" || data.type === "call_answered" || data.type === "call_ended") {
         handleCallMessage(data);
+        renderCallPanel();  // ("Calling…" under their picture comes and goes with these)
+        return;
+      }
+      if (data.type === "dm_call") {
+        // Who's in one of our DMs' calls (for the banner and "Join call").
+        dmCalls[data.channel] = data.members;
+        renderCallPanel();
         return;
       }
       if (data.type === "voice_members") {
@@ -3489,6 +3585,10 @@
         const room = row.closest(".voice-members").dataset.room;
         row.classList.toggle("speaking", room === voiceRoomName && speakingIds.has(row.dataset.userId));
       }
+      // ...and in the call banner, which shows the DM we're looking at.
+      for (const person of document.querySelectorAll(".call-person")) {
+        person.classList.toggle("speaking", currentChannel === voiceRoomName && speakingIds.has(person.dataset.userId));
+      }
     }
 
     // ----- Joining and leaving
@@ -3512,6 +3612,7 @@
       voiceMuteButton.title = micMuted ? "Unmute" : "Mute";
       voiceMuteButton.setAttribute("aria-label", voiceMuteButton.title);
       sendVoiceState();  // the 🔇 next to our name
+      renderCallPanel();  // ...and in the call banner
     }
 
     // LiveKit's library normally loads with the page (the <script> tag near the top). If that went
@@ -3573,6 +3674,9 @@
         // The connection dropped: LiveKit tries to get it back by itself.
         room.on(LivekitClient.RoomEvent.Reconnecting, () => setVoiceStatus("Reconnecting…", "waiting"));
         room.on(LivekitClient.RoomEvent.Reconnected, () => setVoiceStatus("Voice connected"));
+        // Someone joined or left the room: their picture in the call banner lights up or fades.
+        room.on(LivekitClient.RoomEvent.ParticipantConnected, renderCallPanel);
+        room.on(LivekitClient.RoomEvent.ParticipantDisconnected, renderCallPanel);
         // Who's talking: LiveKit measures it on the server and tells everyone in the room.
         room.on(LivekitClient.RoomEvent.ActiveSpeakersChanged, (speakers) => {
           speakingIds = new Set(speakers.map((participant) => participant.identity));
@@ -3695,8 +3799,68 @@
     let ringTimer = null;         // repeats the ringtone every 2 seconds
     let callNotification = null;  // the desktop notification for it
 
+    // ----- The call banner at the top of a DM (like Discord's): both pictures, mute and end call,
+    // or "Join call" when the other person is in the call and we aren't.
+
+    const callPanel = document.getElementById("call-panel");
+    const callPeople = document.getElementById("call-people");
+    const callPanelMute = document.getElementById("call-panel-mute");
+    const callPanelEnd = document.getElementById("call-panel-end");
+    const callPanelJoin = document.getElementById("call-panel-join");
+
+    // Who's in our DMs' calls, from the server: {"dm:3:7": [{id: 7, muted: false}]}.
+    let dmCalls = {};
+
+    function renderCallPanel() {
+      const channel = currentChannel;
+      const partner = dmPartner(channel);
+      const members = dmCalls[channel] || [];
+      const inCall = partner !== null && voiceRoomName === channel;
+      // Only in a DM, and only while someone is in its call.
+      callPanel.hidden = partner === null || (!inCall && members.length === 0);
+      if (callPanel.hidden) return;
+
+      const partnerMember = members.find((member) => member.id === partner);
+      // In the call ourselves, LiveKit knows best whether they're there; otherwise, the server.
+      const partnerHere = inCall
+        ? Boolean(voiceRoom && voiceRoom.remoteParticipants.has(String(partner)))
+        : Boolean(partnerMember);
+      const shown = [
+        { id: myId, here: inCall, muted: micMuted, note: "" },
+        {
+          id: partner, here: partnerHere, muted: Boolean(partnerMember && partnerMember.muted),
+          note: !partnerHere && outgoingCall === channel ? "Calling…" : "",
+        },
+      ];
+      callPeople.replaceChildren(...shown.map(makeCallPerson));
+      callPanelMute.hidden = !inCall;
+      callPanelEnd.hidden = !inCall;
+      callPanelJoin.hidden = inCall;
+      callPanelMute.classList.toggle("off", micMuted);
+      callPanelMute.title = micMuted ? "Unmute" : "Mute";
+      callPanelMute.setAttribute("aria-label", callPanelMute.title);
+      showSpeaking();  // the rings
+    }
+
+    // One person in the banner: a big picture (faded while they're not in the call), and their name.
+    function makeCallPerson({ id, here, muted, note }) {
+      const name = people.has(id) ? people.get(id).name : "?";
+      const box = document.createElement("div");
+      box.className = here ? "call-person" : "call-person away";
+      box.dataset.userId = id;  // (for the speaking ring)
+      const label = document.createElement("span");
+      label.textContent = note || (here && muted ? "🔇 " + name : name);
+      box.append(makeAvatar(id, name, "huge"), label);
+      return box;
+    }
+
+    callPanelMute.addEventListener("click", () => voiceMuteButton.click());  // the same as the voice bar's
+    callPanelEnd.addEventListener("click", leaveVoice);
+    callPanelJoin.addEventListener("click", () => joinVoice(currentChannel, channelLabel(currentChannel)));
+
     // The bar at the top of a DM, with the call button ("In call" while we're in that DM's call).
     function showDmHeader() {
+      renderCallPanel();  // (the banner below it changes at the same moments)
       const inDm = dmPartner(currentChannel) !== null;
       dmHeader.hidden = !inDm;
       if (!inDm) return;
