@@ -2478,6 +2478,34 @@
       switchChannel(channel, channelLabel(channel), true);
     });
 
+    // ---------- Clicking outside a popup closes it ----------
+    // (A modal dialog's surroundings, the darkened "backdrop", count as the dialog itself for
+    // clicks, so the clicks arrive here. Not for the picture editor: a stray click next to it
+    // would throw away the cropping. It has Cancel and Esc.)
+
+    // Was this point outside the dialog's box on the screen? Measured, not "which element
+    // was clicked": the dialog's own padding inside the box would count as the dialog too.
+    function isOutside(dialog, event) {
+      const box = dialog.getBoundingClientRect();
+      return event.clientX < box.left || event.clientX > box.right
+        || event.clientY < box.top || event.clientY > box.bottom;
+    }
+
+    // The press has to start outside too: selecting text in a field and letting go of the mouse
+    // outside the box also counts as a "click" there, and mustn't throw away what was typed.
+    let pressedOutside = false;
+
+    for (const dialog of document.querySelectorAll("dialog")) {
+      if (dialog === cropperDialog) continue;
+      dialog.addEventListener("pointerdown", (event) => {
+        pressedOutside = isOutside(dialog, event);
+      });
+      dialog.addEventListener("click", (event) => {
+        if (pressedOutside && isOutside(dialog, event)) dialog.close();
+        pressedOutside = false;
+      });
+    }
+
     // ---------- The text box ----------
 
     // A textarea doesn't grow by itself. Shrink it to nothing ("auto"), then make it as tall as
@@ -3769,7 +3797,24 @@
     // Dropped somewhere else on the page (like the sidebar)? Then the browser would open the
     // file and leave the chat. Prevent that everywhere; only the chat area accepts drops.
     window.addEventListener("dragover", (event) => event.preventDefault());
-    window.addEventListener("drop", (event) => event.preventDefault());
+    window.addEventListener("drop", (event) => {
+      event.preventDefault();
+      dropOverlay.hidden = true;  // the drag is over, wherever it ended
+    });
+
+    // A drag can also end without a drop or dragleave on the overlay: Windows refusing to drop
+    // a shortcut, Esc in the middle of a drag. Then the overlay must not stay stuck on the chat:
+    // - the drag left the window (relatedTarget null = to somewhere outside the page): hide it;
+    document.addEventListener("dragleave", (event) => {
+      if (event.relatedTarget === null) dropOverlay.hidden = true;
+    });
+    // - and if it's still showing anyway, a click or Esc hides it (nobody can click mid-drag).
+    dropOverlay.addEventListener("click", () => {
+      dropOverlay.hidden = true;
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") dropOverlay.hidden = true;
+    });
 
     // 3. Pasting: a copied screenshot or image arrives as a file on the clipboard.
     document.addEventListener("paste", (event) => {
