@@ -337,7 +337,12 @@
   <dialog id="cropper">
     <h2 id="crop-title">Edit picture</h2>
     <p class="crop-hint">Drag to move. Zoom with the slider (or the scroll wheel).</p>
-    <canvas id="crop-canvas" width="256" height="256"></canvas>
+    <!-- The frame: the canvas (where you drag and zoom) on top, and for a GIF the picture itself
+         underneath it as an <img>, which the browser animates (settings.js). -->
+    <div id="crop-frame">
+      <img id="crop-gif" alt="" hidden>
+      <canvas id="crop-canvas" width="256" height="256"></canvas>
+    </div>
     <label class="crop-zoom">
       Zoom
       <input type="range" id="crop-zoom" min="1" max="4" step="0.01" value="1">

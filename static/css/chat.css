@@ -2105,17 +2105,37 @@ body {
 }
 
 /* Its size and shape (width, aspect-ratio) are set from JavaScript, per kind of picture. */
-#crop-canvas {
-  display: block;
+/* The frame holds the canvas and, for a GIF, the <img> under it. "overflow: hidden" cuts off
+   whatever sticks out, so a zoomed-in picture only shows inside the frame (and its round corners).
+   "position: relative" makes the frame the box the <img>'s left/top/width percentages refer to. */
+#crop-frame {
+  position: relative;
   margin: 0 auto;
+  overflow: hidden;
   border-radius: 8px;
   background: #1e1f22;
+}
+
+#crop-frame.round {
+  border-radius: 50%;  /* profile pictures: shown as a circle, like the finished picture */
+}
+
+/* The canvas fills the frame and lies on top (it comes after the <img>), so it gets the drags. */
+#crop-canvas {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
   cursor: grab;
   touch-action: none;  /* phones: dragging moves the picture instead of scrolling the page */
 }
 
-#crop-canvas.round {
-  border-radius: 50%;  /* profile pictures: shown as a circle, like the finished picture */
+/* A GIF, placed by drawCrop. Its height follows from its width (the picture keeps its shape).
+   pointer-events: none, so clicks and drags go through it, should it ever be on top. */
+#crop-gif {
+  position: absolute;
+  max-width: none;
+  pointer-events: none;
 }
 
 .crop-zoom {

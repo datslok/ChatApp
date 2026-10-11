@@ -241,18 +241,21 @@ let cropY = 0;
 
 function openCropper(img, kind, file) {
   cropKind = kind;
-  // A canvas only holds one still frame, so for a GIF the preview shows its first frame,
-  // and Save sends the original file instead of the canvas.
+  // A canvas only holds one still frame, so a GIF is shown as an <img> under the (empty) canvas
+  // instead: the browser animates that by itself. Save sends the original file, not the canvas.
   cropFile = file.type === "image/gif" ? file : null;
+  cropGif.hidden = !cropFile;
+  if (cropFile) cropGif.src = URL.createObjectURL(cropFile);  // let go of in the "close" handler
   cropShape = CROP_SHAPES[kind];
   cropTitle.textContent = cropShape.title;
 
-  // Size the canvas for this shape: its own pixels, and how big it's shown on the page.
+  // Size the canvas for this shape (its own pixels), and the frame around it: how big it's
+  // shown on the page. The canvas fills the frame.
   cropCanvas.width = cropShape.width;
   cropCanvas.height = cropShape.height;
-  cropCanvas.style.width = `min(${cropShape.width}px, 100%)`;
-  cropCanvas.style.aspectRatio = `${cropShape.width} / ${cropShape.height}`;
-  cropCanvas.classList.toggle("round", cropShape.round);
+  cropFrame.style.width = `min(${cropShape.width}px, 100%)`;
+  cropFrame.style.aspectRatio = `${cropShape.width} / ${cropShape.height}`;
+  cropFrame.classList.toggle("round", cropShape.round);
 
   cropImage = img;
   // The smallest zoom where the picture still covers the whole frame: enough to fill the
@@ -281,6 +284,14 @@ function drawCrop() {
   clampCrop();
   const context = cropCanvas.getContext("2d");
   context.clearRect(0, 0, cropShape.width, cropShape.height);
+  if (cropFile) {
+    // A GIF: move the <img> instead of painting. The same numbers, as percentages of the frame,
+    // so it also lines up when the frame is shown smaller than its own pixels (phones).
+    cropGif.style.left = (cropX / cropShape.width) * 100 + "%";
+    cropGif.style.top = (cropY / cropShape.height) * 100 + "%";
+    cropGif.style.width = ((cropImage.naturalWidth * cropScale) / cropShape.width) * 100 + "%";
+    return;
+  }
   context.drawImage(
     cropImage, cropX, cropY, cropImage.naturalWidth * cropScale, cropImage.naturalHeight * cropScale
   );
@@ -337,6 +348,14 @@ cropCanvas.addEventListener("pointerup", stopDragging);
 cropCanvas.addEventListener("pointercancel", stopDragging);  // e.g. the phone took over the touch
 
 cropCancel.addEventListener("click", () => cropperDialog.close());
+
+// However it closed (Cancel, Save, Esc): let go of the GIF's temporary address and its memory.
+cropperDialog.addEventListener("close", () => {
+  if (cropGif.src) {
+    URL.revokeObjectURL(cropGif.src);
+    cropGif.removeAttribute("src");
+  }
+});
 
 cropSave.addEventListener("click", async () => {
   // Which part of the original picture is inside the frame? Turn canvas pixels back into
