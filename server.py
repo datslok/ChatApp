@@ -1790,6 +1790,12 @@ async def emoji_list():
     return FileResponse("static/emoji.json", headers={"Cache-Control": "public, max-age=86400"})
 
 
+@app.get("/changelog.json")
+async def changelog():
+    # Settings -> What's new. "no-cache" (check first), so a new entry shows up straight after a deploy.
+    return FileResponse("static/changelog.json", headers={"Cache-Control": "no-cache"})
+
+
 # LiveKit's browser library (voice), one fixed version from npm (see CLAUDE.md). A new version gets
 # a new file name, so this address never changes its contents and browsers may keep it for a week.
 LIVEKIT_CLIENT_FILE = "livekit-client-2.22.3.umd.js"

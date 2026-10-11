@@ -78,7 +78,7 @@ let changelog = { features: [], changes: [] };  // the file's contents, once fet
 
 async function loadChangelog() {
   try {
-    const response = await fetch("/static/changelog.json");
+    const response = await fetch("/changelog.json");
     if (!response.ok) return;
     changelog = await response.json();  // (JSON text -> an object with the two lists)
   } catch {
