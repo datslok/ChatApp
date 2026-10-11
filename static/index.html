@@ -47,6 +47,18 @@
       <button type="button" id="open-members" title="Online">👥</button>
     </header>
     <div id="banner" hidden>Connection lost, reconnecting…</div>
+    <!-- "Get the app", for people using a browser on Windows, until they close it (notifications.js). -->
+    <div id="app-banner" class="app-card" hidden>
+      <svg class="download-icon" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M12 3v12m0 0-5-5m5 5 5-5M4 20h16" />
+      </svg>
+      <div class="app-card-text">
+        <strong>ChatApp has a Windows app</strong>
+        <span>Its own window, real notifications, and it keeps itself up to date.</span>
+      </div>
+      <a class="download-button" href="/download" target="_blank">Download</a>
+      <button type="button" id="app-banner-close" title="Don't show this again" aria-label="Close">×</button>
+    </div>
 
     <!-- The Lounge page: everyone in Lounge as a tile (their camera, or their picture), and the
          voice buttons. Shown instead of a channel when Lounge is picked in the sidebar. -->
@@ -141,6 +153,18 @@
   <dialog id="settings">
     <button type="button" id="settings-close" title="Close">×</button>
     <h2>Settings</h2>
+
+    <!-- The Windows app: first in Settings so it's easy to find (hidden inside the app itself). -->
+    <section id="desktop-app" class="app-card">
+      <svg class="download-icon" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M12 3v12m0 0-5-5m5 5 5-5M4 20h16" />
+      </svg>
+      <div class="app-card-text">
+        <strong>Get the Windows app</strong>
+        <span>Its own window, real notifications, and it keeps itself up to date.</span>
+      </div>
+      <a class="download-button" href="/download" target="_blank">Download</a>
+    </section>
 
     <h3>Profile</h3>
     <form id="profile-form">
@@ -259,14 +283,6 @@
       <video id="camera-preview" autoplay muted playsinline hidden></video>
       <button type="button" id="camera-test">Test camera</button>
     </div>
-
-    <section id="desktop-app">
-      <h3>Desktop app</h3>
-      <p class="settings-help">
-        ChatApp for Windows: its own window, notifications, and it keeps itself up to date.
-        <a href="/download" target="_blank">Download it here</a>
-      </p>
-    </section>
 
     <h3>Username</h3>
     <form id="username-form">

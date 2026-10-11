@@ -651,6 +651,92 @@ body {
   font-size: 0.9rem;
 }
 
+/* "Get the Windows app": a card with a big download arrow, the text, and a green Download
+   button. Used twice: the banner above the chat and the first thing in Settings. */
+.app-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  background: #1e1f22;
+}
+/* display: flex above would beat the "hidden" attribute, so say it explicitly. */
+.app-card[hidden] {
+  display: none;
+}
+#app-banner {
+  margin: 8px 16px 0;
+  border: 1px solid #5865f2;  /* a blue outline, so it stands out from the messages */
+}
+#settings #desktop-app {
+  margin-bottom: 8px;
+}
+
+/* The arrow is drawn as lines (stroke), not filled: an arrow pointing down at a tray.
+   "currentColor" means the text colour, set by "color". */
+.download-icon {
+  flex-shrink: 0;  /* never squeezed smaller by the text next to it */
+  width: 40px;
+  height: 40px;
+  padding: 8px;
+  border-radius: 50%;
+  background: #5865f2;
+  color: white;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* The heading and the explanation stacked, taking up the space the icon and button leave. */
+.app-card-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 0.85rem;
+  color: #b5bac1;
+}
+.app-card-text strong {
+  font-size: 1rem;
+  color: white;
+}
+
+/* A link that looks like a button. */
+.download-button {
+  flex-shrink: 0;
+  padding: 10px 18px;
+  border-radius: 6px;
+  background: #248046;
+  color: white;
+  font-weight: 600;
+  text-decoration: none;
+}
+.download-button:hover {
+  background: #1a6334;
+}
+
+#app-banner-close {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: #949ba4;
+  font-size: 1.3rem;
+  line-height: 1;
+  cursor: pointer;
+}
+#app-banner-close:hover {
+  background: #2b2d31;
+  color: white;
+}
+
 /* The two things the chat area can show: a channel, or the Friends page. Each fills the
    space below the top bar. (min-height: 0 lets the list inside scroll instead of growing.) */
 #channel-view, #friends-view, #lounge-view {

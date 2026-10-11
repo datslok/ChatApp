@@ -139,7 +139,20 @@ showNotificationSettings();
 
 // Already in the desktop app? Then "download the app" makes no sense: hide it.
 // (Tauri puts __TAURI_INTERNALS__ on its pages; ordinary browsers don't have it.)
-if ("__TAURI_INTERNALS__" in window) document.getElementById("desktop-app").hidden = true;
+const inDesktopApp = "__TAURI_INTERNALS__" in window;
+if (inDesktopApp) document.getElementById("desktop-app").hidden = true;
+
+// The "get the app" banner above the chat: only in a browser on Windows (the app is Windows-only;
+// every browser's userAgent, the description it gives of itself, names the system it runs on),
+// and only until they close it. Closing it is remembered in this browser, like the settings above.
+const appBanner = document.getElementById("app-banner");
+if (!inDesktopApp && navigator.userAgent.includes("Windows") && loadSetting("appBanner")) {
+  appBanner.hidden = false;
+}
+document.getElementById("app-banner-close").addEventListener("click", () => {
+  appBanner.hidden = true;
+  saveSetting("appBanner", false);
+});
 
 // Our sounds (the ping, the ringtone, the calling sound, the join and leave cues) are generated
 // by the browser (Web Audio): no sound files needed. They all share this one AudioContext.
