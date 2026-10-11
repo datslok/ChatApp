@@ -1237,14 +1237,17 @@ body {
 }
 
 /* "Volume [——o——] 80%" on one line. */
+/* Three columns, the same in every row: the name (wide enough for "Others' volume"), the slider
+   (the rest), the value. So the sliders line up and are all the same length. The name is loose
+   text in the label, which a grid makes a cell of its own. */
 #settings label.slider-row {
-  flex-direction: row;
+  display: grid;
+  grid-template-columns: 8em 1fr 3em;
   align-items: center;
   gap: 12px;
 }
 
 #settings label.slider-row input {
-  flex: 1;
   padding: 0;
 }
 
