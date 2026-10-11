@@ -3741,6 +3741,12 @@
 
     function startRinging(call) {
       if (incomingCall && incomingCall.channel === call.channel) return;  // already ringing
+      // We're calling them (or already in that DM's call) too: no need to ring, just answer. This is
+      // what happens when you both press Call at the same moment.
+      if (voiceRoomName === call.channel) {
+        sendToServer({ type: "call_answer", channel: call.channel, accept: true });
+        return;
+      }
       incomingCall = call;
       incomingCallName.textContent = call.name;
       incomingCallAvatar.replaceChildren(makeAvatar(call.from, call.name, "large"));
@@ -3805,7 +3811,10 @@
         if (incomingCall && incomingCall.channel === data.channel) stopRinging();  // answered on another device
         if (outgoingCall === data.channel) {
           outgoingCall = null;
-          if (voiceRoomName === data.channel && voiceRoom.state === "connected") setVoiceStatus("Voice connected");
+          // (Still connecting? Then voiceRoom may not exist yet: joinVoice shows "Voice connected" when done.)
+          if (voiceRoomName === data.channel && voiceRoom && voiceRoom.state === "connected") {
+            setVoiceStatus("Voice connected");
+          }
         }
       } else if (data.type === "call_ended") {
         if (incomingCall && incomingCall.channel === data.channel) stopRinging();
