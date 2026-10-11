@@ -29,7 +29,7 @@
    - [x] Notifications for DMs and mentions (desktop notifications, a generated sound, count in the tab title)
    - [x] Custom emoji inside messages (typing :pog:, stored as <:id> tokens); emoji picker and jumbo emoji in messages; multi-line text box
    - [x] Desktop app via Tauri (Windows installer, real notifications, automatic updates)
-10. [ ] Voice with WebRTC, through our own LiveKit server (self-hosted on this PC)
+10. [x] Voice with WebRTC, through our own LiveKit server (self-hosted on this PC)
     - [x] LiveKit server (voice.ps1), reachable at voice.datslok.no (tunnel) with UDP/TCP forwarded on the router
     - [x] Voice tickets from our server (/voice-token: a JWT signed with the standard library)
     - [x] Lounge voice channel: join, mute, leave
@@ -40,5 +40,5 @@
     - [x] Call banner in the DM (both pictures with speaking rings, mute, end call, Join call)
     - [x] Sounds: calling, ringing, join and leave cues
     - [x] Voice in the desktop app
-    - [ ] Incoming call notifications in the desktop app (check when the window isn't in focus)
+    - [x] Incoming call notifications in the desktop app
 11. [ ] Video in calls and Lounge: camera on/off (through our LiveKit server, like voice)
