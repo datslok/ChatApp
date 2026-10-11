@@ -18,6 +18,7 @@ settingsButton.addEventListener("click", async () => {
   renderMyEmoji();
   showNotificationSettings();  // (the browser's permission may have changed since)
   settingsDialog.showModal();
+  showSettingsPage(settingsPage);  // the tab from last time, in sight (on a phone) and from the top
 
   // Ask the server for our current details, to show them.
   const response = await fetch("/me");
@@ -45,7 +46,11 @@ function showSettingsPage(name) {
   settingsPage = name;
   for (const page of settingsPages) page.hidden = page.dataset.page !== name;
   for (const tab of settingsTabs) {
-    tab.setAttribute("aria-selected", tab.dataset.tab === name ? "true" : "false");
+    const chosen = tab.dataset.tab === name;
+    tab.setAttribute("aria-selected", chosen ? "true" : "false");
+    // On a phone the tabs are a row you swipe: bring the chosen one into sight ("nearest": only
+    // as far as needed, and nothing at all when it's already visible, as on a computer).
+    if (chosen && settingsDialog.open) tab.scrollIntoView({ block: "nearest", inline: "nearest" });
   }
   settingsPagesBox.scrollTop = 0;  // start at the top of the new page
 }

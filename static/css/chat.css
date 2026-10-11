@@ -2472,7 +2472,13 @@ body {
   #settings-tabs {
     flex-direction: row;
     overflow-x: auto;
-    padding: 8px 56px 8px 8px;  /* room on the right for the × */
+    margin-right: 48px;  /* the row ends before the ×, so tabs never slide under it */
+    padding: 8px;
+  }
+
+  #settings #settings-close {
+    top: 9px;
+    right: 8px;
   }
 
   #settings-tabs h3 {
