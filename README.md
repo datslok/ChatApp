@@ -25,12 +25,14 @@ Run them in PowerShell, from the project folder (`E:\Code\ChatApp` on the develo
 | `scripts\deploy.ps1` | development PC | puts the newest code on the server and restarts the chat (`-Voice`: also voice) | [Day to day](#day-to-day) |
 | `scripts\release-upload.ps1` | development PC | puts a new desktop app version on the server | [The desktop app](#the-desktop-app) |
 | `scripts\backup-fetch.ps1` | development PC | fetches the server's newest backup (`-Install`: every day) | [Backups](#backups) |
+| `scripts\usage.ps1` | development PC | how much space the chat takes on the server (database, uploads, backups, free disk) | [Day to day](#day-to-day) |
 | `scripts\server-connect.ps1` | development PC | once: SSH access to the server (`ssh chatserver`) | [4b](#4b-on-the-development-pc-connect-to-the-new-one) |
 | `scripts\server\export.ps1` | old server PC | packs the data for moving the server | [1](#1-on-the-old-pc-pack-the-data) |
 | `scripts\server\import.ps1` | new server PC | unpacks it | [3](#3-on-the-new-pc-unpack-the-data) |
 | `scripts\server\install.ps1` | server PC (as admin) | installs and sets up everything; safe to run again | [4](#4-on-the-new-pc-install-everything) |
 | `scripts\server\update.ps1` | server PC (as admin) | what `deploy.ps1` runs there: newest code, restart | [Day to day](#day-to-day) |
 | `scripts\server\backup.ps1` | server PC | the nightly backup (also by hand) | [Handy commands](#handy-commands-on-the-server) |
+| `scripts\server\usage.ps1` | server PC | what `usage.ps1` runs there: the sizes, only reading | [Handy commands](#handy-commands-on-the-server) |
 | `serve.ps1`, `voice.ps1` | server PC | the chat and voice; the scheduled tasks start them | [Day to day](#day-to-day) |
 | `tools\make_admin.py` | server PC | make someone an admin (or take it away) | [Handy commands](#handy-commands-on-the-server) |
 
@@ -191,6 +193,7 @@ and `dev.db`, so it never touches the real chat). The real chat only changes whe
 .\scripts\deploy.ps1                 # pushes to GitHub if needed, then updates the server and restarts the chat
 .\scripts\deploy.ps1 -Voice          # also restart LiveKit (after changes to voice.ps1 or livekit.yaml)
 .\scripts\release-upload.ps1         # after building a new desktop app version: copy it to the server
+.\scripts\usage.ps1                  # how much space the database, uploads, releases, logs and backups take
 ssh chatserver               # a PowerShell on the server (type exit to leave)
 ssh chatserver "Get-Content C:\ChatApp\logs\chat.log -Tail 30"   # the chat's latest log lines
 ```
@@ -230,6 +233,11 @@ Stop-ScheduledTask "ChatApp voice"; Start-ScheduledTask "ChatApp voice"
 
 # A backup now, besides the nightly one.
 .\scripts\server\backup.ps1 -Destination E:\ChatApp-backups
+
+# How much space everything takes, and how much is free (only reads). "Leftovers": other .db
+# and .zip files in C:\ChatApp, like an old export or a copy made before a fix: safe to delete
+# once you're sure you don't need them.
+.\scripts\server\usage.ps1
 ```
 
 (Stopping a task can leave its program running; if a restart doesn't seem to take, use
