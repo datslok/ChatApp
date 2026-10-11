@@ -3730,7 +3730,7 @@
     function leaveVoice() {
       if (outgoingCall) {
         sendToServer({ type: "call_cancel", channel: outgoingCall });  // hung up before an answer
-        outgoingCall = null;
+        setOutgoingCall(null);
       }
       const room = voiceRoom;
       voiceRoom = null;
@@ -3873,7 +3873,7 @@
     callButton.addEventListener("click", async () => {
       const channel = currentChannel;
       if (voiceRoom) leaveVoice();  // leave Lounge (or another call) first, so leaving doesn't hang up this one
-      outgoingCall = channel;
+      setOutgoingCall(channel);  // (starts the calling sound)
       sendToServer({ type: "call", channel });  // their tabs start ringing
       await joinVoice(channel, channelLabel(channel));
       if (outgoingCall !== channel) return;  // answered, declined or hung up meanwhile
@@ -3881,7 +3881,7 @@
         setVoiceStatus("Calling…", "waiting");
       } else {
         sendToServer({ type: "call_cancel", channel });  // we couldn't get in: stop their ringing
-        outgoingCall = null;
+        setOutgoingCall(null);
       }
     });
 
@@ -3905,6 +3905,43 @@
           tone.stop(now + start + 0.25);
         }
       } catch {}
+    }
+
+    // While our own call rings: a calm "duu-duu" every 3 seconds, lower than the ringtone for an
+    // incoming call, so the two are easy to tell apart. It follows the notification volume, but not
+    // "do not disturb": we started this call ourselves.
+    let callingTimer = null;
+
+    function playCallingSound() {
+      if (notificationVolume <= 0) return;
+      try {
+        audio ??= new AudioContext();
+        const now = audio.currentTime;
+        const peak = 0.08 * (notificationVolume / 100);
+        for (const [start, pitch] of [[0, 440], [0.45, 523]]) {  // A4, then C5
+          const tone = audio.createOscillator();
+          const volume = audio.createGain();
+          tone.frequency.value = pitch;
+          volume.gain.setValueAtTime(0.0001, now + start);
+          volume.gain.exponentialRampToValueAtTime(peak, now + start + 0.05);  // softer start than the ringtone
+          volume.gain.exponentialRampToValueAtTime(0.0001, now + start + 0.4);
+          tone.connect(volume).connect(audio.destination);
+          tone.start(now + start);
+          tone.stop(now + start + 0.45);
+        }
+      } catch {}
+    }
+
+    // Every change to outgoingCall goes through here, so however a ringing call ends (answered,
+    // declined, no answer, hung up), the calling sound stops with it.
+    function setOutgoingCall(channel) {
+      outgoingCall = channel;
+      clearInterval(callingTimer);
+      callingTimer = null;
+      if (channel) {
+        playCallingSound();
+        callingTimer = setInterval(playCallingSound, 3000);
+      }
     }
 
     function startRinging(call) {
@@ -3983,7 +4020,7 @@
       } else if (data.type === "call_answered") {
         if (incomingCall && incomingCall.channel === data.channel) stopRinging();  // answered on another device
         if (outgoingCall === data.channel) {
-          outgoingCall = null;
+          setOutgoingCall(null);
           // (Still connecting? Then voiceRoom may not exist yet: joinVoice shows "Voice connected" when done.)
           if (voiceRoomName === data.channel && voiceRoom && voiceRoom.state === "connected") {
             setVoiceStatus("Voice connected");
@@ -3992,7 +4029,7 @@
       } else if (data.type === "call_ended") {
         if (incomingCall && incomingCall.channel === data.channel) stopRinging();
         if (outgoingCall === data.channel) {
-          outgoingCall = null;
+          setOutgoingCall(null);
           leaveVoice();  // nobody answered: hang up
           showCallNotice(data.channel, data.reason === "declined" ? "Declined" : "No answer");
         }
