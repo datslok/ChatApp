@@ -730,6 +730,7 @@ body {
 }
 /* A screen share's numbers (voice.js, screenBlock), under a line of their own. */
 #voice-stats .stat-screen {
+  overflow-wrap: anywhere;  /* long encoder names wrap instead of sticking out */
   margin-top: 10px;
   padding-top: 8px;
   border-top: 1px solid #3f4147;

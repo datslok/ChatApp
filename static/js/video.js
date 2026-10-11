@@ -155,6 +155,11 @@ async function startScreenShare() {
       // Quick Sync), like Discord's "H.264 hardware acceleration". The browser uses it if it's
       // there, and otherwise encodes H.264 on the CPU. (The connection popup shows which.)
       videoCodec: "h264",
+      // One version of the screen, not also a half-size one for slow connections ("simulcast",
+      // which cameras keep). Graphics cards' H.264 encoders generally can't make two at once,
+      // so with simulcast the browser falls back to the CPU. Dynacast still pauses it when
+      // nobody's watching.
+      simulcast: false,
       screenShareEncoding: { maxBitrate: SHARE_BITRATES[height][fps], maxFramerate: fps },
       // When the encoder or the connection can't keep up, something has to give. LiveKit's
       // default for screens keeps the resolution and drops frames: right for text (30 fps),

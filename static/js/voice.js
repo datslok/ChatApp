@@ -523,6 +523,8 @@ function videoStats(report, type, key, counts) {
     mbps: seconds > 0 ? ((now.bytes - last.bytes) * 8) / seconds / 1e6 : null,
     codec: codec ? codec.mimeType.replace("video/", "") : null,
     hardware: main.powerEfficientEncoder ?? main.powerEfficientDecoder ?? null,  // true, false or unknown
+    // The browser's own name for it, like "OpenH264" (CPU) or "MediaFoundationVideoEncodeAccelerator".
+    implementation: main.encoderImplementation ?? main.decoderImplementation ?? null,
     limitedBy: main.qualityLimitationReason ?? null,
     // Only for what we receive: what got lost or dropped since last time.
     loss: type === "inbound-rtp" && last ? lossPercent(now.lost, now.packets + now.lost, last.lost, last.packets + last.lost) : null,
@@ -565,6 +567,7 @@ function screenBlock(title, stats, sending) {
   line("Data", stats.mbps === null ? "–" : stats.mbps.toFixed(1) + " Mbit/s");
   const where = stats.hardware === true ? "graphics card" : stats.hardware === false ? "CPU" : null;
   line(sending ? "Encoder" : "Decoder", [stats.codec, where].filter(Boolean).join(", ") || "–");
+  if (stats.implementation) line("Using", stats.implementation);
   if (sending) {
     const reasons = { none: "nothing", cpu: "the CPU (too slow)", bandwidth: "the connection", other: "something else" };
     line("Held back by", reasons[stats.limitedBy] ?? "–");
