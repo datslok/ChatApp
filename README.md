@@ -200,9 +200,22 @@ ssh chatserver               # a PowerShell on the server (type exit to leave)
 ssh chatserver "Get-Content C:\ChatApp\logs\chat.log -Tail 30"   # the chat's latest log lines
 ```
 
-After a deploy that changed the page (`static/index.html`, `static/js/`, `static/css/`), open pages
-and apps reload themselves within a few seconds: nobody needs to press F5. Someone in a call, with
-files waiting to be sent, or editing a message gets it once that's done; a half-typed message is kept.
+After a deploy that changed the page (`static/index.html`, `static/js/`, `static/css/`,
+`static/changelog.json`), open pages and apps reload themselves within a few seconds: nobody needs
+to press F5. Someone in a call, with files waiting to be sent, or editing a message gets it once
+that's done; a half-typed message is kept.
+
+**What's new** (Settings → What's new) is written by hand in `static/changelog.json`: one entry per
+day, newest first, each with a list of short lines for friends (not for developers). The lines can
+use the chat's formatting (`**bold**`, `` `code` `` and so on). A new date at the top puts a red dot
+on everyone's ⚙️ until they've opened the page. To add something, edit the file and deploy:
+
+```json
+[
+  {"date": "2026-10-13", "items": ["Something new", "And something else"]},
+  {"date": "2026-10-12", "items": ["..."]}
+]
+```
 
 On the server itself, in `C:\ChatApp` (as administrator): `.\scripts\server\update.ps1` does what
 `scripts\deploy.ps1` does, `Get-ScheduledTask ChatApp*` shows whether the tasks run, and

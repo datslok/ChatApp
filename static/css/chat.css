@@ -828,6 +828,26 @@ body {
   font-size: 0.6rem;
 }
 
+/* A red dot: something new in "What's new" (settings.js). On ⚙️ it sits in the top corner. */
+.new-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #f23f43;
+  vertical-align: middle;
+}
+
+.new-dot[hidden] {
+  display: none;  /* display above would otherwise beat the hidden attribute */
+}
+
+#settings-new-dot {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+}
+
 /* Next to someone in voice. Deafened: the 🎧 with a red line through it. */
 .voice-state.deafened {
   position: relative;
@@ -1522,6 +1542,28 @@ body {
   padding: 12px 14px;
   border-radius: 8px;
   background: #2b2d31;
+}
+
+/* What's new: one card per day, like the Inbox's. */
+.changelog-day {
+  margin-bottom: 12px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: #2b2d31;
+}
+
+.changelog-date {
+  font-weight: 600;
+  color: white;
+}
+
+.changelog-day ul {
+  margin: 6px 0 0;
+  padding-left: 20px;
+}
+
+.changelog-day li {
+  margin: 4px 0;
 }
 
 .inbox-item.done {

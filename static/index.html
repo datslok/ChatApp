@@ -52,6 +52,8 @@
       <button type="button" id="user-deafen" class="user-panel-button" title="Deafen" aria-label="Deafen">🎧</button>
       <button type="button" id="settings-button" class="user-panel-button" title="Settings" aria-label="Settings">
         ⚙️<span id="muted-icon" title="Notifications are muted" hidden>🔕</span>
+        <!-- Something new in "What's new" (settings.js). -->
+        <span id="settings-new-dot" class="new-dot" title="Something new: see What's new" hidden></span>
       </button>
     </div>
   </nav>
@@ -225,6 +227,9 @@
       <button type="button" class="settings-tab" role="tab" data-tab="voice">Voice &amp; audio</button>
       <button type="button" class="settings-tab" role="tab" data-tab="video">Video</button>
       <h3>Help</h3>
+      <button type="button" class="settings-tab" role="tab" data-tab="changelog">
+        What's new <span id="changelog-new-dot" class="new-dot" hidden></span>
+      </button>
       <button type="button" class="settings-tab" role="tab" data-tab="feedback">Bugs &amp; ideas</button>
       <!-- Only for admins (settings.js shows it); the server checks too. -->
       <button type="button" class="settings-tab" role="tab" data-tab="inbox" id="inbox-tab" hidden>
@@ -428,6 +433,12 @@
           <video id="camera-preview" autoplay muted playsinline hidden></video>
           <button type="button" id="camera-test">Test camera</button>
         </div>
+      </section>
+
+      <section class="settings-page" data-page="changelog" role="tabpanel" aria-label="What's new">
+        <h2>What's new</h2>
+        <!-- One card per day, newest first, from static/changelog.json (settings.js). -->
+        <div id="changelog-list"></div>
       </section>
 
       <section class="settings-page" data-page="feedback" role="tabpanel" aria-label="Bugs &amp; ideas">

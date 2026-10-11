@@ -55,12 +55,74 @@ function showSettingsPage(name) {
     if (chosen && settingsDialog.open) tab.scrollIntoView({ block: "nearest", inline: "nearest" });
   }
   settingsPagesBox.scrollTop = 0;  // start at the top of the new page
+  if (name === "changelog" && settingsDialog.open) showChangelog();  // (also marks it as seen)
 }
 
 for (const tab of settingsTabs) {
   tab.addEventListener("click", () => showSettingsPage(tab.dataset.tab));
 }
 showSettingsPage(settingsPage);  // at the start: hide every page but the first
+
+// ---------- Settings: What's new ----------
+//
+// The list is written by hand in static/changelog.json: one entry per day, newest first,
+// {"date": "2026-10-12", "items": ["...", ...]}. This browser remembers the newest date it has
+// shown (localStorage "changelogSeen"); a newer one in the file puts a red dot on ⚙️ and on the tab.
+
+const settingsNewDot = document.getElementById("settings-new-dot");
+const changelogNewDot = document.getElementById("changelog-new-dot");
+const changelogList = document.getElementById("changelog-list");
+let changelog = [];  // the file's entries, once fetched
+
+async function loadChangelog() {
+  try {
+    const response = await fetch("/static/changelog.json");
+    if (!response.ok) return;
+    changelog = await response.json();  // (JSON text -> a list of objects)
+  } catch {
+    return;  // offline or a broken file: no dots, and the page stays empty
+  }
+  updateChangelogDots();
+}
+
+// Dates written as YYYY-MM-DD sort like plain text: "2026-10-12" > "2026-10-11", and anything
+// is > "" (nothing seen yet, like on a new device).
+function updateChangelogDots() {
+  const newest = changelog.length > 0 ? changelog[0].date : "";
+  const unseen = newest > (localStorage.getItem("changelogSeen") || "");
+  settingsNewDot.hidden = !unseen;
+  changelogNewDot.hidden = !unseen;
+}
+
+// Draw the entries as cards (one per day), and remember that we've seen them.
+function showChangelog() {
+  changelogList.replaceChildren();
+  for (const entry of changelog) {
+    const day = document.createElement("article");
+    day.className = "changelog-day";
+    const date = document.createElement("time");
+    date.className = "changelog-date";
+    date.dateTime = entry.date;
+    // "T12:00": midday, so the date is the same in every time zone (just "2026-10-12" means
+    // midnight in London, which is still the day before further west).
+    date.textContent = new Date(entry.date + "T12:00").toLocaleDateString(undefined, {
+      weekday: "long", day: "numeric", month: "long", year: "numeric",
+    });
+    const list = document.createElement("ul");
+    for (const item of entry.items) {
+      const line = document.createElement("li");
+      line.className = "message-text";  // formatted like a message (messages.js), so **bold** etc. work
+      formatText(line, item);
+      list.appendChild(line);
+    }
+    day.append(date, list);
+    changelogList.appendChild(day);
+  }
+  if (changelog.length > 0) localStorage.setItem("changelogSeen", changelog[0].date);
+  updateChangelogDots();
+}
+
+loadChangelog();
 
 // ---------- Settings: profile ----------
 

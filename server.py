@@ -1755,7 +1755,7 @@ def page_version():
     one letter in any of them and it comes out completely different. Each page gets it in its
     "welcome"; after a deploy that changed the page, the pages that reconnect see a new one and
     reload themselves (core.js, reloadIfOutdated). Changes to this file alone don't count."""
-    files = [Path("static/index.html"), Path("static/voice-gate.js"),
+    files = [Path("static/index.html"), Path("static/voice-gate.js"), Path("static/changelog.json"),
              *Path("static/js").glob("*.js"), *Path("static/css").glob("*.css")]
     digest = hashlib.sha256()
     for path in sorted(files):  # always in the same order, or the same files would give another hash
