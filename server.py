@@ -18,14 +18,28 @@ from pathlib import Path
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Request, Response, WebSocket, WebSocketDisconnect
+from fastapi.exception_handlers import http_exception_handler
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from PIL import Image, ImageSequence
 from pydantic import BaseModel
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 # docs_url etc. = None: turn off FastAPI's automatic API explorer pages (/docs, /redoc),
 # handy in development but nothing the public internet needs to see.
 app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
+
+
+@app.exception_handler(StarletteHTTPException)
+async def errors_are_never_cached(request, error):
+    """Every error answer (404 not found, 403, ...) gets "Cache-Control: no-store": never keep it.
+    Otherwise Cloudflare may keep a 404 for hours (it adds its own 4 hours to answers that don't
+    say), and browsers with it: a file that was briefly missing during an update would stay
+    "missing" long after. FastAPI builds the answer as usual; we only add the header.
+    (Starlette's HTTPException: the one behind FastAPI's own, which also covers unknown addresses.)"""
+    response = await http_exception_handler(request, error)
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 # Settings from the environment. serve.ps1 loads them from the .env file (which is never committed).
 INVITE_CODE = os.environ.get("INVITE_CODE", "")  # needed to create an account; empty = anyone can
