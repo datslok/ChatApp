@@ -594,6 +594,46 @@ function fitTiles(area) {
 // (A ResizeObserver calls its function when a watched element's size changes.)
 new ResizeObserver(() => fitTiles(callTiles)).observe(callTiles);
 
+// ----- Resizing the banner: drag the bar on its bottom edge. Pointer events, like dragging a
+// picture in the editor: remember where the drag started and how tall the banner was, then on
+// every move set the height to that plus how far the pointer moved. The tiles follow by
+// themselves (the ResizeObserver above). The height is kept in this browser for next time.
+
+const callResize = document.getElementById("call-resize");
+const MIN_CALL_HEIGHT = 160;   // the same as min-height in the CSS
+const MIN_MESSAGES_HEIGHT = 100;  // the banner may take the messages' space, but leaves this much
+let resizeFrom = null;  // while dragging: {y, height} at the start
+
+try {
+  const saved = Number(localStorage.getItem("callPanelHeight"));
+  if (saved > 0) callPanel.style.height = saved + "px";  // (none saved: the CSS's 40% of the window)
+} catch {}
+
+callResize.addEventListener("pointerdown", (event) => {
+  callResize.setPointerCapture(event.pointerId);  // keep getting the moves, even off the bar
+  callResize.classList.add("dragging");
+  resizeFrom = { y: event.clientY, height: callPanel.offsetHeight };
+});
+
+callResize.addEventListener("pointermove", (event) => {
+  if (!resizeFrom) return;
+  // As tall as it is plus all of the messages' height, minus what the messages must keep.
+  const max = callPanel.offsetHeight + messages.clientHeight - MIN_MESSAGES_HEIGHT;
+  const height = resizeFrom.height + (event.clientY - resizeFrom.y);  // down: taller
+  callPanel.style.height = Math.round(Math.max(MIN_CALL_HEIGHT, Math.min(max, height))) + "px";
+});
+
+function stopResizing() {
+  if (!resizeFrom) return;
+  resizeFrom = null;
+  callResize.classList.remove("dragging");
+  try {
+    localStorage.setItem("callPanelHeight", String(callPanel.offsetHeight));
+  } catch {}
+}
+callResize.addEventListener("pointerup", stopResizing);
+callResize.addEventListener("pointercancel", stopResizing);  // e.g. the phone took over the touch
+
 loungeMute.addEventListener("click", () => voiceMuteButton.click());  // the same as the voice bar's
 loungeCamera.addEventListener("click", toggleCamera);
 loungeLeave.addEventListener("click", leaveVoice);

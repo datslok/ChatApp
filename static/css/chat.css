@@ -189,9 +189,13 @@ body {
 /* The call banner at the top of a DM: a dark area of a fixed height, the tiles filling it,
    the buttons below them. "flex-shrink: 0": the messages below give way, never the banner. */
 #call-panel {
+  position: relative;  /* the grab bar is placed against its bottom edge */
   box-sizing: border-box;  /* the height includes the padding */
-  height: 40vh;
+  height: 40vh;  /* until it's dragged: then rooms.js sets a height in pixels */
   min-height: 160px;
+  /* Never so big that the messages and the text box get squeezed out (a dragged height stays
+     as it is when the window gets smaller, so this guards that too). */
+  max-height: calc(100% - 200px);
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -217,6 +221,32 @@ body {
 }
 #call-tiles .call-tile {
   width: var(--tile-width, 0px);
+}
+/* The grab bar: a strip along the banner's bottom edge, with a short line in the middle that
+   lights up under the mouse. "ns-resize": the up-and-down arrows cursor. */
+#call-resize {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 10px;
+  cursor: ns-resize;
+  touch-action: none;  /* phones: dragging resizes instead of scrolling the page */
+}
+#call-resize::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 3px;
+  width: 40px;
+  height: 4px;
+  margin-left: -20px;  /* half its width: centred */
+  border-radius: 2px;
+  background: #4e5058;
+}
+#call-resize:hover::after,
+#call-resize.dragging::after {
+  background: #b5bac1;
 }
 /* The camera preview in Settings, mirrored like the one in calls. */
 #camera-preview {
