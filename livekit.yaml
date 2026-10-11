@@ -1,0 +1,18 @@
+# Settings for the LiveKit server (voice), started by voice.ps1. No secrets here: the API key and
+# secret come from .env, through the LIVEKIT_KEYS environment variable.
+
+# Signalling: the WebSocket browsers use to join a room and hear who's in it. The Cloudflare
+# Tunnel forwards wss://voice.datslok.no here, like it forwards the chat to port 8000.
+port: 7880
+
+rtc:
+  # The voice itself. The tunnel can't carry it (it's UDP), so these two ports are forwarded
+  # on the router straight to this PC.
+  udp_port: 7882   # the normal way: everyone's audio over this one UDP port
+  tcp_port: 7881   # the fallback, for networks that block UDP
+  # Look up this PC's public IP address at startup (like whatismyip) and tell browsers to send
+  # their audio there. After the internet provider changes the IP, restart LiveKit.
+  use_external_ip: true
+
+logging:
+  level: info

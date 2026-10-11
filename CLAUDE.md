@@ -65,6 +65,11 @@ the point is for me to understand how it works, not just to have it done.
   it; losing it means friends must reinstall by hand). The public key is in `tauri.conf.json`.
 - `dev.env`: development settings for start.ps1: its own `dev.db` and `dev-uploads/`, so tests never
   touch the real chat's `chat.db` and `uploads/`.
+- Voice runs on a self-hosted LiveKit server: `livekit/livekit-server.exe` (downloaded from
+  github.com/livekit/livekit/releases, the windows_amd64 zip, checked against `checksums.txt`; git-ignored),
+  settings in `livekit.yaml`, started by `voice.ps1`. Its key and secret are `LIVEKIT_API_KEY` and
+  `LIVEKIT_API_SECRET` in `.env`. Ports: 7880 signalling (through the tunnel), 7881 TCP and 7882 UDP
+  for the audio (forwarded on the router).
 
 ## Hosting
 
@@ -88,6 +93,7 @@ Then start the server with:
 ```powershell
 .\start.ps1     # development, with auto-reload
 .\serve.ps1     # the real site (needs .env)
+.\voice.ps1     # LiveKit, for voice (add -Dev for development: localhost only, test keys)
 ```
 
 For development, open http://localhost:8001 (start.ps1) in two browser tabs and chat between them.

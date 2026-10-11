@@ -27,3 +27,6 @@ desktop/src-tauri/gen/
 
 # Desktop app installers, served at /releases/ for the app's automatic updates
 releases/
+
+# The LiveKit server program (downloaded, see CLAUDE.md)
+livekit/
