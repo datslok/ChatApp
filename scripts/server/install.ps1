@@ -142,7 +142,9 @@ Write-Host "The tasks run as your account, also when nobody is logged in, so Win
 Write-Host "password once. (With a Microsoft account: its password, not the PIN.)"
 # Asked right here in the terminal (not in a separate window), so it also works over SSH from the
 # development PC. -AsSecureString: shown as dots, and kept encrypted in memory.
-$userName = "$env:USERDOMAIN\$env:USERNAME"
+# Who we are, asked from Windows itself: "LAPTOP-NAME\axel". (Not $env:USERDOMAIN: over SSH that
+# says "WORKGROUP", and "WORKGROUP\axel" is no account Windows knows.)
+$userName = [Security.Principal.WindowsIdentity]::GetCurrent().Name
 $password = Read-Host "Your Windows password for $userName" -AsSecureString
 $credential = New-Object System.Management.Automation.PSCredential($userName, $password)
 
@@ -160,7 +162,7 @@ foreach ($task in @(@{ Name = "ChatApp"; Script = "serve.ps1"; Log = "logs\chat.
     $trigger = New-ScheduledTaskTrigger -AtStartup
     $trigger.Delay = "PT30S"  # 30 seconds after boot: the network is up by then (LiveKit looks up our IP)
     Register-ScheduledTask -TaskName $task.Name -Action $action -Trigger $trigger -Settings $settings `
-        -User $credential.UserName -Password $credential.GetNetworkCredential().Password -RunLevel Limited -Force | Out-Null
+        -User $credential.UserName -Password $credential.GetNetworkCredential().Password -RunLevel Limited -Force -ErrorAction Stop | Out-Null
     Write-Host "  Task '$($task.Name)': runs $($task.Script) at boot, log in $($task.Log)"
 }
 
@@ -207,7 +209,7 @@ if (-not (Test-Path "${drive}:\")) {
     $backupSettings = New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatteries `
         -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Hours 1)
     Register-ScheduledTask -TaskName "ChatApp backup" -Action $action -Trigger $trigger -Settings $backupSettings `
-        -User $credential.UserName -Password $credential.GetNetworkCredential().Password -RunLevel Limited -Force | Out-Null
+        -User $credential.UserName -Password $credential.GetNetworkCredential().Password -RunLevel Limited -Force -ErrorAction Stop | Out-Null
     Write-Host "  Task 'ChatApp backup': every night at 04:00 into $backups (log in logs\backup.log)"
     if (Test-Path chat.db) {
         Start-ScheduledTask -TaskName "ChatApp backup"  # the first backup, now
