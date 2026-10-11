@@ -322,3 +322,209 @@ function showSpeaking() {
     tile.classList.toggle("speaking", voiceRoomName === "lounge" && speakingIds.has(tile.dataset.userId));
   }
 }
+
+// ----- Connection quality: the signal icon in the voice bar, and its popup (like Discord's)
+//
+// WebRTC keeps statistics on every connection, and LiveKit lets us read them per track
+// (getRTCStatsReport: the browser's getStats() for that track, a Map of "stats" objects, each
+// with a "type"). Every 5 seconds while in voice we read:
+//   - ping: the route the audio takes to our LiveKit server ("candidate-pair") knows how long a
+//     packet takes there and back (currentRoundTripTime, in seconds)
+//   - UDP or TCP: that route's own end ("local-candidate"); TCP is LiveKit's fallback
+//   - outbound packet loss: what we sent ("outbound-rtp") against what the server says never
+//     arrived ("remote-inbound-rtp": its regular reports back to us)
+//   - inbound packet loss: of the others' voices, what never reached us ("inbound-rtp")
+// The counters only ever go up, so the loss is worked out from the difference with 5 seconds
+// ago: what's happening now, not an average since joining.
+
+const voiceSignal = document.getElementById("voice-signal");
+const voiceStatsDialog = document.getElementById("voice-stats");
+const pingGraph = document.getElementById("ping-graph");
+const STATS_SECONDS = 5;    // how often we measure
+const GRAPH_SECONDS = 300;  // how far back the graph goes: 5 minutes
+
+let statsTimer = null;
+let pingSamples = [];   // [{time, ping}]: when (ms since 1970) and the ping (ms), the last 5 minutes
+let connection = null;  // the latest: {ping, protocol, outLoss, inLoss} (null where unknown)
+let lastCounts = null;  // the packet counters last time
+let voiceServer = "";   // LiveKit's address, e.g. "voice.datslok.no" (rooms.js, joinVoice)
+
+function startConnectionStats() {
+  stopConnectionStats();
+  measureConnection();
+  statsTimer = setInterval(measureConnection, STATS_SECONDS * 1000);
+}
+
+function stopConnectionStats() {
+  clearInterval(statsTimer);
+  statsTimer = null;
+  pingSamples = [];
+  connection = null;
+  lastCounts = null;
+  voiceSignal.hidden = true;
+  if (voiceStatsDialog.open) voiceStatsDialog.close();
+}
+
+// The route a report's packets take: its ping (ms) and "udp" or "tcp". Or null.
+function routeOf(report) {
+  if (!report) return null;
+  let pair = null;
+  for (const stat of report.values()) {
+    if (stat.type === "transport" && stat.selectedCandidatePairId) pair = report.get(stat.selectedCandidatePairId);
+  }
+  // (Some browsers don't say which one is selected: then the one that's working.)
+  if (!pair) {
+    for (const stat of report.values()) {
+      if (stat.type === "candidate-pair" && stat.nominated && stat.state === "succeeded") pair = stat;
+    }
+  }
+  if (!pair || pair.currentRoundTripTime === undefined) return null;
+  const local = report.get(pair.localCandidateId);
+  return { ping: Math.round(pair.currentRoundTripTime * 1000), protocol: local ? local.protocol : null };
+}
+
+// Lost packets as a % of all of them, since the last measurement. null if nothing was sent.
+function lossPercent(lost, total, lastLost, lastTotal) {
+  if (lastTotal === undefined) return null;      // the first measurement: nothing to compare with
+  const newLost = Math.max(0, lost - lastLost);  // (Math.max: duplicates can make it count down)
+  const newTotal = total - lastTotal;
+  if (newTotal <= 0) return null;  // muted, nobody talking, or someone left (their counts went with them)
+  return Math.min(100, (newLost / newTotal) * 100);
+}
+
+async function measureConnection() {
+  const room = voiceRoom;
+  if (!room) return;
+  let sending;
+  const receiving = [];
+  try {
+    // Our microphone's report (if we're sending one), and one for each voice we receive.
+    if (micPublication && micPublication.track) sending = await micPublication.track.getRTCStatsReport();
+    for (const participant of room.remoteParticipants.values()) {
+      for (const publication of participant.audioTrackPublications.values()) {
+        if (publication.track) receiving.push(await publication.track.getRTCStatsReport());
+      }
+    }
+  } catch {
+    return;  // (a track went away while we asked: next time)
+  }
+  if (voiceRoom !== room) return;  // left while measuring
+
+  // Add up the counters: ours, and everyone's we receive.
+  const counts = { sent: 0, lostOut: 0, received: 0, lostIn: 0 };
+  for (const stat of sending ? sending.values() : []) {
+    if (stat.type === "outbound-rtp") counts.sent += stat.packetsSent || 0;
+    if (stat.type === "remote-inbound-rtp") counts.lostOut += stat.packetsLost || 0;
+  }
+  for (const report of receiving) {
+    for (const stat of report ? report.values() : []) {
+      if (stat.type === "inbound-rtp") {
+        counts.received += stat.packetsReceived || 0;
+        counts.lostIn += stat.packetsLost || 0;
+      }
+    }
+  }
+  const last = lastCounts || {};
+  lastCounts = counts;
+
+  // The route: from our microphone's report, or else from a voice we receive (listening only).
+  const route = routeOf(sending) || receiving.map(routeOf).find(Boolean) || null;
+  connection = {
+    ping: route ? route.ping : null,
+    protocol: route ? route.protocol : null,
+    outLoss: lossPercent(counts.lostOut, counts.sent, last.lostOut, last.sent),
+    // (Received plus lost: everything that was sent to us.)
+    inLoss: lossPercent(counts.lostIn, counts.received + counts.lostIn, last.lostIn,
+      last.received === undefined ? undefined : last.received + last.lostIn),
+  };
+
+  const now = Date.now();
+  if (connection.ping !== null) pingSamples.push({ time: now, ping: connection.ping });
+  pingSamples = pingSamples.filter((sample) => sample.time > now - GRAPH_SECONDS * 1000);
+  showSignal();
+  if (voiceStatsDialog.open) renderConnectionStats();
+}
+
+// "good" (green), "fair" (yellow) or "bad" (red), like Discord's signal icon.
+function connectionQuality() {
+  const ping = connection.ping ?? 0;
+  const loss = Math.max(connection.outLoss ?? 0, connection.inLoss ?? 0);
+  if (ping >= 250 || loss >= 10) return "bad";
+  if (ping >= 100 || loss >= 2) return "fair";
+  return "good";
+}
+
+function showSignal() {
+  voiceSignal.hidden = connection.ping === null;
+  voiceSignal.className = connectionQuality();
+  voiceSignal.title = `Ping ${connection.ping} ms: connection details`;
+}
+
+// The popup, just above the voice bar (a modal dialog, so a click outside or Esc closes it,
+// like the other popups: ui.js).
+function openConnectionStats() {
+  if (!statsTimer) return;  // not in voice (still connecting)
+  renderConnectionStats();
+  voiceStatsDialog.showModal();
+  const bar = voiceBar.getBoundingClientRect();
+  const width = voiceStatsDialog.offsetWidth;
+  voiceStatsDialog.style.left = Math.max(8, Math.min(bar.left, innerWidth - width - 8)) + "px";
+  voiceStatsDialog.style.bottom = (innerHeight - bar.top + 8) + "px";
+}
+
+voiceSignal.addEventListener("click", openConnectionStats);
+
+function renderConnectionStats() {
+  const percent = (value) => (value === null ? "–" : value.toFixed(1) + "%");
+  const average = pingSamples.length
+    ? Math.round(pingSamples.reduce((sum, sample) => sum + sample.ping, 0) / pingSamples.length) + " ms"
+    : "–";
+  document.getElementById("stat-server").textContent = voiceServer;
+  document.getElementById("stat-protocol").textContent =
+    connection.protocol === "udp" ? "UDP (direct)" : connection.protocol === "tcp" ? "TCP (fallback)" : "–";
+  document.getElementById("stat-average").textContent = average;
+  document.getElementById("stat-ping").textContent = connection.ping === null ? "–" : connection.ping + " ms";
+  document.getElementById("stat-out-loss").textContent = percent(connection.outLoss);
+  document.getElementById("stat-in-loss").textContent = percent(connection.inLoss);
+  drawPingGraph();
+}
+
+// An SVG element (SVG elements need their own "namespace", so createElementNS, not createElement).
+function svgElement(name, attributes) {
+  const element = document.createElementNS("http://www.w3.org/2000/svg", name);
+  for (const [key, value] of Object.entries(attributes)) element.setAttribute(key, value);
+  return element;
+}
+
+// The graph: the last 5 minutes from left to right, the ping upwards. Its top is a round number
+// a little above the highest ping (10, 20, 50, 100, ... ms), with a line and a label at the top,
+// the middle and 0, and the time below at each whole minute. Drawn in the viewBox's own units
+// (260 × 90): the browser scales it to the size the CSS gives it.
+function drawPingGraph() {
+  const plotWidth = 236, plotHeight = 74;  // room on the right for the ms labels, below for the times
+  const now = Date.now();
+  const start = now - GRAPH_SECONDS * 1000;
+  const highest = Math.max(0, ...pingSamples.map((sample) => sample.ping));
+  const top = [10, 20, 50, 100, 200, 500, 1000, 2000].find((step) => highest <= step) ?? Math.ceil(highest / 1000) * 1000;
+  const x = (time) => ((time - start) / (GRAPH_SECONDS * 1000)) * plotWidth;
+  const y = (ping) => plotHeight - (ping / top) * plotHeight;
+
+  const parts = [];
+  for (const value of [0, top / 2, top]) {
+    parts.push(svgElement("line", { x1: 0, x2: plotWidth, y1: y(value), y2: y(value), class: "graph-grid" }));
+    const label = svgElement("text", { x: plotWidth + 4, y: y(value) + 3, class: "graph-label" });
+    label.textContent = value;
+    parts.push(label);
+  }
+  // A time at each whole minute (60 000 ms) in the window, if it isn't squashed against an edge.
+  for (let minute = Math.ceil(start / 60000) * 60000; minute <= now; minute += 60000) {
+    if (x(minute) < 14 || x(minute) > plotWidth - 14) continue;
+    const label = svgElement("text", { x: x(minute), y: 88, class: "graph-label", "text-anchor": "middle" });
+    label.textContent = new Date(minute).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    parts.push(label);
+  }
+  // The line itself: "x,y x,y ..." through every measurement.
+  const points = pingSamples.map((sample) => `${x(sample.time).toFixed(1)},${y(sample.ping).toFixed(1)}`);
+  parts.push(svgElement("polyline", { points: points.join(" "), class: "graph-line" }));
+  pingGraph.replaceChildren(...parts);
+}

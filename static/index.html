@@ -25,7 +25,17 @@
     <!-- While you're in voice (or joining it): where, and the mute and leave buttons. -->
     <div id="voice-bar" hidden>
       <div id="voice-info">
-        <button type="button" id="voice-status">Connecting…</button>
+        <div id="voice-status-line">
+          <!-- How good the connection is: three bars, coloured by ping (voice.js). Opens #voice-stats. -->
+          <button type="button" id="voice-signal" title="Connection details" aria-label="Connection details" hidden>
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+              <rect x="1" y="10" width="3.5" height="5" rx="1" />
+              <rect x="6.25" y="6" width="3.5" height="9" rx="1" />
+              <rect x="11.5" y="2" width="3.5" height="13" rx="1" />
+            </svg>
+          </button>
+          <button type="button" id="voice-status">Connecting…</button>
+        </div>
         <span id="voice-where"></span>
       </div>
       <button type="button" id="voice-mute" class="voice-button" title="Mute" aria-label="Mute">🎤</button>
@@ -151,6 +161,25 @@
     <h2 id="offline-heading" class="section-heading">Offline</h2>
     <ul id="offline-list"></ul>
   </aside>
+
+  <!-- The voice connection's details (like Discord's): a graph of the ping over the last 5
+       minutes and the latest numbers. Opened from the voice bar, filled in by voice.js. -->
+  <dialog id="voice-stats">
+    <h2>Connection</h2>
+    <svg id="ping-graph" viewBox="0 0 260 90" aria-label="Ping over the last 5 minutes"></svg>
+    <p id="stat-server"></p>
+    <p>Connection: <strong id="stat-protocol"></strong></p>
+    <p>Average ping: <strong id="stat-average"></strong></p>
+    <p>Last ping: <strong id="stat-ping"></strong></p>
+    <p>Outbound packet loss: <strong id="stat-out-loss"></strong></p>
+    <p>Inbound packet loss: <strong id="stat-in-loss"></strong></p>
+    <p class="voice-stats-help">
+      The ping is the time to our voice server and back. You may notice delayed audio at 250 ms
+      or higher, and sound robotic with more than 10% outbound packet loss. Inbound loss is what
+      reaches you: if others sound robotic and it's high, the problem is on your side. TCP is a
+      fallback when UDP is blocked, and handles lost packets worse.
+    </p>
+  </dialog>
 
   <!-- The Settings popup: tabs down the left side (like Discord's), one page of settings at a
        time on the right (settings.js, showSettingsPage). -->

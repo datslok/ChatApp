@@ -148,6 +148,7 @@ async function joinVoice(roomName, label) {
     const answer = await response.json();
     if (!response.ok) throw new Error(answer.detail || "Couldn't join voice.");
     await room.connect(answer.url, answer.token);
+    voiceServer = new URL(answer.url).host;  // "wss://voice.datslok.no" -> "voice.datslok.no" (voice.js)
   } catch (error) {
     if (voiceRoomName !== roomName || (room && voiceRoom !== room)) return;  // we left meanwhile
     if (room) room.disconnect(false);  // false: don't stop our microphone track (see sendMic)
@@ -176,6 +177,7 @@ async function joinVoice(roomName, label) {
       if (voiceRoom === room) showNoMicrophone();
     }
   }
+  if (voiceRoom === room) startConnectionStats();  // the signal icon and its popup (voice.js)
 }
 
 function leaveVoice() {
@@ -207,6 +209,7 @@ function leaveVoice() {
   voiceAudio.replaceChildren();  // remove every <audio> element
   voiceBar.hidden = true;
   voiceStatus.title = "";
+  stopConnectionStats();
   markVoiceChannel();
   speakingIds.clear();
   showSpeaking();
@@ -245,9 +248,14 @@ voiceMuteButton.addEventListener("click", async () => {
   }
 });
 
-// The "Tap here to turn on sound" case: this click lets the browser play the others' audio.
+// Clicking the status ("Voice connected"): the connection details, like the signal icon. Except
+// in the "Tap here to turn on sound" case: that click lets the browser play the others' audio.
 voiceStatus.addEventListener("click", async () => {
-  if (!voiceRoom || !voiceStatus.classList.contains("clickable")) return;
+  if (!voiceRoom) return;
+  if (!voiceStatus.classList.contains("clickable")) {
+    openConnectionStats();
+    return;
+  }
   await voiceRoom.startAudio();
   voiceStatus.classList.remove("clickable");
   setVoiceStatus("Voice connected");

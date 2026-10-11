@@ -673,6 +673,76 @@ body {
 #voice-status.waiting { color: #f0b232; }
 #voice-status.error { color: #f23f43; }
 #voice-status.clickable { cursor: pointer; text-decoration: underline; }
+/* Clicking it opens the connection details (once in voice): underlined on hover, like a link. */
+#voice-status:hover { cursor: pointer; text-decoration: underline; }
+
+/* The signal icon and the status, side by side. */
+#voice-status-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Three bars, filled with the text colour ("currentColor"), which says how good the connection is. */
+#voice-signal {
+  display: flex;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+}
+#voice-signal[hidden] { display: none; }
+#voice-signal svg { width: 16px; height: 16px; fill: currentColor; }
+#voice-signal.good { color: #23a55a; }
+#voice-signal.fair { color: #f0b232; }
+#voice-signal.bad { color: #f23f43; }
+
+/* The connection details popup, just above the voice bar (voice.js sets left and bottom). */
+#voice-stats {
+  position: fixed;
+  inset: auto;  /* not centred like other popups: placed by left and bottom instead */
+  width: min(300px, 100vw - 16px);
+  box-sizing: border-box;
+  margin: 0;
+  padding: 16px;
+  border: 1px solid #1e1f22;
+  border-radius: 8px;
+  background: #232428;
+  color: #dbdee1;
+  font-size: 0.85rem;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+#voice-stats::backdrop {
+  background: transparent;  /* the chat stays visible, as with Discord's */
+}
+#voice-stats h2 {
+  margin: 0 0 12px;
+  font-size: 1rem;
+  color: white;
+}
+#voice-stats p {
+  margin: 2px 0;
+}
+#voice-stats #stat-server {
+  margin-top: 10px;
+  font-weight: 600;
+  color: white;
+}
+#voice-stats .voice-stats-help {
+  margin-top: 12px;
+  font-size: 0.8rem;
+  color: #949ba4;
+}
+
+#ping-graph {
+  display: block;
+  width: 100%;
+  border-radius: 4px;
+  background: #1e1f22;
+}
+#ping-graph .graph-grid { stroke: #3f4147; stroke-width: 0.5; }
+#ping-graph .graph-label { fill: #949ba4; font-size: 8px; }
+#ping-graph .graph-line { fill: none; stroke: #5865f2; stroke-width: 1.5; stroke-linejoin: round; }
 #voice-where {
   font-size: 0.8rem;
   color: #949ba4;
