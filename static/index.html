@@ -243,6 +243,16 @@
     .call-person.speaking .call-video {
       box-shadow: 0 0 0 3px #23a55a;
     }
+    /* The camera preview in Settings, mirrored like the one in calls. */
+    #camera-preview {
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      object-fit: cover;
+      border-radius: 8px;
+      background: #000;
+      transform: scaleX(-1);
+    }
+
     /* The Lounge page: a dark area with a grid of tiles, the buttons below it. */
     #lounge-view {
       gap: 16px;
@@ -2285,6 +2295,17 @@
       <button type="button" id="voice-test">Test microphone</button>
     </div>
 
+    <h3>Video</h3>
+    <div class="settings-group">
+      <label>
+        Camera
+        <select id="camera-input"></select>
+      </label>
+      <!-- What the camera sees (mirrored, like a mirror), while "Test camera" is on. -->
+      <video id="camera-preview" autoplay muted playsinline hidden></video>
+      <button type="button" id="camera-test">Test camera</button>
+    </div>
+
     <section id="desktop-app">
       <h3>Desktop app</h3>
       <p class="settings-help">
@@ -3506,7 +3527,9 @@
 
     // ----- Settings, remembered in this browser: they belong to this device's microphone and speakers.
     // Device ids "" mean the computer's default. Volumes in %, gate in decibels (-100 = always on).
-    const voiceSettings = { inputDevice: "", outputDevice: "", micVolume: 100, outputVolume: 100, gate: -60 };
+    const voiceSettings = {
+      inputDevice: "", outputDevice: "", cameraDevice: "", micVolume: 100, outputVolume: 100, gate: -60,
+    };
     try {
       Object.assign(voiceSettings, JSON.parse(localStorage.getItem("voiceSettings")) || {});
     } catch {}
@@ -3861,7 +3884,11 @@
           // the versions nobody watches. Our camera: 1280x720.
           adaptiveStream: true,
           dynacast: true,
-          videoCaptureDefaults: { resolution: LivekitClient.VideoPresets.h720.resolution },
+          // (The camera chosen in Settings, if any: undefined means the default.)
+          videoCaptureDefaults: {
+            resolution: LivekitClient.VideoPresets.h720.resolution,
+            deviceId: voiceSettings.cameraDevice || undefined,
+          },
         });
         voiceRoom = room;
 
@@ -4351,6 +4378,7 @@
       } catch {}
       fillDeviceSelect(voiceInputSelect, devices.filter((d) => d.kind === "audioinput"), voiceSettings.inputDevice, "Microphone");
       fillDeviceSelect(voiceOutputSelect, devices.filter((d) => d.kind === "audiooutput"), voiceSettings.outputDevice, "Speakers");
+      fillDeviceSelect(cameraSelect, devices.filter((d) => d.kind === "videoinput"), voiceSettings.cameraDevice, "Camera");
       // Browsers only show the devices' names once the page may use the microphone.
       voiceDevicesHelp.textContent = devices.some((d) => d.label)
         ? ""
@@ -4432,12 +4460,64 @@
       }
     });
 
+    // ----- Settings: Video
+
+    const cameraSelect = document.getElementById("camera-input");
+    const cameraPreview = document.getElementById("camera-preview");
+    const cameraTestButton = document.getElementById("camera-test");
+    let previewStream = null;  // the camera, opened for the preview, while "Test camera" is on
+
+    async function startCameraPreview() {
+      stopCameraPreview();
+      previewStream = await navigator.mediaDevices.getUserMedia({
+        video: voiceSettings.cameraDevice ? { deviceId: { ideal: voiceSettings.cameraDevice } } : true,
+      });
+      cameraPreview.srcObject = previewStream;  // a <video> can show a live stream directly
+      cameraPreview.hidden = false;
+      cameraTestButton.textContent = "Stop camera test";
+      listDevices();  // now the browser tells us the cameras' names
+    }
+
+    function stopCameraPreview() {
+      if (previewStream) {
+        for (const track of previewStream.getTracks()) track.stop();  // the camera's light goes out
+      }
+      previewStream = null;
+      cameraPreview.srcObject = null;
+      cameraPreview.hidden = true;
+      cameraTestButton.textContent = "Test camera";
+    }
+
+    cameraTestButton.addEventListener("click", async () => {
+      if (previewStream) {
+        stopCameraPreview();
+        return;
+      }
+      try {
+        await startCameraPreview();
+      } catch {
+        stopCameraPreview();
+        voiceDevicesHelp.textContent = "The browser didn't allow the camera, or another program is using it.";
+      }
+    });
+
+    cameraSelect.addEventListener("change", async () => {
+      voiceSettings.cameraDevice = cameraSelect.value;
+      saveVoiceSettings();
+      if (previewStream) startCameraPreview().catch(stopCameraPreview);  // show the new one
+      // In a call with the camera on: switch it there too ("Default" leaves the current one).
+      if (voiceRoom && cameraOn && cameraSelect.value) {
+        voiceRoom.switchActiveDevice("videoinput", cameraSelect.value).catch(() => {});
+      }
+    });
+
     // Opening Settings: fresh device lists. Closing it: stop the test.
     settingsButton.addEventListener("click", listDevices);
     settingsDialog.addEventListener("close", () => {
       micTesting = false;
       showTestButton();
       closeMicIfUnused();
+      stopCameraPreview();
     });
 
     // ---------- Settings ----------
