@@ -77,7 +77,7 @@ CHANNELS = ["general", "memes"]  # add a name here to make a new channel
 with open("static/emoji.json", encoding="utf-8") as emoji_file:
     ALLOWED_EMOJI = {emoji for group in json.load(emoji_file)["groups"] for emoji, name in group["emoji"]}
 MAX_TEXT_LENGTH = 2000
-HISTORY_LIMIT = 50  # how many old messages a new connection gets
+HISTORY_LIMIT = 50  # how many messages a channel opens with, and how many more each scroll up loads
 
 USERNAME_PATTERN = re.compile(r"[A-Za-z0-9_-]{1,32}")  # 1-32 letters, digits, _ or -
 RESERVED_NAMES = {"everyone", "here"}  # would be confused with @everyone
@@ -548,8 +548,10 @@ def reactions_for(message_ids):
     return result
 
 
-def recent_messages(channel):
-    """The channel's newest messages, oldest first, in the same shape as live messages."""
+def recent_messages(channel, before=None):
+    """The channel's newest messages, oldest first, in the same shape as live messages.
+    With `before` (a message id): the newest ones *older* than that message instead, for
+    scrolling up. Ids only ever grow, so "older" simply means "a smaller id"."""
     # LEFT JOINs: each message, plus its sender's *current* username, plus its attachment
     # (NULLs where there's none). COALESCE(a, b) means "a, or b if a is NULL": for messages from
     # before accounts existed, there's no user, so we show the name that was typed back then.
@@ -568,10 +570,11 @@ def recent_messages(channel):
         LEFT JOIN attachments ON attachments.id = messages.attachment_id
         LEFT JOIN messages AS original ON original.id = messages.reply_to
         LEFT JOIN users AS original_sender ON original_sender.id = original.user_id
-        WHERE messages.channel = ?
+        WHERE messages.channel = ? AND messages.id < ?
         ORDER BY messages.id DESC LIMIT ?
         """,
-        (channel, HISTORY_LIMIT),
+        # No `before`: SQLite's biggest whole number, so the condition lets every message through.
+        (channel, before if before is not None else 2**63 - 1, HISTORY_LIMIT),
     ).fetchall()
     rows.reverse()  # we fetched newest-first; chat reads oldest-first
     reactions = reactions_for([row[0] for row in rows])  # all the reactions, in one query
@@ -2240,7 +2243,23 @@ async def chat(websocket: WebSocket):
                 clients[websocket]["channel"] = new_channel
                 history = recent_messages(new_channel)
                 mark_read(user_id, new_channel)  # opening a channel means you've seen it
-                await send(websocket, {"type": "history", "channel": new_channel, "messages": history})
+                # "more": a full batch, so there may be older messages to load by scrolling up.
+                more = len(history) == HISTORY_LIMIT
+                await send(websocket, {"type": "history", "channel": new_channel, "messages": history, "more": more})
+
+            elif kind == "older" and channel is not None:
+                # {"type": "older", "before": 1234}: scrolled to the top, so send the messages just
+                # before message 1234 in the channel we're in. Checked like everything else: a whole
+                # number (True counts as an int in Python, so rule that out) that SQLite can hold,
+                # and a channel we may still read (a DM stops being allowed when the friendship ends).
+                before = data.get("before")
+                if not isinstance(before, int) or isinstance(before, bool) or not 0 < before < 2**63:
+                    continue
+                if not can_join(channel, user_id):
+                    continue
+                older = recent_messages(channel, before)
+                more = len(older) == HISTORY_LIMIT
+                await send(websocket, {"type": "older", "channel": channel, "messages": older, "more": more})
 
             elif kind == "message" and channel is not None:
                 # Check again, not just when joining: a DM stops being allowed the moment

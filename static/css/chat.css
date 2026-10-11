@@ -1793,6 +1793,13 @@ body {
   background: #3f4147;
 }
 
+/* "This is the beginning of #general", above a channel's first message. */
+.channel-start {
+  margin: 8px 0 16px;
+  font-size: 0.85rem;
+  color: #949ba4;
+}
+
 .name {
   color: white;
   font-weight: 600;

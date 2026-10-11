@@ -808,8 +808,8 @@ function jumpToMessage(messageId) {
   // The id is a number from the server, so it's safe to put in a CSS selector.
   const target = messages.querySelector(`[data-id="${messageId}"]`);
   if (!target) {
-    // Only the newest messages are loaded, so older ones can't be shown (yet).
-    showUploadError("That message is too old to show here.");
+    // Not loaded yet: older messages only come in by scrolling up.
+    showUploadError("That message is further up: scroll up to load it.");
     return;
   }
   jumpTarget = target;
@@ -843,10 +843,62 @@ function canModify(message) {
 function redrawMessages() {
   const atBottom = messages.scrollHeight - messages.scrollTop - messages.clientHeight < 50;
   const scrollTop = messages.scrollTop;
+  drawAllMessages(atBottom);
+  messages.scrollTop = atBottom ? messages.scrollHeight : scrollTop;
+}
+
+// Empty the box and draw shownMessages into it again, from the top.
+// `follow`: were we at the bottom? Only then should pictures that finish loading later
+// scroll back down (showMessage). The box is empty at first, so it can't tell by itself.
+function drawAllMessages(follow) {
   messages.replaceChildren();
   lastShown = null;
-  for (const message of shownMessages) showMessage(message);
-  messages.scrollTop = atBottom ? messages.scrollHeight : scrollTop;
+  if (reachedStart) messages.appendChild(makeChannelStart());
+  for (const message of shownMessages) showMessage(message, follow);
+}
+
+// ----- Loading older messages by scrolling up
+//
+// A channel opens with its newest 50 messages. Getting near the top asks the server for the
+// 50 before the oldest one we have ("older than message 1234"), which go in front of the others.
+
+// "This is the beginning of #general": shown above the very first message.
+function makeChannelStart() {
+  const line = document.createElement("div");
+  line.className = "channel-start";
+  line.textContent = "This is the beginning of " + topbarTitle.textContent + ".";  // "#general" or "@kari"
+  return line;
+}
+
+function loadOlderMessages() {
+  // Already asked, nothing older, or nothing here at all (the Friends and Lounge pages).
+  if (loadingOlder || reachedStart || shownMessages.length === 0) return;
+  // If we're disconnected, nothing is sent and loadingOlder stays true until the
+  // reconnect rejoins the channel (joinCurrentChannel), which resets it.
+  loadingOlder = true;
+  sendToServer({ type: "older", before: shownMessages[0].id });
+}
+
+// The "scroll" event fires many times while scrolling. Within 300 pixels of the top is
+// "near the top": the next batch then usually arrives before you get there.
+messages.addEventListener("scroll", () => {
+  if (messages.scrollTop < 300) loadOlderMessages();
+});
+
+// The server's answer (core.js): put the batch in front, without moving what you're reading.
+function showOlderMessages(older, more) {
+  loadingOlder = false;
+  reachedStart = !more;
+  // Adding things above the view would push it down: the browser keeps scrollTop (the distance
+  // from the top) the same, but the top now has more above it. So measure the box's full height
+  // before and after, and scroll down by however much it grew.
+  const heightBefore = messages.scrollHeight;
+  const topBefore = messages.scrollTop;
+  shownMessages = older.concat(shownMessages);  // older ones first
+  drawAllMessages(false);  // a full redraw, so grouping and date dividers are right where they meet
+  messages.scrollTop = topBefore + (messages.scrollHeight - heightBefore);
+  // Still near the top (a tall screen, or a batch of short messages)? Then the next batch.
+  if (messages.scrollTop < 300) loadOlderMessages();
 }
 
 // In the text, custom emoji are tokens like <:17>. In an edit box we show ":pog:" again.
@@ -949,11 +1001,13 @@ function makeDateDivider(date) {
 // Add one message to the bottom of the #messages box.
 // Built piece by piece with textContent, never innerHTML: names and text are
 // shown as-is, so neither can ever run as code.
-function showMessage(message) {
+// `follow` is false when redrawing while scrolled up (drawAllMessages): then nothing here may
+// scroll to the bottom, not even later when a picture finishes loading.
+function showMessage(message, follow = true) {
   // Were we scrolled to (or near) the bottom before this message arrived?
   // (Measured before adding anything, including a date divider.)
   const distanceFromBottom = messages.scrollHeight - messages.scrollTop - messages.clientHeight;
-  const wasAtBottom = distanceFromBottom < 50;
+  const wasAtBottom = follow && distanceFromBottom < 50;
 
   const time = new Date(message.sent_at);
   // Who sent it: the user id, or for messages from before accounts existed, the typed name.

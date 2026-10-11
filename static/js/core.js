@@ -115,6 +115,8 @@ const LOUNGE = "voice:lounge";  // the Lounge page (a "channel" name like FRIEND
 let myId = null;            // our own user id; the server tells us in its "welcome"
 let pendingJump = null;     // a message id to go to once its channel's history arrives (from a notification)
 let jumpTarget = null;      // the message we last jumped to: pictures loading keep it in view (messages.js)
+let loadingOlder = false;   // asked the server for older messages, and waiting for them (messages.js)
+let reachedStart = false;   // the channel's very first message is on the page: nothing older to load
 let reconnectDelay = 1000;  // milliseconds to wait before the next reconnect attempt
 const unread = new Set();   // channels and DMs with messages we haven't seen
 const mentionCounts = new Map();  // channel -> how many unread messages there mention us
@@ -322,6 +324,8 @@ function handleServerMessage(event) {
 
   if (data.type === "history") {
     shownMessages = data.messages;  // remembered, so we can redraw after edits and deletes
+    reachedStart = !data.more;      // not a full batch: this is the whole channel
+    if (reachedStart) messages.appendChild(makeChannelStart());
     for (const message of shownMessages) {
       showMessage(message);
     }
@@ -330,6 +334,11 @@ function handleServerMessage(event) {
       jumpToMessage(pendingJump);
       pendingJump = null;
     }
+  } else if (data.type === "older") {
+    // The batch we asked for by scrolling up. If we didn't ask (or switched channels and back
+    // since, which resets loadingOlder), it no longer fits what's on the page: ignore it.
+    if (!loadingOlder) return;
+    showOlderMessages(data.messages, data.more);
   } else if (data.type === "message") {
     stopTyping(data.name);  // their message arrived, so they're done typing
     shownMessages.push(data);
@@ -419,6 +428,8 @@ function joinCurrentChannel() {
   editingId = null;
   lastShown = null;            // so the first message starts a fresh group (and date divider)
   jumpTarget = null;           // a fresh channel starts at the bottom
+  loadingOlder = false;        // an answer still on its way belongs to what we just cleared
+  reachedStart = false;        // (the history says whether there's more)
   pendingJump = null;          // (openMessage sets it again right after switching)
   clearReply();                // a reply belongs to the channel we just left
   clearTyping();
