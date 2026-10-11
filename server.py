@@ -125,8 +125,9 @@ MAX_BIO_LENGTH = 300
 
 hasher = PasswordHasher()
 
-# Every open connection (one per browser tab) and what we know about it:
-# {websocket: {"user_id": 3, "channel": "memes"}}
+# Every open connection (one per browser tab) and what we know about it: the channel it's looking
+# at, and the voice room it says it's in (and whether it's muted there).
+# {websocket: {"user_id": 3, "channel": "memes", "voice": "lounge", "muted": False}}
 clients = {}
 
 
@@ -1724,6 +1725,22 @@ def make_voice_token(user_id, name, room):
     })
 
 
+def voice_members_message():
+    """Who's in each voice channel (in the order their tabs connected), and whether they're muted:
+    {"type": "voice_members", "rooms": {"lounge": [{"id": 3, "muted": false}, ...]}}.
+    Someone in it from two tabs is listed once (muted only if muted in all of them)."""
+    rooms = {room: {} for room in VOICE_ROOMS}  # room -> {user id: muted}
+    for client in clients.values():  # (a dict keeps the order things were added: who connected first)
+        members = rooms.get(client["voice"])
+        if members is not None:
+            members[client["user_id"]] = members.get(client["user_id"], True) and client["muted"]
+    return {
+        "type": "voice_members",
+        "rooms": {room: [{"id": user_id, "muted": muted} for user_id, muted in members.items()]
+                  for room, members in rooms.items()},
+    }
+
+
 @app.get("/voice-token")
 async def voice_token(room: str, request: Request):
     """Where the LiveKit server is, and a ticket into this voice room. The page asks for this when
@@ -1835,7 +1852,8 @@ async def chat(websocket: WebSocket):
 
     await websocket.accept()
     was_online = user_id in online_user_ids()  # already open in another tab?
-    clients[websocket] = {"user_id": user_id, "channel": None}  # no channel until they "join"
+    # No channel until they "join", no voice room until they say they joined one.
+    clients[websocket] = {"user_id": user_id, "channel": None, "voice": None, "muted": False}
     try:
         # Tell the page who it is (the id is for building DM names).
         await send(websocket, {
@@ -1851,6 +1869,7 @@ async def chat(websocket: WebSocket):
             await send(websocket, users_message())  # just this tab
         else:
             await send_to_everyone(users_message())  # they came online
+        await send(websocket, voice_members_message())  # who's in the voice channels right now
 
         while True:
             data = parse_json(await websocket.receive_text())
@@ -1994,9 +2013,28 @@ async def chat(websocket: WebSocket):
                     channel, {"type": "typing", "channel": channel, "name": username_of(user_id)},
                     except_user_id=user_id,
                 )
+
+            elif kind == "voice":
+                # The page joined a voice room ({"room": "lounge"}), left it ({"room": null}), or
+                # muted or unmuted ({"muted": true}). Only for showing who's in voice: getting into
+                # the audio itself still needs a ticket from /voice-token.
+                room = data.get("room")
+                if room is not None and room not in VOICE_ROOMS and not (
+                    isinstance(room, str) and room.startswith("dm:") and can_join(room, user_id)
+                ):
+                    continue  # not a room they may be in
+                old_room = clients[websocket]["voice"]
+                clients[websocket]["voice"] = room
+                clients[websocket]["muted"] = data.get("muted") is True
+                # Everyone sees who's in the voice channels; DM calls stay private (step 9).
+                if old_room in VOICE_ROOMS or room in VOICE_ROOMS:
+                    await send_to_everyone(voice_members_message())
     except WebSocketDisconnect:
         pass
     finally:
+        voice_room = clients[websocket]["voice"]
         del clients[websocket]
         if user_id not in online_user_ids():  # that was their last tab: they went offline
             await send_to_everyone(users_message())
+        if voice_room in VOICE_ROOMS:  # closed the tab while in voice: they're out
+            await send_to_everyone(voice_members_message())

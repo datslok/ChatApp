@@ -156,6 +156,46 @@
       font-weight: 600;
     }
 
+    /* Who's in a voice channel, listed under it, a little indented. */
+    .voice-members {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      padding-left: 24px;
+    }
+    .voice-member {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 3px 8px;
+      border: none;
+      border-radius: 6px;
+      background: none;
+      color: #949ba4;
+      font-size: 0.9rem;
+      text-align: left;
+      cursor: pointer;
+    }
+    .voice-member:hover {
+      background: #35373c;
+      color: #dbdee1;
+    }
+    .voice-member-name {
+      flex: 1;
+      min-width: 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    /* Talking right now: a green ring around their picture. box-shadow draws it outside the
+       picture without changing its size, so nothing moves when it lights up. */
+    .voice-member .avatar {
+      transition: box-shadow 0.1s;
+    }
+    .voice-member.speaking .avatar {
+      box-shadow: 0 0 0 2px #23a55a;
+    }
+
     /* The voice bar at the bottom of the sidebar: what you're connected to, then mute and leave. */
     #voice-bar {
       display: flex;
@@ -1757,6 +1797,7 @@
       <h2 class="section-heading">Voice</h2>
       <div id="voice-list">
         <button class="channel voice-channel" data-room="lounge">🔊 Lounge</button>
+        <div class="voice-members" data-room="lounge"></div>
       </div>
       <h2 class="section-heading">Direct messages</h2>
       <div id="dm-list"></div>
@@ -2205,6 +2246,7 @@
       socket.addEventListener("open", () => {
         reconnectDelay = 1000;  // it worked, so start from 1 second again next time
         banner.hidden = true;
+        sendVoiceState();  // a new connection: the server doesn't know we're in voice yet
         if (currentChannel === null) {
           switchChannel(firstChannel, "#" + firstChannel);  // first time: open the first channel
         } else {
@@ -2267,6 +2309,12 @@
       }
       if (data.type === "users") {
         showUsers(data.users);
+        renderVoiceMembers();  // (names may have changed)
+        return;
+      }
+      if (data.type === "voice_members") {
+        voiceMembers = data.rooms;
+        renderVoiceMembers();
         return;
       }
       if (data.type === "unread") {
@@ -3264,6 +3312,58 @@
       participant.setVolume((voiceSettings.outputVolume / 100) * (personVolume(participant.identity) / 100));
     }
 
+    // ----- Who's in voice (in the sidebar, for everyone) and who's talking (only while you're in there)
+
+    let voiceMembers = {};        // from the server: {"lounge": [{id: 3, muted: false}, ...]}
+    let speakingIds = new Set();  // identities (user ids as text) talking right now, from LiveKit
+
+    // Tell our server where we are in voice and whether we're muted, so everyone's sidebar shows it.
+    // Only once really connected: "Connecting…" doesn't count.
+    function sendVoiceState() {
+      const connected = voiceRoom && voiceRoom.state === "connected";
+      sendToServer({ type: "voice", room: connected ? voiceRoomName : null, muted: micMuted });
+    }
+
+    function renderVoiceMembers() {
+      for (const box of document.querySelectorAll(".voice-members")) {
+        const rows = (voiceMembers[box.dataset.room] || []).map(({ id, muted }) => {
+          const name = people.has(id) ? people.get(id).name : "?";
+          const row = document.createElement("button");
+          row.type = "button";
+          row.className = "voice-member";
+          row.dataset.userId = id;
+          const label = document.createElement("span");
+          label.className = "voice-member-name";
+          label.textContent = name;
+          row.append(makeAvatar(id, name, "small"), label);
+          if (muted) {
+            const icon = document.createElement("span");
+            icon.textContent = "🔇";
+            icon.title = "Muted";
+            row.append(icon);
+          }
+          // Click (or right-click, instead of the browser's own menu): their profile, with the volume.
+          row.addEventListener("click", () => openProfile(id));
+          row.addEventListener("contextmenu", (event) => {
+            event.preventDefault();
+            openProfile(id);
+          });
+          return row;
+        });
+        box.replaceChildren(...rows);
+      }
+      showSpeaking();
+    }
+
+    // Light up the ring of whoever is talking. Only switches a class on and off, instead of
+    // redrawing the list: LiveKit sends these changes several times a second.
+    function showSpeaking() {
+      for (const row of document.querySelectorAll(".voice-member")) {
+        const room = row.closest(".voice-members").dataset.room;
+        row.classList.toggle("speaking", room === voiceRoomName && speakingIds.has(row.dataset.userId));
+      }
+    }
+
     // ----- Joining and leaving
 
     // The status line in the voice bar. kind: "" (green), "waiting" (yellow) or "error" (red).
@@ -3283,6 +3383,7 @@
       voiceMuteButton.classList.toggle("off", micMuted);
       voiceMuteButton.title = micMuted ? "Unmute" : "Mute";
       voiceMuteButton.setAttribute("aria-label", voiceMuteButton.title);
+      sendVoiceState();  // the 🔇 next to our name
     }
 
     async function joinVoice(roomName, label) {
@@ -3323,6 +3424,11 @@
         // The connection dropped: LiveKit tries to get it back by itself.
         room.on(LivekitClient.RoomEvent.Reconnecting, () => setVoiceStatus("Reconnecting…", "waiting"));
         room.on(LivekitClient.RoomEvent.Reconnected, () => setVoiceStatus("Voice connected"));
+        // Who's talking: LiveKit measures it on the server and tells everyone in the room.
+        room.on(LivekitClient.RoomEvent.ActiveSpeakersChanged, (speakers) => {
+          speakingIds = new Set(speakers.map((participant) => participant.identity));
+          showSpeaking();
+        });
         // Disconnected for good (gave up reconnecting, or joined from another tab with the same account).
         room.on(LivekitClient.RoomEvent.Disconnected, () => {
           if (voiceRoom === room) leaveVoice();
@@ -3355,6 +3461,7 @@
         return;
       }
       setVoiceStatus("Voice connected");
+      sendVoiceState();  // we're in: show us under the channel
 
       // The microphone. The first time, the browser asks whether we may use it. Without it you can
       // still listen (and the mute button stays red).
@@ -3378,6 +3485,9 @@
       voiceBar.hidden = true;
       voiceStatus.title = "";
       markVoiceChannel();
+      speakingIds.clear();
+      showSpeaking();
+      sendVoiceState();  // we're out
     }
 
     // Clicking a voice channel in the sidebar joins it.

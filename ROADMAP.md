@@ -35,7 +35,7 @@
     - [ ] Lounge voice channel: join, mute, leave (built; tick after the live test)
     - [ ] Voice settings: input and output device, mic and output volume, sensitivity (noise gate) (built; tick after the live test)
     - [ ] Volume per person (built; tick after the live test)
-    - [ ] Who is in voice (in the sidebar) and a speaking ring
+    - [ ] Who is in voice (in the sidebar, with 🔇 for muted) and a speaking ring (built; tick after the live test)
     - [ ] Calls in DMs: ringing, accept/decline
     - [ ] Microphone and call notifications in the desktop app
 11. [ ] Video calls in DMs: 1-on-1, peer-to-peer WebRTC (signalling over our WebSocket, STUN/TURN),
