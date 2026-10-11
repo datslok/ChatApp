@@ -12,6 +12,10 @@ fn main() {
         .plugin(tauri_plugin_notification::init())
         // Updates: where to look and the public key to check them with are in tauri.conf.json.
         .plugin(tauri_plugin_updater::Builder::new().build())
+        // Remembers the window's size, position and whether it's maximized: saved when the app
+        // closes (in %APPDATA%\no.datslok.chat), put back when it starts. Not for the update window,
+        // which should always appear centred at its own size.
+        .plugin(tauri_plugin_window_state::Builder::default().with_denylist(&["update"]).build())
         .setup(|app| {
             // Look for an update in the background, so the window opens right away.
             let handle = app.handle().clone();
