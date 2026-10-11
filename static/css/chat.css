@@ -2101,6 +2101,15 @@ body {
   margin-inline: auto;
 }
 
+/* Buttons straight inside a form or group (Save, Send, Test microphone, ...) would be stretched
+   like the text boxes. align-self: flex-start keeps just this one at the start (left) and only
+   as wide as its text, plus some padding on the sides. (">" means "directly inside".) */
+#settings form > button,
+#settings .settings-group > button {
+  align-self: flex-start;
+  padding: 10px 24px;
+}
+
 #settings label {
   display: flex;
   flex-direction: column;
