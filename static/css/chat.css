@@ -1975,8 +1975,8 @@ body {
 /* The Settings popup: the tabs on the left, the chosen page on the right. A fixed size, so it
    doesn't jump around when switching tabs; the page scrolls inside it. */
 #settings {
-  width: min(900px, 100% - 32px);
-  height: min(720px, 90vh);
+  width: min(1350px, 100% - 32px);  /* as wide as there's room for, up to 1350px */
+  height: min(1080px, 90vh);
   box-sizing: border-box;
   padding: 0;
   overflow: hidden;
