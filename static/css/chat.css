@@ -1490,6 +1490,98 @@ body {
   gap: 8px 24px;
 }
 
+/* ----- The inbox (admins): bug reports and ideas as cards ----- */
+
+#inbox-filters {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+/* "#settings" in front, to beat "#settings button" (the big blue buttons). */
+#settings #inbox-filters button {
+  padding: 6px 14px;
+  border-radius: 16px;
+  background: #2e3035;
+  color: #b5bac1;
+  font-size: 0.9rem;
+}
+
+#settings #inbox-filters button[aria-pressed="true"] {
+  background: #5865f2;
+  color: white;
+}
+
+#inbox-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.inbox-item {
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: #2b2d31;
+}
+
+.inbox-item.done {
+  opacity: 0.6;  /* dealt with: faded, but still readable */
+}
+
+.inbox-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.inbox-kind {
+  padding: 1px 8px;
+  border-radius: 10px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.inbox-kind.bug {
+  background: #4d2427;
+  color: #fa777c;
+}
+
+.inbox-kind.idea {
+  background: #22392b;
+  color: #57d28f;
+}
+
+.inbox-head time {
+  font-size: 0.8rem;
+  color: #949ba4;
+}
+
+.inbox-text {
+  margin: 8px 0;
+  white-space: pre-wrap;      /* keep the line breaks they typed (and wrap long lines) */
+  overflow-wrap: anywhere;    /* a long link without spaces still wraps instead of sticking out */
+}
+
+.inbox-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;  /* the device on the left, the button on the right */
+  gap: 10px;
+  font-size: 0.8rem;
+  color: #949ba4;
+}
+
+#settings .inbox-foot button {
+  flex-shrink: 0;
+  padding: 6px 12px;
+  font-size: 0.85rem;
+}
+
+#settings .inbox-item.done .inbox-foot button {
+  background: #4e5058;  /* Reopen: grey, not the main action */
+}
+
 .settings-help {
   margin: 0;
   font-size: 0.8rem;

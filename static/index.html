@@ -226,6 +226,10 @@
       <button type="button" class="settings-tab" role="tab" data-tab="video">Video</button>
       <h3>Help</h3>
       <button type="button" class="settings-tab" role="tab" data-tab="feedback">Bugs &amp; ideas</button>
+      <!-- Only for admins (settings.js shows it); the server checks too. -->
+      <button type="button" class="settings-tab" role="tab" data-tab="inbox" id="inbox-tab" hidden>
+        Inbox <span id="inbox-count"></span>
+      </button>
       <!-- The Windows app: always in sight at the bottom of the tabs (hidden inside the app itself). -->
       <a id="desktop-app" href="/download" target="_blank">
         <svg class="download-icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -449,6 +453,18 @@
           <div id="feedback-status" class="status"></div>
           <button>Send</button>
         </form>
+      </section>
+
+      <section class="settings-page" data-page="inbox" role="tabpanel" aria-label="Inbox">
+        <h2>Inbox</h2>
+        <!-- Which reports to show. aria-pressed marks the chosen one (and the CSS colours it). -->
+        <div id="inbox-filters" role="group" aria-label="Show">
+          <button type="button" data-filter="open" aria-pressed="true">Open</button>
+          <button type="button" data-filter="done" aria-pressed="false">Done</button>
+          <button type="button" data-filter="all" aria-pressed="false">All</button>
+        </div>
+        <p id="inbox-empty" class="settings-help" hidden></p>
+        <div id="inbox-list"></div>
       </section>
     </div>
   </dialog>

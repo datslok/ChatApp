@@ -17,6 +17,7 @@ settingsButton.addEventListener("click", async () => {
   emojiStatus.textContent = "";
   feedbackStatus.textContent = "";  // (a half-written report stays, in case Settings was closed by mistake)
   renderMyEmoji();
+  loadInbox();  // (admins only: the bug reports and ideas, fetched fresh)
   showNotificationSettings();  // (the browser's permission may have changed since)
   settingsDialog.showModal();
   showSettingsPage(settingsPage);  // the tab from last time, in sight (on a phone) and from the top
@@ -516,7 +517,7 @@ feedbackForm.addEventListener("submit", async (event) => {
   // The chosen radio button: ":checked" finds the one that's ticked.
   const kind = feedbackForm.querySelector('input[name="feedback-kind"]:checked').value;
   feedbackSendButton.disabled = true;  // no second copy from a double click
-  const result = await postJson("/feedback", { kind, text: feedbackText.value });
+  const result = await postJson("/feedback", { kind, text: feedbackText.value, app: inDesktopApp });
   feedbackSendButton.disabled = false;
   if (!result.ok) {
     showStatus(feedbackStatus, result.error, "error");
@@ -525,3 +526,126 @@ feedbackForm.addEventListener("submit", async (event) => {
   feedbackForm.reset();  // empties the text (and goes back to "bug")
   showStatus(feedbackStatus, kind === "bug" ? "Thanks! The bug report is sent." : "Thanks! Your idea is sent.", "success");
 });
+
+// ---------- Settings: the inbox (admins only) ----------
+// Every bug report and idea, newest first. Loaded from the server each time Settings opens;
+// the filter buttons only choose which of the loaded ones to show.
+
+const inboxTab = document.getElementById("inbox-tab");
+const inboxCount = document.getElementById("inbox-count");
+const inboxFilterButtons = document.querySelectorAll("#inbox-filters button");
+const inboxEmpty = document.getElementById("inbox-empty");
+const inboxList = document.getElementById("inbox-list");
+let inboxReports = [];     // [{id, user_id, kind, text, user_agent, created_at, done}, ...]
+let inboxFilter = "open";  // "open", "done" or "all"
+
+// Called when Settings opens. For everyone else the tab stays hidden (and the server would
+// refuse them anyway).
+async function loadInbox() {
+  inboxTab.hidden = !amAdmin();
+  if (inboxTab.hidden) {
+    if (settingsPage === "inbox") showSettingsPage("account");  // (no longer an admin)
+    return;
+  }
+  const response = await fetch("/feedback");
+  if (!response.ok) {
+    inboxEmpty.hidden = false;
+    inboxEmpty.textContent = "Couldn't load the reports.";
+    return;
+  }
+  inboxReports = await response.json();
+  renderInbox();
+}
+
+// "Chrome on Android", "Windows app", ... from the User-Agent text the browser sent. These are
+// rough guesses by looking for known words, which is all a User-Agent allows. The order matters:
+// Edge's says "Chrome" and "Safari" too, and Chrome's says "Safari".
+function describeDevice(userAgent) {
+  if (!userAgent) return "unknown device";
+  if (userAgent.startsWith("ChatApp Windows app")) return "Windows app";
+  let browser = "a browser";
+  if (userAgent.includes("Edg/")) browser = "Edge";
+  else if (userAgent.includes("OPR/")) browser = "Opera";
+  else if (userAgent.includes("Firefox/") || userAgent.includes("FxiOS/")) browser = "Firefox";
+  else if (userAgent.includes("Chrome/") || userAgent.includes("CriOS/")) browser = "Chrome";
+  else if (userAgent.includes("Safari/")) browser = "Safari";
+  let system = "";
+  if (userAgent.includes("Android")) system = "Android";
+  else if (userAgent.includes("iPhone") || userAgent.includes("iPad")) system = "iPhone/iPad";
+  else if (userAgent.includes("Windows")) system = "Windows";
+  else if (userAgent.includes("Mac OS X")) system = "Mac";
+  else if (userAgent.includes("Linux")) system = "Linux";
+  return system ? `${browser} on ${system}` : browser;
+}
+
+// One report as a card: who and when, the text, where it was sent from, and Mark done / Reopen.
+function makeInboxItem(report) {
+  const item = document.createElement("article");
+  item.className = "inbox-item" + (report.done ? " done" : "");
+
+  const head = document.createElement("div");
+  head.className = "inbox-head";
+  const name = people.get(report.user_id)?.name ?? "someone";
+  head.appendChild(makeAvatar(report.user_id, name, "small"));
+  const nameElement = document.createElement("strong");
+  nameElement.textContent = name;
+  head.appendChild(nameElement);
+  const kind = document.createElement("span");
+  kind.className = "inbox-kind " + report.kind;  // "bug" or "idea": its own colour (chat.css)
+  kind.textContent = report.kind === "bug" ? "🐛 Bug" : "💡 Idea";
+  head.appendChild(kind);
+  const time = document.createElement("time");
+  const sent = new Date(report.created_at);
+  time.textContent = dayName(sent) + " at " + formatClock(sent);  // "Yesterday at 14:03"
+  time.title = sent.toLocaleString();
+  head.appendChild(time);
+  item.appendChild(head);
+
+  // textContent, never innerHTML: this is text someone typed. The CSS keeps its line breaks.
+  const text = document.createElement("p");
+  text.className = "inbox-text";
+  text.textContent = report.text;
+  item.appendChild(text);
+
+  const foot = document.createElement("div");
+  foot.className = "inbox-foot";
+  const device = document.createElement("span");
+  device.textContent = `#${report.id} · from ${describeDevice(report.user_agent)}`;
+  device.title = report.user_agent || "";  // the whole User-Agent, when hovering it
+  foot.appendChild(device);
+  const button = document.createElement("button");
+  button.type = "button";
+  button.textContent = report.done ? "Reopen" : "Mark done";
+  button.addEventListener("click", async () => {
+    button.disabled = true;
+    const result = await postJson(`/feedback/${report.id}/done`, { done: !report.done });
+    if (!result.ok) {
+      button.disabled = false;
+      device.textContent = result.error;
+      return;
+    }
+    report.done = !report.done;  // the same object as in inboxReports, so the list knows too
+    renderInbox();
+  });
+  foot.appendChild(button);
+  item.appendChild(foot);
+  return item;
+}
+
+function renderInbox() {
+  const openCount = inboxReports.filter((report) => !report.done).length;
+  inboxCount.textContent = openCount ? `(${openCount})` : "";
+  const shown = inboxReports.filter((report) =>
+    inboxFilter === "all" || (inboxFilter === "done" ? report.done : !report.done));
+  inboxList.replaceChildren(...shown.map(makeInboxItem));  // "...": each card as its own argument
+  inboxEmpty.hidden = shown.length > 0;
+  inboxEmpty.textContent = inboxFilter === "open" ? "Nothing open. 🎉" : "Nothing here yet.";
+}
+
+for (const button of inboxFilterButtons) {
+  button.addEventListener("click", () => {
+    inboxFilter = button.dataset.filter;
+    for (const other of inboxFilterButtons) other.setAttribute("aria-pressed", other === button ? "true" : "false");
+    renderInbox();
+  });
+}

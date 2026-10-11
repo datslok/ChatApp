@@ -1327,6 +1327,7 @@ MAX_FEEDBACK_LENGTH = 4000
 class Feedback(BaseModel):
     kind: str
     text: str
+    app: bool = False  # sent from the Windows app (whose window says it's Edge, so we're told)
 
 
 @app.post("/feedback")
@@ -1349,8 +1350,8 @@ async def send_feedback(data: Feedback, request: Request, background_tasks: Back
     record_failure(key)
 
     # The browser says what it is in every request (the User-Agent header): which browser, which
-    # version, which system. The app's window (WebView2) counts as Edge there.
-    user_agent = request.headers.get("user-agent", "")[:300]
+    # version, which system. The app's window (WebView2) says it's Edge, so the page tells us.
+    user_agent = ("ChatApp Windows app | " if data.app else "") + request.headers.get("user-agent", "")[:300]
     with db:
         cursor = db.execute(
             "INSERT INTO feedback (user_id, kind, text, user_agent) VALUES (?, ?, ?, ?)",
@@ -1372,6 +1373,50 @@ async def send_feedback(data: Feedback, request: Request, background_tasks: Back
         background_tasks.add_task(send_email, admin_email, subject, body)
     if not admin_emails:
         print(f"Feedback #{feedback_id} saved, but no admin has an email to send it to.", flush=True)
+    return {"ok": True}
+
+
+def logged_in_admin(request):
+    """The logged-in admin's id, or an error. The page only shows the inbox to admins, but anyone
+    can send a request by hand, so this check on the server is what actually keeps it private."""
+    user_id = current_user(request)
+    if user_id is None:
+        raise HTTPException(401, "You're not logged in.")
+    if not is_admin(user_id):
+        raise HTTPException(403, "Only admins can do that.")
+    return user_id
+
+
+@app.get("/feedback")
+async def list_feedback(request: Request):
+    """Every report, newest first, for the inbox in Settings (admins only)."""
+    logged_in_admin(request)
+    rows = db.execute(
+        "SELECT id, user_id, kind, text, user_agent, created_at, done FROM feedback ORDER BY id DESC"
+    ).fetchall()
+    return [
+        {
+            "id": feedback_id, "user_id": user_id, "kind": kind, "text": text,
+            "user_agent": user_agent, "created_at": iso_time(created_at), "done": bool(done),
+        }
+        for feedback_id, user_id, kind, text, user_agent, created_at, done in rows
+    ]
+
+
+class FeedbackDone(BaseModel):
+    done: bool
+
+
+@app.post("/feedback/{feedback_id}/done")
+async def mark_feedback_done(feedback_id: int, data: FeedbackDone, request: Request):
+    """Tick a report off (done: true), or open it again (done: false). Admins only.
+    {feedback_id} in the path: FastAPI takes the 12 out of /feedback/12/done (and refuses
+    anything that isn't a number, because of the `int`)."""
+    logged_in_admin(request)
+    with db:
+        cursor = db.execute("UPDATE feedback SET done = ? WHERE id = ?", (int(data.done), feedback_id))
+    if cursor.rowcount == 0:
+        raise HTTPException(404, "There's no such report.")
     return {"ok": True}
 
 

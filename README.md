@@ -225,7 +225,8 @@ administrator); then `cd C:\ChatApp`. Or sit at the server PC itself, in PowerSh
 .venv\Scripts\python.exe tools\make_admin.py mongri --remove     # take it away again
 
 # Bug reports and ideas (Settings → Bugs & ideas). Each one is also emailed to every admin
-# with an email address, the moment it's sent.
+# with an email address, the moment it's sent. Admins can read them and tick them off in the
+# chat itself too: Settings → Inbox. Here, by hand:
 .venv\Scripts\python.exe tools\feedback.py                       # the ones not done yet
 .venv\Scripts\python.exe tools\feedback.py --done 12             # tick off #12 (--undo 12: back again)
 .venv\Scripts\python.exe tools\feedback.py --all                 # every one, done ones too

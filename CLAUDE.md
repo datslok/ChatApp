@@ -54,7 +54,9 @@ the point is for me to understand how it works, not just to have it done.
 - `tools/make_admin.py`: make someone an admin (or `--remove`, or `--list`); `--db dev.db` for development.
   Admins can edit and delete anyone's messages and custom emoji.
 - Settings → "Bugs & ideas": `/feedback` saves a report in the `feedback` table and emails it to every
-  admin with an email. `tools/feedback.py` lists them (`--all`, `--done ID`, `--undo ID`, `--db dev.db`).
+  admin with an email. Admins read them in Settings → "Inbox" (settings.js; `GET /feedback` and
+  `POST /feedback/{id}/done`, both admin-only on the server), or with `tools/feedback.py`
+  (`--all`, `--done ID`, `--undo ID`, `--db dev.db`).
 - `uploads/`: uploaded files, saved under random names (git-ignored, like `chat.db`).
 - `ROADMAP.md`: the milestones, ticked off as they're done.
 - `setup.ps1`: creates the `chatapp` conda environment and installs `requirements.txt`.
