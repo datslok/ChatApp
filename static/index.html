@@ -3907,7 +3907,7 @@
       } catch {}
     }
 
-    // While our own call rings: a calm "duu-duu" every 3 seconds, lower than the ringtone for an
+    // While our own call rings: a calm, nearly constant "duu-duu" (every 1.2 s), lower than the ringtone for an
     // incoming call, so the two are easy to tell apart. It follows the notification volume, but not
     // "do not disturb": we started this call ourselves.
     let callingTimer = null;
@@ -3918,16 +3918,16 @@
         audio ??= new AudioContext();
         const now = audio.currentTime;
         const peak = 0.08 * (notificationVolume / 100);
-        for (const [start, pitch] of [[0, 440], [0.45, 523]]) {  // A4, then C5
+        for (const [start, pitch] of [[0, 440], [0.55, 523]]) {  // A4, then C5
           const tone = audio.createOscillator();
           const volume = audio.createGain();
           tone.frequency.value = pitch;
           volume.gain.setValueAtTime(0.0001, now + start);
           volume.gain.exponentialRampToValueAtTime(peak, now + start + 0.05);  // softer start than the ringtone
-          volume.gain.exponentialRampToValueAtTime(0.0001, now + start + 0.4);
+          volume.gain.exponentialRampToValueAtTime(0.0001, now + start + 0.55);  // (longer: closer to a steady tone)
           tone.connect(volume).connect(audio.destination);
           tone.start(now + start);
-          tone.stop(now + start + 0.45);
+          tone.stop(now + start + 0.6);
         }
       } catch {}
     }
@@ -3940,7 +3940,7 @@
       callingTimer = null;
       if (channel) {
         playCallingSound();
-        callingTimer = setInterval(playCallingSound, 3000);
+        callingTimer = setInterval(playCallingSound, 1200);
       }
     }
 
