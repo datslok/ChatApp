@@ -824,6 +824,10 @@
     #voice-meter-level.open {
       background: #23a55a;
     }
+    #voice-gate-readout {
+      font-variant-numeric: tabular-nums;  /* digits all the same width, so the text doesn't jiggle */
+      color: #949ba4;
+    }
     /* The sensitivity slider covers the meter, see-through except for its handle: a yellow line.
        "appearance: none" turns off the browser's own look so we can draw it ourselves. */
     #settings #voice-gate {
@@ -2063,6 +2067,8 @@
           <div id="voice-meter-level"></div>
           <input type="range" id="voice-gate" min="-100" max="0" step="1">
         </div>
+        <!-- The line's value and the microphone's level right now, as numbers. -->
+        <span id="voice-gate-readout"></span>
       </label>
       <p class="settings-help">
         Stay quiet and drag the line a little right of where the bar sits, then talk: the bar turns
@@ -3245,6 +3251,7 @@
     const voiceOutputVolumeValue = document.getElementById("voice-output-volume-value");
     const voiceMeterLevel = document.getElementById("voice-meter-level");
     const voiceGateSlider = document.getElementById("voice-gate");
+    const voiceGateReadout = document.getElementById("voice-gate-readout");
     const voiceTestButton = document.getElementById("voice-test");
 
     let voiceRoom = null;       // the LiveKit Room we're in (or joining), or null
@@ -3337,6 +3344,7 @@
       micSource = null;
       micStream = null;
       showMicLevel({ level: -100, open: false });
+      showGateReadout();  // without "Your mic" now (even if the last update was just now)
     }
 
     // Close the microphone if nothing needs it any more (not in voice, not testing it).
@@ -3345,9 +3353,23 @@
     }
 
     // The level meter in Settings: how loud the microphone is, green while the gate lets it through.
+    let micLevel = -100;      // the latest level from the gate, in dB
+    let readoutShownAt = 0;   // when the numbers were last updated (performance.now(), in ms)
+
     function showMicLevel({ level, open }) {
       voiceMeterLevel.style.width = (level + 100) + "%";  // -100 dB = empty, 0 dB = full
       voiceMeterLevel.classList.toggle("open", open);
+      micLevel = level;
+      // The bar moves ~30 times a second, but numbers changing that fast can't be read: 4 is enough.
+      if (performance.now() - readoutShownAt > 250) showGateReadout();
+    }
+
+    // "Line −52 dB · Your mic −64 dB". (The real minus sign "−" instead of "-" reads better.)
+    function showGateReadout() {
+      readoutShownAt = performance.now();
+      const decibels = (value) => String(Math.round(value)).replace("-", "−") + " dB";
+      const line = voiceSettings.gate <= -100 ? "Line off (always on)" : "Line " + decibels(voiceSettings.gate);
+      voiceGateReadout.textContent = micStream ? `${line} · Your mic ${decibels(micLevel)}` : line;
     }
 
     // Send our microphone in this room (turning it on if needed). Throws if the browser won't let us.
@@ -3842,6 +3864,7 @@
       voiceOutputVolumeSlider.value = voiceSettings.outputVolume;
       voiceOutputVolumeValue.textContent = voiceSettings.outputVolume + "%";
       voiceGateSlider.value = voiceSettings.gate;
+      showGateReadout();
     }
     showVolumes();
 
@@ -3867,6 +3890,7 @@
     voiceGateSlider.addEventListener("input", async () => {
       voiceSettings.gate = Number(voiceGateSlider.value);
       saveVoiceSettings();
+      showGateReadout();  // straight away while dragging, not only with the next level report
       if (voiceEngine) (await getAudio()).gate.port.postMessage({ threshold: voiceSettings.gate });
     });
 
