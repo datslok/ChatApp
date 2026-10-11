@@ -276,11 +276,11 @@ function showSpeaking() {
     row.classList.toggle("speaking", room === voiceRoomName && speakingIds.has(row.dataset.userId));
   }
   // ...and in the call banner, which shows the DM we're looking at.
-  for (const person of document.querySelectorAll(".call-person")) {
-    person.classList.toggle("speaking", currentChannel === voiceRoomName && speakingIds.has(person.dataset.userId));
+  for (const tile of document.querySelectorAll("#call-tiles .call-tile")) {
+    tile.classList.toggle("speaking", currentChannel === voiceRoomName && speakingIds.has(tile.dataset.userId));
   }
   // ...and on the Lounge page (only while we're in Lounge: that's when LiveKit tells us).
-  for (const tile of document.querySelectorAll(".lounge-tile")) {
+  for (const tile of document.querySelectorAll("#lounge-tiles .call-tile")) {
     tile.classList.toggle("speaking", voiceRoomName === "lounge" && speakingIds.has(tile.dataset.userId));
   }
 }

@@ -186,57 +186,37 @@ body {
   cursor: default;
 }
 
-/* The call banner at the top of a DM: a dark area with both pictures, buttons below them. */
+/* The call banner at the top of a DM: a dark area of a fixed height, the tiles filling it,
+   the buttons below them. "flex-shrink: 0": the messages below give way, never the banner. */
 #call-panel {
+  box-sizing: border-box;  /* the height includes the padding */
+  height: 40vh;
+  min-height: 160px;
+  flex-shrink: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 16px;
-  padding: 24px 16px 16px;
+  gap: 12px;
+  padding: 16px;
   background: #111214;
 }
 #call-panel[hidden] {
   display: none;
 }
-#call-people {
+/* The tiles, sized by fitTiles (rooms.js) through --tile-width, centred in the space left
+   above the buttons ("flex: 1"; "min-height: 0" lets it be smaller than its tiles would like). */
+#call-tiles {
+  flex: 1;
+  min-height: 0;
+  align-self: stretch;  /* the full width of the banner */
   display: flex;
-  gap: 32px;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-content: center;
+  gap: 8px;  /* TILE_GAP in rooms.js */
 }
-.call-person {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  font-size: 0.85rem;
-  color: #b5bac1;
-}
-.avatar.huge {
-  width: 80px;
-  height: 80px;
-  font-size: 2rem;
-}
-.call-person .avatar {
-  transition: box-shadow 0.1s;
-}
-.call-person.speaking .avatar {
-  box-shadow: 0 0 0 3px #23a55a;  /* the same green ring as in the sidebar, a little thicker */
-}
-/* Someone's camera in the call banner: 16:9, rounded like the pictures are round. */
-.call-video {
-  width: 320px;
-  max-width: 40vw;  /* two side by side still fit on a narrow window */
-  aspect-ratio: 16 / 9;
-  object-fit: cover;  /* fill the frame, cutting off a little at the edges if needed */
-  border-radius: 12px;
-  background: #000;
-  transition: box-shadow 0.1s;
-}
-/* Our own camera, mirrored like a mirror (the others see us the right way round). */
-.call-video.mine {
-  transform: scaleX(-1);
-}
-.call-person.speaking .call-video {
-  box-shadow: 0 0 0 3px #23a55a;
+#call-tiles .call-tile {
+  width: var(--tile-width, 0px);
 }
 /* The camera preview in Settings, mirrored like the one in calls. */
 #camera-preview {
@@ -269,11 +249,11 @@ body {
   text-align: center;
   color: #949ba4;
 }
-/* One person: a 16:9 tile with their camera filling it, or their picture in the middle. */
-.lounge-tile {
+/* One person: a 16:9 tile with their camera filling it, or their picture in the middle.
+   (On the Lounge page and in the DM call banner, which sizes them with --tile-width.) */
+.call-tile {
   position: relative;  /* the video, the name and the ring are placed against it */
   aspect-ratio: 16 / 9;
-  max-height: 70vh;
   border-radius: 12px;
   background: #2b2d31;
   display: flex;
@@ -302,7 +282,7 @@ body {
   font-size: 0.85rem;
 }
 /* The speaking ring: drawn by a layer on top of the tile (::after), so a video can't cover it. */
-.lounge-tile.speaking::after {
+.call-tile.speaking::after {
   content: "";
   position: absolute;
   inset: 0;
@@ -328,37 +308,22 @@ body {
   cursor: pointer;
 }
 
-/* A shared screen on the Lounge page: a tile across the whole width ("1 / -1": from the first
-   grid line to the last), above everyone's tiles. */
-.lounge-tile.screen-tile {
-  grid-column: 1 / -1;
+#lounge-tiles .call-tile {
+  max-height: 70vh;
+}
+/* A shared screen's tile: black around the screen, double-click for fullscreen. */
+.screen-tile {
   background: #000;
   cursor: zoom-in;
+}
+/* On the Lounge page, across the whole width ("1 / -1": from the first grid line to the last),
+   above everyone's tiles. */
+#lounge-tiles .screen-tile {
+  grid-column: 1 / -1;
 }
 /* Screens are never cut off ("contain": the whole picture, black bars if needed) or mirrored. */
 .tile-video.screen {
   object-fit: contain;
-}
-/* Shared screens in the DM call banner, above the two pictures. */
-#call-screens {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-}
-#call-screens:empty {
-  display: none;  /* nobody sharing: no gap */
-}
-.call-screen {
-  width: 100%;
-  max-width: 960px;
-  max-height: 50vh;
-  aspect-ratio: 16 / 9;
-  object-fit: contain;
-  border-radius: 12px;
-  background: #000;
-  cursor: zoom-in;
 }
 /* The 🖥️ buttons while we're sharing. */
 .share-button.on {
@@ -464,7 +429,7 @@ body {
 .call-round.on {
   background: #248046;
 }
-.call-person.away .avatar {
+.call-tile.away .avatar {
   opacity: 0.35;  /* not in the call (yet) */
 }
 #call-buttons {

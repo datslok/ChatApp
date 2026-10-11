@@ -273,10 +273,9 @@ let callNotification = null;  // the desktop notification for it
 // or "Join call" when the other person is in the call and we aren't.
 
 const callPanel = document.getElementById("call-panel");
-const callPeople = document.getElementById("call-people");
+const callTiles = document.getElementById("call-tiles");
 const callPanelMute = document.getElementById("call-panel-mute");
 const callPanelCamera = document.getElementById("call-panel-camera");
-const callScreens = document.getElementById("call-screens");
 const callPanelEnd = document.getElementById("call-panel-end");
 const callPanelJoin = document.getElementById("call-panel-join");
 
@@ -298,18 +297,20 @@ function renderCallPanel() {
   const partnerHere = inCall
     ? Boolean(voiceRoom && voiceRoom.remoteParticipants.has(String(partner)))
     : Boolean(partnerMember);
-  const shown = [
-    { id: myId, here: inCall, muted: micMuted, note: "", video: inCall ? cameraTrack(myId) : null },
-    {
-      id: partner, here: partnerHere, muted: Boolean(partnerMember && partnerMember.muted),
-      note: !partnerHere && outgoingCall === channel ? "Calling…" : "",
+  // Shared screens first (ours too, so we see what they see; only while we're in the call),
+  // then both of us: faded while not in the call, "Calling…" while it rings.
+  const screens = inCall ? [myId, partner].filter((id) => screenTrack(id)).map(makeScreenTile) : [];
+  callTiles.replaceChildren(
+    ...screens,
+    makeTile(myId, { muted: inCall && micMuted, video: inCall ? cameraTrack(myId) : null, away: !inCall }),
+    makeTile(partner, {
+      muted: partnerHere && Boolean(partnerMember && partnerMember.muted),
       video: inCall && partnerHere ? cameraTrack(partner) : null,  // (only while we're in the call too)
-    },
-  ];
-  callPeople.replaceChildren(...shown.map(makeCallPerson));
-  // Shared screens (ours too, so we see what they see), while we're in the call.
-  const screens = inCall ? [myId, partner].map(screenTrack).filter(Boolean) : [];
-  callScreens.replaceChildren(...screens.map((track) => screenVideo(track, "call-screen")));
+      away: !partnerHere,
+      note: !partnerHere && outgoingCall === channel ? "Calling…" : "",
+    }),
+  );
+  fitTiles(callTiles);
   callPanelMute.hidden = !inCall;
   callPanelCamera.hidden = !inCall;
   callPanelShare.hidden = !inCall || !canShareScreen;
@@ -319,19 +320,6 @@ function renderCallPanel() {
   callPanelMute.title = micMuted ? "Unmute" : "Mute";
   callPanelMute.setAttribute("aria-label", callPanelMute.title);
   showSpeaking();  // the rings
-}
-
-// One person in the banner: their camera if it's on, otherwise a big picture (faded while they're
-// not in the call), and their name.
-function makeCallPerson({ id, here, muted, note, video }) {
-  const name = people.has(id) ? people.get(id).name : "?";
-  const box = document.createElement("div");
-  box.className = here ? "call-person" : "call-person away";
-  box.dataset.userId = id;  // (for the speaking ring)
-  const label = document.createElement("span");
-  label.textContent = note || (here && muted ? "🔇 " + name : name);
-  box.append(video ? videoFor(video, id === myId) : makeAvatar(id, name, "huge"), label);
-  return box;
 }
 
 callPanelMute.addEventListener("click", () => voiceMuteButton.click());  // the same as the voice bar's
@@ -535,7 +523,10 @@ function renderLoungeView() {
   } else {
     // Shared screens first (only visible to those in Lounge, like cameras), then everyone.
     const screens = inLounge ? members.filter(({ id }) => screenTrack(id)).map(({ id }) => makeScreenTile(id)) : [];
-    loungeTiles.replaceChildren(...screens, ...members.map(({ id, muted }) => makeLoungeTile(id, muted, inLounge)));
+    loungeTiles.replaceChildren(
+      ...screens,
+      ...members.map(({ id, muted }) => makeTile(id, { muted, video: inLounge ? cameraTrack(id) : null })),
+    );
   }
   loungeMute.hidden = !inLounge;
   loungeCamera.hidden = !inLounge;
@@ -548,34 +539,60 @@ function renderLoungeView() {
   showSpeaking();  // the rings
 }
 
-// One person's tile: their camera filling it (only visible to those in Lounge, like the sound),
-// or their picture in the middle; their name in the corner. Click: their profile (and volume).
-function makeLoungeTile(id, muted, inLounge) {
+// One person's tile, on the Lounge page and in the DM call banner: their camera filling it
+// (`video`, a track, or null), or their picture in the middle; their name in the corner.
+// `away`: not in the call (yet), so the picture is faded; `note` replaces the name ("Calling…").
+// Click: their profile (and volume).
+function makeTile(id, { muted = false, video = null, away = false, note = "" } = {}) {
   const name = people.has(id) ? people.get(id).name : "?";
   const tile = document.createElement("div");
-  tile.className = "lounge-tile";
+  tile.className = away ? "call-tile away" : "call-tile";
   tile.dataset.userId = id;  // (for the speaking ring)
-  const video = inLounge ? cameraTrack(id) : null;
-  tile.append(video ? videoFor(video, id === myId, "tile-video") : makeAvatar(id, name, "large"));
+  tile.append(video ? videoFor(video, id === myId) : makeAvatar(id, name, "large"));
   const label = document.createElement("span");
   label.className = "tile-name";
-  label.textContent = muted ? "🔇 " + name : name;
+  label.textContent = note || (muted ? "🔇 " + name : name);
   tile.append(label);
   tile.addEventListener("click", () => openProfile(id));
   return tile;
 }
 
-// A shared screen's tile: the whole width, the screen fitted inside, "Axel's screen" in the corner.
+// A shared screen's tile: the screen fitted inside, "Axel's screen" in the corner.
+// (On the Lounge page it takes the whole width.)
 function makeScreenTile(id) {
   const name = people.has(id) ? people.get(id).name : "?";
   const tile = document.createElement("div");
-  tile.className = "lounge-tile screen-tile";
+  tile.className = "call-tile screen-tile";
   const label = document.createElement("span");
   label.className = "tile-name";
   label.textContent = id === myId ? "Your screen" : name + "'s screen";
   tile.append(screenVideo(screenTrack(id), "tile-video screen"), label);
   return tile;
 }
+
+// Make the tiles in `area` as big as possible while they all fit inside it, at 16:9. Try every
+// number of columns: with that many, how wide can a tile be before the tiles get wider than the
+// area, or (in rows) taller than it? Keep the biggest. A wide area puts them side by side, a tall
+// one stacks them. The result goes into the CSS variable --tile-width, which the tiles use.
+const TILE_GAP = 8;  // the space between tiles, the same as "gap" in the CSS
+
+function fitTiles(area) {
+  const count = area.querySelectorAll(".call-tile").length;
+  const width = area.clientWidth;
+  const height = area.clientHeight;
+  let best = 0;
+  for (let columns = 1; columns <= count; columns++) {
+    const rows = Math.ceil(count / columns);
+    const byWidth = (width - (columns - 1) * TILE_GAP) / columns;
+    const byHeight = ((height - (rows - 1) * TILE_GAP) / rows) * 16 / 9;  // a row's height, as a 16:9 width
+    best = Math.max(best, Math.min(byWidth, byHeight));
+  }
+  area.style.setProperty("--tile-width", Math.floor(best) + "px");
+}
+
+// Fit again whenever the banner's tile area changes size: the window resized, the banner shown.
+// (A ResizeObserver calls its function when a watched element's size changes.)
+new ResizeObserver(() => fitTiles(callTiles)).observe(callTiles);
 
 loungeMute.addEventListener("click", () => voiceMuteButton.click());  // the same as the voice bar's
 loungeCamera.addEventListener("click", toggleCamera);

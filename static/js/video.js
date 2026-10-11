@@ -46,8 +46,8 @@ function cameraTrack(userId) {
 
 // A <video> showing this track. Reused if it already has one, so redrawing the banner doesn't
 // keep making new ones (each attach() makes another).
-// look: "call-video" (the DM banner) or "tile-video" (a Lounge tile).
-function videoFor(track, mine, look = "call-video") {
+// look: its class, "tile-video" (filling a tile) unless said otherwise.
+function videoFor(track, mine, look = "tile-video") {
   const video = track.attachedElements[0] || track.attach();
   video.className = mine ? look + " mine" : look;
   return video;
