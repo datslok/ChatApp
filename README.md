@@ -28,3 +28,7 @@ Tunnel in front of it to reach it from the internet over HTTPS.
 ## Roadmap
 
 See [ROADMAP.md](ROADMAP.md) for what's planned and what's done.
+
+## Credits
+
+The app icon (the black cat) is made by Niamh Hannon.

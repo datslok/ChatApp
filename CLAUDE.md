@@ -48,7 +48,7 @@ the point is for me to understand how it works, not just to have it done.
 - `desktop/`: the Windows app (Tauri). A window around https://chat.datslok.no, with real Windows
   notifications (notification plugin, allowed for the site in `src-tauri/capabilities/default.json`)
   and automatic updates at startup (updater plugin). `npm run tauri dev` in `desktop/` to try it.
-- `icon/fin_icon.png`: the app icon (1024×1024, made by my girlfriend). `npm run tauri icon ../icon/fin_icon.png`
+- `icon/fin_icon.png`: the app icon (1024×1024, made by Niamh Hannon). `npm run tauri icon ../icon/fin_icon.png`
   in `desktop/` makes every size (delete the android/ios/Store/Mac ones); `static/favicon.ico` is a copy of
   the resulting `icon.ico`, served at `/favicon.ico` for the browser tab.
 - `static/download.html`: the download page (`/download`, no login), linked from the login page and
