@@ -19,6 +19,7 @@ from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
 from PIL import Image, ImageSequence
 from pydantic import BaseModel
 
@@ -1592,6 +1593,23 @@ async def favicon():
     # The icon in the browser tab. Browsers ask for /favicon.ico by themselves, on every page.
     # (A copy of the desktop app's desktop/src-tauri/icons/icon.ico.)
     return FileResponse("static/favicon.ico", headers={"Cache-Control": "public, max-age=86400"})
+
+
+class FreshStaticFiles(StaticFiles):
+    """Serves a folder's files, telling browsers (and Cloudflare) to check for a newer version every
+    time they use one ("no-cache" means "check first", not "don't store"). Unchanged files cost a
+    tiny "304 Not Modified" answer, and after an update everyone gets the new version straight away."""
+
+    async def get_response(self, path, scope):
+        response = await super().get_response(path, scope)
+        response.headers["Cache-Control"] = "no-cache"
+        return response
+
+
+# The chat page's styles and scripts (static/index.html loads them). Only these two folders:
+# the rest of static/ is served by its own routes, some of them only when logged in.
+app.mount("/static/css", FreshStaticFiles(directory="static/css"), name="css")
+app.mount("/static/js", FreshStaticFiles(directory="static/js"), name="js")
 
 
 @app.get("/emoji.json")
