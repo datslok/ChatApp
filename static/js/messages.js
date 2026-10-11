@@ -238,6 +238,7 @@ function makeAttachment(file, message) {
   link.href = url;
 
   if (file.image) {
+    link.className = "attachment-image-link";  // only as wide as the picture (chat.css)
     // A normal click opens the popup instead of following the link. Middle-click or
     // right-click > "Open in new tab" still work, since they don't fire "click".
     link.target = "_blank";

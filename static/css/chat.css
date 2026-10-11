@@ -1476,6 +1476,16 @@ body {
   color: #949ba4;
 }
 
+/* The link around a picture: on its own line (block), but only as wide as the picture, so a
+   click beside the picture doesn't open it (a block is otherwise as wide as the message).
+   The picture's 400px limit is repeated here: the picture's own max-width is measured against
+   this link, so the browser can't use it to work out how wide the link should be. */
+.attachment-image-link {
+  display: block;
+  width: fit-content;
+  max-width: min(400px, 100%);
+}
+
 .attachment-image {
   display: block;
   max-width: min(400px, 100%);
