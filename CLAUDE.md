@@ -52,7 +52,8 @@ the point is for me to understand how it works, not just to have it done.
   (bundled in the app), shows the progress. To test it: `npm run tauri dev -- --config pretend.json`
   with `{"version": "0.1.0"}` in pretend.json, so the live version counts as an update.
 - `tools/make_installer_images.py`: makes the installer's pictures (`desktop/src-tauri/installer/`)
-  and the update window's cat (`desktop/ui/cat.png`) from the icon. Run it again after changing the icon.
+  and the update window's cat (`desktop/ui/cat.png`) from the icon, at twice NSIS's sizes so they stay sharp
+  with Windows scaling (`installer/hooks.nsh` keeps their shape). Run it again after changing the icon.
 - `icon/`: the app icon, made by Niamh Hannon (1024×1024). `fin2.png` is her drawing; `fin2_round.png`
   is the one in use (the oval made a circle, stray marks outside it removed). `npm run tauri icon ../icon/fin2_round.png` in `desktop/` makes every size (delete the android/ios/Store/Mac ones); `static/favicon.ico` is a copy of
   the resulting `icon.ico`, served at `/favicon.ico` for the browser tab.
