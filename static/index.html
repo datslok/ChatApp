@@ -15,6 +15,64 @@
       color: #dbdee1;
     }
 
+    /* Scrollbars, like Discord's. "::-webkit-scrollbar" and friends are pseudo-elements: the parts
+       of a scrollbar, which the browser draws, styled like boxes. Chromium (Chrome, Edge, the desktop
+       app) and Safari understand them. The scrollbar itself sets the width, the track is the groove
+       and the thumb is the part you drag. "*" means every element, so every scrolling area gets this:
+       thin, a thumb with no track, so it stays out of the way in the sidebars and popups. */
+    *::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;  /* (for sideways scrolling) */
+    }
+    *::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    *::-webkit-scrollbar-thumb {
+      background: #1a1b1e;
+      border-radius: 4px;  /* half the width: fully rounded ends */
+    }
+    *::-webkit-scrollbar-thumb:hover {
+      background: #111214;  /* a little darker under the mouse: you can grab it */
+    }
+    *::-webkit-scrollbar-corner {
+      background: transparent;  /* the square where a sideways and an up-down scrollbar meet */
+    }
+
+    /* The messages get a wider scrollbar with a visible track, so you can see where you are in a
+       long chat. The thumb's border, in the track's colour, makes it look inset in the groove
+       ("background-clip: padding-box" keeps its colour from showing under that border). */
+    #messages::-webkit-scrollbar {
+      width: 16px;
+    }
+    #messages::-webkit-scrollbar-track {
+      background: #2b2d31;
+      border-radius: 8px;
+    }
+    #messages::-webkit-scrollbar-thumb {
+      background: #1a1b1e;
+      background-clip: padding-box;
+      border: 4px solid transparent;
+      border-radius: 8px;
+    }
+    #messages::-webkit-scrollbar-thumb:hover {
+      background: #111214;
+      background-clip: padding-box;
+    }
+
+    /* Browsers without those pseudo-elements (Firefox) get the standard version: just two colours,
+       the thumb's and the track's. Only there, because Chromium ignores all of the above on elements
+       that have scrollbar-color. */
+    @supports not selector(::-webkit-scrollbar) {
+      * {
+        scrollbar-width: thin;
+        scrollbar-color: #1a1b1e transparent;
+      }
+      #messages {
+        scrollbar-width: auto;
+        scrollbar-color: #1a1b1e #2b2d31;
+      }
+    }
+
     #sidebar {
       width: 200px;
       padding: 16px 8px;
