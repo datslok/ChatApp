@@ -1,9 +1,9 @@
 {
   "identifier": "default",
-  "description": "What the chat page may ask the app to do: only show notifications, only from chat.datslok.no.",
+  "description": "What the chat page may ask the app to do: only show notifications and look for an update, only from chat.datslok.no.",
   "windows": ["main"],
   "remote": {
     "urls": ["https://chat.datslok.no/*"]
   },
-  "permissions": ["notification:default"]
+  "permissions": ["notification:default", "allow-check-for-update"]
 }

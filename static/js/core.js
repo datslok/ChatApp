@@ -157,6 +157,7 @@ function connect() {
       switchChannel(start, channelLabel(start));
     } else {
       joinCurrentChannel();  // reconnected: rejoin where we were, which reloads the history
+      checkForAppUpdate();   // the server restarted, perhaps for a new version of the app
     }
   });
 
@@ -172,6 +173,15 @@ function connect() {
     setTimeout(connect, reconnectDelay);
     reconnectDelay = Math.min(reconnectDelay * 2, 10000);
   });
+}
+
+// In the desktop app: ask it to look for a new version of itself (main.rs, check_for_update). If
+// there is one, the app swaps the chat for its update window, installs it and starts again. Not
+// during a call, which that would drop: leaveVoice asks again afterwards. (inDesktopApp is from
+// notifications.js. Apps older than 0.1.13 don't know the command: their "no" is ignored.)
+function checkForAppUpdate() {
+  if (!inDesktopApp || voiceRoom) return;
+  window.__TAURI_INTERNALS__.invoke("check_for_update").catch(() => {});
 }
 
 // The channel this tab was in before a reload, or null. switchChannel saves every channel in the

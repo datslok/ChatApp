@@ -3,6 +3,7 @@
 
 use std::os::windows::process::CommandExt;  // raw_arg
 use std::process::Command;
+use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::webview::{DownloadEvent, NewWindowResponse};
 use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
 use tauri_plugin_notification::NotificationExt;
@@ -25,6 +26,9 @@ fn main() {
         // open_js_links_on_click(false) the plugin adds a script to the page that catches left
         // clicks on links and asks for that from the page instead, which is refused: nothing happened.
         .plugin(tauri_plugin_opener::Builder::new().open_js_links_on_click(false).build())
+        // The commands the page may call (window.__TAURI_INTERNALS__.invoke("check_for_update")).
+        // Made a permission in build.rs, allowed for the chat page in capabilities/default.json.
+        .invoke_handler(tauri::generate_handler![check_for_update])
         .setup(|app| {
             // The chat window, from its settings in tauri.conf.json ("create": false there, so that
             // we make it here, with a handler added): it shows https://chat.datslok.no.
@@ -80,17 +84,39 @@ fn main() {
                 }
             })?;
 
-            // Look for an update in the background, so the window opens right away.
-            let handle = app.handle().clone();
-            tauri::async_runtime::spawn(async move {
-                if let Err(error) = update(handle).await {
-                    eprintln!("Update check failed: {error}");  // (offline, server down, ...): try next start
-                }
-            });
+            // Look for an update now, at the start (the page asks again later: check_for_update).
+            update_in_background(app.handle().clone());
             Ok(())
         })
         .run(tauri::generate_context!())
         .expect("error while running ChatApp");
+}
+
+// True while an update check (or the update itself) is running, so that a second one can't start
+// next to it: say the page reconnects while the check from the start is still going. An AtomicBool
+// is a true/false that several threads can read and change safely at the same time.
+static UPDATING: AtomicBool = AtomicBool::new(false);
+
+// The page calls this after it reconnects to the server (which restarts after a deploy or a new
+// release) and after leaving a call, so that an app left open for days still gets new versions.
+// It answers straight away; the check runs in the background.
+#[tauri::command]
+fn check_for_update(app: tauri::AppHandle) {
+    update_in_background(app);
+}
+
+// Look for an update in the background (so the window stays usable), unless one is already running.
+fn update_in_background(app: tauri::AppHandle) {
+    // swap sets it to true and gives back what it was: true means another check is busy.
+    if UPDATING.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    tauri::async_runtime::spawn(async move {
+        if let Err(error) = update(app).await {
+            eprintln!("Update check failed: {error}");  // (offline, server down, ...): try again later
+        }
+        UPDATING.store(false, Ordering::SeqCst);
+    });
 }
 
 // If releases/latest.json names a newer version: swap the chat for our own small update window
@@ -141,7 +167,7 @@ async fn update(app: tauri::AppHandle) -> tauri_plugin_updater::Result<()> {
 
     // On Windows we only get here if something went wrong: a successful install starts the
     // installer and ends this program, and the installer starts the new version (installMode
-    // "quiet" in tauri.conf.json: no installer window). So: back to the chat, and try next start.
+    // "quiet" in tauri.conf.json: no installer window). So: back to the chat, and try again later.
     window.close()?;
     if let Some(main) = &main {
         main.show()?;

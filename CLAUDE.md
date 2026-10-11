@@ -70,14 +70,15 @@ the point is for me to understand how it works, not just to have it done.
   the newest one to `~\ChatApp-backups` over SSH. Restoring: README, "Backups".
 - From the development PC (after `scripts\server-connect.ps1` once: an SSH key and the name `chatserver` in
   `~/.ssh/config`): `scripts\deploy.ps1` pushes if needed and runs `scripts\server\update.ps1` on the server over SSH;
-  `scripts\release-upload.ps1` copies a new desktop app release into the server's `releases\`;
+  `scripts\release-upload.ps1` copies a new desktop app release into the server's `releases\` and then
+  runs deploy.ps1 (the restart makes open apps reconnect and update);
   `scripts\usage.ps1` shows the space used there (runs `scripts\server\usage.ps1`: database, uploads by
   kind, releases, logs, leftover .db/.zip files, backups, free disk; only reads). The server
   PC's SSH server (step 7 of scripts\server\install.ps1) only accepts the home network.
 - `.env.example`: template for `.env` (INVITE_CODE, SECURE_COOKIES). `.env` itself is never committed.
 - `desktop/`: the Windows app (Tauri). A window around https://chat.datslok.no, with real Windows
   notifications (notification plugin, allowed for the site in `src-tauri/capabilities/default.json`)
-  automatic updates at startup (updater plugin), and links opening in the default browser (opener plugin,
+  automatic updates at startup and when the page asks (updater plugin; `check_for_update` in main.rs, called by core.js after a reconnect and after leaving a call), and links opening in the default browser (opener plugin,
   used only by main.rs's new-window handler, not by the page). Downloads: the page fetches a file itself
   with a progress bar (messages.js, only in the app) and main.rs's download handler then runs
   `explorer.exe /select,` on it (the opener plugin's reveal_item_in_dir silently did nothing).

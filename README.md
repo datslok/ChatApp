@@ -23,7 +23,7 @@ Run them in PowerShell, from the project folder (`E:\Code\ChatApp` on the develo
 | `start.ps1` | development PC | the chat for development (http://localhost:8001, `dev.db`) | [Development](#running-it-for-development) |
 | `voice.ps1 -Dev` | development PC | voice for development (localhost only) | [Development](#running-it-for-development) |
 | `scripts\deploy.ps1` | development PC | puts the newest code on the server and restarts the chat (`-Voice`: also voice) | [Day to day](#day-to-day) |
-| `scripts\release-upload.ps1` | development PC | puts a new desktop app version on the server | [The desktop app](#the-desktop-app) |
+| `scripts\release-upload.ps1` | development PC | puts a new desktop app version on the server and restarts the chat (open apps update) | [The desktop app](#the-desktop-app) |
 | `scripts\backup-fetch.ps1` | development PC | fetches the server's newest backup (`-Install`: every day) | [Backups](#backups) |
 | `scripts\usage.ps1` | development PC | how much space the chat takes on the server (database, uploads, backups, free disk) | [Day to day](#day-to-day) |
 | `scripts\server-connect.ps1` | development PC | once: SSH access to the server (`ssh chatserver`) | [4b](#4b-on-the-development-pc-connect-to-the-new-one) |
@@ -192,7 +192,7 @@ and `dev.db`, so it never touches the real chat). The real chat only changes whe
 # On the development PC:
 .\scripts\deploy.ps1                 # pushes to GitHub if needed, then updates the server and restarts the chat
 .\scripts\deploy.ps1 -Voice          # also restart LiveKit (after changes to voice.ps1 or livekit.yaml)
-.\scripts\release-upload.ps1         # after building a new desktop app version: copy it to the server
+.\scripts\release-upload.ps1         # after building a new desktop app version: copy it to the server, restart the chat
 .\scripts\usage.ps1                  # how much space the database, uploads, releases, logs and backups take
 ssh chatserver               # a PowerShell on the server (type exit to leave)
 ssh chatserver "Get-Content C:\ChatApp\logs\chat.log -Tail 30"   # the chat's latest log lines
@@ -285,7 +285,8 @@ can't update themselves any more).
 
 **Trying it:** in `desktop\`, `npm run tauri dev` opens the app straight from the code.
 
-**Releasing a new version** (everyone's app installs it by itself at its next start):
+**Releasing a new version** (everyone's app installs it by itself: open apps when they reconnect after
+the restart in step 5, or after their call, the others at their next start):
 
 1. Raise `"version"` in `desktop\src-tauri\tauri.conf.json` (e.g. 0.1.8 → 0.1.9).
 2. Build and sign it, in `desktop\`:
@@ -299,10 +300,12 @@ can't update themselves any more).
 4. In `releases\latest.json`, set `version`, the installer's `url`
    (`https://chat.datslok.no/releases/ChatApp_<version>_x64-setup.exe`), and `signature` (the whole
    contents of the `.sig` file).
-5. Put it on the server, then commit and push the version change:
+5. Commit the version change, then put it on the server. `release-upload.ps1` ends by running
+   `scripts\deploy.ps1` (which pushes the commit and restarts the chat), so every open app reconnects
+   and looks for the new version (someone in a call: once they leave it):
    ```powershell
+   git add desktop; git commit -m "Desktop app <version>: ..."
    .\scripts\release-upload.ps1
-   git add desktop; git commit -m "Desktop app <version>: ..."; git push
    ```
 
 **Testing the update window** (what people see while the app updates): in `desktop\`, make a file

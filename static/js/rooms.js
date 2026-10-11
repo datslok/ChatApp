@@ -211,6 +211,7 @@ function leaveVoice() {
   speakingIds.clear();
   showSpeaking();
   sendVoiceState();  // we're out
+  checkForAppUpdate();  // skipped during the call, so now (core.js)
 }
 
 // Clicking a voice channel opens its page, and joins it (unless we're in it already).
