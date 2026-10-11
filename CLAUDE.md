@@ -80,7 +80,10 @@ the point is for me to understand how it works, not just to have it done.
   automatic updates at startup (updater plugin), and links opening in the default browser (opener plugin,
   used only by main.rs's new-window handler, not by the page). Downloads: the page fetches a file itself
   with a progress bar (messages.js, only in the app) and main.rs's download handler then runs
-  `explorer.exe /select,` on it (the opener plugin's reveal_item_in_dir silently did nothing). `npm run tauri dev` in `desktop/` to try it.
+  `explorer.exe /select,` on it (the opener plugin's reveal_item_in_dir silently did nothing).
+  Notification clicks: the plugin's stand-in `Notification` has no click event, so the page puts
+  `extra: {channel, messageId}` in it and main.rs's `on_action` ("tap") focuses the window and calls the
+  page's `openMessage` (notifications.js) with them. Windows only reports clicks while the toast is on screen. `npm run tauri dev` in `desktop/` to try it.
   Updates install silently (installMode "quiet") while our own window, `desktop/ui/update.html`
   (bundled in the app), shows the progress. To test it: `npm run tauri dev -- --config pretend.json`
   with `{"version": "0.1.0"}` in pretend.json, so the live version counts as an update.
