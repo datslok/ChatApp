@@ -638,8 +638,11 @@ body {
 }
 
 /* The voice bar at the bottom of the sidebar: what you're connected to, then mute and leave. */
+/* Two lines: the status ("Voice connected", where) on the first, the buttons sharing the second.
+   flex-wrap lets the row continue on a new line; the status asks for the whole first one. */
 #voice-bar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 4px;
   margin: 8px 0;
@@ -650,7 +653,7 @@ body {
   display: none;  /* display: flex above would otherwise win over the hidden attribute */
 }
 #voice-info {
-  flex: 1;
+  flex-basis: 100%;  /* a line of its own: the buttons wrap to the next */
   min-width: 0;  /* lets long names be cut off with "…" instead of pushing the buttons out */
   display: flex;
   flex-direction: column;
@@ -678,7 +681,7 @@ body {
   text-overflow: ellipsis;
 }
 .voice-button {
-  width: 32px;
+  flex: 1;  /* the buttons share their line equally */
   height: 32px;
   border: none;
   border-radius: 6px;
