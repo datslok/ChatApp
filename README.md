@@ -53,19 +53,41 @@ delete it everywhere once the move is done.
 
 ### 2. On the new PC: get the code
 
-Open PowerShell and install Git (Windows' own `winget` does it), then fetch the code:
+Open PowerShell and install Git (Windows' own `winget` does it):
 
 ```powershell
 winget install --exact --id Git.Git
 # close PowerShell and open it again, so it finds git
+```
+
+The repository is private, so this PC needs a way in. Not your GitHub login: `deploy.ps1` later
+runs `git pull` here over SSH, with nobody at this PC, and Windows doesn't unlock stored logins in
+such a session (nor can git ask for one). Instead, a **deploy key**: an SSH key GitHub accepts for
+this one repository, read-only. Make it and tell SSH to use it for GitHub:
+
+```powershell
+ssh-keygen -t ed25519 -f "$HOME\.ssh\github_chatapp" -N '""' -C "chatapp server (deploy key)"
+"Host github.com`n    IdentityFile ~/.ssh/github_chatapp`n    IdentitiesOnly yes`n    StrictHostKeyChecking accept-new`n" |
+    Out-File -Encoding ascii -Append "$HOME\.ssh\config"
+Get-Content "$HOME\.ssh\github_chatapp.pub"    # copy this line
+```
+
+On GitHub: the repository → **Settings** → **Deploy keys** → **Add deploy key**. Paste the line,
+call it "laptop server" or similar, and leave *Allow write access* **off**. Then fetch the code
+(the `git@github.com:` address goes through SSH, with that key):
+
+```powershell
 cd C:\
-git clone https://github.com/datslok/ChatApp.git
+git clone git@github.com:datslok/ChatApp.git
 cd C:\ChatApp
 Set-ExecutionPolicy -Scope CurrentUser RemoteSigned   # once: lets you run scripts from this PC
 ```
 
 (Windows doesn't run PowerShell scripts at all out of the box. `RemoteSigned` lets your own run,
 while scripts downloaded from the internet still need a signature.)
+
+Already cloned with `https://` (and logged in)? Then make the deploy key as above, and switch:
+`git remote set-url origin git@github.com:datslok/ChatApp.git`.
 
 ### 3. On the new PC: unpack the data
 

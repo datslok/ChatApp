@@ -43,10 +43,16 @@ if ($Voice) {
     Restart-ChatTask "ChatApp voice" "livekit-server.exe" "--config livekit.yaml"
 }
 
-Start-Sleep -Seconds 5
-try {
-    Invoke-WebRequest http://localhost:8000/login -UseBasicParsing -TimeoutSec 5 | Out-Null
+# Is the chat back? It is once something listens on port 8000 again (uvicorn only starts listening
+# when its startup is complete). Ask Windows once a second, for up to 30 seconds. (Fetching a page
+# with Invoke-WebRequest instead isn't reliable when this runs over SSH from deploy.ps1.)
+$running = $false
+for ($second = 0; $second -lt 30 -and -not $running; $second++) {
+    Start-Sleep -Seconds 1
+    $running = [bool](Get-NetTCPConnection -State Listen -LocalPort 8000 -ErrorAction SilentlyContinue)
+}
+if ($running) {
     Write-Host "The chat is running." -ForegroundColor Green
-} catch {
-    Write-Host "The chat isn't answering yet. Give it a minute, or look in logs\chat.log." -ForegroundColor Yellow
+} else {
+    Write-Host "The chat isn't running after 30 seconds: look in logs\chat.log." -ForegroundColor Yellow
 }
