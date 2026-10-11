@@ -1,5 +1,7 @@
 import asyncio
+import base64
 import hashlib
+import hmac
 import json
 import os
 import re
@@ -41,6 +43,11 @@ SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
 SMTP_USER = os.environ.get("SMTP_USER", "")
 SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "")
 MAIL_FROM = os.environ.get("MAIL_FROM", "ChatApp <noreply@datslok.no>")
+# The LiveKit server that carries voice (voice.ps1), and the key and secret it shares with us:
+# we sign the tickets ("tokens") that let people into a voice room, and LiveKit checks them.
+LIVEKIT_URL = os.environ.get("LIVEKIT_URL", "")
+LIVEKIT_API_KEY = os.environ.get("LIVEKIT_API_KEY", "")
+LIVEKIT_API_SECRET = os.environ.get("LIVEKIT_API_SECRET", "")
 print(f"Using database {DATABASE_FILE} and upload folder {UPLOAD_DIR}/")
 if not INVITE_CODE:
     print("WARNING: no INVITE_CODE set, so anyone who can reach this server can create an account.")
@@ -1662,6 +1669,55 @@ def can_join(channel, user_id):
         return False  # someone else's DM: never
     other = second if user_id == first else first
     return are_friends(user_id, other)  # (a friendship also means the other person exists)
+
+
+# ---------- Voice ----------
+
+VOICE_ROOMS = ["lounge"]  # voice channels anyone logged in can join (DM calls use the DM's name)
+VOICE_TOKEN_LIFETIME = 10 * 60  # seconds: only needed to get in; LiveKit renews it after that
+
+
+def base64url(data):
+    """Bytes as base64url text: letters, digits, - and _ (safe in a URL), without the = padding."""
+    return base64.urlsafe_b64encode(data).rstrip(b"=").decode()
+
+
+def make_jwt(payload):
+    """A JSON Web Token: header.payload.signature, each part base64url. The signature is an HMAC
+    (a fingerprint that needs the secret to make) of the first two parts, so anyone can read the
+    token, but nobody without LIVEKIT_API_SECRET can change it or make a new one."""
+    header = {"alg": "HS256", "typ": "JWT"}  # HS256: HMAC with SHA-256
+    signed_part = base64url(json.dumps(header).encode()) + "." + base64url(json.dumps(payload).encode())
+    signature = hmac.new(LIVEKIT_API_SECRET.encode(), signed_part.encode(), hashlib.sha256).digest()
+    return signed_part + "." + base64url(signature)
+
+
+def make_voice_token(user_id, name, room):
+    """A ticket into one LiveKit room for one person, valid for VOICE_TOKEN_LIFETIME seconds."""
+    now = int(time.time())
+    return make_jwt({
+        "iss": LIVEKIT_API_KEY,  # issued by: tells LiveKit which secret to check the signature with
+        "sub": str(user_id),     # who it's for: their "identity" in the room
+        "name": name,            # the name the others see
+        "nbf": now,              # not valid before
+        "exp": now + VOICE_TOKEN_LIFETIME,
+        # What they may do there (LiveKit calls it "video", but it covers audio too): join this
+        # room, send their own audio and hear the others.
+        "video": {"room": room, "roomJoin": True, "canPublish": True, "canSubscribe": True},
+    })
+
+
+@app.get("/voice-token")
+async def voice_token(room: str, request: Request):
+    """Where the LiveKit server is, and a ticket into this voice room. The page asks for this when
+    you join voice, and gives both to LiveKit."""
+    user_id, username, password_hash, email = logged_in_user(request)
+    if not (LIVEKIT_URL and LIVEKIT_API_KEY and LIVEKIT_API_SECRET):
+        raise HTTPException(503, "Voice isn't set up on this server.")
+    # Lounge: anyone logged in. A DM call: the same rule as the DM's messages (the two friends).
+    if room not in VOICE_ROOMS and not (room.startswith("dm:") and can_join(room, user_id)):
+        raise HTTPException(403, "You can't join that voice room.")
+    return {"url": LIVEKIT_URL, "token": make_voice_token(user_id, username, room)}
 
 
 # ---------- Unread ----------
