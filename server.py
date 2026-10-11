@@ -774,6 +774,21 @@ def send_email(to, subject, body):
         print(f"Couldn't send email to {to}: {error}", flush=True)
 
 
+def send_security_notice(background_tasks, email, username, subject, what, if_not_you):
+    """Tell someone about a change to their account, in case it wasn't them.
+    `what` says what happened; `if_not_you` what to do then. Sent in the background (see send_email)."""
+    if not email:
+        return  # (an account without an email: nobody to tell)
+    when = time.strftime("%d %B %Y, %H:%M")  # e.g. "11 October 2026, 14:30" (the server's clock)
+    body = (
+        f"Hi {username},\n\n"
+        f"{what} ({when}).\n\n"
+        "If that was you, all is well and you don't need to do anything.\n\n"
+        f"If it wasn't you, someone else has been in your account. {if_not_you}\n"
+    )
+    background_tasks.add_task(send_email, email, subject, body)
+
+
 def hash_token(token):
     """Reset tokens are stored hashed: if the database leaked, the hashes couldn't be used as links.
     A fast hash (SHA-256) is fine here, unlike for passwords: the token is long and random,
@@ -831,12 +846,12 @@ class ResetRequest(BaseModel):
 
 
 @app.post("/reset")
-async def reset(data: ResetRequest):
+async def reset(data: ResetRequest, background_tasks: BackgroundTasks):
     """Set a new password using the token from an emailed link."""
     check_password_length(data.password)
     row = db.execute(
         """
-        SELECT password_resets.user_id, users.username
+        SELECT password_resets.user_id, users.username, users.email
         FROM password_resets JOIN users ON users.id = password_resets.user_id
         WHERE password_resets.token_hash = ? AND password_resets.created_at > datetime('now', ?)
         """,
@@ -844,7 +859,7 @@ async def reset(data: ResetRequest):
     ).fetchone()
     if row is None:
         raise HTTPException(400, "This reset link is invalid or has expired. Ask for a new one.")
-    user_id, username = row
+    user_id, username, email = row
 
     with db:
         db.execute("UPDATE users SET password_hash = ? WHERE id = ?", (hasher.hash(data.password), user_id))
@@ -852,6 +867,7 @@ async def reset(data: ResetRequest):
         db.execute("DELETE FROM sessions WHERE user_id = ?", (user_id,))  # log out everywhere
     failures.pop("login:" + username.lower(), None)  # a fresh start for logging in
     await disconnect_user(user_id)  # close their open chat tabs too
+    send_password_notice(background_tasks, email, username)
     return {"ok": True}
 
 
@@ -894,7 +910,7 @@ class EmailChange(BaseModel):
 
 
 @app.post("/settings/email")
-async def change_email(data: EmailChange, request: Request):
+async def change_email(data: EmailChange, request: Request, background_tasks: BackgroundTasks):
     user_id, username, password_hash, old_email = logged_in_user(request)
     # Needs the password: otherwise someone at your unlocked laptop could set their own
     # email and then "reset" your password to take over the account.
@@ -907,6 +923,16 @@ async def change_email(data: EmailChange, request: Request):
             db.execute("UPDATE users SET email = ? WHERE id = ?", (email, user_id))
     except sqlite3.IntegrityError:
         raise HTTPException(400, "That email is already used by another account.")
+    if email != old_email:
+        # To the *old* address: if someone else did this, the new one is theirs, and reset links
+        # would go there too. So the real owner needs the admin, who can put their email back.
+        send_security_notice(
+            background_tasks, old_email, username,
+            "Your ChatApp email address was changed",
+            f"The email address for your ChatApp account was just changed to {email}",
+            "Password reset links now go to that new address, so tell the admin right away:"
+            " they can put your own email back.",
+        )
     return {"ok": True, "email": email}
 
 
@@ -945,8 +971,19 @@ class PasswordChange(BaseModel):
     new_password: str
 
 
+def send_password_notice(background_tasks, email, username):
+    """After a password change (in Settings, or with a reset link)."""
+    send_security_notice(
+        background_tasks, email, username,
+        "Your ChatApp password was changed",
+        "The password for your ChatApp account was just changed",
+        f"Choose a new password right away at {PUBLIC_URL}/reset (the link is sent to this email address),"
+        " and let the admin know.",
+    )
+
+
 @app.post("/settings/password")
-async def change_password(data: PasswordChange, request: Request):
+async def change_password(data: PasswordChange, request: Request, background_tasks: BackgroundTasks):
     user_id, username, password_hash, email = logged_in_user(request)
     check_current_password(username, password_hash, data.current_password)
     check_password_length(data.new_password)
@@ -957,6 +994,7 @@ async def change_password(data: PasswordChange, request: Request):
             "DELETE FROM sessions WHERE user_id = ? AND token != ?",
             (user_id, request.cookies.get(SESSION_COOKIE)),
         )
+    send_password_notice(background_tasks, email, username)
     return {"ok": True}
 
 
