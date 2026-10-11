@@ -30,3 +30,10 @@ releases/
 
 # The LiveKit server program (downloaded, see CLAUDE.md)
 livekit/
+
+# The server PC's Python environment and logs (made by server-install.ps1)
+.venv/
+logs/
+
+# Moving the server: holds the secrets and everyone's messages
+chatapp-data.zip

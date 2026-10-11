@@ -4,8 +4,11 @@
 #   .\voice.ps1 -Dev    for development: only reachable from this PC, with LiveKit's test keys
 #
 # Stop it with Ctrl+C. livekit-server.exe is downloaded into livekit/ (see CLAUDE.md), not committed.
+#
+# On the server PC, a scheduled task starts it at boot (see server-install.ps1), with
+# -LogFile logs\voice.log: then there's no window, and everything it prints goes to that file.
 
-param([switch]$Dev)
+param([switch]$Dev, [string]$LogFile)
 
 # Work from the folder this script is in, wherever it was started from.
 Set-Location $PSScriptRoot
@@ -33,4 +36,16 @@ if (-not $key -or -not $secret) {
 # LiveKit reads its keys from this environment variable, as "key: secret". It only exists for this
 # window and the programs it starts, so the secret is never written to a file other than .env.
 $env:LIVEKIT_KEYS = "${key}: ${secret}"
-.\livekit\livekit-server.exe --config livekit.yaml
+
+if (-not $LogFile) {
+    .\livekit\livekit-server.exe --config livekit.yaml
+    exit $LASTEXITCODE
+}
+
+# With a log file: keep the previous run's log, then run with everything going into the file.
+# (LiveKit gets LIVEKIT_KEYS too: a program started from here inherits our environment variables.)
+New-Item -ItemType Directory (Split-Path $LogFile) -Force | Out-Null
+if (Test-Path $LogFile) { Move-Item $LogFile ($LogFile -replace '\.log$', '.previous.log') -Force }
+$process = Start-Process .\livekit\livekit-server.exe -ArgumentList "--config livekit.yaml" -NoNewWindow -Wait -PassThru `
+    -RedirectStandardError $LogFile -RedirectStandardOutput ($LogFile -replace '\.log$', '.out.log')
+exit $process.ExitCode  # not 0 = it crashed: the scheduled task then starts it again
