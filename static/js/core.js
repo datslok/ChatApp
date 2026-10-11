@@ -119,8 +119,41 @@ let reconnectDelay = 1000;  // milliseconds to wait before the next reconnect at
 const unread = new Set();   // channels and DMs with messages we haven't seen
 const mentionCounts = new Map();  // channel -> how many unread messages there mention us
 
+// ----- Reloading by itself after an update to the page (like pressing F5)
+//
+// The server sends a fingerprint of the page's files (its "page_version") in every welcome.
+// When a reconnect brings a different one, this page is running old code: reload, so everyone
+// gets fixes without being told to press F5. But not while something would be lost by it: a
+// call (it would drop), files waiting to be sent, a message being sent or edited. Until then,
+// try again every few seconds. The text box survives: saved in sessionStorage (kept by the
+// browser for this tab through a reload) and put back by restoreDraft.
+let pageVersion = null;  // the version this page was loaded with
+let outdated = false;    // true once the server has a newer one
+
+function reloadIfOutdated() {
+  if (!outdated || voiceRoomName || tray.length > 0 || sending || editingId !== null) return;
+  try {
+    sessionStorage.setItem("draft", input.value);
+  } catch {}
+  location.reload();
+}
+setInterval(reloadIfOutdated, 5000);
+
+// After a reload: put back what was in the text box.
+function restoreDraft() {
+  try {
+    const draft = sessionStorage.getItem("draft");
+    sessionStorage.removeItem("draft");
+    if (draft) {
+      input.value = draft;
+      autoGrow();  // (ui.js) as tall as the text
+    }
+  } catch {}
+}
+
 // Ask the server which channels exist, make a sidebar button for each, then connect.
 async function start() {
+  restoreDraft();
   const response = await fetch("/channels");
   const channels = await response.json();  // e.g. ["general", "memes"]
 
@@ -213,6 +246,12 @@ function handleServerMessage(event) {
     myId = data.id;
     maxTextLength = data.max_text_length;
     input.maxLength = maxTextLength;  // the textarea's maxlength, from the server's limit
+    if (pageVersion === null) {
+      pageVersion = data.page_version;  // the first welcome: the version we were loaded with
+    } else if (data.page_version !== pageVersion) {
+      outdated = true;  // a reconnect after a deploy that changed the page
+      reloadIfOutdated();
+    }
     return;
   }
   if (data.type === "renamed") {

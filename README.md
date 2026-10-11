@@ -198,6 +198,10 @@ ssh chatserver               # a PowerShell on the server (type exit to leave)
 ssh chatserver "Get-Content C:\ChatApp\logs\chat.log -Tail 30"   # the chat's latest log lines
 ```
 
+After a deploy that changed the page (`static/index.html`, `static/js/`, `static/css/`), open pages
+and apps reload themselves within a few seconds: nobody needs to press F5. Someone in a call, with
+files waiting to be sent, or editing a message gets it once that's done; a half-typed message is kept.
+
 On the server itself, in `C:\ChatApp` (as administrator): `.\scripts\server\update.ps1` does what
 `scripts\deploy.ps1` does, `Get-ScheduledTask ChatApp*` shows whether the tasks run, and
 `Get-Content logs\chat.log -Tail 30 -Wait` follows the log (Ctrl+C to stop watching).

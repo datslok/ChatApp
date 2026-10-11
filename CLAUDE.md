@@ -41,7 +41,10 @@ the point is for me to understand how it works, not just to have it done.
   (joining/leaving, DM calls, call banner, Lounge page), `voice-settings.js`, `settings.js`,
   `people.js` (DM/online lists, friends, profile popup, typing) and `messages.js` (uploads, messages,
   reactions, replies, editing; ends with `start()`). Code that runs at load time may only use what
-  earlier files declare. Both folders are served with `Cache-Control: no-cache` (FreshStaticFiles).
+  earlier files declare. Both folders are served with `Cache-Control: no-cache` (FreshStaticFiles), as is
+  `/`. The server hashes the page's files at startup (`PAGE_VERSION`, sent in "welcome"); a page that
+  reconnects to a different one reloads itself (core.js, `reloadIfOutdated`; not in a call, with files
+  in the tray, or while sending or editing; the text box is kept through sessionStorage).
 - `static/login.html`: the login / create account page.
 - `static/reset.html`: "forgot password" (asks for a reset link) and, with `?token=`, choosing a new password.
 - Emails (reset links) go out through Resend's SMTP server, configured in `.env`. Without `SMTP_HOST`

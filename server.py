@@ -1609,7 +1609,9 @@ async def friend_remove(data: FriendAction, request: Request):
 async def index(request: Request):
     if current_user(request) is None:
         return RedirectResponse("/login")  # not logged in: send them to the login page
-    return FileResponse("static/index.html")
+    # no-cache: the browser asks each time whether it changed, so a reload after a new version
+    # (see PAGE_VERSION) never gets an old copy.
+    return FileResponse("static/index.html", headers={"Cache-Control": "no-cache"})
 
 
 @app.get("/login")
@@ -1630,6 +1632,23 @@ async def favicon():
     # The icon in the browser tab. Browsers ask for /favicon.ico by themselves, on every page.
     # (A copy of the desktop app's desktop/src-tauri/icons/icon.ico.)
     return FileResponse("static/favicon.ico", headers={"Cache-Control": "public, max-age=86400"})
+
+
+def page_version():
+    """A fingerprint of the chat page's files: a hash (SHA-256) of all of them together. Change
+    one letter in any of them and it comes out completely different. Each page gets it in its
+    "welcome"; after a deploy that changed the page, the pages that reconnect see a new one and
+    reload themselves (core.js, reloadIfOutdated). Changes to this file alone don't count."""
+    files = [Path("static/index.html"), Path("static/voice-gate.js"),
+             *Path("static/js").glob("*.js"), *Path("static/css").glob("*.css")]
+    digest = hashlib.sha256()
+    for path in sorted(files):  # always in the same order, or the same files would give another hash
+        digest.update(path.name.encode())
+        digest.update(path.read_bytes())
+    return digest.hexdigest()[:16]  # the first 16 characters are plenty to tell versions apart
+
+
+PAGE_VERSION = page_version()  # worked out once, when the server starts
 
 
 class FreshStaticFiles(StaticFiles):
@@ -2070,6 +2089,7 @@ async def chat(websocket: WebSocket):
         await send(websocket, {
             "type": "welcome", "id": user_id, "username": username_of(user_id),
             "max_text_length": MAX_TEXT_LENGTH,  # so the page's text box uses the same limit
+            "page_version": PAGE_VERSION,  # a different one than it was loaded with: it reloads
         })
         await send(websocket, friends_message(user_id))
         await send(websocket, custom_emoji_message())
