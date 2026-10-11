@@ -1571,6 +1571,13 @@ async def reset_page():
     return FileResponse("static/reset.html")
 
 
+@app.get("/favicon.ico")
+async def favicon():
+    # The icon in the browser tab. Browsers ask for /favicon.ico by themselves, on every page.
+    # (A copy of the desktop app's desktop/src-tauri/icons/icon.ico.)
+    return FileResponse("static/favicon.ico", headers={"Cache-Control": "public, max-age=86400"})
+
+
 @app.get("/emoji.json")
 async def emoji_list():
     # All emoji for the picker. They never change while the server runs, so browsers may keep it for a day.
