@@ -44,7 +44,7 @@ What runs on that PC:
 In this folder, in PowerShell:
 
 ```powershell
-.\server-export.ps1
+.\scripts\server\export.ps1
 ```
 
 That makes `chatapp-data.zip` with `chat.db` (a safe copy, even while the chat runs), `uploads/`,
@@ -72,7 +72,7 @@ while scripts downloaded from the internet still need a signature.)
 Put `chatapp-data.zip` in `C:\ChatApp` (or point to it on the stick), then:
 
 ```powershell
-.\server-import.ps1                        # or: .\server-import.ps1 E:\chatapp-data.zip
+.\scripts\server\import.ps1                        # or: .\scripts\server\import.ps1 E:\chatapp-data.zip
 ```
 
 ### 4. On the new PC: install everything
@@ -81,7 +81,7 @@ Open PowerShell **as administrator** (right-click it, "Run as administrator"), t
 
 ```powershell
 cd C:\ChatApp
-.\server-install.ps1
+.\scripts\server\install.ps1
 ```
 
 It installs Python (and the packages, in `.venv`), LiveKit and `cloudflared`, adds the firewall
@@ -103,7 +103,7 @@ So you can update the server from your development PC, without walking over to i
 the install printed at its end, in this folder on the development PC:
 
 ```powershell
-.\server-connect.ps1 192.168.10.123 yourname    # the server PC's address and your username there
+.\scripts\server-connect.ps1 192.168.10.123 yourname    # the server PC's address and your username there
 ```
 
 It makes an SSH key on the development PC (if you don't have one), puts it on the server (asking
@@ -144,22 +144,22 @@ and `dev.db`, so it never touches the real chat). The real chat only changes whe
 
 ```powershell
 # On the development PC:
-.\deploy.ps1                 # pushes to GitHub if needed, then updates the server and restarts the chat
-.\deploy.ps1 -Voice          # also restart LiveKit (after changes to voice.ps1 or livekit.yaml)
-.\release-upload.ps1         # after building a new desktop app version: copy it to the server
+.\scripts\deploy.ps1                 # pushes to GitHub if needed, then updates the server and restarts the chat
+.\scripts\deploy.ps1 -Voice          # also restart LiveKit (after changes to voice.ps1 or livekit.yaml)
+.\scripts\release-upload.ps1         # after building a new desktop app version: copy it to the server
 ssh chatserver               # a PowerShell on the server (type exit to leave)
 ssh chatserver "Get-Content C:\ChatApp\logs\chat.log -Tail 30"   # the chat's latest log lines
 ```
 
-On the server itself, in `C:\ChatApp` (as administrator): `.\server-update.ps1` does what
-`deploy.ps1` does, `Get-ScheduledTask ChatApp*` shows whether the tasks run, and
+On the server itself, in `C:\ChatApp` (as administrator): `.\scripts\server\update.ps1` does what
+`scripts\deploy.ps1` does, `Get-ScheduledTask ChatApp*` shows whether the tasks run, and
 `Get-Content logs\chat.log -Tail 30 -Wait` follows the log (Ctrl+C to stop watching).
 
-After the internet provider changes your home IP, restart voice (`.\deploy.ps1 -Voice`, or restart
+After the internet provider changes your home IP, restart voice (`.\scripts\deploy.ps1 -Voice`, or restart
 the server PC): LiveKit looks up the IP when it starts.
 
 New desktop app versions are still built on the development PC (it has the signing key), then
-`release-upload.ps1` puts them on the server (see CLAUDE.md, "Releasing").
+`scripts\release-upload.ps1` puts them on the server (see CLAUDE.md, "Releasing").
 
 ## Roadmap
 

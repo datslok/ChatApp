@@ -4,7 +4,7 @@
 # Run it from this folder with:   .\serve.ps1
 # Stop it with Ctrl+C.
 #
-# On the server PC, a scheduled task starts it at boot (see server-install.ps1), with
+# On the server PC, a scheduled task starts it at boot (see scripts\server\install.ps1), with
 # -LogFile logs\chat.log: then there's no window, and everything it prints goes to that file.
 
 param([string]$LogFile)
@@ -20,7 +20,7 @@ if (-not $hasInvite) {
     exit 1
 }
 
-# The Python to use: the server PC's .venv (server-install.ps1 makes it), or else the "chatapp"
+# The Python to use: the server PC's .venv (scripts\server\install.ps1 makes it), or else the "chatapp"
 # conda environment (this development PC).
 if (Test-Path .venv\Scripts\python.exe) {
     $python = (Resolve-Path .venv\Scripts\python.exe).Path

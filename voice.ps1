@@ -5,7 +5,7 @@
 #
 # Stop it with Ctrl+C. livekit-server.exe is downloaded into livekit/ (see CLAUDE.md), not committed.
 #
-# On the server PC, a scheduled task starts it at boot (see server-install.ps1), with
+# On the server PC, a scheduled task starts it at boot (see scripts\server\install.ps1), with
 # -LogFile logs\voice.log: then there's no window, and everything it prints goes to that file.
 
 param([switch]$Dev, [string]$LogFile)

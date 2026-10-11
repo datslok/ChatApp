@@ -30,7 +30,15 @@ the point is for me to understand how it works, not just to have it done.
 ## Layout
 
 - `server.py`: FastAPI app. Serves the page and the `/ws` WebSocket endpoint that broadcasts messages.
-- `static/index.html`: the chat page (markup, styles and script in one file for now).
+- `static/index.html`: the chat page's markup. Its styles are in `static/css/chat.css`, its script in
+  `static/js/`: plain scripts (not ES modules) sharing one global scope, loaded in this order:
+  `core.js` (elements, connecting, server messages, channels, sidebar), `notifications.js` (and every
+  generated sound), `ui.js` (drawers, back button, popups, text box, emoji autocomplete), `voice.js`
+  (audio engine, mic, gate, volumes, who's in voice), `video.js` (camera, screen sharing), `rooms.js`
+  (joining/leaving, DM calls, call banner, Lounge page), `voice-settings.js`, `settings.js`,
+  `people.js` (DM/online lists, friends, profile popup, typing) and `messages.js` (uploads, messages,
+  reactions, replies, editing; ends with `start()`). Code that runs at load time may only use what
+  earlier files declare. Both folders are served with `Cache-Control: no-cache` (FreshStaticFiles).
 - `static/login.html`: the login / create account page.
 - `static/reset.html`: "forgot password" (asks for a reset link) and, with `?token=`, choosing a new password.
 - Emails (reset links) go out through Resend's SMTP server, configured in `.env`. Without `SMTP_HOST`
@@ -46,16 +54,16 @@ the point is for me to understand how it works, not just to have it done.
 - `serve.ps1`: runs the real site for chat.datslok.no: no reload, localhost only, settings from `.env`.
   Uses `.venv` if there is one (the server PC), else the conda environment. `-LogFile` (used by the
   scheduled tasks) writes everything to a log instead of the window; `voice.ps1` has the same.
-- Moving the server to its own PC (README, "Running the server on its own PC"): `server-export.ps1`
-  (old PC: `chatapp-data.zip` with chat.db, uploads/, releases/, .env), `server-import.ps1` (new PC),
-  `server-install.ps1` (new PC, as admin: Python + `.venv`, LiveKit, cloudflared service, firewall,
+- Moving the server to its own PC (README, "Running the server on its own PC"): `scripts\server\export.ps1`
+  (old PC: `chatapp-data.zip` with chat.db, uploads/, releases/, .env), `scripts\server\import.ps1` (new PC),
+  `scripts\server\install.ps1` (new PC, as admin: Python + `.venv`, LiveKit, cloudflared service, firewall,
   power settings, scheduled tasks "ChatApp" and "ChatApp voice" at boot, logs in `logs\`), and
-  `server-update.ps1` (git pull, packages, restart the chat; `-Voice` also LiveKit).
+  `scripts\server\update.ps1` (git pull, packages, restart the chat; `-Voice` also LiveKit).
   `tools/copy_db.py` makes a safe copy of a live database (SQLite's backup function).
-- From the development PC (after `server-connect.ps1` once: an SSH key and the name `chatserver` in
-  `~/.ssh/config`): `deploy.ps1` pushes if needed and runs `server-update.ps1` on the server over SSH;
-  `release-upload.ps1` copies a new desktop app release into the server's `releases\`. The server
-  PC's SSH server (step 7 of server-install.ps1) only accepts the home network.
+- From the development PC (after `scripts\server-connect.ps1` once: an SSH key and the name `chatserver` in
+  `~/.ssh/config`): `scripts\deploy.ps1` pushes if needed and runs `scripts\server\update.ps1` on the server over SSH;
+  `scripts\release-upload.ps1` copies a new desktop app release into the server's `releases\`. The server
+  PC's SSH server (step 7 of scripts\server\install.ps1) only accepts the home network.
 - `.env.example`: template for `.env` (INVITE_CODE, SECURE_COOKIES). `.env` itself is never committed.
 - `desktop/`: the Windows app (Tauri). A window around https://chat.datslok.no, with real Windows
   notifications (notification plugin, allowed for the site in `src-tauri/capabilities/default.json`)
@@ -79,7 +87,7 @@ the point is for me to understand how it works, not just to have it done.
   touch the real chat's `chat.db` and `uploads/`.
 - Voice runs on a self-hosted LiveKit server: `livekit/livekit-server.exe` (downloaded from
   github.com/livekit/livekit/releases, the windows_amd64 zip, checked against `checksums.txt`; git-ignored;
-  the server PC gets it from server-install.ps1, whose `$LiveKitVersion` should match this PC's),
+  the server PC gets it from scripts\server\install.ps1, whose `$LiveKitVersion` should match this PC's),
   settings in `livekit.yaml`, started by `voice.ps1`. Its key and secret are `LIVEKIT_API_KEY` and
   `LIVEKIT_API_SECRET` in `.env`. Ports: 7880 signalling (through the tunnel), 7881 TCP and 7882 UDP
   for the audio (forwarded on the router). The page uses LiveKit's browser library, `static/livekit-client-<version>.umd.js`
@@ -135,7 +143,7 @@ Only needed when the app itself changes (icon, plugins, Rust code); chat changes
 3. Copy `ChatApp_<version>_x64-setup.exe` and its `.sig` from `desktop/src-tauri/target/release/bundle/nsis/`
    into `releases/`.
 4. In `releases/latest.json`, set `version`, the installer's `url`, and `signature` (the .sig file's contents).
-5. Once the real chat runs on its own server PC: `.\release-upload.ps1` copies the installer, its `.sig`
+5. Once the real chat runs on its own server PC: `.\scripts\release-upload.ps1` copies the installer, its `.sig`
    and `latest.json` there (over SSH).
 
 ## Roadmap

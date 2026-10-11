@@ -2,15 +2,15 @@
 # version of the desktop app"): copies it into the server PC's releases\ folder, where the apps
 # look for updates.
 #
-#   .\release-upload.ps1
+#   .\scripts\release-upload.ps1
 #
 # It copies what releases\latest.json points to (the installer and its .sig), then latest.json
 # itself, last: so an app that checks in the meantime never sees a version whose installer isn't
-# there yet. Uses SSH's file copy (scp), set up once with server-connect.ps1.
+# there yet. Uses SSH's file copy (scp), set up once with scripts\server-connect.ps1.
 
 $ServerFolder = "C:/ChatApp"  # where the code is on the server PC (scp prefers / in paths)
 
-Set-Location $PSScriptRoot
+Set-Location (Split-Path $PSScriptRoot)  # the project folder: one up from scripts\
 
 $latest = Get-Content releases\latest.json -Raw | ConvertFrom-Json
 $installer = Split-Path $latest.platforms."windows-x86_64".url -Leaf  # "ChatApp_0.1.8_x64-setup.exe"

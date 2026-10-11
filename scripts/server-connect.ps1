@@ -1,8 +1,8 @@
-# Run once on the development PC, after server-install.ps1 has run on the server PC. Afterwards
-# "ssh chatserver" logs in there without a password, which deploy.ps1 and release-upload.ps1 use.
+# Run once on the development PC, after scripts\server\install.ps1 has run on the server PC. Afterwards
+# "ssh chatserver" logs in there without a password, which scripts\deploy.ps1 and scripts\release-upload.ps1 use.
 #
-#   .\server-connect.ps1 192.168.10.123 axel     (the server PC's address and your username there;
-#                                                  server-install.ps1 prints both at its step 7)
+#   .\scripts\server-connect.ps1 192.168.10.123 axel     (the server PC's address and your username there;
+#                                                  scripts\server\install.ps1 prints both at its step 7)
 #
 # What it does:
 #   1. Makes a key pair on this PC, if there isn't one: a private key that never leaves this PC
@@ -73,7 +73,7 @@ $text = $text.TrimEnd() + "`n`n" + $entry + "`n"
 # --- 4. Check
 $answer = ssh -o BatchMode=yes chatserver "Write-Output ok"  # BatchMode: fail instead of asking a password
 if ($answer -eq "ok") {
-    Write-Host "Done: 'ssh chatserver' works without a password. Try .\deploy.ps1" -ForegroundColor Green
+    Write-Host "Done: 'ssh chatserver' works without a password. Try .\scripts\deploy.ps1" -ForegroundColor Green
 } else {
     Write-Host "Logging in with the key didn't work yet. Run this again, or check the server's step 7." -ForegroundColor Yellow
 }

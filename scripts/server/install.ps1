@@ -7,18 +7,18 @@
 #   5. Power settings: never sleep on the charger, and closing the lid does nothing
 #   6. Two scheduled tasks, "ChatApp" and "ChatApp voice": start serve.ps1 and voice.ps1 at boot
 #      (even before anyone logs in), hidden, logging to logs\, and restarting them if they crash
-#   7. Windows' SSH server, so the development PC can update this one (deploy.ps1)
+#   7. Windows' SSH server, so the development PC can update this one (scripts\deploy.ps1)
 #
 # Run it in PowerShell *as administrator* (right-click PowerShell, "Run as administrator"),
-# from this folder:   .\server-install.ps1
+# from the project folder:   .\scripts\server\install.ps1
 #
-# Safe to run again: every step checks what's already done. Run server-import.ps1 first if you're
+# Safe to run again: every step checks what's already done. Run scripts\server\import.ps1 first if you're
 # moving an existing chat here, so the servers start with its data.
 
 $ErrorActionPreference = "Stop"  # stop at the first error, instead of carrying on half set up
 $ProgressPreference = "SilentlyContinue"  # no progress bars: in Windows PowerShell they make downloads very slow
-Set-Location $PSScriptRoot
-$root = $PSScriptRoot
+$root = Split-Path (Split-Path $PSScriptRoot)  # the project folder: two up from scripts\server\
+Set-Location $root
 
 $LiveKitVersion = "1.13.9"  # the same version as the development PC (see CLAUDE.md)
 
@@ -162,7 +162,7 @@ foreach ($task in @(@{ Name = "ChatApp"; Script = "serve.ps1"; Log = "logs\chat.
 # --- 7. SSH
 Step "7. SSH server (so the development PC can update this one)"
 # Windows' own SSH server ("OpenSSH"): it only needs switching on. The development PC then runs
-# commands here with deploy.ps1 and copies desktop app releases with release-upload.ps1.
+# commands here with scripts\deploy.ps1 and copies desktop app releases with scripts\release-upload.ps1.
 $sshServer = Get-WindowsCapability -Online -Name "OpenSSH.Server*" | Select-Object -First 1
 if ($sshServer.State -ne "Installed") {
     Write-Host "Switching on Windows' SSH server (this can take a minute)..."
@@ -184,7 +184,7 @@ if (Get-NetFirewallRule -Name "OpenSSH-Server-In-TCP" -ErrorAction SilentlyConti
 }
 $address = (Get-NetIPAddress -AddressFamily IPv4 |
     Where-Object { $_.IPAddress -like "192.168.*" -or $_.IPAddress -like "10.*" } | Select-Object -First 1).IPAddress
-Write-Host "SSH is on. On the development PC, run:  .\server-connect.ps1 $address $env:USERNAME"
+Write-Host "SSH is on. On the development PC, run:  .\scripts\server-connect.ps1 $address $env:USERNAME"
 
 # --- Start them now (if there's something to start)
 Step "Starting"
@@ -201,7 +201,7 @@ if (Test-Path .env) {
         }
     }
 } else {
-    Write-Host "No .env here yet: run .\server-import.ps1 (moving a chat) or copy .env.example to .env"
+    Write-Host "No .env here yet: run .\scripts\server\import.ps1 (moving a chat) or copy .env.example to .env"
     Write-Host "and fill it in (a new chat). Then: Start-ScheduledTask ChatApp; Start-ScheduledTask 'ChatApp voice'"
 }
 

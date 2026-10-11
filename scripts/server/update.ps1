@@ -1,15 +1,15 @@
 # Updates the server PC to the newest code on GitHub, and restarts the chat:
 #
-#   .\server-update.ps1          the chat (calls in Lounge and DMs carry on: voice isn't touched)
-#   .\server-update.ps1 -Voice   the chat and LiveKit (everyone in a call is dropped for a moment)
+#   .\scripts\server\update.ps1          the chat (calls in Lounge and DMs carry on: voice isn't touched)
+#   .\scripts\server\update.ps1 -Voice   the chat and LiveKit (everyone in a call is dropped for a moment)
 #
-# Run it in PowerShell as administrator (stopping and starting the tasks needs it), in this folder.
+# Run it in PowerShell as administrator (stopping and starting the tasks needs it), in the project folder.
 
 param([switch]$Voice)
 
 $ErrorActionPreference = "Stop"
-Set-Location $PSScriptRoot
-$root = $PSScriptRoot
+$root = Split-Path (Split-Path $PSScriptRoot)  # the project folder: two up from scripts\server\
+Set-Location $root
 
 $me = [Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
 if (-not $me.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {

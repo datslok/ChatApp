@@ -6,12 +6,13 @@
 #   releases/   the desktop app's installers and latest.json
 #   .env        the settings and secrets (invite code, mail password, LiveKit keys)
 #
-# Run it on the PC the chat runs on now:   .\server-export.ps1
-# Then copy chatapp-data.zip to the new PC (a USB stick, say) and run .\server-import.ps1 there.
+# Run it on the PC the chat runs on now:   .\scripts\server\export.ps1
+# Then copy chatapp-data.zip to the new PC (a USB stick, say) and run .\scripts\server\import.ps1 there.
 # The zip holds your secrets and everyone's messages: delete it from the stick afterwards.
 
-Set-Location $PSScriptRoot
-$zip = Join-Path $PSScriptRoot "chatapp-data.zip"
+$root = Split-Path (Split-Path $PSScriptRoot)  # the project folder: two up from scripts\server\
+Set-Location $root
+$zip = Join-Path $root "chatapp-data.zip"
 
 # The Python to use: the server's .venv if there is one, otherwise the "chatapp" conda environment.
 if (Test-Path .venv\Scripts\python.exe) {
@@ -45,7 +46,7 @@ try {
     $size = [math]::Round((Get-Item $zip).Length / 1MB, 1)
     Write-Host ""
     Write-Host "Done: $zip ($size MB)."
-    Write-Host "Copy it next to server-import.ps1 on the new PC and run that."
+    Write-Host "Copy it into the project folder on the new PC (C:\ChatApp) and run .\scripts\server\import.ps1 there."
 } finally {
     Remove-Item $temp -Recurse -Force  # the temporary copy, whatever happened
 }
