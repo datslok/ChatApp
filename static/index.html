@@ -3902,12 +3902,13 @@
     callButton.addEventListener("click", async () => {
       const channel = currentChannel;
       if (voiceRoom) leaveVoice();  // leave Lounge (or another call) first, so leaving doesn't hang up this one
-      setOutgoingCall(channel);  // (starts the calling sound)
+      setOutgoingCall(channel);
       sendToServer({ type: "call", channel });  // their tabs start ringing
       await joinVoice(channel, channelLabel(channel));
       if (outgoingCall !== channel) return;  // answered, declined or hung up meanwhile
       if (voiceRoomName === channel) {
         setVoiceStatus("Calling…", "waiting");
+        startCallingSound();  // (joinVoice has opened the microphone by now)
       } else {
         sendToServer({ type: "call_cancel", channel });  // we couldn't get in: stop their ringing
         setOutgoingCall(null);
@@ -3957,10 +3958,15 @@
       outgoingCall = channel;
       clearInterval(callingTimer);
       callingTimer = null;
-      if (channel) {
-        playCallingSound();
-        callingTimer = setInterval(playCallingSound, 1200);
-      }
+    }
+
+    // The calling sound starts only once we're connected and the microphone is open: opening the
+    // microphone makes Windows reconfigure the sound device, which would put a tick in a sound
+    // that's already playing.
+    function startCallingSound() {
+      clearInterval(callingTimer);
+      playCallingSound();
+      callingTimer = setInterval(playCallingSound, 1200);
     }
 
     function startRinging(call) {
