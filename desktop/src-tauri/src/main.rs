@@ -1,11 +1,12 @@
 // In the finished app, don't open a console window next to it (development mode keeps it for errors).
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use tauri::webview::NewWindowResponse;
 use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri_plugin_opener::OpenerExt;
 use tauri_plugin_updater::UpdaterExt;
 
 fn main() {
-    // Open the window described in tauri.conf.json, which shows https://chat.datslok.no.
     tauri::Builder::default()
         // Real Windows notifications: replaces the page's Notification, which WebView2 blocks here.
         // (Allowed for the chat page in capabilities/default.json.)
@@ -16,7 +17,27 @@ fn main() {
         // closes (in %APPDATA%\no.datslok.chat), put back when it starts. Not for the update window,
         // which should always appear centred at its own size.
         .plugin(tauri_plugin_window_state::Builder::default().with_denylist(&["update"]).build())
+        // Opens links in the default browser. Only our Rust code below uses it: the page isn't
+        // allowed to (capabilities/default.json only gives it notifications).
+        .plugin(tauri_plugin_opener::init())
         .setup(|app| {
+            // The chat window, from its settings in tauri.conf.json ("create": false there, so that
+            // we make it here, with a handler added): it shows https://chat.datslok.no.
+            let handle = app.handle().clone();
+            WebviewWindowBuilder::from_config(app.handle(), &app.config().app.windows[0])?
+                // A link with target="_blank" asks for a new window. Tauri says no to those unless
+                // we decide, so: open web addresses in the default browser, and never a window here.
+                .on_new_window(move |url, _features| {
+                    if url.scheme() == "http" || url.scheme() == "https" {
+                        if let Err(error) = handle.opener().open_url(url.as_str(), None::<&str>) {
+                            eprintln!("Couldn't open {url}: {error}");
+                        }
+                    }
+                    NewWindowResponse::Deny
+                })
+                .build()?;
+
+
             // Look for an update in the background, so the window opens right away.
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {

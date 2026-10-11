@@ -75,7 +75,8 @@ the point is for me to understand how it works, not just to have it done.
 - `.env.example`: template for `.env` (INVITE_CODE, SECURE_COOKIES). `.env` itself is never committed.
 - `desktop/`: the Windows app (Tauri). A window around https://chat.datslok.no, with real Windows
   notifications (notification plugin, allowed for the site in `src-tauri/capabilities/default.json`)
-  and automatic updates at startup (updater plugin). `npm run tauri dev` in `desktop/` to try it.
+  automatic updates at startup (updater plugin), and links opening in the default browser (opener plugin,
+  used only by main.rs's new-window handler, not by the page). `npm run tauri dev` in `desktop/` to try it.
   Updates install silently (installMode "quiet") while our own window, `desktop/ui/update.html`
   (bundled in the app), shows the progress. To test it: `npm run tauri dev -- --config pretend.json`
   with `{"version": "0.1.0"}` in pretend.json, so the live version counts as an update.

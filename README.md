@@ -268,7 +268,8 @@ Everything after that day's 04:00 is lost (messages, accounts, settings changed 
 ## The desktop app
 
 The Windows app (`desktop\`, made with [Tauri](https://tauri.app/)) is a window around
-https://chat.datslok.no: changes to the chat reach it through the site, no new app needed. A new
+https://chat.datslok.no (links in it open in the default browser): changes to the chat reach it
+through the site, no new app needed. A new
 version is only needed when the app itself changes (its Rust code, plugins, the icon). Building it
 needs [Node.js](https://nodejs.org/) and [Rust](https://rustup.rs/) on the development PC, and the
 **signing key** `C:\Users\axelk\.tauri\chatapp.key` (never commit it; without it, the installed apps
