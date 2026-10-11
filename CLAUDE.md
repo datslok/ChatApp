@@ -49,10 +49,12 @@ the point is for me to understand how it works, not just to have it done.
 - `static/reset.html`: "forgot password" (asks for a reset link) and, with `?token=`, choosing a new password.
 - Emails (reset links) go out through Resend's SMTP server, configured in `.env`. Without `SMTP_HOST`
   (as in development) they're printed in the server window instead.
-- `static/changelog.json`: Settings → "What's new" (settings.js), written by hand, newest day first. A newer
-  date than the browser last saw (localStorage "changelogSeen") puts a red dot on ⚙️ and the tab. **Add a
-  line for friends (short, no technical details) in the same commit as every feature they'd notice**; same
-  day: add to that day's entry. Part of `PAGE_VERSION`, so a changelog-only deploy reloads open pages.
+- `static/changelog.json`: Settings → "What's new" (settings.js), written by hand: `features` (everything the
+  chat can do, by topic, with how to use it) and `changes` (newest day first). A newer date in `changes` than
+  the browser last saw (localStorage "changelogSeen") puts a red dot on ⚙️ and the tab. **In the same commit
+  as every feature friends would notice: a line in `changes` (same day: add to that day's entry) and update
+  `features`** (short, for friends, no technical details). Part of `PAGE_VERSION`, so a changelog-only
+  deploy reloads open pages.
 - `static/emoji.json`: every emoji for the reaction picker (and the server's list of allowed reactions),
   made from Unicode's `emoji-test.txt` by `tools/make_emoji_json.py`.
 - `tools/make_admin.py`: make someone an admin (or `--remove`, or `--list`); `--db dev.db` for development.

@@ -1,33 +1,94 @@
-[
-  {
-    "date": "2026-10-12",
-    "items": [
-      "Text formatting: **bold**, *italic*, ~~strikethrough~~, `code`, code blocks (three backticks around them), \"> \" at the start of a line for a quote, and ||spoilers|| (click to reveal). A backslash before a star (`\\*`) shows a real one",
-      "Scroll up in a channel to load older messages, all the way to the beginning",
-      "Settings → Bugs & ideas: tell us what's broken or what you'd like",
-      "You at the bottom left, like Discord: your picture, status, mute and deafen",
-      "What's new: this page, with a dot on ⚙️ when there's something new"
-    ]
-  },
-  {
-    "date": "2026-10-11",
-    "items": [
-      "Screen sharing in calls and the Lounge, up to 1440p and 60 fps, with sound",
-      "Camera in DM calls and the Lounge, with a tile for everyone (click one to make it big)",
-      "Voice: the Lounge voice channel, calls in DMs, volume per person, and noise suppression",
-      "In a call: a signal icon with your ping, and a connection popup",
-      "The Windows app, with real notifications and automatic updates",
-      "Clickable links, and clicking a notification takes you to the message",
-      "F5 keeps you in the channel you were in",
-      "Custom emoji: replace the picture (old messages show the new one)"
-    ]
-  },
-  {
-    "date": "2026-10-10",
-    "items": [
-      "The beginning: channels, DMs and friends, profiles with pictures and banners, pictures and files",
-      "Replies, reactions, custom emoji, editing and deleting, @mentions",
-      "Notifications for DMs and mentions, with a volume slider and mute"
-    ]
-  }
-]
+{
+  "features": [
+    {
+      "topic": "💬 Messages",
+      "items": [
+        "Enter sends, Shift+Enter starts a new line. Up to 2000 characters",
+        "Formatting: **bold**, *italic*, ~~strikethrough~~, `code`, code blocks (three backticks around them), \"> \" at the start of a line for a quote, and ||spoilers|| (click to reveal). A backslash before a star (`\\*`) shows a real one",
+        "Hover a message to react 😀, reply ↩, edit ✏️ or delete 🗑️ (hold Shift to skip the question). Esc cancels a reply or an edit",
+        "↑ in an empty text box edits your last message",
+        "Click a reply's quote to jump to the original message",
+        "@name mentions someone, @everyone mentions everybody: they get a notification and a red count",
+        "Type :name for emoji suggestions (↑↓ to choose, Enter or Tab to pick), or use the 😀 button. Messages with only emoji show them big",
+        "Pictures and files up to 10 MB: the + button, drag and drop, or paste. Up to 10 at once, click a picture to see it big",
+        "Links are clickable",
+        "Scroll up to load older messages, all the way to the beginning"
+      ]
+    },
+    {
+      "topic": "👥 People",
+      "items": [
+        "Friends: send requests and accept them on the Friends page. DMs are between friends",
+        "Online and offline people on the right, and \"is typing…\" under the messages",
+        "Click someone's picture or name for their profile: picture, banner, status and bio",
+        "Your own in Settings → Profile. Pictures and banners can be animated GIFs, and you can move and zoom them",
+        "Up to 12 custom emoji of your own (also animated) in Settings → Emoji, for messages and reactions"
+      ]
+    },
+    {
+      "topic": "🔊 Voice & video",
+      "items": [
+        "The Lounge: a voice channel anyone can join. 📞 in a DM calls your friend, and it rings on all their devices",
+        "🎤 mute and 🎧 deafen at the bottom left. 📷 camera and 🖥️ screen sharing (up to 1440p and 60 fps, with sound) in calls and the Lounge",
+        "Click a tile to make it big, right-click it for the profile. ⛶ for fullscreen. In a DM, drag the call's bottom edge to resize it",
+        "Volume per person (0–200%) in their profile: click them, also in the voice list",
+        "Settings → Voice & audio: microphone, speakers, volumes, sensitivity and noise suppression. Settings → Video: your camera, with a preview",
+        "The signal icon in a call shows your ping, click it for details"
+      ]
+    },
+    {
+      "topic": "🔔 Notifications",
+      "items": [
+        "For DMs and mentions: a notification, a sound and a count in the tab's title. Click one to go to the message",
+        "Unread channels get a dot, mentions a red count",
+        "Settings → Notifications: turn them on or off, the volume, and mute them for 1 hour, 8 hours, until morning, or until you turn them back on"
+      ]
+    },
+    {
+      "topic": "💻 The Windows app",
+      "items": [
+        "Real Windows notifications, and it updates itself. Get it in Settings or at chat.datslok.no/download"
+      ]
+    },
+    {
+      "topic": "⚙️ Settings and help",
+      "items": [
+        "My Account: change your username, email and password. Forgot your password? There's a link on the login page",
+        "Bugs & ideas: tell us what's broken or what you'd like"
+      ]
+    }
+  ],
+  "changes": [
+    {
+      "date": "2026-10-12",
+      "items": [
+        "Text formatting: **bold**, *italic*, ~~strikethrough~~, `code`, code blocks, quotes and ||spoilers||",
+        "Scroll up in a channel to load older messages, all the way to the beginning",
+        "Settings → Bugs & ideas: tell us what's broken or what you'd like",
+        "You at the bottom left, like Discord: your picture, status, mute and deafen",
+        "What's new: this page, with a dot on ⚙️ when there's something new"
+      ]
+    },
+    {
+      "date": "2026-10-11",
+      "items": [
+        "Screen sharing in calls and the Lounge, up to 1440p and 60 fps, with sound",
+        "Camera in DM calls and the Lounge, with a tile for everyone (click one to make it big)",
+        "Voice: the Lounge voice channel, calls in DMs, volume per person, and noise suppression",
+        "In a call: a signal icon with your ping, and a connection popup",
+        "The Windows app, with real notifications and automatic updates",
+        "Clickable links, and clicking a notification takes you to the message",
+        "F5 keeps you in the channel you were in",
+        "Custom emoji: replace the picture (old messages show the new one)"
+      ]
+    },
+    {
+      "date": "2026-10-10",
+      "items": [
+        "The beginning: channels, DMs and friends, profiles with pictures and banners, pictures and files",
+        "Replies, reactions, custom emoji, editing and deleting, @mentions",
+        "Notifications for DMs and mentions, with a volume slider and mute"
+      ]
+    }
+  ]
+}

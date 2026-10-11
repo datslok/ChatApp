@@ -205,17 +205,25 @@ After a deploy that changed the page (`static/index.html`, `static/js/`, `static
 to press F5. Someone in a call, with files waiting to be sent, or editing a message gets it once
 that's done; a half-typed message is kept.
 
-**What's new** (Settings → What's new) is written by hand in `static/changelog.json`: one entry per
-day, newest first, each with a list of short lines for friends (not for developers). The lines can
-use the chat's formatting (`**bold**`, `` `code` `` and so on). A new date at the top puts a red dot
-on everyone's ⚙️ until they've opened the page. To add something, edit the file and deploy:
+**What's new** (Settings → What's new) is written by hand in `static/changelog.json`, in two parts:
+`features`, an overview of everything the chat can do (by topic), and `changes`, one entry per day,
+newest first. Both are short lines for friends (not for developers), and they can use the chat's
+formatting (`**bold**`, `` `code` `` and so on). A new date at the top of `changes` puts a red dot on
+everyone's ⚙️ until they've opened the page. To add something, edit the file and deploy:
 
 ```json
-[
-  {"date": "2026-10-13", "items": ["Something new", "And something else"]},
-  {"date": "2026-10-12", "items": ["..."]}
-]
+{
+  "features": [
+    {"topic": "💬 Messages", "items": ["Enter sends, Shift+Enter starts a new line", "..."]}
+  ],
+  "changes": [
+    {"date": "2026-10-13", "items": ["Something new", "And something else"]},
+    {"date": "2026-10-12", "items": ["..."]}
+  ]
+}
 ```
+
+A new feature goes in both: a line under its date in `changes`, and in the right topic of `features`.
 
 On the server itself, in `C:\ChatApp` (as administrator): `.\scripts\server\update.ps1` does what
 `scripts\deploy.ps1` does, `Get-ScheduledTask ChatApp*` shows whether the tasks run, and

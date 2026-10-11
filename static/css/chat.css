@@ -1544,25 +1544,25 @@ body {
   background: #2b2d31;
 }
 
-/* What's new: one card per day, like the Inbox's. */
-.changelog-day {
+/* What's new: one card per topic or day, like the Inbox's. */
+.changelog-card {
   margin-bottom: 12px;
   padding: 12px 14px;
   border-radius: 8px;
   background: #2b2d31;
 }
 
-.changelog-date {
+.changelog-title {
   font-weight: 600;
   color: white;
 }
 
-.changelog-day ul {
+.changelog-card ul {
   margin: 6px 0 0;
   padding-left: 20px;
 }
 
-.changelog-day li {
+.changelog-card li {
   margin: 4px 0;
 }
 

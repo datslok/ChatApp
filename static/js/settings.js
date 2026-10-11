@@ -65,20 +65,22 @@ showSettingsPage(settingsPage);  // at the start: hide every page but the first
 
 // ---------- Settings: What's new ----------
 //
-// The list is written by hand in static/changelog.json: one entry per day, newest first,
-// {"date": "2026-10-12", "items": ["...", ...]}. This browser remembers the newest date it has
-// shown (localStorage "changelogSeen"); a newer one in the file puts a red dot on ⚙️ and on the tab.
+// Written by hand in static/changelog.json, in two parts:
+//   "features": everything the chat can do, by topic: [{"topic": "💬 Messages", "items": [...]}]
+//   "changes":  what changed when, newest day first: [{"date": "2026-10-12", "items": [...]}]
+// This browser remembers the newest date it has shown (localStorage "changelogSeen"); a newer
+// one in "changes" puts a red dot on ⚙️ and on the tab. Editing "features" alone doesn't.
 
 const settingsNewDot = document.getElementById("settings-new-dot");
 const changelogNewDot = document.getElementById("changelog-new-dot");
 const changelogList = document.getElementById("changelog-list");
-let changelog = [];  // the file's entries, once fetched
+let changelog = { features: [], changes: [] };  // the file's contents, once fetched
 
 async function loadChangelog() {
   try {
     const response = await fetch("/static/changelog.json");
     if (!response.ok) return;
-    changelog = await response.json();  // (JSON text -> a list of objects)
+    changelog = await response.json();  // (JSON text -> an object with the two lists)
   } catch {
     return;  // offline or a broken file: no dots, and the page stays empty
   }
@@ -88,37 +90,56 @@ async function loadChangelog() {
 // Dates written as YYYY-MM-DD sort like plain text: "2026-10-12" > "2026-10-11", and anything
 // is > "" (nothing seen yet, like on a new device).
 function updateChangelogDots() {
-  const newest = changelog.length > 0 ? changelog[0].date : "";
+  const newest = changelog.changes.length > 0 ? changelog.changes[0].date : "";
   const unseen = newest > (localStorage.getItem("changelogSeen") || "");
   settingsNewDot.hidden = !unseen;
   changelogNewDot.hidden = !unseen;
 }
 
-// Draw the entries as cards (one per day), and remember that we've seen them.
+// One card: a title over a list of lines, formatted like messages (messages.js, formatText),
+// so **bold**, `code` and the rest work in them.
+function makeChangelogCard(title, items) {
+  const card = document.createElement("article");
+  card.className = "changelog-card";
+  const list = document.createElement("ul");
+  for (const item of items) {
+    const line = document.createElement("li");
+    line.className = "message-text";
+    formatText(line, item);
+    list.appendChild(line);
+  }
+  card.append(title, list);
+  return card;
+}
+
+function makeChangelogHeading(text) {
+  const heading = document.createElement("h3");
+  heading.textContent = text;
+  return heading;
+}
+
+// Draw both parts, and remember that we've seen the newest changes.
 function showChangelog() {
-  changelogList.replaceChildren();
-  for (const entry of changelog) {
-    const day = document.createElement("article");
-    day.className = "changelog-day";
+  changelogList.replaceChildren(makeChangelogHeading("Everything ChatApp can do"));
+  for (const group of changelog.features) {
+    const topic = document.createElement("div");
+    topic.className = "changelog-title";
+    topic.textContent = group.topic;
+    changelogList.appendChild(makeChangelogCard(topic, group.items));
+  }
+  changelogList.appendChild(makeChangelogHeading("Changes"));
+  for (const entry of changelog.changes) {
     const date = document.createElement("time");
-    date.className = "changelog-date";
+    date.className = "changelog-title";
     date.dateTime = entry.date;
     // "T12:00": midday, so the date is the same in every time zone (just "2026-10-12" means
     // midnight in London, which is still the day before further west).
     date.textContent = new Date(entry.date + "T12:00").toLocaleDateString(undefined, {
       weekday: "long", day: "numeric", month: "long", year: "numeric",
     });
-    const list = document.createElement("ul");
-    for (const item of entry.items) {
-      const line = document.createElement("li");
-      line.className = "message-text";  // formatted like a message (messages.js), so **bold** etc. work
-      formatText(line, item);
-      list.appendChild(line);
-    }
-    day.append(date, list);
-    changelogList.appendChild(day);
+    changelogList.appendChild(makeChangelogCard(date, entry.items));
   }
-  if (changelog.length > 0) localStorage.setItem("changelogSeen", changelog[0].date);
+  if (changelog.changes.length > 0) localStorage.setItem("changelogSeen", changelog.changes[0].date);
   updateChangelogDots();
 }
 
