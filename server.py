@@ -1596,6 +1596,12 @@ async def emoji_list():
 LIVEKIT_CLIENT_FILE = "livekit-client-2.22.3.umd.js"
 
 
+@app.get("/voice-gate.js")
+async def voice_gate():
+    # The noise gate for voice, which the page loads into the browser's audio engine (an AudioWorklet).
+    return FileResponse("static/voice-gate.js", media_type="text/javascript")
+
+
 @app.get("/" + LIVEKIT_CLIENT_FILE)
 async def livekit_client():
     return FileResponse("static/" + LIVEKIT_CLIENT_FILE, media_type="text/javascript",

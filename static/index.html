@@ -671,9 +671,58 @@
       padding: 0;
     }
 
-    #notify-volume-value {
+    #notify-volume-value, .slider-value {
       width: 3em;
       text-align: right;
+    }
+
+    /* The microphone's level meter: a dark bar that fills from the left as you get louder (grey,
+       or green while your voice gets through), with the sensitivity line on top. */
+    #voice-meter {
+      position: relative;
+      height: 24px;
+      border-radius: 6px;
+      background: #1e1f22;
+      overflow: hidden;
+    }
+    #voice-meter-level {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 0;
+      width: 0%;
+      background: #4e5058;
+    }
+    #voice-meter-level.open {
+      background: #23a55a;
+    }
+    /* The sensitivity slider covers the meter, see-through except for its handle: a yellow line.
+       "appearance: none" turns off the browser's own look so we can draw it ourselves. */
+    #settings #voice-gate {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      background: transparent;
+      appearance: none;
+      -webkit-appearance: none;
+      cursor: ew-resize;
+    }
+    #voice-gate::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 4px;
+      height: 24px;
+      border-radius: 2px;
+      background: #f0b232;
+    }
+    #voice-gate::-moz-range-thumb {
+      width: 4px;
+      height: 24px;
+      border: none;
+      border-radius: 2px;
+      background: #f0b232;
     }
 
     #settings select {
@@ -1852,6 +1901,42 @@
       <p id="mute-status" class="settings-help"></p>
     </div>
 
+    <h3>Voice &amp; audio</h3>
+    <div class="settings-group">
+      <label>
+        Microphone
+        <select id="voice-input"></select>
+      </label>
+      <label id="voice-output-row">
+        Speakers or headphones
+        <select id="voice-output"></select>
+      </label>
+      <p id="voice-devices-help" class="settings-help"></p>
+      <label class="slider-row">
+        Mic volume
+        <input type="range" id="voice-mic-volume" min="0" max="200" step="5">
+        <span id="voice-mic-volume-value" class="slider-value"></span>
+      </label>
+      <label class="slider-row">
+        Others' volume
+        <input type="range" id="voice-output-volume" min="0" max="200" step="5">
+        <span id="voice-output-volume-value" class="slider-value"></span>
+      </label>
+      <label>
+        Sensitivity: when the bar is left of the line, your microphone is silent
+        <!-- The level meter, with the sensitivity slider laid on top of it. -->
+        <div id="voice-meter">
+          <div id="voice-meter-level"></div>
+          <input type="range" id="voice-gate" min="-100" max="0" step="1">
+        </div>
+      </label>
+      <p class="settings-help">
+        Stay quiet and drag the line a little right of where the bar sits, then talk: the bar turns
+        green when your voice gets through. All the way left: always on.
+      </p>
+      <button type="button" id="voice-test">Test microphone</button>
+    </div>
+
     <section id="desktop-app">
       <h3>Desktop app</h3>
       <p class="settings-help">
@@ -2972,9 +3057,14 @@
     // ---------- Voice ----------
     //
     // Voice goes through our LiveKit server (voice.ps1), not through the chat's WebSocket. Joining:
-    // ask our server for a ticket (/voice-token), connect to LiveKit with it, then turn the
-    // microphone on. In LiveKit's words, everyone in a room is a "participant" who "publishes" their
+    // ask our server for a ticket (/voice-token), connect to LiveKit with it, then send the
+    // microphone. In LiveKit's words, everyone in a room is a "participant" who "publishes" their
     // microphone as an audio "track", and "subscribes" to (receives) everyone else's.
+    //
+    // The sound goes through the browser's Web Audio engine, as a chain of "nodes" (like guitar
+    // pedals), all in one AudioContext:
+    //   microphone → mic volume (a GainNode) → noise gate (static/voice-gate.js) → a track LiveKit sends
+    //   each other person → their volume (a GainNode LiveKit makes for them) → speakers or headphones
 
     const voiceBar = document.getElementById("voice-bar");
     const voiceStatus = document.getElementById("voice-status");
@@ -2982,10 +3072,150 @@
     const voiceMuteButton = document.getElementById("voice-mute");
     const voiceLeaveButton = document.getElementById("voice-leave");
     const voiceAudio = document.getElementById("voice-audio");
+    const voiceInputSelect = document.getElementById("voice-input");
+    const voiceOutputSelect = document.getElementById("voice-output");
+    const voiceOutputRow = document.getElementById("voice-output-row");
+    const voiceDevicesHelp = document.getElementById("voice-devices-help");
+    const voiceMicVolumeSlider = document.getElementById("voice-mic-volume");
+    const voiceMicVolumeValue = document.getElementById("voice-mic-volume-value");
+    const voiceOutputVolumeSlider = document.getElementById("voice-output-volume");
+    const voiceOutputVolumeValue = document.getElementById("voice-output-volume-value");
+    const voiceMeterLevel = document.getElementById("voice-meter-level");
+    const voiceGateSlider = document.getElementById("voice-gate");
+    const voiceTestButton = document.getElementById("voice-test");
 
-    let voiceRoom = null;      // the LiveKit Room we're in (or joining), or null
-    let voiceRoomName = null;  // its name: "lounge", or a DM's "dm:3:7"
-    let micMuted = false;      // stays the same between calls, like Discord
+    let voiceRoom = null;       // the LiveKit Room we're in (or joining), or null
+    let voiceRoomName = null;   // its name: "lounge", or a DM's "dm:3:7"
+    let micMuted = false;       // stays the same between calls, like Discord
+    let micPublication = null;  // our microphone track as LiveKit sends it, while in a room
+    let micStream = null;       // the open microphone (from getUserMedia), or null
+    let micSource = null;       // ...as the first node of the chain
+    let micTesting = false;     // "Test microphone" in Settings is on
+
+    // ----- Settings, remembered in this browser: they belong to this device's microphone and speakers.
+    // Device ids "" mean the computer's default. Volumes in %, gate in decibels (-100 = always on).
+    const voiceSettings = { inputDevice: "", outputDevice: "", micVolume: 100, outputVolume: 100, gate: -60 };
+    try {
+      Object.assign(voiceSettings, JSON.parse(localStorage.getItem("voiceSettings")) || {});
+    } catch {}
+
+    function saveVoiceSettings() {
+      try {
+        localStorage.setItem("voiceSettings", JSON.stringify(voiceSettings));
+      } catch {}
+    }
+
+    // ----- The audio engine, made the first time it's needed (it needs a click on the page first).
+    // A Promise, because loading the gate takes a moment: everyone who needs it waits for the same one.
+    let voiceEngine = null;
+
+    function getAudio() {
+      if (!voiceEngine) {
+        voiceEngine = setUpAudio();
+        voiceEngine.catch(() => { voiceEngine = null; });  // failed: try again next time
+      }
+      return voiceEngine;
+    }
+
+    async function setUpAudio() {
+      const context = new AudioContext();
+      await context.audioWorklet.addModule("/voice-gate.js");  // load our gate into the audio engine
+      const micGain = context.createGain();
+      const gate = new AudioWorkletNode(context, "voice-gate");
+      // The end of the chain: turns the sound back into a normal track, which LiveKit can send.
+      const destination = context.createMediaStreamDestination();
+      micGain.connect(gate).connect(destination);
+      micGain.gain.value = voiceSettings.micVolume / 100;
+      gate.port.postMessage({ threshold: voiceSettings.gate });
+      gate.port.onmessage = (event) => showMicLevel(event.data);  // the gate's reports, ~30 a second
+      const nodes = { context, micGain, gate, destination };
+      await applyOutputDevice(context);
+      return nodes;
+    }
+
+    // Send the others' voices to the chosen speakers or headphones (where the browser can).
+    async function applyOutputDevice(context) {
+      if (!("setSinkId" in context)) return;
+      try {
+        await context.setSinkId(voiceSettings.outputDevice);
+      } catch {
+        await context.setSinkId("").catch(() => {});  // unplugged since: the default instead
+      }
+    }
+
+    // ----- The microphone
+
+    async function openMic() {
+      const { context, micGain } = await getAudio();
+      await context.resume();  // an AudioContext starts paused until the page has been clicked
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          // "ideal": this one if it's there, otherwise the default (if it was unplugged).
+          deviceId: voiceSettings.inputDevice ? { ideal: voiceSettings.inputDevice } : undefined,
+          // The browser's own clean-up: no echo of the others from your speakers, less background
+          // noise, and an even volume.
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+      });
+      closeMic();  // another microphone was open (switching devices): close that one first
+      micStream = stream;
+      micSource = context.createMediaStreamSource(stream);
+      micSource.connect(micGain);
+      listDevices();  // now that we may use the microphone, the browser tells us the devices' names
+    }
+
+    function closeMic() {
+      if (micSource) micSource.disconnect();
+      if (micStream) {
+        for (const track of micStream.getTracks()) track.stop();  // the "mic in use" light goes out
+      }
+      micSource = null;
+      micStream = null;
+      showMicLevel({ level: -100, open: false });
+    }
+
+    // Close the microphone if nothing needs it any more (not in voice, not testing it).
+    function closeMicIfUnused() {
+      if (!micTesting && !micPublication) closeMic();
+    }
+
+    // The level meter in Settings: how loud the microphone is, green while the gate lets it through.
+    function showMicLevel({ level, open }) {
+      voiceMeterLevel.style.width = (level + 100) + "%";  // -100 dB = empty, 0 dB = full
+      voiceMeterLevel.classList.toggle("open", open);
+    }
+
+    // Send our microphone in this room (turning it on if needed). Throws if the browser won't let us.
+    async function sendMic(room) {
+      if (!micStream) await openMic();
+      const { destination } = await getAudio();
+      if (voiceRoom !== room) return;  // left while waiting
+      if (!micPublication) {
+        micPublication = await room.localParticipant.publishTrack(destination.stream.getAudioTracks()[0], {
+          source: LivekitClient.Track.Source.Microphone,
+        });
+      } else if (micPublication.isMuted) {
+        await micPublication.unmute();
+      }
+    }
+
+    function showNoMicrophone() {
+      micMuted = true;
+      showMuteButton();
+      setVoiceStatus("Connected, no microphone", "error");
+      voiceStatus.title = "The browser didn't allow the microphone. Allow it (the icon in the address bar) and unmute.";
+    }
+
+    // ----- Volumes
+
+    // How loud one person is for us. (Step 7 adds a volume per person on top of this.)
+    function applyVolume(participant) {
+      participant.setVolume(voiceSettings.outputVolume / 100);
+    }
+
+    // ----- Joining and leaving
 
     // The status line in the voice bar. kind: "" (green), "waiting" (yellow) or "error" (red).
     function setVoiceStatus(text, kind = "") {
@@ -3009,62 +3239,62 @@
     async function joinVoice(roomName, label) {
       if (voiceRoomName === roomName) return;  // already there
       if (voiceRoom) leaveVoice();             // one voice room at a time
-      if (!window.LivekitClient) {
-        // The library is still loading (or failed to): rare, since it starts loading with the page.
-        voiceBar.hidden = false;
-        voiceWhere.textContent = label;
-        setVoiceStatus("Voice isn't loaded yet, try again", "error");
-        return;
-      }
-
-      const room = new LivekitClient.Room({
-        // The browser's own clean-up of your microphone: no echo of the others from your speakers,
-        // less background noise, and an even volume.
-        audioCaptureDefaults: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-      });
-      voiceRoom = room;
       voiceRoomName = roomName;
       voiceBar.hidden = false;
       voiceWhere.textContent = label;
+      voiceStatus.title = "";
       setVoiceStatus("Connecting…", "waiting");
       markVoiceChannel();
       showMuteButton();
 
-      // Someone else's audio has reached us: track.attach() makes an <audio> element that plays it.
-      room.on(LivekitClient.RoomEvent.TrackSubscribed, (track) => {
-        if (track.kind === "audio") voiceAudio.appendChild(track.attach());
-      });
-      // ...and when they leave or stop sending, remove it again.
-      room.on(LivekitClient.RoomEvent.TrackUnsubscribed, (track) => {
-        for (const element of track.detach()) element.remove();
-      });
-      // The connection dropped: LiveKit tries to get it back by itself.
-      room.on(LivekitClient.RoomEvent.Reconnecting, () => setVoiceStatus("Reconnecting…", "waiting"));
-      room.on(LivekitClient.RoomEvent.Reconnected, () => setVoiceStatus("Voice connected"));
-      // Disconnected for good (gave up reconnecting, or joined from another tab with the same account).
-      room.on(LivekitClient.RoomEvent.Disconnected, () => {
-        if (voiceRoom === room) {
-          leaveVoice();
-        }
-      });
-      // Browsers only play sound after you've clicked something on the page. Joining is a click,
-      // but if connecting took long, the browser may have stopped counting it: then ask for one more.
-      room.on(LivekitClient.RoomEvent.AudioPlaybackStatusChanged, () => {
-        if (!room.canPlaybackAudio) {
-          setVoiceStatus("Tap here to turn on sound", "waiting");
-          voiceStatus.classList.add("clickable");
-        }
-      });
-
+      let room;
       try {
+        if (!window.LivekitClient) throw new Error("Voice isn't loaded yet, try again");
+        const { context } = await getAudio();
+        if (voiceRoomName !== roomName) return;  // left (or went elsewhere) while waiting
+        room = new LivekitClient.Room({
+          // Play the others through our AudioContext, so their volume can go above 100% and the
+          // speakers can be chosen.
+          webAudioMix: { audioContext: context },
+          // Leaving unpublishes our microphone track; keep it working for the next call.
+          stopLocalTrackOnUnpublish: false,
+        });
+        voiceRoom = room;
+
+        // Someone else's audio has reached us: track.attach() starts playing it.
+        room.on(LivekitClient.RoomEvent.TrackSubscribed, (track, publication, participant) => {
+          if (track.kind !== "audio") return;
+          voiceAudio.appendChild(track.attach());
+          applyVolume(participant);
+        });
+        // ...and when they leave or stop sending, stop it again.
+        room.on(LivekitClient.RoomEvent.TrackUnsubscribed, (track) => {
+          for (const element of track.detach()) element.remove();
+        });
+        // The connection dropped: LiveKit tries to get it back by itself.
+        room.on(LivekitClient.RoomEvent.Reconnecting, () => setVoiceStatus("Reconnecting…", "waiting"));
+        room.on(LivekitClient.RoomEvent.Reconnected, () => setVoiceStatus("Voice connected"));
+        // Disconnected for good (gave up reconnecting, or joined from another tab with the same account).
+        room.on(LivekitClient.RoomEvent.Disconnected, () => {
+          if (voiceRoom === room) leaveVoice();
+        });
+        // Browsers only play sound after you've clicked something on the page. Joining is a click,
+        // but if connecting took long, the browser may have stopped counting it: then ask for one more.
+        room.on(LivekitClient.RoomEvent.AudioPlaybackStatusChanged, () => {
+          if (!room.canPlaybackAudio) {
+            setVoiceStatus("Tap here to turn on sound", "waiting");
+            voiceStatus.classList.add("clickable");
+          }
+        });
+
         // Our server checks that we may join, and gives us LiveKit's address and a ticket.
         const response = await fetch("/voice-token?room=" + encodeURIComponent(roomName));
         const answer = await response.json();
         if (!response.ok) throw new Error(answer.detail || "Couldn't join voice.");
         await room.connect(answer.url, answer.token);
       } catch (error) {
-        if (voiceRoom !== room) return;  // we left (or went elsewhere) while it was connecting
-        room.disconnect();
+        if (voiceRoomName !== roomName || (room && voiceRoom !== room)) return;  // we left meanwhile
+        if (room) room.disconnect();
         voiceRoom = null;
         voiceRoomName = null;
         markVoiceChannel();
@@ -3081,12 +3311,9 @@
       // still listen (and the mute button stays red).
       if (!micMuted) {
         try {
-          await room.localParticipant.setMicrophoneEnabled(true);
-        } catch (error) {
-          micMuted = true;
-          showMuteButton();
-          setVoiceStatus("Connected, no microphone", "error");
-          voiceStatus.title = "The browser didn't allow the microphone. Allow it (the icon in the address bar) and unmute.";
+          await sendMic(room);
+        } catch {
+          if (voiceRoom === room) showNoMicrophone();
         }
       }
     }
@@ -3095,7 +3322,9 @@
       const room = voiceRoom;
       voiceRoom = null;
       voiceRoomName = null;
-      if (room) room.disconnect();  // also turns the microphone off, so the "mic in use" light goes out
+      micPublication = null;
+      if (room) room.disconnect();
+      closeMicIfUnused();  // the "mic in use" light goes out (unless Settings is testing it)
       voiceAudio.replaceChildren();  // remove every <audio> element
       voiceBar.hidden = true;
       voiceStatus.title = "";
@@ -3112,16 +3341,18 @@
     voiceMuteButton.addEventListener("click", async () => {
       micMuted = !micMuted;
       showMuteButton();
-      if (!voiceRoom || voiceRoom.state !== "connected") return;  // takes effect once connected
+      const room = voiceRoom;
+      if (!room || room.state !== "connected") return;  // takes effect once connected
+      if (micMuted) {
+        if (micPublication) await micPublication.mute();  // send silence (the microphone stays open)
+        return;
+      }
       try {
-        await voiceRoom.localParticipant.setMicrophoneEnabled(!micMuted);
+        await sendMic(room);
         setVoiceStatus("Voice connected");
         voiceStatus.title = "";
-      } catch (error) {
-        micMuted = true;
-        showMuteButton();
-        setVoiceStatus("Connected, no microphone", "error");
-        voiceStatus.title = "The browser didn't allow the microphone. Allow it (the icon in the address bar) and unmute.";
+      } catch {
+        if (voiceRoom === room) showNoMicrophone();
       }
     });
 
@@ -3131,6 +3362,117 @@
       await voiceRoom.startAudio();
       voiceStatus.classList.remove("clickable");
       setVoiceStatus("Voice connected");
+    });
+
+    // ----- Settings: Voice & audio
+
+    // Fill a device list. new Option(text, value) sets the text as plain text, never as HTML.
+    function fillDeviceSelect(select, devices, chosen, fallbackName) {
+      const options = [new Option("Default", "")];
+      let number = 0;
+      for (const device of devices) {
+        // Chrome also lists the defaults as "default" and "communications": we have our own Default.
+        // (Before the microphone is allowed, the ids are empty: then only Default.)
+        if (!device.deviceId || device.deviceId === "default" || device.deviceId === "communications") continue;
+        number += 1;
+        options.push(new Option(device.label || `${fallbackName} ${number}`, device.deviceId));
+      }
+      select.replaceChildren(...options);
+      select.value = options.some((option) => option.value === chosen) ? chosen : "";
+    }
+
+    async function listDevices() {
+      let devices = [];
+      try {
+        devices = await navigator.mediaDevices.enumerateDevices();
+      } catch {}
+      fillDeviceSelect(voiceInputSelect, devices.filter((d) => d.kind === "audioinput"), voiceSettings.inputDevice, "Microphone");
+      fillDeviceSelect(voiceOutputSelect, devices.filter((d) => d.kind === "audiooutput"), voiceSettings.outputDevice, "Speakers");
+      // Browsers only show the devices' names once the page may use the microphone.
+      voiceDevicesHelp.textContent = devices.some((d) => d.label)
+        ? ""
+        : "Press Test microphone (or join voice) to see your devices' names.";
+    }
+
+    // Plugging in or out a headset: the lists change.
+    if (navigator.mediaDevices) navigator.mediaDevices.addEventListener("devicechange", listDevices);
+
+    // Choosing speakers only works where the browser can do it (not on iPhones or in Firefox).
+    voiceOutputRow.hidden = !(window.AudioContext && "setSinkId" in AudioContext.prototype);
+
+    voiceInputSelect.addEventListener("change", async () => {
+      voiceSettings.inputDevice = voiceInputSelect.value;
+      saveVoiceSettings();
+      // Switch the open microphone. Only the start of the chain changes, so a call carries on.
+      if (micStream) await openMic().catch(() => {});
+    });
+
+    voiceOutputSelect.addEventListener("change", async () => {
+      voiceSettings.outputDevice = voiceOutputSelect.value;
+      saveVoiceSettings();
+      if (voiceEngine) applyOutputDevice((await getAudio()).context);
+    });
+
+    function showVolumes() {
+      voiceMicVolumeSlider.value = voiceSettings.micVolume;
+      voiceMicVolumeValue.textContent = voiceSettings.micVolume + "%";
+      voiceOutputVolumeSlider.value = voiceSettings.outputVolume;
+      voiceOutputVolumeValue.textContent = voiceSettings.outputVolume + "%";
+      voiceGateSlider.value = voiceSettings.gate;
+    }
+    showVolumes();
+
+    voiceMicVolumeSlider.addEventListener("input", async () => {
+      voiceSettings.micVolume = Number(voiceMicVolumeSlider.value);
+      showVolumes();
+      saveVoiceSettings();
+      if (voiceEngine) {
+        const { context, micGain } = await getAudio();
+        micGain.gain.setTargetAtTime(voiceSettings.micVolume / 100, context.currentTime, 0.02);  // glide, no clicks
+      }
+    });
+
+    voiceOutputVolumeSlider.addEventListener("input", () => {
+      voiceSettings.outputVolume = Number(voiceOutputVolumeSlider.value);
+      showVolumes();
+      saveVoiceSettings();
+      if (voiceRoom) {
+        for (const participant of voiceRoom.remoteParticipants.values()) applyVolume(participant);
+      }
+    });
+
+    voiceGateSlider.addEventListener("input", async () => {
+      voiceSettings.gate = Number(voiceGateSlider.value);
+      saveVoiceSettings();
+      if (voiceEngine) (await getAudio()).gate.port.postMessage({ threshold: voiceSettings.gate });
+    });
+
+    function showTestButton() {
+      voiceTestButton.textContent = micTesting ? "Stop test" : "Test microphone";
+    }
+
+    voiceTestButton.addEventListener("click", async () => {
+      micTesting = !micTesting;
+      showTestButton();
+      if (!micTesting) {
+        closeMicIfUnused();
+        return;
+      }
+      try {
+        if (!micStream) await openMic();
+      } catch {
+        micTesting = false;
+        showTestButton();
+        voiceDevicesHelp.textContent = "The browser didn't allow the microphone. Allow it (the icon in the address bar) and try again.";
+      }
+    });
+
+    // Opening Settings: fresh device lists. Closing it: stop the test.
+    settingsButton.addEventListener("click", listDevices);
+    settingsDialog.addEventListener("close", () => {
+      micTesting = false;
+      showTestButton();
+      closeMicIfUnused();
     });
 
     // ---------- Settings ----------

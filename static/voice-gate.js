@@ -1,0 +1,68 @@
+// The noise gate for voice: lets your microphone through while you're louder than the sensitivity
+// line, and silences it when you're not. This is an AudioWorklet: the browser runs it inside its
+// audio engine, on every block of 128 samples (2.7 ms at 48 000 samples a second), even while the
+// window is minimised. The page loads it with audioContext.audioWorklet.addModule("/voice-gate.js").
+//
+// It also tells the page how loud the microphone is (for the level meter in Settings), about 30
+// times a second, through its "port" (a message channel between the audio engine and the page).
+
+const HOLD_SECONDS = 0.3;    // stay open this long after you go quiet, so word endings aren't cut off
+const FADE_SECONDS = 0.005;  // open and close over a few milliseconds instead of instantly (no clicks)
+const REPORTS_PER_SECOND = 30;
+
+class VoiceGate extends AudioWorkletProcessor {
+  constructor() {
+    super();
+    this.threshold = -100;  // dB: the sensitivity line (-100 = always open). The page sends the real one.
+    this.holdLeft = 0;      // samples left before the gate may close
+    this.gain = 0;          // how open it is right now: 0 (closed) to 1 (open)
+    this.loudest = -100;    // the loudest block since the last report, in dB
+    this.sinceReport = 0;   // samples since the last report
+    this.port.onmessage = (event) => {
+      this.threshold = event.data.threshold;
+    };
+  }
+
+  // inputs[0] and outputs[0]: our one input and output, each a list of channels (arrays of samples).
+  process(inputs, outputs) {
+    const input = inputs[0];
+    const output = outputs[0];
+    if (input.length === 0) return true;  // nothing connected yet (the microphone isn't open)
+    const samples = input[0];
+
+    // How loud is this block? The "RMS" (root mean square) of the samples, in decibels: 0 dB is
+    // the loudest possible, -100 dB is silence, quiet speech is around -40 dB.
+    let sum = 0;
+    for (const sample of samples) sum += sample * sample;
+    const level = Math.max(-100, 10 * Math.log10(sum / samples.length + 1e-10));
+
+    // Loud enough: open (and keep it open for HOLD_SECONDS). Otherwise, count down.
+    if (level > this.threshold) {
+      this.holdLeft = HOLD_SECONDS * sampleRate;  // sampleRate: given to every AudioWorklet
+    } else {
+      this.holdLeft = Math.max(0, this.holdLeft - samples.length);
+    }
+    const target = this.holdLeft > 0 ? 1 : 0;
+
+    // Copy the sound through, moving the gain a little closer to its target at every sample.
+    const step = 1 - Math.exp(-1 / (FADE_SECONDS * sampleRate));
+    for (let i = 0; i < samples.length; i++) {
+      this.gain += (target - this.gain) * step;
+      for (let channel = 0; channel < output.length; channel++) {
+        output[channel][i] = (input[channel] || samples)[i] * this.gain;
+      }
+    }
+
+    // Now and then, tell the page the level and whether the gate is open.
+    this.loudest = Math.max(this.loudest, level);
+    this.sinceReport += samples.length;
+    if (this.sinceReport >= sampleRate / REPORTS_PER_SECOND) {
+      this.port.postMessage({ level: this.loudest, open: target === 1 });
+      this.loudest = -100;
+      this.sinceReport = 0;
+    }
+    return true;  // keep running
+  }
+}
+
+registerProcessor("voice-gate", VoiceGate);

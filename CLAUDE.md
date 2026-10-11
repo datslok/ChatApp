@@ -71,6 +71,8 @@ the point is for me to understand how it works, not just to have it done.
   `LIVEKIT_API_SECRET` in `.env`. Ports: 7880 signalling (through the tunnel), 7881 TCP and 7882 UDP
   for the audio (forwarded on the router). The page uses LiveKit's browser library, `static/livekit-client-<version>.umd.js`
   (the UMD build from npm, checked against npm's integrity hash; served at `/livekit-client-<version>.umd.js`).
+  The microphone goes through Web Audio (mic volume, then the noise gate `static/voice-gate.js`, an
+  AudioWorklet) before LiveKit sends it; voice settings are kept in the browser (localStorage "voiceSettings").
 
 ## Hosting
 
