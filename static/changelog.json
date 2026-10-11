@@ -33,7 +33,7 @@
         "Click a tile to make it big, right-click it for the profile. ⛶ for fullscreen. In a DM, drag the call's bottom edge to resize it",
         "Volume per person (0–200%) in their profile: click them, also in the voice list",
         "Settings → Voice & audio: microphone, speakers, volumes, sensitivity and noise suppression. Settings → Video: your camera, with a preview",
-        "The signal icon in a call shows your ping, click it for details"
+        "The signal icon in a call shows your ping. Click it for details, including how a screen share is doing (frame rate, data, and whether the graphics card encodes it)"
       ]
     },
     {
@@ -66,7 +66,9 @@
         "Scroll up in a channel to load older messages, all the way to the beginning",
         "Settings → Bugs & ideas: tell us what's broken or what you'd like",
         "You at the bottom left, like Discord: your picture, status, mute and deafen",
-        "What's new: this page, with a dot on ⚙️ when there's something new"
+        "What's new: this page, with a dot on ⚙️ when there's something new",
+        "Smoother screen sharing in games: encoded on the graphics card (H.264) when it can, and at 60 fps it keeps the frame rate instead of dropping frames",
+        "The connection popup shows how screen shares are doing"
       ]
     },
     {

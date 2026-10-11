@@ -356,6 +356,8 @@ let statsTimer = null;
 let pingSamples = [];   // [{time, ping}]: when (ms since 1970) and the ping (ms), the last 5 minutes
 let connection = null;  // the latest: {ping, protocol, outLoss, inLoss} (null where unknown)
 let lastCounts = null;  // the packet counters last time
+let screenStats = { sending: null, watching: [] };  // screen shares, the latest (measureScreens)
+let lastScreenCounts = new Map();  // "out" or "in:<user id>" -> the counters last time
 let voiceServer = "";   // LiveKit's address, e.g. "voice.datslok.no" (rooms.js, joinVoice)
 
 function startConnectionStats() {
@@ -370,6 +372,8 @@ function stopConnectionStats() {
   pingSamples = [];
   connection = null;
   lastCounts = null;
+  screenStats = { sending: null, watching: [] };
+  lastScreenCounts = new Map();
   voiceSignal.hidden = true;
   if (voiceStatsDialog.open) voiceStatsDialog.close();
 }
@@ -447,11 +451,129 @@ async function measureConnection() {
       last.received === undefined ? undefined : last.received + last.lostIn),
   };
 
+  await measureScreens(room);
+  if (voiceRoom !== room) return;
+
   const now = Date.now();
   if (connection.ping !== null) pingSamples.push({ time: now, ping: connection.ping });
   pingSamples = pingSamples.filter((sample) => sample.time > now - GRAPH_SECONDS * 1000);
   showSignal();
   if (voiceStatsDialog.open) renderConnectionStats();
+}
+
+// ----- Screen shares in the popup: how the one we send is doing, and the ones we watch.
+//
+// The same statistics, for video ("outbound-rtp" and "inbound-rtp" with kind "video"):
+//   - frameWidth, frameHeight, framesPerSecond: what's actually being sent or shown right now
+//   - qualityLimitationReason (sending): what's holding the encoder back: "cpu", "bandwidth"
+//     or "none". The browser's own verdict.
+//   - encoderImplementation / powerEfficientEncoder: which encoder is used; "power efficient"
+//     means the graphics card's video chip (hardware), not the CPU. Same for decoding.
+//   - codecId: points to a "codec" entry with the mimeType, like "video/H264"
+//   - bytes, lost packets, dropped frames and freezes: counters, so again the difference with
+//     5 seconds ago.
+
+async function measureScreens(room) {
+  const counts = new Map();
+  const Source = LivekitClient.Track.Source;
+  let sending = null;
+  const watching = [];
+  try {
+    const mine = room.localParticipant.getTrackPublication(Source.ScreenShare);
+    if (mine && mine.track) sending = videoStats(await mine.track.getRTCStatsReport(), "outbound-rtp", "out", counts);
+    for (const participant of room.remoteParticipants.values()) {
+      const theirs = participant.getTrackPublication(Source.ScreenShare);
+      if (!theirs || !theirs.track) continue;  // not sharing, or we aren't receiving it
+      const stats = videoStats(await theirs.track.getRTCStatsReport(), "inbound-rtp", "in:" + participant.identity, counts);
+      if (stats) watching.push({ userId: participant.identity, ...stats });
+    }
+  } catch {
+    return;  // (a share ended while we asked: next time)
+  }
+  lastScreenCounts = counts;
+  screenStats = { sending, watching };
+}
+
+// One stream's numbers from a stats report. A screen we send can be several streams (a full one
+// and a half-size one for slow connections): the counters add them all up, the rest is about the
+// biggest one, the one you'd watch.
+function videoStats(report, type, key, counts) {
+  if (!report) return null;
+  let main = null;
+  const now = { time: Date.now(), bytes: 0, packets: 0, lost: 0, dropped: 0, freezes: 0 };
+  for (const stat of report.values()) {
+    if (stat.type !== type || stat.kind !== "video") continue;
+    now.bytes += (stat.bytesSent ?? stat.bytesReceived) || 0;
+    now.packets += (stat.packetsSent ?? stat.packetsReceived) || 0;
+    now.lost += stat.packetsLost || 0;
+    now.dropped += stat.framesDropped || 0;
+    now.freezes += stat.freezeCount || 0;
+    if (!main || (stat.frameHeight || 0) > (main.frameHeight || 0)) main = stat;
+  }
+  if (!main) return null;
+  counts.set(key, now);
+  const last = lastScreenCounts.get(key);
+  const seconds = last ? (now.time - last.time) / 1000 : 0;
+  const codec = report.get(main.codecId);
+  return {
+    width: main.frameWidth,
+    height: main.frameHeight,
+    fps: main.framesPerSecond,
+    // Bits per second (bytes × 8), in megabits (millions): what the stream uses of the connection.
+    mbps: seconds > 0 ? ((now.bytes - last.bytes) * 8) / seconds / 1e6 : null,
+    codec: codec ? codec.mimeType.replace("video/", "") : null,
+    hardware: main.powerEfficientEncoder ?? main.powerEfficientDecoder ?? null,  // true, false or unknown
+    limitedBy: main.qualityLimitationReason ?? null,
+    // Only for what we receive: what got lost or dropped since last time.
+    loss: type === "inbound-rtp" && last ? lossPercent(now.lost, now.packets + now.lost, last.lost, last.packets + last.lost) : null,
+    dropped: last ? now.dropped - last.dropped : null,
+    freezes: last ? now.freezes - last.freezes : null,
+  };
+}
+
+// The screen share part of the popup: one block for ours, one for each we watch.
+function renderScreenStats() {
+  const box = document.getElementById("stat-screens");
+  const blocks = [];
+  if (screenStats.sending) blocks.push(screenBlock("Your screen share", screenStats.sending, true));
+  for (const stats of screenStats.watching) {
+    const name = people.get(Number(stats.userId))?.name ?? "Someone";
+    blocks.push(screenBlock(name + "'s screen", stats, false));
+  }
+  box.replaceChildren(...blocks);
+}
+
+function screenBlock(title, stats, sending) {
+  const block = document.createElement("div");
+  block.className = "stat-screen";
+  const line = (label, value) => {
+    const p = document.createElement("p");
+    p.append(label + ": ");
+    const strong = document.createElement("strong");
+    strong.textContent = value;
+    p.appendChild(strong);
+    block.appendChild(p);
+  };
+  const heading = document.createElement("p");
+  heading.className = "stat-screen-title";
+  heading.textContent = title;
+  block.appendChild(heading);
+
+  const size = stats.width ? `${stats.width}×${stats.height}` : "–";
+  const fps = stats.fps === undefined ? "–" : Math.round(stats.fps) + " fps";
+  line("Picture", `${size} at ${fps}`);
+  line("Data", stats.mbps === null ? "–" : stats.mbps.toFixed(1) + " Mbit/s");
+  const where = stats.hardware === true ? "graphics card" : stats.hardware === false ? "CPU" : null;
+  line(sending ? "Encoder" : "Decoder", [stats.codec, where].filter(Boolean).join(", ") || "–");
+  if (sending) {
+    const reasons = { none: "nothing", cpu: "the CPU (too slow)", bandwidth: "the connection", other: "something else" };
+    line("Held back by", reasons[stats.limitedBy] ?? "–");
+  } else {
+    line("Packet loss", stats.loss === null ? "–" : stats.loss.toFixed(1) + "%");
+    line("Dropped frames", stats.dropped === null ? "–" : String(stats.dropped));
+    line("Freezes", stats.freezes === null ? "–" : String(stats.freezes));
+  }
+  return block;
 }
 
 // "good" (green), "fair" (yellow) or "bad" (red), like Discord's signal icon.
@@ -495,6 +617,7 @@ function renderConnectionStats() {
   document.getElementById("stat-ping").textContent = connection.ping === null ? "–" : connection.ping + " ms";
   document.getElementById("stat-out-loss").textContent = percent(connection.outLoss);
   document.getElementById("stat-in-loss").textContent = percent(connection.inLoss);
+  renderScreenStats();
   drawPingGraph();
 }
 

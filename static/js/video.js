@@ -150,7 +150,16 @@ async function startScreenShare() {
       // A hint for the video encoder: keep text crisp ("detail"), or keep movement smooth ("motion").
       contentHint: fps === 60 ? "motion" : "detail",
     }, {
+      // H.264 instead of LiveKit's default, VP8. Browsers encode VP8 on the CPU, which a game is
+      // already using; for H.264, nearly every graphics card has a chip of its own (NVENC, VCN,
+      // Quick Sync), like Discord's "H.264 hardware acceleration". The browser uses it if it's
+      // there, and otherwise encodes H.264 on the CPU. (The connection popup shows which.)
+      videoCodec: "h264",
       screenShareEncoding: { maxBitrate: SHARE_BITRATES[height][fps], maxFramerate: fps },
+      // When the encoder or the connection can't keep up, something has to give. LiveKit's
+      // default for screens keeps the resolution and drops frames: right for text (30 fps),
+      // but a game at 60 should rather stay smooth and get a little less sharp.
+      degradationPreference: fps === 60 ? "maintain-framerate" : "maintain-resolution",
     });
     sharing = room.localParticipant.isScreenShareEnabled;
   } catch (error) {

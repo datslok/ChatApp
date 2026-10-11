@@ -206,11 +206,15 @@
     <p>Last ping: <strong id="stat-ping"></strong></p>
     <p>Outbound packet loss: <strong id="stat-out-loss"></strong></p>
     <p>Inbound packet loss: <strong id="stat-in-loss"></strong></p>
+    <!-- Screen shares we send or watch, if any (voice.js, renderScreenStats). -->
+    <div id="stat-screens"></div>
     <p class="voice-stats-help">
       The ping is the time to our voice server and back. You may notice delayed audio at 250 ms
       or higher, and sound robotic with more than 10% outbound packet loss. Inbound loss is what
       reaches you: if others sound robotic and it's high, the problem is on your side. TCP is a
       fallback when UDP is blocked, and handles lost packets worse.
+      A screen share "held back by the CPU" needs a lower quality (or the graphics card encoder);
+      "by the connection" means your upload can't keep up.
     </p>
   </dialog>
 

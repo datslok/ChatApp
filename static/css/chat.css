@@ -728,6 +728,16 @@ body {
   font-weight: 600;
   color: white;
 }
+/* A screen share's numbers (voice.js, screenBlock), under a line of their own. */
+#voice-stats .stat-screen {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid #3f4147;
+}
+#voice-stats .stat-screen-title {
+  font-weight: 600;
+  color: white;
+}
 #voice-stats .voice-stats-help {
   margin-top: 12px;
   font-size: 0.8rem;
