@@ -152,196 +152,218 @@
     <ul id="offline-list"></ul>
   </aside>
 
-  <!-- The Settings popup: your email and your password. -->
+  <!-- The Settings popup: tabs down the left side (like Discord's), one page of settings at a
+       time on the right (settings.js, showSettingsPage). -->
   <dialog id="settings">
-    <button type="button" id="settings-close" title="Close">×</button>
-    <h2>Settings</h2>
+    <nav id="settings-tabs" role="tablist" aria-label="Settings">
+      <h3>User settings</h3>
+      <button type="button" class="settings-tab" role="tab" data-tab="account">My Account</button>
+      <button type="button" class="settings-tab" role="tab" data-tab="profile">Profile</button>
+      <button type="button" class="settings-tab" role="tab" data-tab="emoji">Emoji</button>
+      <h3>App settings</h3>
+      <button type="button" class="settings-tab" role="tab" data-tab="notifications">Notifications</button>
+      <button type="button" class="settings-tab" role="tab" data-tab="voice">Voice &amp; audio</button>
+      <button type="button" class="settings-tab" role="tab" data-tab="video">Video</button>
+      <!-- The Windows app: always in sight at the bottom of the tabs (hidden inside the app itself). -->
+      <a id="desktop-app" href="/download" target="_blank">
+        <svg class="download-icon" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M12 3v12m0 0-5-5m5 5 5-5M4 20h16" />
+        </svg>
+        Get the Windows app
+      </a>
+    </nav>
 
-    <!-- The Windows app: first in Settings so it's easy to find (hidden inside the app itself). -->
-    <section id="desktop-app" class="app-card">
-      <svg class="download-icon" viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M12 3v12m0 0-5-5m5 5 5-5M4 20h16" />
-      </svg>
-      <div class="app-card-text">
-        <strong>Get the Windows app</strong>
-        <span>Its own window, real notifications, and it keeps itself up to date.</span>
-      </div>
-      <a class="download-button" href="/download" target="_blank">Download</a>
-    </section>
+    <!-- Only this side scrolls; the tabs stay where they are. -->
+    <div id="settings-pages">
+      <button type="button" id="settings-close" title="Close">×</button>
 
-    <h3>Profile</h3>
-    <form id="profile-form">
-      <div id="avatar-row">
-        <span id="settings-avatar"></span>
-        <button type="button" id="change-avatar">Change picture</button>
-        <button type="button" id="remove-avatar">Remove</button>
-        <input type="file" id="avatar-input" accept="image/*" hidden>
-      </div>
-      <div id="settings-banner"></div>
-      <div class="banner-buttons">
-        <button type="button" id="change-banner">Change banner</button>
-        <button type="button" id="remove-banner">Remove</button>
-        <input type="file" id="banner-input" accept="image/*" hidden>
-      </div>
-      <label>
-        Status
-        <input id="status-input" maxlength="60" placeholder="e.g. 🎮 playing Minecraft">
-      </label>
-      <label>
-        Bio
-        <textarea id="bio-input" maxlength="300" rows="3" placeholder="A few words about yourself"></textarea>
-      </label>
-      <div id="profile-status-line" class="status"></div>
-      <button>Save profile</button>
-    </form>
+      <section class="settings-page" data-page="account" role="tabpanel" aria-label="My Account">
+        <h2>My Account</h2>
+        <h3>Username</h3>
+        <form id="username-form">
+          <p>Current: <strong id="current-username">…</strong></p>
+          <label>
+            New username
+            <input id="new-username" autocomplete="username" required>
+          </label>
+          <label>
+            Your password (to confirm it's you)
+            <input id="username-password" type="password" autocomplete="current-password" required>
+          </label>
+          <div id="username-status" class="status"></div>
+          <button>Change username</button>
+        </form>
 
-    <h3>Emoji</h3>
-    <form id="emoji-form">
-      <p id="emoji-count"></p>
-      <div id="my-emoji"></div>
-      <label>
-        Name for a new emoji
-        <input id="emoji-name" maxlength="32" placeholder="e.g. pog" autocomplete="off">
-      </label>
-      <!-- Picking a picture opens the editor; Save there uploads it with this name. -->
-      <button type="button" id="add-emoji">Choose picture…</button>
-      <input type="file" id="emoji-input" accept="image/*" hidden>
-      <div id="emoji-status" class="status"></div>
-    </form>
+        <h3>Email</h3>
+        <form id="email-form">
+          <p>Current: <strong id="current-email">…</strong></p>
+          <label>
+            New email
+            <input id="new-email" type="email" autocomplete="email" required>
+          </label>
+          <label>
+            Your password (to confirm it's you)
+            <input id="email-password" type="password" autocomplete="current-password" required>
+          </label>
+          <div id="email-status" class="status"></div>
+          <button>Save email</button>
+        </form>
 
-    <h3>Notifications</h3>
-    <div class="settings-group">
-      <label class="checkbox">
-        <input type="checkbox" id="notify-desktop">
-        Desktop notifications for DMs and mentions
-      </label>
-      <p id="notify-help" class="settings-help"></p>
-      <label class="checkbox">
-        <input type="checkbox" id="notify-sound">
-        Sound
-      </label>
-      <label class="slider-row">
-        Volume
-        <input type="range" id="notify-volume" min="0" max="100" step="5">
-        <span id="notify-volume-value"></span>
-      </label>
-      <label>
-        Mute notifications (no sound, no popups; the red numbers still show)
-        <select id="mute-select">
-          <option value="off">Off</option>
-          <option value="1h">For 1 hour</option>
-          <option value="8h">For 8 hours</option>
-          <option value="morning">Until tomorrow 08:00</option>
-          <option value="forever">Until I turn it back on</option>
-        </select>
-      </label>
-      <p id="mute-status" class="settings-help"></p>
-    </div>
+        <h3>Password</h3>
+        <form id="password-form">
+          <label>
+            Current password
+            <input id="current-password" type="password" autocomplete="current-password" required>
+          </label>
+          <label>
+            New password
+            <input id="new-password" type="password" autocomplete="new-password" required>
+          </label>
+          <label>
+            New password again
+            <input id="new-password-again" type="password" autocomplete="new-password" required>
+          </label>
+          <div id="password-status" class="status"></div>
+          <button>Change password</button>
+        </form>
+      </section>
 
-    <h3>Voice &amp; audio</h3>
-    <div class="settings-group">
-      <label>
-        Microphone
-        <select id="voice-input"></select>
-      </label>
-      <label>
-        Noise suppression
-        <select id="voice-noise">
-          <option value="on">On: AI, also keyboards, dogs and voices in the background</option>
-          <option value="light">Light: the browser's own, for fans and hum</option>
-          <option value="off">Off</option>
-        </select>
-      </label>
-      <label id="voice-output-row">
-        Speakers or headphones
-        <select id="voice-output"></select>
-      </label>
-      <p id="voice-devices-help" class="settings-help"></p>
-      <label class="slider-row">
-        Mic volume
-        <input type="range" id="voice-mic-volume" min="0" max="200" step="5">
-        <span id="voice-mic-volume-value" class="slider-value"></span>
-      </label>
-      <label class="slider-row">
-        Others' volume
-        <input type="range" id="voice-output-volume" min="0" max="200" step="5">
-        <span id="voice-output-volume-value" class="slider-value"></span>
-      </label>
-      <label>
-        Sensitivity: when the bar is left of the line, your microphone is silent
-        <!-- The level meter, with the sensitivity slider laid on top of it. -->
-        <div id="voice-meter">
-          <div id="voice-meter-level"></div>
-          <input type="range" id="voice-gate" min="-100" max="0" step="1">
+      <section class="settings-page" data-page="profile" role="tabpanel" aria-label="Profile">
+        <h2>Profile</h2>
+        <form id="profile-form">
+          <div id="avatar-row">
+            <span id="settings-avatar"></span>
+            <button type="button" id="change-avatar">Change picture</button>
+            <button type="button" id="remove-avatar">Remove</button>
+            <input type="file" id="avatar-input" accept="image/*" hidden>
+          </div>
+          <div id="settings-banner"></div>
+          <div class="banner-buttons">
+            <button type="button" id="change-banner">Change banner</button>
+            <button type="button" id="remove-banner">Remove</button>
+            <input type="file" id="banner-input" accept="image/*" hidden>
+          </div>
+          <label>
+            Status
+            <input id="status-input" maxlength="60" placeholder="e.g. 🎮 playing Minecraft">
+          </label>
+          <label>
+            Bio
+            <textarea id="bio-input" maxlength="300" rows="3" placeholder="A few words about yourself"></textarea>
+          </label>
+          <div id="profile-status-line" class="status"></div>
+          <button>Save profile</button>
+        </form>
+      </section>
+
+      <section class="settings-page" data-page="emoji" role="tabpanel" aria-label="Emoji">
+        <h2>Emoji</h2>
+        <form id="emoji-form">
+          <p id="emoji-count"></p>
+          <div id="my-emoji"></div>
+          <label>
+            Name for a new emoji
+            <input id="emoji-name" maxlength="32" placeholder="e.g. pog" autocomplete="off">
+          </label>
+          <!-- Picking a picture opens the editor; Save there uploads it with this name. -->
+          <button type="button" id="add-emoji">Choose picture…</button>
+          <input type="file" id="emoji-input" accept="image/*" hidden>
+          <div id="emoji-status" class="status"></div>
+        </form>
+      </section>
+
+      <section class="settings-page" data-page="notifications" role="tabpanel" aria-label="Notifications">
+        <h2>Notifications</h2>
+        <div class="settings-group">
+          <label class="checkbox">
+            <input type="checkbox" id="notify-desktop">
+            Desktop notifications for DMs and mentions
+          </label>
+          <p id="notify-help" class="settings-help"></p>
+          <label class="checkbox">
+            <input type="checkbox" id="notify-sound">
+            Sound
+          </label>
+          <label class="slider-row">
+            Volume
+            <input type="range" id="notify-volume" min="0" max="100" step="5">
+            <span id="notify-volume-value"></span>
+          </label>
+          <label>
+            Mute notifications (no sound, no popups; the red numbers still show)
+            <select id="mute-select">
+              <option value="off">Off</option>
+              <option value="1h">For 1 hour</option>
+              <option value="8h">For 8 hours</option>
+              <option value="morning">Until tomorrow 08:00</option>
+              <option value="forever">Until I turn it back on</option>
+            </select>
+          </label>
+          <p id="mute-status" class="settings-help"></p>
         </div>
-        <!-- The line's value and the microphone's level right now, as numbers. -->
-        <span id="voice-gate-readout"></span>
-      </label>
-      <p class="settings-help">
-        Stay quiet and drag the line a little right of where the bar sits, then talk: the bar turns
-        green when your voice gets through. All the way left: always on.
-      </p>
-      <button type="button" id="voice-test">Test microphone</button>
+      </section>
+
+      <section class="settings-page" data-page="voice" role="tabpanel" aria-label="Voice &amp; audio">
+        <h2>Voice &amp; audio</h2>
+        <div class="settings-group">
+          <label>
+            Microphone
+            <select id="voice-input"></select>
+          </label>
+          <label>
+            Noise suppression
+            <select id="voice-noise">
+              <option value="on">On: AI, also keyboards, dogs and voices in the background</option>
+              <option value="light">Light: the browser's own, for fans and hum</option>
+              <option value="off">Off</option>
+            </select>
+          </label>
+          <label id="voice-output-row">
+            Speakers or headphones
+            <select id="voice-output"></select>
+          </label>
+          <p id="voice-devices-help" class="settings-help"></p>
+          <label class="slider-row">
+            Mic volume
+            <input type="range" id="voice-mic-volume" min="0" max="200" step="5">
+            <span id="voice-mic-volume-value" class="slider-value"></span>
+          </label>
+          <label class="slider-row">
+            Others' volume
+            <input type="range" id="voice-output-volume" min="0" max="200" step="5">
+            <span id="voice-output-volume-value" class="slider-value"></span>
+          </label>
+          <label>
+            Sensitivity: when the bar is left of the line, your microphone is silent
+            <!-- The level meter, with the sensitivity slider laid on top of it. -->
+            <div id="voice-meter">
+              <div id="voice-meter-level"></div>
+              <input type="range" id="voice-gate" min="-100" max="0" step="1">
+            </div>
+            <!-- The line's value and the microphone's level right now, as numbers. -->
+            <span id="voice-gate-readout"></span>
+          </label>
+          <p class="settings-help">
+            Stay quiet and drag the line a little right of where the bar sits, then talk: the bar turns
+            green when your voice gets through. All the way left: always on.
+          </p>
+          <button type="button" id="voice-test">Test microphone</button>
+        </div>
+      </section>
+
+      <section class="settings-page" data-page="video" role="tabpanel" aria-label="Video">
+        <h2>Video</h2>
+        <div class="settings-group">
+          <label>
+            Camera
+            <select id="camera-input"></select>
+          </label>
+          <!-- What the camera sees (mirrored, like a mirror), while "Test camera" is on. -->
+          <video id="camera-preview" autoplay muted playsinline hidden></video>
+          <button type="button" id="camera-test">Test camera</button>
+        </div>
+      </section>
     </div>
-
-    <h3>Video</h3>
-    <div class="settings-group">
-      <label>
-        Camera
-        <select id="camera-input"></select>
-      </label>
-      <!-- What the camera sees (mirrored, like a mirror), while "Test camera" is on. -->
-      <video id="camera-preview" autoplay muted playsinline hidden></video>
-      <button type="button" id="camera-test">Test camera</button>
-    </div>
-
-    <h3>Username</h3>
-    <form id="username-form">
-      <p>Current: <strong id="current-username">…</strong></p>
-      <label>
-        New username
-        <input id="new-username" autocomplete="username" required>
-      </label>
-      <label>
-        Your password (to confirm it's you)
-        <input id="username-password" type="password" autocomplete="current-password" required>
-      </label>
-      <div id="username-status" class="status"></div>
-      <button>Change username</button>
-    </form>
-
-    <h3>Email</h3>
-    <form id="email-form">
-      <p>Current: <strong id="current-email">…</strong></p>
-      <label>
-        New email
-        <input id="new-email" type="email" autocomplete="email" required>
-      </label>
-      <label>
-        Your password (to confirm it's you)
-        <input id="email-password" type="password" autocomplete="current-password" required>
-      </label>
-      <div id="email-status" class="status"></div>
-      <button>Save email</button>
-    </form>
-
-    <h3>Password</h3>
-    <form id="password-form">
-      <label>
-        Current password
-        <input id="current-password" type="password" autocomplete="current-password" required>
-      </label>
-      <label>
-        New password
-        <input id="new-password" type="password" autocomplete="new-password" required>
-      </label>
-      <label>
-        New password again
-        <input id="new-password-again" type="password" autocomplete="new-password" required>
-      </label>
-      <div id="password-status" class="status"></div>
-      <button>Change password</button>
-    </form>
   </dialog>
 
   <!-- The picture editor: move and zoom a new profile picture or banner before it's uploaded. -->

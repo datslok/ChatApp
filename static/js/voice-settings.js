@@ -170,11 +170,15 @@ cameraSelect.addEventListener("change", async () => {
   }
 });
 
-// Opening Settings: fresh device lists. Closing it: stop the test.
-settingsButton.addEventListener("click", listDevices);
-settingsDialog.addEventListener("close", () => {
+// Opening Settings: fresh device lists. Closing it, or going to another tab (settings.js): stop
+// the tests, so the microphone or camera doesn't stay on unseen. (In a call, the microphone
+// stays open: closeMicIfUnused only closes it when nothing needs it.)
+function stopSettingsTests() {
   micTesting = false;
   showTestButton();
   closeMicIfUnused();
   stopCameraPreview();
-});
+}
+
+settingsButton.addEventListener("click", listDevices);
+settingsDialog.addEventListener("close", stopSettingsTests);

@@ -33,6 +33,28 @@ settingsButton.addEventListener("click", async () => {
 });
 settingsClose.addEventListener("click", () => settingsDialog.close());
 
+// ----- The tabs down the left side: one page of settings at a time. Each tab button has a
+// data-tab="voice" and its page a data-page="voice" (index.html); button.dataset.tab reads it.
+const settingsTabs = document.querySelectorAll(".settings-tab");
+const settingsPages = document.querySelectorAll(".settings-page");
+const settingsPagesBox = document.getElementById("settings-pages");
+let settingsPage = "account";  // the one showing; Settings opens on it again (until a reload)
+
+function showSettingsPage(name) {
+  if (name !== settingsPage) stopSettingsTests();  // leaving Voice or Video: mic and camera off
+  settingsPage = name;
+  for (const page of settingsPages) page.hidden = page.dataset.page !== name;
+  for (const tab of settingsTabs) {
+    tab.setAttribute("aria-selected", tab.dataset.tab === name ? "true" : "false");
+  }
+  settingsPagesBox.scrollTop = 0;  // start at the top of the new page
+}
+
+for (const tab of settingsTabs) {
+  tab.addEventListener("click", () => showSettingsPage(tab.dataset.tab));
+}
+showSettingsPage(settingsPage);  // at the start: hide every page but the first
+
 // ---------- Settings: profile ----------
 
 profileForm.addEventListener("submit", async (event) => {
