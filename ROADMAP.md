@@ -42,3 +42,6 @@
     - [x] Voice in the desktop app
     - [x] Incoming call notifications in the desktop app
 11. [ ] Video in calls and Lounge: camera on/off (through our LiveKit server, like voice)
+    - [ ] Camera button, and video in the DM call banner (built; tick after the live test)
+    - [ ] A Lounge page with a tile for everyone (video or picture)
+    - [ ] Choosing the camera in Settings, with a preview

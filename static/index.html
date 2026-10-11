@@ -226,6 +226,28 @@
     .call-person.speaking .avatar {
       box-shadow: 0 0 0 3px #23a55a;  /* the same green ring as in the sidebar, a little thicker */
     }
+    /* Someone's camera in the call banner: 16:9, rounded like the pictures are round. */
+    .call-video {
+      width: 320px;
+      max-width: 40vw;  /* two side by side still fit on a narrow window */
+      aspect-ratio: 16 / 9;
+      object-fit: cover;  /* fill the frame, cutting off a little at the edges if needed */
+      border-radius: 12px;
+      background: #000;
+      transition: box-shadow 0.1s;
+    }
+    /* Our own camera, mirrored like a mirror (the others see us the right way round). */
+    .call-video.mine {
+      transform: scaleX(-1);
+    }
+    .call-person.speaking .call-video {
+      box-shadow: 0 0 0 3px #23a55a;
+    }
+    /* The camera buttons while the camera is on. */
+    #voice-camera.on,
+    .call-round.on {
+      background: #248046;
+    }
     .call-person.away .avatar {
       opacity: 0.35;  /* not in the call (yet) */
     }
@@ -1968,6 +1990,7 @@
         <span id="voice-where"></span>
       </div>
       <button type="button" id="voice-mute" class="voice-button" title="Mute" aria-label="Mute">🎤</button>
+      <button type="button" id="voice-camera" class="voice-button" title="Turn on camera" aria-label="Turn on camera">📷</button>
       <button type="button" id="voice-leave" class="voice-button" title="Leave voice" aria-label="Leave voice">📞</button>
     </div>
     <!-- The other people's voices play through <audio> elements in here (never shown). -->
@@ -2010,6 +2033,7 @@
         <div id="call-people"></div>
         <div id="call-buttons">
           <button type="button" id="call-panel-mute" class="call-round" title="Mute" aria-label="Mute">🎤</button>
+          <button type="button" id="call-panel-camera" class="call-round" title="Turn on camera" aria-label="Turn on camera">📷</button>
           <button type="button" id="call-panel-end" class="call-round end" title="End call" aria-label="End call">📞</button>
           <button type="button" id="call-panel-join">📞 Join call</button>
         </div>
@@ -3374,6 +3398,8 @@
     let voiceRoom = null;       // the LiveKit Room we're in (or joining), or null
     let voiceRoomName = null;   // its name: "lounge", or a DM's "dm:3:7"
     let micMuted = false;       // stays the same between calls, like Discord
+    let cameraOn = false;       // always off when joining, like Discord
+    const voiceCameraButton = document.getElementById("voice-camera");
     let micPublication = null;  // our microphone track as LiveKit sends it, while in a room
     let micStream = null;       // the open microphone (from getUserMedia), or null
     let micSource = null;       // ...as the first node of the chain
@@ -3608,6 +3634,55 @@
       }
     }
 
+    // ----- The camera
+    //
+    // LiveKit opens the camera for us (setCameraEnabled): unlike the microphone, it doesn't go through
+    // our own chain. Turning it off "mutes" it, which also releases the camera, so its light goes out.
+
+    async function toggleCamera() {
+      const room = voiceRoom;
+      if (!room || room.state !== "connected") return;
+      const turnOn = !cameraOn;
+      try {
+        await room.localParticipant.setCameraEnabled(turnOn);  // the first time, the browser asks
+        cameraOn = turnOn;
+      } catch {
+        cameraOn = false;  // not allowed, no camera, or it's in use by another program
+        setVoiceStatus("No camera access", "error");
+        voiceStatus.title = "The browser didn't allow the camera, or another program is using it.";
+      }
+      showCameraButtons();
+      renderCallPanel();
+    }
+
+    function showCameraButtons() {
+      for (const button of [voiceCameraButton, callPanelCamera]) {
+        button.classList.toggle("on", cameraOn);
+        button.title = cameraOn ? "Turn off camera" : "Turn on camera";
+        button.setAttribute("aria-label", button.title);
+      }
+    }
+
+    voiceCameraButton.addEventListener("click", toggleCamera);
+
+    // Someone's camera track, if it's on and has reached us (ours: if it's on), or null.
+    function cameraTrack(userId) {
+      if (!voiceRoom) return null;
+      const participant = userId === myId
+        ? voiceRoom.localParticipant
+        : voiceRoom.remoteParticipants.get(String(userId));
+      const publication = participant && participant.getTrackPublication(LivekitClient.Track.Source.Camera);
+      return publication && publication.track && !publication.isMuted ? publication.track : null;
+    }
+
+    // A <video> showing this track. Reused if it already has one, so redrawing the banner doesn't
+    // keep making new ones (each attach() makes another).
+    function videoFor(track, mine) {
+      const video = track.attachedElements[0] || track.attach();
+      video.className = mine ? "call-video mine" : "call-video";
+      return video;
+    }
+
     // ----- Joining and leaving
 
     // The status line in the voice bar. kind: "" (green), "waiting" (yellow) or "error" (red).
@@ -3675,19 +3750,35 @@
           webAudioMix: { audioContext: context },
           // Leaving unpublishes our microphone track; keep it working for the next call.
           stopLocalTrackOnUnpublish: false,
+          // Video. Cameras send a small, a medium and a large version at once ("simulcast", on by
+          // default), and each viewer gets only the size it shows: adaptiveStream tells LiveKit how
+          // big our video elements are (and that hidden ones need nothing), dynacast stops sending
+          // the versions nobody watches. Our camera: 1280x720.
+          adaptiveStream: true,
+          dynacast: true,
+          videoCaptureDefaults: { resolution: LivekitClient.VideoPresets.h720.resolution },
         });
         voiceRoom = room;
 
-        // Someone else's audio has reached us: track.attach() starts playing it.
+        // Someone else's audio has reached us: track.attach() starts playing it. Their camera: the
+        // call banner shows it (renderCallPanel attaches it to a <video> there).
         room.on(LivekitClient.RoomEvent.TrackSubscribed, (track, publication, participant) => {
-          if (track.kind !== "audio") return;
+          if (track.kind === "video") {
+            renderCallPanel();
+            return;
+          }
           voiceAudio.appendChild(track.attach());
           applyVolume(participant);
         });
         // ...and when they leave or stop sending, stop it again.
         room.on(LivekitClient.RoomEvent.TrackUnsubscribed, (track) => {
           for (const element of track.detach()) element.remove();
+          renderCallPanel();
         });
+        // A camera turned off or on (LiveKit "mutes" a camera that's off), ours or theirs.
+        for (const event of ["TrackMuted", "TrackUnmuted", "LocalTrackPublished", "LocalTrackUnpublished"]) {
+          room.on(LivekitClient.RoomEvent[event], renderCallPanel);
+        }
         // The connection dropped: LiveKit tries to get it back by itself.
         room.on(LivekitClient.RoomEvent.Reconnecting, () => setVoiceStatus("Reconnecting…", "waiting"));
         room.on(LivekitClient.RoomEvent.Reconnected, () => setVoiceStatus("Voice connected"));
@@ -3762,6 +3853,12 @@
       const room = voiceRoom;
       // Only a real leave gets the cue: not a failed or cancelled attempt to connect.
       if (room && room.state === "connected") playVoiceCue("leave");
+      // The camera: disconnect(false) below leaves our tracks running, so stop it ourselves (its
+      // light goes out). It's off again next time we join.
+      const camera = room && room.localParticipant.getTrackPublication(LivekitClient.Track.Source.Camera);
+      if (camera && camera.track) camera.track.stop();
+      cameraOn = false;
+      showCameraButtons();
       voiceRoom = null;
       voiceRoomName = null;
       micPublication = null;
@@ -3834,6 +3931,7 @@
     const callPanel = document.getElementById("call-panel");
     const callPeople = document.getElementById("call-people");
     const callPanelMute = document.getElementById("call-panel-mute");
+    const callPanelCamera = document.getElementById("call-panel-camera");
     const callPanelEnd = document.getElementById("call-panel-end");
     const callPanelJoin = document.getElementById("call-panel-join");
 
@@ -3855,14 +3953,16 @@
         ? Boolean(voiceRoom && voiceRoom.remoteParticipants.has(String(partner)))
         : Boolean(partnerMember);
       const shown = [
-        { id: myId, here: inCall, muted: micMuted, note: "" },
+        { id: myId, here: inCall, muted: micMuted, note: "", video: inCall ? cameraTrack(myId) : null },
         {
           id: partner, here: partnerHere, muted: Boolean(partnerMember && partnerMember.muted),
           note: !partnerHere && outgoingCall === channel ? "Calling…" : "",
+          video: inCall && partnerHere ? cameraTrack(partner) : null,  // (only while we're in the call too)
         },
       ];
       callPeople.replaceChildren(...shown.map(makeCallPerson));
       callPanelMute.hidden = !inCall;
+      callPanelCamera.hidden = !inCall;
       callPanelEnd.hidden = !inCall;
       callPanelJoin.hidden = inCall;
       callPanelMute.classList.toggle("off", micMuted);
@@ -3871,19 +3971,21 @@
       showSpeaking();  // the rings
     }
 
-    // One person in the banner: a big picture (faded while they're not in the call), and their name.
-    function makeCallPerson({ id, here, muted, note }) {
+    // One person in the banner: their camera if it's on, otherwise a big picture (faded while they're
+    // not in the call), and their name.
+    function makeCallPerson({ id, here, muted, note, video }) {
       const name = people.has(id) ? people.get(id).name : "?";
       const box = document.createElement("div");
       box.className = here ? "call-person" : "call-person away";
       box.dataset.userId = id;  // (for the speaking ring)
       const label = document.createElement("span");
       label.textContent = note || (here && muted ? "🔇 " + name : name);
-      box.append(makeAvatar(id, name, "huge"), label);
+      box.append(video ? videoFor(video, id === myId) : makeAvatar(id, name, "huge"), label);
       return box;
     }
 
     callPanelMute.addEventListener("click", () => voiceMuteButton.click());  // the same as the voice bar's
+    callPanelCamera.addEventListener("click", toggleCamera);
     callPanelEnd.addEventListener("click", leaveVoice);
     callPanelJoin.addEventListener("click", () => joinVoice(currentChannel, channelLabel(currentChannel)));
 
