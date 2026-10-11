@@ -1,7 +1,9 @@
 // In the finished app, don't open a console window next to it (development mode keeps it for errors).
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use tauri::webview::NewWindowResponse;
+use std::os::windows::process::CommandExt;  // raw_arg
+use std::process::Command;
+use tauri::webview::{DownloadEvent, NewWindowResponse};
 use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
 use tauri_plugin_opener::OpenerExt;
 use tauri_plugin_updater::UpdaterExt;
@@ -36,6 +38,19 @@ fn main() {
                         }
                     }
                     NewWindowResponse::Deny
+                })
+                // Downloads (a file from a message) go to Downloads as usual, which WebView2 does
+                // without showing anything. So when one is done, open Explorer with the file selected.
+                // (The opener plugin's reveal_item_in_dir quietly did nothing here, so: Explorer's own
+                // "/select," option. raw_arg passes it exactly as written: Explorer is picky about quotes.)
+                .on_download(|_webview, event| {
+                    if let DownloadEvent::Finished { path: Some(path), success: true, .. } = event {
+                        let select = format!("/select,\"{}\"", path.display());
+                        if let Err(error) = Command::new("explorer.exe").raw_arg(select).spawn() {
+                            eprintln!("Couldn't show {}: {error}", path.display());
+                        }
+                    }
+                    true  // let every download through (for "Requested"; ignored for "Finished")
                 })
                 .build()?;
 
