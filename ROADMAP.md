@@ -45,6 +45,6 @@
     - [x] Camera button, and video in the DM call banner
     - [x] A Lounge page with a tile for everyone (video or picture)
     - [x] Choosing the camera in Settings, with a preview
-12. [ ] Screen sharing in calls and Lounge (through LiveKit, like the camera)
+12. [ ] Screen sharing in calls and Lounge (through LiveKit, like the camera): 720p/1080p/1440p, 30/60 fps, with sound (built; tick after the live test)
 13. [ ] Start the chat (serve.ps1) and voice (voice.ps1) automatically with Windows, without open windows
 14. [ ] Backups of chat.db and uploads/

@@ -333,6 +333,94 @@
       cursor: pointer;
     }
 
+    /* A shared screen on the Lounge page: a tile across the whole width ("1 / -1": from the first
+       grid line to the last), above everyone's tiles. */
+    .lounge-tile.screen-tile {
+      grid-column: 1 / -1;
+      background: #000;
+      cursor: zoom-in;
+    }
+    /* Screens are never cut off ("contain": the whole picture, black bars if needed) or mirrored. */
+    .tile-video.screen {
+      object-fit: contain;
+    }
+    /* Shared screens in the DM call banner, above the two pictures. */
+    #call-screens {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+    }
+    #call-screens:empty {
+      display: none;  /* nobody sharing: no gap */
+    }
+    .call-screen {
+      width: 100%;
+      max-width: 960px;
+      max-height: 50vh;
+      aspect-ratio: 16 / 9;
+      object-fit: contain;
+      border-radius: 12px;
+      background: #000;
+      cursor: zoom-in;
+    }
+    /* The 🖥️ buttons while we're sharing. */
+    .share-button.on {
+      background: #248046;
+    }
+
+    /* The "Share your screen" menu. */
+    #share-menu {
+      padding: 20px 24px;
+      border: none;
+      border-radius: 12px;
+      background: #313338;
+      color: #dbdee1;
+      min-width: 280px;
+    }
+    #share-menu::backdrop {
+      background: rgba(0, 0, 0, 0.5);
+    }
+    #share-menu h2 {
+      margin: 0 0 12px;
+      font-size: 1.1rem;
+    }
+    #share-menu fieldset {
+      display: flex;
+      gap: 16px;
+      margin: 0 0 12px;
+      padding: 8px 12px;
+      border: 1px solid #4e5058;
+      border-radius: 8px;
+    }
+    #share-menu legend {
+      padding: 0 4px;
+      font-size: 0.8rem;
+      color: #949ba4;
+    }
+    #share-menu label:has(input:disabled) {
+      color: #6d6f78;  /* greyed out: more than this screen has */
+    }
+    .share-menu-buttons {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 12px;
+    }
+    .share-menu-buttons button {
+      padding: 8px 16px;
+      border: none;
+      border-radius: 6px;
+      background: #4e5058;
+      color: white;
+      font-size: 0.95rem;
+      cursor: pointer;
+    }
+    #share-start {
+      background: #248046;
+    }
+
     /* The camera buttons while the camera is on. */
     #voice-camera.on,
     .call-round.on {
@@ -2081,6 +2169,7 @@
       </div>
       <button type="button" id="voice-mute" class="voice-button" title="Mute" aria-label="Mute">🎤</button>
       <button type="button" id="voice-camera" class="voice-button" title="Turn on camera" aria-label="Turn on camera">📷</button>
+      <button type="button" id="voice-share" class="voice-button share-button" title="Share your screen" aria-label="Share your screen">🖥️</button>
       <button type="button" id="voice-leave" class="voice-button" title="Leave voice" aria-label="Leave voice">📞</button>
     </div>
     <!-- The other people's voices play through <audio> elements in here (never shown). -->
@@ -2105,6 +2194,7 @@
       <div class="lounge-buttons">
         <button type="button" id="lounge-mute" class="call-round" title="Mute" aria-label="Mute">🎤</button>
         <button type="button" id="lounge-camera" class="call-round" title="Turn on camera" aria-label="Turn on camera">📷</button>
+        <button type="button" id="lounge-share" class="call-round share-button" title="Share your screen" aria-label="Share your screen">🖥️</button>
         <button type="button" id="lounge-leave" class="call-round end" title="Leave Lounge" aria-label="Leave Lounge">📞</button>
         <button type="button" id="lounge-join">🔊 Join Lounge</button>
       </div>
@@ -2132,10 +2222,13 @@
       </header>
       <!-- While this DM has a call: both pictures (a green ring for whoever talks), and the buttons. -->
       <section id="call-panel" hidden>
+        <!-- Screens shared in this call, above the two pictures. -->
+        <div id="call-screens"></div>
         <div id="call-people"></div>
         <div id="call-buttons">
           <button type="button" id="call-panel-mute" class="call-round" title="Mute" aria-label="Mute">🎤</button>
           <button type="button" id="call-panel-camera" class="call-round" title="Turn on camera" aria-label="Turn on camera">📷</button>
+          <button type="button" id="call-panel-share" class="call-round share-button" title="Share your screen" aria-label="Share your screen">🖥️</button>
           <button type="button" id="call-panel-end" class="call-round end" title="End call" aria-label="End call">📞</button>
           <button type="button" id="call-panel-join">📞 Join call</button>
         </div>
@@ -2396,6 +2489,27 @@
         <input type="range" id="profile-volume" min="0" max="200" step="5">
         <span id="profile-volume-value" class="slider-value"></span>
       </label>
+    </div>
+  </dialog>
+
+  <!-- Pressing 🖥️: how sharp and how smooth, before the browser asks which screen. -->
+  <dialog id="share-menu">
+    <h2>Share your screen</h2>
+    <fieldset>
+      <legend>Resolution</legend>
+      <label><input type="radio" name="share-height" value="720"> 720p</label>
+      <label><input type="radio" name="share-height" value="1080"> 1080p</label>
+      <label><input type="radio" name="share-height" value="1440"> 1440p</label>
+    </fieldset>
+    <fieldset>
+      <legend>Frame rate</legend>
+      <label><input type="radio" name="share-fps" value="30"> 30 fps</label>
+      <label><input type="radio" name="share-fps" value="60"> 60 fps</label>
+    </fieldset>
+    <p id="share-help" class="settings-help"></p>
+    <div class="share-menu-buttons">
+      <button type="button" id="share-cancel">Cancel</button>
+      <button type="button" id="share-start">Share screen</button>
     </div>
   </dialog>
 
@@ -3529,6 +3643,7 @@
     // Device ids "" mean the computer's default. Volumes in %, gate in decibels (-100 = always on).
     const voiceSettings = {
       inputDevice: "", outputDevice: "", cameraDevice: "", micVolume: 100, outputVolume: 100, gate: -60,
+      shareHeight: 1080, shareFps: 30,  // screen sharing quality: the last choice in the 🖥️ menu
     };
     try {
       Object.assign(voiceSettings, JSON.parse(localStorage.getItem("voiceSettings")) || {});
@@ -3697,7 +3812,10 @@
     // How loud one person is for us: everyone's volume (Settings) times their own (profile popup).
     // 150% × 120% = 180%: LiveKit's GainNode for them simply multiplies the sound by 1.8.
     function applyVolume(participant) {
-      participant.setVolume((voiceSettings.outputVolume / 100) * (personVolume(participant.identity) / 100));
+      const volume = (voiceSettings.outputVolume / 100) * (personVolume(participant.identity) / 100);
+      participant.setVolume(volume);  // their voice
+      // ...and the sound of their shared screen (LiveKit keeps a volume per source).
+      participant.setVolume(volume, LivekitClient.Track.Source.ScreenShareAudio);
     }
 
     // ----- Who's in voice (in the sidebar, for everyone) and who's talking (only while you're in there)
@@ -3811,6 +3929,145 @@
       return video;
     }
 
+    // ----- Screen sharing
+    //
+    // getDisplayMedia (through LiveKit's setScreenShareEnabled) lets the browser show its own picker:
+    // a whole screen, a window or a tab. To LiveKit it's one more video track (source "screen_share"),
+    // plus an audio track ("screen_share_audio") if "Share audio" was ticked in the picker.
+
+    const voiceShareButton = document.getElementById("voice-share");
+    const callPanelShare = document.getElementById("call-panel-share");
+    const loungeShare = document.getElementById("lounge-share");
+    const shareMenu = document.getElementById("share-menu");
+    const shareHelp = document.getElementById("share-help");
+    let sharing = false;
+
+    // How much to send per second, for each resolution and frame rate: enough to keep text sharp
+    // (and moving pictures smooth at 60). Everyone watching gets this much (or less, with simulcast).
+    const SHARE_BITRATES = {
+      720: { 30: 2_500_000, 60: 4_000_000 },
+      1080: { 30: 5_000_000, 60: 8_000_000 },
+      1440: { 30: 8_000_000, 60: 12_000_000 },
+    };
+
+    // Phone browsers can't share their screen: no button there (they can still watch).
+    const canShareScreen = Boolean(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia);
+
+    function showShareButtons() {
+      // (The banner's and the Lounge page's buttons are shown and hidden with the rest of their
+      // buttons, in renderCallPanel and renderLoungeView.)
+      voiceShareButton.hidden = !canShareScreen;
+      for (const button of [voiceShareButton, callPanelShare, loungeShare]) {
+        button.classList.toggle("on", sharing);
+        button.title = sharing ? "Stop sharing" : "Share your screen";
+        button.setAttribute("aria-label", button.title);
+      }
+    }
+
+    // The screen's real size in pixels (CSS pixels times Windows' scaling, like 125%).
+    function screenHeight() {
+      return Math.round(screen.height * devicePixelRatio);
+    }
+
+    // 🖥️: stop sharing, or open the quality menu (with the last choice ticked, and resolutions
+    // above this screen's own greyed out).
+    function shareButtonClicked() {
+      if (sharing) {
+        stopScreenShare();
+        return;
+      }
+      const native = screenHeight();
+      for (const radio of shareMenu.querySelectorAll('input[name="share-height"]')) {
+        radio.disabled = Number(radio.value) > native && radio.value !== "720";  // 720p always works
+      }
+      // The saved choice, or the biggest one this screen allows.
+      let height = voiceSettings.shareHeight;
+      if (height > native) height = native >= 1080 ? 1080 : 720;
+      shareMenu.querySelector(`input[name="share-height"][value="${height}"]`).checked = true;
+      shareMenu.querySelector(`input[name="share-fps"][value="${voiceSettings.shareFps}"]`).checked = true;
+      showShareHelp();
+      shareMenu.showModal();
+    }
+
+    function showShareHelp() {
+      const height = Number(shareMenu.querySelector('input[name="share-height"]:checked').value);
+      const fps = Number(shareMenu.querySelector('input[name="share-fps"]:checked').value);
+      const megabits = SHARE_BITRATES[height][fps] / 1_000_000;
+      shareHelp.textContent = `About ${megabits} Mbit/s for each person watching. Your screen: ${screenHeight()}p.`;
+    }
+    shareMenu.addEventListener("change", showShareHelp);  // a radio button was picked
+
+    for (const button of [voiceShareButton, callPanelShare, loungeShare]) {
+      button.addEventListener("click", shareButtonClicked);
+    }
+    document.getElementById("share-cancel").addEventListener("click", () => shareMenu.close());
+
+    document.getElementById("share-start").addEventListener("click", async () => {
+      voiceSettings.shareHeight = Number(shareMenu.querySelector('input[name="share-height"]:checked').value);
+      voiceSettings.shareFps = Number(shareMenu.querySelector('input[name="share-fps"]:checked').value);
+      saveVoiceSettings();
+      shareMenu.close();
+      // Straight away, still inside this click: browsers only open their screen picker right after
+      // a click.
+      await startScreenShare();
+    });
+
+    async function startScreenShare() {
+      const room = voiceRoom;
+      if (!room || room.state !== "connected") return;
+      const height = voiceSettings.shareHeight;
+      const fps = voiceSettings.shareFps;
+      try {
+        await room.localParticipant.setScreenShareEnabled(true, {
+          // What the browser captures: at most this size and frame rate.
+          resolution: { width: Math.round((height * 16) / 9), height, frameRate: fps },
+          audio: true,               // shows "Share audio" in the picker
+          systemAudio: "include",    // ...also when sharing a whole screen, not only a tab
+          // A hint for the video encoder: keep text crisp ("detail"), or keep movement smooth ("motion").
+          contentHint: fps === 60 ? "motion" : "detail",
+        }, {
+          screenShareEncoding: { maxBitrate: SHARE_BITRATES[height][fps], maxFramerate: fps },
+        });
+        sharing = room.localParticipant.isScreenShareEnabled;
+      } catch (error) {
+        sharing = false;
+        // Pressing Cancel in the browser's picker counts as "not allowed": that's not an error.
+        if (error.name !== "NotAllowedError") setVoiceStatus("Couldn't share the screen", "error");
+      }
+      showShareButtons();
+      renderCallPanel();
+    }
+
+    async function stopScreenShare() {
+      if (voiceRoom) await voiceRoom.localParticipant.setScreenShareEnabled(false).catch(() => {});
+      sharing = false;
+      showShareButtons();
+      renderCallPanel();
+    }
+
+    // Someone's shared screen, if they're sharing and it has reached us (ours: if we're sharing).
+    function screenTrack(userId) {
+      if (!voiceRoom) return null;
+      const participant = userId === myId
+        ? voiceRoom.localParticipant
+        : voiceRoom.remoteParticipants.get(String(userId));
+      const publication = participant && participant.getTrackPublication(LivekitClient.Track.Source.ScreenShare);
+      return publication && publication.track && !publication.isMuted ? publication.track : null;
+    }
+
+    // A shared screen as a <video> (never mirrored, never cut off). Double-click: fullscreen.
+    function screenVideo(track, look) {
+      const video = videoFor(track, false, look);
+      video.title = "Double-click for fullscreen";
+      video.ondblclick = () => {
+        if (document.fullscreenElement) document.exitFullscreen();
+        else video.requestFullscreen().catch(() => {});
+      };
+      return video;
+    }
+
+    showShareButtons();
+
     // ----- Joining and leaving
 
     // The status line in the voice bar. kind: "" (green), "waiting" (yellow) or "error" (red).
@@ -3911,6 +4168,14 @@
         for (const event of ["TrackMuted", "TrackUnmuted", "LocalTrackPublished", "LocalTrackUnpublished"]) {
           room.on(LivekitClient.RoomEvent[event], renderCallPanel);
         }
+        // Our screen share ended from outside our buttons (the browser's "Stop sharing" bar, or the
+        // shared window closed): LiveKit unpublishes it, and our buttons follow.
+        room.on(LivekitClient.RoomEvent.LocalTrackUnpublished, (publication) => {
+          if (publication.source === LivekitClient.Track.Source.ScreenShare) {
+            sharing = false;
+            showShareButtons();
+          }
+        });
         // The connection dropped: LiveKit tries to get it back by itself.
         room.on(LivekitClient.RoomEvent.Reconnecting, () => setVoiceStatus("Reconnecting…", "waiting"));
         room.on(LivekitClient.RoomEvent.Reconnected, () => setVoiceStatus("Voice connected"));
@@ -3991,6 +4256,13 @@
       if (camera && camera.track) camera.track.stop();
       cameraOn = false;
       showCameraButtons();
+      // The same for a screen share (and its sound): stop capturing.
+      for (const source of [LivekitClient.Track.Source.ScreenShare, LivekitClient.Track.Source.ScreenShareAudio]) {
+        const publication = room && room.localParticipant.getTrackPublication(source);
+        if (publication && publication.track) publication.track.stop();
+      }
+      sharing = false;
+      showShareButtons();
       voiceRoom = null;
       voiceRoomName = null;
       micPublication = null;
@@ -4068,6 +4340,7 @@
     const callPeople = document.getElementById("call-people");
     const callPanelMute = document.getElementById("call-panel-mute");
     const callPanelCamera = document.getElementById("call-panel-camera");
+    const callScreens = document.getElementById("call-screens");
     const callPanelEnd = document.getElementById("call-panel-end");
     const callPanelJoin = document.getElementById("call-panel-join");
 
@@ -4098,8 +4371,12 @@
         },
       ];
       callPeople.replaceChildren(...shown.map(makeCallPerson));
+      // Shared screens (ours too, so we see what they see), while we're in the call.
+      const screens = inCall ? [myId, partner].map(screenTrack).filter(Boolean) : [];
+      callScreens.replaceChildren(...screens.map((track) => screenVideo(track, "call-screen")));
       callPanelMute.hidden = !inCall;
       callPanelCamera.hidden = !inCall;
+      callPanelShare.hidden = !inCall || !canShareScreen;
       callPanelEnd.hidden = !inCall;
       callPanelJoin.hidden = inCall;
       callPanelMute.classList.toggle("off", micMuted);
@@ -4320,10 +4597,13 @@
         empty.textContent = "Nobody's in Lounge right now.";
         loungeTiles.replaceChildren(empty);
       } else {
-        loungeTiles.replaceChildren(...members.map(({ id, muted }) => makeLoungeTile(id, muted, inLounge)));
+        // Shared screens first (only visible to those in Lounge, like cameras), then everyone.
+        const screens = inLounge ? members.filter(({ id }) => screenTrack(id)).map(({ id }) => makeScreenTile(id)) : [];
+        loungeTiles.replaceChildren(...screens, ...members.map(({ id, muted }) => makeLoungeTile(id, muted, inLounge)));
       }
       loungeMute.hidden = !inLounge;
       loungeCamera.hidden = !inLounge;
+      loungeShare.hidden = !inLounge || !canShareScreen;
       loungeLeave.hidden = !inLounge;
       loungeJoin.hidden = inLounge;
       loungeMute.classList.toggle("off", micMuted);
@@ -4346,6 +4626,18 @@
       label.textContent = muted ? "🔇 " + name : name;
       tile.append(label);
       tile.addEventListener("click", () => openProfile(id));
+      return tile;
+    }
+
+    // A shared screen's tile: the whole width, the screen fitted inside, "Axel's screen" in the corner.
+    function makeScreenTile(id) {
+      const name = people.has(id) ? people.get(id).name : "?";
+      const tile = document.createElement("div");
+      tile.className = "lounge-tile screen-tile";
+      const label = document.createElement("span");
+      label.className = "tile-name";
+      label.textContent = id === myId ? "Your screen" : name + "'s screen";
+      tile.append(screenVideo(screenTrack(id), "tile-video screen"), label);
       return tile;
     }
 
