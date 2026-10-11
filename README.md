@@ -12,6 +12,28 @@ status), replies, reactions and custom emoji, @mentions, unread dots, notificati
 uploads, a Lounge voice channel and calls in DMs (with a noise gate and volume per person), cameras,
 screen sharing (up to 1440p60), and a desktop app that updates itself.
 
+## Scripts at a glance
+
+Run them in PowerShell, from the project folder (`E:\Code\ChatApp` on the development PC,
+`C:\ChatApp` on the server PC). Each one also explains itself in comments at its top.
+
+| Script | Where | What it does | More |
+|--------|-------|--------------|------|
+| `setup.ps1` | development PC | makes the conda environment, installs the packages | [Development](#running-it-for-development) |
+| `start.ps1` | development PC | the chat for development (http://localhost:8001, `dev.db`) | [Development](#running-it-for-development) |
+| `voice.ps1 -Dev` | development PC | voice for development (localhost only) | [Development](#running-it-for-development) |
+| `scripts\deploy.ps1` | development PC | puts the newest code on the server and restarts the chat (`-Voice`: also voice) | [Day to day](#day-to-day) |
+| `scripts\release-upload.ps1` | development PC | puts a new desktop app version on the server | [The desktop app](#the-desktop-app) |
+| `scripts\backup-fetch.ps1` | development PC | fetches the server's newest backup (`-Install`: every day) | [Backups](#backups) |
+| `scripts\server-connect.ps1` | development PC | once: SSH access to the server (`ssh chatserver`) | [4b](#4b-on-the-development-pc-connect-to-the-new-one) |
+| `scripts\server\export.ps1` | old server PC | packs the data for moving the server | [1](#1-on-the-old-pc-pack-the-data) |
+| `scripts\server\import.ps1` | new server PC | unpacks it | [3](#3-on-the-new-pc-unpack-the-data) |
+| `scripts\server\install.ps1` | server PC (as admin) | installs and sets up everything; safe to run again | [4](#4-on-the-new-pc-install-everything) |
+| `scripts\server\update.ps1` | server PC (as admin) | what `deploy.ps1` runs there: newest code, restart | [Day to day](#day-to-day) |
+| `scripts\server\backup.ps1` | server PC | the nightly backup (also by hand) | [Handy commands](#handy-commands-on-the-server) |
+| `serve.ps1`, `voice.ps1` | server PC | the chat and voice; the scheduled tasks start them | [Day to day](#day-to-day) |
+| `tools\make_admin.py` | server PC | make someone an admin (or take it away) | [Handy commands](#handy-commands-on-the-server) |
+
 ## Running it for development
 
 You need [Anaconda](https://www.anaconda.com/) (or Miniconda). In PowerShell:
@@ -180,8 +202,39 @@ On the server itself, in `C:\ChatApp` (as administrator): `.\scripts\server\upda
 After the internet provider changes your home IP, restart voice (`.\scripts\deploy.ps1 -Voice`, or restart
 the server PC): LiveKit looks up the IP when it starts.
 
-New desktop app versions are still built on the development PC (it has the signing key), then
-`scripts\release-upload.ps1` puts them on the server (see CLAUDE.md, "Releasing").
+New desktop app versions are built on the development PC (it has the signing key), then
+`scripts\release-upload.ps1` puts them on the server: see [The desktop app](#the-desktop-app).
+
+### Handy commands (on the server)
+
+From the development PC, `ssh chatserver` gives you a PowerShell on the server (already as
+administrator); then `cd C:\ChatApp`. Or sit at the server PC itself, in PowerShell as administrator.
+
+```powershell
+# Admins can edit and delete anyone's messages and custom emoji.
+.venv\Scripts\python.exe tools\make_admin.py --list              # who's an admin?
+.venv\Scripts\python.exe tools\make_admin.py mongri              # make mongri an admin
+.venv\Scripts\python.exe tools\make_admin.py mongri --remove     # take it away again
+
+# Is everything running? (ChatApp and ChatApp voice: Running. ChatApp backup: Ready.)
+Get-ScheduledTask ChatApp*
+
+# The logs. chat.log: starts and errors; chat.out.log: every request; voice.log: LiveKit.
+Get-Content logs\chat.log -Tail 30
+Get-Content logs\chat.out.log -Tail 30
+Get-Content logs\backup.log -Tail 5
+
+# Restart by hand (deploy.ps1 does this too).
+Stop-ScheduledTask ChatApp; Start-ScheduledTask ChatApp
+Stop-ScheduledTask "ChatApp voice"; Start-ScheduledTask "ChatApp voice"
+
+# A backup now, besides the nightly one.
+.\scripts\server\backup.ps1 -Destination E:\ChatApp-backups
+```
+
+(Stopping a task can leave its program running; if a restart doesn't seem to take, use
+`.\scripts\server\update.ps1`, which also ends those.) On the development PC, `tools\make_admin.py`
+works the same with `--db dev.db`, for the development chat.
 
 ### Backups
 
@@ -211,6 +264,47 @@ Start-ScheduledTask ChatApp
 ```
 
 Everything after that day's 04:00 is lost (messages, accounts, settings changed since).
+
+## The desktop app
+
+The Windows app (`desktop\`, made with [Tauri](https://tauri.app/)) is a window around
+https://chat.datslok.no: changes to the chat reach it through the site, no new app needed. A new
+version is only needed when the app itself changes (its Rust code, plugins, the icon). Building it
+needs [Node.js](https://nodejs.org/) and [Rust](https://rustup.rs/) on the development PC, and the
+**signing key** `C:\Users\axelk\.tauri\chatapp.key` (never commit it; without it, the installed apps
+can't update themselves any more).
+
+**Trying it:** in `desktop\`, `npm run tauri dev` opens the app straight from the code.
+
+**Releasing a new version** (everyone's app installs it by itself at its next start):
+
+1. Raise `"version"` in `desktop\src-tauri\tauri.conf.json` (e.g. 0.1.8 → 0.1.9).
+2. Build and sign it, in `desktop\`:
+   ```powershell
+   $env:TAURI_SIGNING_PRIVATE_KEY = "C:\Users\axelk\.tauri\chatapp.key"
+   $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = ""
+   npm run tauri build
+   ```
+3. Copy `ChatApp_<version>_x64-setup.exe` and its `.sig` from
+   `desktop\src-tauri\target\release\bundle\nsis\` into `releases\`.
+4. In `releases\latest.json`, set `version`, the installer's `url`
+   (`https://chat.datslok.no/releases/ChatApp_<version>_x64-setup.exe`), and `signature` (the whole
+   contents of the `.sig` file).
+5. Put it on the server, then commit and push the version change:
+   ```powershell
+   .\scripts\release-upload.ps1
+   git add desktop; git commit -m "Desktop app <version>: ..."; git push
+   ```
+
+**Testing the update window** (what people see while the app updates): in `desktop\`, make a file
+`pretend.json` containing `{"version": "0.1.0"}`, then `npm run tauri dev -- --config pretend.json`.
+The app then believes it's old, finds the live version, and updates to it.
+
+**Changing the icon:** put the new picture (1024×1024 PNG) in `icon\`, then in `desktop\`:
+`npm run tauri icon ../icon/<file>.png` (delete the `android`, `ios`, `Square*`/`StoreLogo` and
+`icon.icns` files it also makes), copy `desktop\src-tauri\icons\icon.ico` to `static\favicon.ico`
+(the browser tab), run `python tools\make_installer_images.py` (the installer's pictures and the
+update window's cat), and release a new version.
 
 ## Roadmap
 

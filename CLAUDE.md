@@ -15,6 +15,9 @@ the point is for me to understand how it works, not just to have it done.
   abstractions. Readable code beats clever code. Don't add features I didn't ask for.
 - **Explain any new dependency** before adding it: what it does and why it's needed.
 - I know Python. I'm learning JavaScript/HTML/CSS along the way, so explain frontend code in more detail.
+- **The README is the manual.** Everything I might want to do by hand (scripts, releasing the app,
+  server commands, restoring backups) must be described in README.md, not only here: when adding or
+  changing a script or a manual step, update the README too (including "Scripts at a glance").
 - **Security basics still matter**, since friends will use this for real: never insert user text with
   `innerHTML`, hash passwords with a proper library, never commit secrets.
 
@@ -136,20 +139,9 @@ Port 8000 is reserved for serve.ps1, because the tunnel forwards the public site
 
 ## Releasing a new version of the desktop app
 
-Only needed when the app itself changes (icon, plugins, Rust code); chat changes reach it through the site.
-
-1. Raise `"version"` in `desktop/src-tauri/tauri.conf.json` (e.g. 0.1.1 → 0.1.2).
-2. Build and sign it, in `desktop/`:
-   ```powershell
-   $env:TAURI_SIGNING_PRIVATE_KEY = "C:\Users\axelk\.tauri\chatapp.key"
-   $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = ""
-   npm run tauri build
-   ```
-3. Copy `ChatApp_<version>_x64-setup.exe` and its `.sig` from `desktop/src-tauri/target/release/bundle/nsis/`
-   into `releases/`.
-4. In `releases/latest.json`, set `version`, the installer's `url`, and `signature` (the .sig file's contents).
-5. Once the real chat runs on its own server PC: `.\scripts\release-upload.ps1` copies the installer, its `.sig`
-   and `latest.json` there (over SSH).
+Only when the app itself changes (icon, plugins, Rust code). The steps (build and sign, `releases/`,
+`latest.json`, `scripts\release-upload.ps1`) are in README.md, "The desktop app", along with trying the
+app, testing the update window and changing the icon.
 
 ## Roadmap
 
