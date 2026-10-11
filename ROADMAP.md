@@ -51,7 +51,7 @@
     - [x] Set up on the laptop and tested (a restart brings everything back by itself)
 14. [x] Backups of chat.db and uploads/: nightly onto the server PC's second disk (30 days), and a copy fetched to the development PC
 15. [ ] Everyday chat gaps, in this order:
-    - [ ] Clickable links in messages
+    - [x] Clickable links in messages
     - [ ] Loading older messages when scrolling up (past the newest 50)
     - [ ] Text formatting: **bold**, *italic*, `code`, code blocks, > quotes, ||spoilers||, ~~strikethrough~~
     - [ ] Link previews (title and picture for pasted links, fetched safely by the server)
@@ -66,7 +66,7 @@
     - [ ] Blocking someone
     - [ ] Roles with colours (coloured names and headings in the member list)
 18. [ ] Smaller polish
-    - [ ] Clicking a reply's quote jumps to the original message
+    - [x] Clicking a reply's quote jumps to the original message (was already there)
     - [ ] Up arrow in an empty text box edits your last message
     - [ ] A "New messages" divider where you stopped reading
     - [ ] GIF search (Tenor or Giphy)

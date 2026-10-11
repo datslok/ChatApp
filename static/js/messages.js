@@ -546,16 +546,17 @@ function isOnlyEmoji(text) {
 }
 
 // Put message text into an element, with tokens shown as what they mean: custom emoji (<:17>)
-// as their pictures, mentions (<@2>, <@everyone>) as @name chips.
-// Still never innerHTML: the text goes in as text nodes, the rest as elements.
-function fillWithEmoji(element, text) {
+// as their pictures, mentions (<@2>, <@everyone>) as @name chips, and (if withLinks) web
+// addresses as links. Still never innerHTML: the text goes in as text nodes, the rest as elements.
+function fillWithEmoji(element, text, withLinks) {
   element.replaceChildren();
   // split() with a (group) in the pattern keeps what the group matched: the tokens' insides end
   // up at the odd positions, the text around them at the even ones.
   // "hi <:17> and <@2>!" -> ["hi ", ":17", " and ", "@2", "!"]
   text.split(/<(:\d+|@\d+|@everyone)>/).forEach((part, index) => {
     if (index % 2 === 0) {
-      if (part) element.appendChild(document.createTextNode(part));
+      if (withLinks) appendWithLinks(element, part);
+      else if (part) element.appendChild(document.createTextNode(part));
     } else if (part.startsWith(":")) {
       const id = part.slice(1);
       if (customById.has(Number(id))) {
@@ -569,6 +570,52 @@ function fillWithEmoji(element, text) {
       element.appendChild(makeMentionChip(part.slice(1)));  // "2" or "everyone"
     }
   });
+}
+
+// A web address: http:// or https://, then everything up to a space (or a "<", which can't
+// be part of one). Only these two kinds: a link to "javascript:..." would run code when clicked.
+const URL_PATTERN = /https?:\/\/[^\s<]+/g;
+
+// Text with its web addresses as links, the rest as text nodes.
+function appendWithLinks(element, text) {
+  let position = 0;  // how far into the text we've added
+  // matchAll() finds every address; each match knows where in the text it starts (.index).
+  for (const match of text.matchAll(URL_PATTERN)) {
+    const url = trimUrl(match[0]);
+    if (match.index > position) {
+      element.appendChild(document.createTextNode(text.slice(position, match.index)));
+    }
+    element.appendChild(makeLink(url));
+    position = match.index + url.length;  // what trimUrl cut off is added as text next time
+  }
+  if (position < text.length) element.appendChild(document.createTextNode(text.slice(position)));
+}
+
+// Punctuation at the end of an address usually belongs to the sentence: "see https://x.com."
+// A ")" stays if the address has a "(" of its own, like Wikipedia's ".../Python_(language)".
+function trimUrl(url) {
+  while (true) {
+    const last = url.slice(-1);
+    const opens = url.split("(").length - 1;   // how many "(" (pieces minus one)
+    const closes = url.split(")").length - 1;
+    if (".,!?:;'\"".includes(last) || (last === ")" && closes > opens)) {
+      url = url.slice(0, -1);
+    } else {
+      return url;
+    }
+  }
+}
+
+function makeLink(url) {
+  const link = document.createElement("a");
+  link.className = "message-link";
+  link.href = url;
+  link.textContent = url;
+  link.target = "_blank";  // a new tab, so the chat stays open
+  // noopener: the new page gets no handle back to our tab (it could send it to a fake login page).
+  // noreferrer: and it isn't told which page the click came from.
+  link.rel = "noopener noreferrer";
+  return link;
 }
 
 // "@kari", highlighted. Shows the person's *current* name; click for their profile.
@@ -921,7 +968,7 @@ function showMessage(message) {
   } else if (message.text) {
     const text = document.createElement("div");
     text.className = isOnlyEmoji(message.text) ? "message-text jumbo" : "message-text";
-    fillWithEmoji(text, message.text);
+    fillWithEmoji(text, message.text, true);
     if (message.edited_at) {
       const label = document.createElement("span");
       label.className = "edited-label";
