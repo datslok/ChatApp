@@ -32,11 +32,13 @@
 10. [ ] Voice with WebRTC, through our own LiveKit server (self-hosted on this PC)
     - [x] LiveKit server (voice.ps1), reachable at voice.datslok.no (tunnel) with UDP/TCP forwarded on the router
     - [x] Voice tickets from our server (/voice-token: a JWT signed with the standard library)
-    - [ ] Lounge voice channel: join, mute, leave (built; tick after the live test)
-    - [ ] Voice settings: input and output device, mic and output volume, sensitivity (noise gate) (built; tick after the live test)
+    - [x] Lounge voice channel: join, mute, leave
+    - [x] Voice settings: input and output device, mic and output volume, sensitivity (noise gate, with dB numbers)
     - [ ] Volume per person (built; tick after the live test)
-    - [ ] Who is in voice (in the sidebar, with 🔇 for muted) and a speaking ring (built; tick after the live test)
-    - [ ] Calls in DMs: ringing on every device, accept/decline, call notes in the DM (built; tick after the live test)
-    - [ ] Microphone and call notifications in the desktop app
-11. [ ] Video calls in DMs: 1-on-1, peer-to-peer WebRTC (signalling over our WebSocket, STUN/TURN),
-    only between friends; mute, camera on/off, hang up
+    - [x] Who is in voice (in the sidebar, with 🔇 for muted) and a speaking ring
+    - [x] Calls in DMs: ringing on every device, accept/decline, call notes in the DM
+    - [x] Call banner in the DM (both pictures with speaking rings, mute, end call, Join call)
+    - [x] Sounds: calling, ringing, join and leave cues
+    - [x] Voice in the desktop app
+    - [ ] Incoming call notifications in the desktop app (check when the window isn't in focus)
+11. [ ] Video in calls and Lounge: camera on/off (through our LiveKit server, like voice)
