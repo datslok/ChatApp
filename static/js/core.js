@@ -180,7 +180,7 @@ function connect() {
 // during a call, which that would drop: leaveVoice asks again afterwards. (inDesktopApp is from
 // notifications.js. Apps older than 0.1.13 don't know the command: their "no" is ignored.)
 function checkForAppUpdate() {
-  if (!inDesktopApp || voiceRoom) return;
+  if (!inDesktopApp || voiceRoomName) return;
   window.__TAURI_INTERNALS__.invoke("check_for_update").catch(() => {});
 }
 

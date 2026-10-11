@@ -108,8 +108,14 @@ async function loadDenoiser(context) {
     const response = await fetch("/rnnoise-0.4.1/rnnoise_simd.wasm");
     if (!response.ok) throw new Error("RNNoise wasn't found");
     const wasmBinary = await response.arrayBuffer();
-    // maxChannels 1: a microphone is one channel (mono).
+    // One channel (mono) in and out. Windows often gives the browser a microphone as two channels
+    // (stereo), even a mono one: "explicit" makes the browser mix those into one before RNNoise.
+    // Otherwise RNNoise only cleans the first (left) one, the right stays silent, and the others
+    // hear us in one ear. After it, the chain spreads the one channel over both ears again.
     return new AudioWorkletNode(context, "@sapphi-red/web-noise-suppressor/rnnoise", {
+      channelCount: 1,
+      channelCountMode: "explicit",
+      outputChannelCount: [1],
       processorOptions: { wasmBinary, maxChannels: 1 },
     });
   } catch (error) {

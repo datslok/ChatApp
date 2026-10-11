@@ -211,7 +211,9 @@ function leaveVoice() {
   speakingIds.clear();
   showSpeaking();
   sendVoiceState();  // we're out
-  checkForAppUpdate();  // skipped during the call, so now (core.js)
+  // Skipped during the call, so now (core.js). A moment later: when leaving is part of joining
+  // another room (joinVoice, Call, Accept), that room is set by then, and the check is skipped.
+  setTimeout(checkForAppUpdate, 0);
 }
 
 // Clicking a voice channel opens its page, and joins it (unless we're in it already).
