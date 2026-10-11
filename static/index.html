@@ -3375,10 +3375,18 @@
     // Send our microphone in this room (turning it on if needed). Throws if the browser won't let us.
     async function sendMic(room) {
       if (!micStream) await openMic();
-      const { destination } = await getAudio();
+      const engine = await getAudio();
       if (voiceRoom !== room) return;  // left while waiting
+      // The track at the end of our chain. A stopped track can never start again, and LiveKit stops
+      // the tracks it sends when a room disconnects by itself (a dropped connection, a server
+      // restart). Then: a fresh end for the chain, with a new, working track.
+      if (engine.destination.stream.getAudioTracks()[0].readyState === "ended") {
+        engine.gate.disconnect(engine.destination);
+        engine.destination = engine.context.createMediaStreamDestination();
+        engine.gate.connect(engine.destination);
+      }
       if (!micPublication) {
-        micPublication = await room.localParticipant.publishTrack(destination.stream.getAudioTracks()[0], {
+        micPublication = await room.localParticipant.publishTrack(engine.destination.stream.getAudioTracks()[0], {
           source: LivekitClient.Track.Source.Microphone,
         });
       } else if (micPublication.isMuted) {
@@ -3586,7 +3594,7 @@
         await room.connect(answer.url, answer.token);
       } catch (error) {
         if (voiceRoomName !== roomName || (room && voiceRoom !== room)) return;  // we left meanwhile
-        if (room) room.disconnect();
+        if (room) room.disconnect(false);  // false: don't stop our microphone track (see sendMic)
         voiceRoom = null;
         voiceRoomName = null;
         markVoiceChannel();
@@ -3594,7 +3602,7 @@
         return;
       }
       if (voiceRoom !== room) {
-        room.disconnect();  // we left while it was connecting
+        room.disconnect(false);  // we left while it was connecting
         return;
       }
       setVoiceStatus(outgoingCall === roomName ? "Calling…" : "Voice connected");
@@ -3620,7 +3628,7 @@
       voiceRoom = null;
       voiceRoomName = null;
       micPublication = null;
-      if (room) room.disconnect();
+      if (room) room.disconnect(false);  // false: LiveKit would otherwise stop our microphone track for good
       closeMicIfUnused();  // the "mic in use" light goes out (unless Settings is testing it)
       voiceAudio.replaceChildren();  // remove every <audio> element
       voiceBar.hidden = true;
