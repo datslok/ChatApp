@@ -811,6 +811,7 @@ function jumpToMessage(messageId) {
     showUploadError("That message is too old to show here.");
     return;
   }
+  jumpTarget = target;
   target.scrollIntoView({ block: "center", behavior: "smooth" });
   // Restart the highlight animation, even if it was already running: remove the class,
   // make the browser notice (reading offsetWidth forces it to work out the layout), add it back.
@@ -1073,12 +1074,15 @@ function showMessage(message) {
   div.appendChild(body);
 
   // A picture only gets its real height once it has loaded, which pushes the
-  // messages up after we've scrolled. So scroll again when it finishes loading.
+  // messages up after we've scrolled. So scroll again when it finishes loading:
+  // to the bottom, or back to the message we jumped to (a reply or a notification).
   // (Only the attached picture: profile pictures always have the same fixed size.)
+  if (wasAtBottom) jumpTarget = null;  // back at the bottom: follow new messages again
   const img = div.querySelector(".attachment-image");
   if (img && wasAtBottom) {
     img.addEventListener("load", () => {
-      messages.scrollTop = messages.scrollHeight;
+      if (jumpTarget) jumpTarget.scrollIntoView({ block: "center" });
+      else messages.scrollTop = messages.scrollHeight;
     });
   }
 

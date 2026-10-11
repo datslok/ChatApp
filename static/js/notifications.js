@@ -210,8 +210,8 @@ function channelLabel(channel) {
   return partner === null ? "#" + channel : "@" + (people.get(partner)?.name ?? "someone");
 }
 
-// Notify: sound and/or a desktop notification. Clicking it opens that channel.
-function notify(channel, senderId, senderName, text) {
+// Notify: sound and/or a desktop notification. Clicking it opens that message.
+function notify(channel, messageId, senderId, senderName, text) {
   if (isMuted()) return;  // do not disturb: no sound, no popup (the red numbers still update)
   if (notificationSound) playPing();
   if (!desktopNotifications || !("Notification" in window) || Notification.permission !== "granted") return;
@@ -222,15 +222,33 @@ function notify(channel, senderId, senderName, text) {
       body: tokensToCodes(text),  // <@2> -> @kari, <:17> -> :pog:
       icon: avatar ? "/avatars/" + encodeURIComponent(avatar) : undefined,
       tag: channel,  // a newer one from the same channel replaces the older one
+      // For the desktop app: its notification plugin hands this back when the notification is
+      // clicked, and the app then calls openMessage with it (main.rs). Browsers ignore it.
+      extra: { channel, messageId },
     });
-    notification.addEventListener("click", () => {
-      window.focus();
-      switchChannel(channel, channelLabel(channel));
-      notification.close();
-    });
+    // In the desktop app, Notification is the plugin's stand-in, which has no click event.
+    if (!inDesktopApp) {
+      notification.addEventListener("click", () => {
+        openMessage(channel, messageId);
+        notification.close();
+      });
+    }
   } catch {
     // Some browsers (Android Chrome) refuse notifications without a service worker.
   }
+}
+
+// A notification was clicked: show that channel and go to the message. Called from the
+// click handler above, and by the desktop app (main.rs). In another channel, the message only
+// arrives with that channel's history, so the jump waits for it (core.js, "history").
+function openMessage(channel, messageId) {
+  window.focus();
+  if (channel === currentChannel) {
+    jumpToMessage(messageId);
+    return;
+  }
+  switchChannel(channel, channelLabel(channel));
+  pendingJump = messageId;  // after switchChannel, which forgets any older one
 }
 
 // The tab title: "(3) ChatApp". Counts the red numbers, plus mentions that arrived in the

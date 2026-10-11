@@ -1989,6 +1989,7 @@ async def announce_new_message(channel, mentioned=(), message=None):
                 if message:
                     update["notify"] = {
                         "channel": channel,
+                        "id": message["id"],  # so clicking the notification can jump to the message
                         "user_id": message["user_id"],
                         "name": message["name"],
                         # The start of the text (a token cut in half at the end dropped), or a file.

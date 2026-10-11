@@ -112,6 +112,8 @@ let firstChannel = null;    // where to start: the first channel in the list
 const FRIENDS = "friends";
 const LOUNGE = "voice:lounge";  // the Lounge page (a "channel" name like FRIENDS, so switching works the same)
 let myId = null;            // our own user id; the server tells us in its "welcome"
+let pendingJump = null;     // a message id to go to once its channel's history arrives (from a notification)
+let jumpTarget = null;      // the message we last jumped to: pictures loading keep it in view (messages.js)
 let reconnectDelay = 1000;  // milliseconds to wait before the next reconnect attempt
 const unread = new Set();   // channels and DMs with messages we haven't seen
 const mentionCounts = new Map();  // channel -> how many unread messages there mention us
@@ -240,7 +242,7 @@ function handleServerMessage(event) {
     updateSidebar();
     // A DM or mention in another channel: notify (we're not looking at that channel anyway).
     if (data.notify) {
-      notify(data.notify.channel, data.notify.user_id, data.notify.name, data.notify.text);
+      notify(data.notify.channel, data.notify.id, data.notify.user_id, data.notify.name, data.notify.text);
     }
     return;
   }
@@ -254,6 +256,11 @@ function handleServerMessage(event) {
     for (const message of shownMessages) {
       showMessage(message);
     }
+    // Opened from a notification: now that its message is on the page, go to it.
+    if (pendingJump !== null) {
+      jumpToMessage(pendingJump);
+      pendingJump = null;
+    }
   } else if (data.type === "message") {
     stopTyping(data.name);  // their message arrived, so they're done typing
     shownMessages.push(data);
@@ -264,7 +271,7 @@ function handleServerMessage(event) {
     if (forMe && !isLooking()) {
       missedWhileAway += 1;
       updateTitle();
-      notify(data.channel, data.user_id, data.name, data.text || (data.file ? "📎 Attachment" : ""));
+      notify(data.channel, data.id, data.user_id, data.name, data.text || (data.file ? "📎 Attachment" : ""));
     }
   } else if (data.type === "edited") {
     // A message was edited: update it in our list (and quotes of it in replies), then redraw.
@@ -342,6 +349,8 @@ function joinCurrentChannel() {
   shownMessages = [];
   editingId = null;
   lastShown = null;            // so the first message starts a fresh group (and date divider)
+  jumpTarget = null;           // a fresh channel starts at the bottom
+  pendingJump = null;          // (openMessage sets it again right after switching)
   clearReply();                // a reply belongs to the channel we just left
   clearTyping();
   // Show the Friends page, the Lounge page or the channel: one of them.
