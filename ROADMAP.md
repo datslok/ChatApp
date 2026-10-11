@@ -1,24 +1,24 @@
 # Roadmap
 
-1. [x] One chat room: WebSocket broadcast to everyone connected
+- [x] **1.** One chat room: WebSocket broadcast to everyone connected
    - [x] Display names (typed in, remembered in the browser; real accounts come in milestone 4)
-2. [x] Save messages in SQLite and load history when someone joins
-3. [x] Channels (#general, #memes, …) and a sidebar to switch between them
-4. [x] Accounts and login (hashed passwords, sessions)
+- [x] **2.** Save messages in SQLite and load history when someone joins
+- [x] **3.** Channels (#general, #memes, …) and a sidebar to switch between them
+- [x] **4.** Accounts and login (hashed passwords, sessions)
    - [x] Email per account, password reset by email, Settings (change username, email, password)
    - [x] People identified by user id behind the scenes, so usernames can change
    - [x] Profiles: picture and banner (with a move/zoom editor), status, bio, profile popup
    - [x] Animated GIFs as picture and banner (cropped frame by frame on the server with Pillow)
-5. [x] Online list and "is typing…" indicator
-6. [x] Direct messages: private two-person channels, opened from the sidebar
+- [x] **5.** Online list and "is typing…" indicator
+- [x] **6.** Direct messages: private two-person channels, opened from the sidebar
    - [x] Friends: requests and a friends list (a page in the chat area, like Discord); DMs only between friends
    - [x] Online and offline people in the right column
-7. [x] Image and file uploads (with a preview tray, drag-and-drop and pasting)
-8. [x] Host it so friends can connect: live at https://chat.datslok.no through a Cloudflare Tunnel
+- [x] **7.** Image and file uploads (with a preview tray, drag-and-drop and pasting)
+- [x] **8.** Host it so friends can connect: live at https://chat.datslok.no through a Cloudflare Tunnel
    - [x] Before going online: invite code for new accounts, login limits, HTTPS (wss://, secure cookies)
    - [x] Mobile-friendly layout (drawers for channels and the online list)
    - [x] Separate development database (dev.db), so tests stay out of the real chat
-9. [x] Nice-to-haves, in this order:
+- [x] **9.** Nice-to-haves, in this order:
    - [x] Unread dots on channels and DMs (remembered by the server)
    - [x] Message ids and times on the page, message grouping and date dividers
    - [x] Replies
@@ -29,7 +29,7 @@
    - [x] Notifications for DMs and mentions (desktop notifications, a generated sound, count in the tab title)
    - [x] Custom emoji inside messages (typing :pog:, stored as <:id> tokens); emoji picker and jumbo emoji in messages; multi-line text box
    - [x] Desktop app via Tauri (Windows installer, real notifications, automatic updates)
-10. [x] Voice with WebRTC, through our own LiveKit server (self-hosted on this PC)
+- [x] **10.** Voice with WebRTC, through our own LiveKit server (self-hosted on this PC)
     - [x] LiveKit server (voice.ps1), reachable at voice.datslok.no (tunnel) with UDP/TCP forwarded on the router
     - [x] Voice tickets from our server (/voice-token: a JWT signed with the standard library)
     - [x] Lounge voice channel: join, mute, leave
@@ -42,17 +42,17 @@
     - [x] Sounds: calling, ringing, join and leave cues
     - [x] Voice in the desktop app
     - [x] Incoming call notifications in the desktop app
-11. [x] Video in calls and Lounge: camera on/off (through our LiveKit server, like voice)
+- [x] **11.** Video in calls and Lounge: camera on/off (through our LiveKit server, like voice)
     - [x] Camera button, and video in the DM call banner
     - [x] A Lounge page with a tile for everyone (video or picture)
     - [x] Choosing the camera in Settings, with a preview
     - [x] Tiles sized to fit, focus view (click a tile: big, the others as thumbnails; right-click: profile), fullscreen, and a resizable DM call banner
-12. [x] Screen sharing in calls and Lounge (through LiveKit, like the camera): 720p/1080p/1440p, 30/60 fps, with sound
-13. [x] Start the chat (serve.ps1) and voice (voice.ps1) automatically with Windows, without open windows
+- [x] **12.** Screen sharing in calls and Lounge (through LiveKit, like the camera): 720p/1080p/1440p, 30/60 fps, with sound
+- [x] **13.** Start the chat (serve.ps1) and voice (voice.ps1) automatically with Windows, without open windows
     - [x] Scripts to run the server on its own PC (scripts\server\: install, export, import, update; scheduled tasks; README)
     - [x] Set up on the laptop and tested (a restart brings everything back by itself)
-14. [x] Backups of chat.db and uploads/: nightly onto the server PC's second disk (30 days), and a copy fetched to the development PC
-15. [ ] Everyday chat gaps, in this order:
+- [x] **14.** Backups of chat.db and uploads/: nightly onto the server PC's second disk (30 days), and a copy fetched to the development PC
+- [ ] **15.** Everyday chat gaps, in this order:
     - [x] Clickable links in messages
     - [x] Clicking a notification goes to the message (browser and desktop app)
     - [x] F5 keeps you in the channel you were in
@@ -64,17 +64,17 @@
     - [ ] Loading older messages when scrolling up (past the newest 50)
     - [ ] Text formatting: **bold**, *italic*, `code`, code blocks, > quotes, ||spoilers||, ~~strikethrough~~
     - [ ] Link previews (title and picture for pasted links, fetched safely by the server)
-16. [ ] Organising the chat
+- [ ] **16.** Organising the chat
     - [ ] Admins create, rename, delete and reorder channels from the app, with headings to group them
     - [ ] Group DMs (private chats with 3-10 people)
     - [ ] Pinned messages per channel
     - [ ] Search messages (by text, person or channel; SQLite's FTS5)
-17. [ ] Social and presence
+- [ ] **17.** Social and presence
     - [ ] Statuses: Online, Idle (automatic when away), Do Not Disturb (no notifications), Invisible
     - [ ] Muting a channel or DM
     - [ ] Blocking someone
     - [ ] Roles with colours (coloured names and headings in the member list)
-18. [ ] Smaller polish
+- [ ] **18.** Smaller polish
     - [x] Clicking a reply's quote jumps to the original message (was already there)
     - [ ] Up arrow in an empty text box edits your last message
     - [ ] A "New messages" divider where you stopped reading
