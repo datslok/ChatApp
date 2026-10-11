@@ -3480,6 +3480,27 @@
       sendVoiceState();  // the 🔇 next to our name
     }
 
+    // LiveKit's library normally loads with the page (the <script> tag near the top). If that went
+    // wrong (the page was opened while the server didn't have it, and that error got cached), load
+    // it once more, from an address with "?retry=..." on the end: a new address, so no cache can
+    // answer with the old error. Our server ignores the extra part and sends the same file.
+    function loadLiveKit() {
+      if (window.LivekitClient) return Promise.resolve();
+      return new Promise((resolve, reject) => {
+        const script = document.createElement("script");
+        script.src = "/livekit-client-2.22.3.umd.js?retry=" + Date.now();
+        script.addEventListener("load", () => {
+          if (window.LivekitClient) resolve();
+          else reject(new Error("Couldn't load voice"));
+        });
+        script.addEventListener("error", () => {
+          script.remove();
+          reject(new Error("Couldn't load voice (offline, or blocked?)"));
+        });
+        document.head.appendChild(script);
+      });
+    }
+
     async function joinVoice(roomName, label) {
       if (voiceRoomName === roomName) return;  // already there
       if (voiceRoom) leaveVoice();             // one voice room at a time
@@ -3493,7 +3514,7 @@
 
       let room;
       try {
-        if (!window.LivekitClient) throw new Error("Voice isn't loaded yet, try again");
+        await loadLiveKit();
         const { context } = await getAudio();
         if (voiceRoomName !== roomName) return;  // left (or went elsewhere) while waiting
         room = new LivekitClient.Room({
