@@ -635,6 +635,12 @@ function isOnlyEmoji(text) {
 // addresses as links. Still never innerHTML: the text goes in as text nodes, the rest as elements.
 function fillWithEmoji(element, text, withLinks) {
   element.replaceChildren();
+  appendWithEmoji(element, text, withLinks);
+}
+
+// The same, but added after whatever the element already holds (formatText builds a message
+// from many such pieces).
+function appendWithEmoji(element, text, withLinks) {
   // split() with a (group) in the pattern keeps what the group matched: the tokens' insides end
   // up at the odd positions, the text around them at the even ones.
   // "hi <:17> and <@2>!" -> ["hi ", ":17", " and ", "@2", "!"]
@@ -683,7 +689,8 @@ function trimUrl(url) {
     const last = url.slice(-1);
     const opens = url.split("(").length - 1;   // how many "(" (pieces minus one)
     const closes = url.split(")").length - 1;
-    if (".,!?:;'\"".includes(last) || (last === ")" && closes > opens)) {
+    // (Also formatting markers: in "**https://x.com**" the stars are bold's, not the address's.)
+    if (".,!?:;'\"*~|".includes(last) || (last === ")" && closes > opens)) {
       url = url.slice(0, -1);
     } else {
       return url;
@@ -701,6 +708,141 @@ function makeLink(url) {
   // noreferrer: and it isn't told which page the click came from.
   link.rel = "noopener noreferrer";
   return link;
+}
+
+// ----- Text formatting (a small part of Markdown, like Discord's)
+//
+// Only the page knows about it: a message is stored exactly as typed ("**hi**"), and drawn
+// formatted here. Built from elements and text nodes like everything else, never innerHTML,
+// so whatever someone types stays text.
+//
+// Two levels. Blocks first: ```code blocks``` (shown exactly as typed) and lines starting
+// with "> " (quotes). Then, inside the rest, the inline markers: `code`, **bold**, *italic*,
+// ~~strikethrough~~ and ||spoilers||.
+
+// The message's text, formatted, into `element`.
+function formatText(element, text) {
+  element.replaceChildren();
+  // ```code blocks```, found first, since nothing inside them is formatted. An optional
+  // language name on the opening line ("```py") is left out, like Discord does.
+  // With the (group), the blocks' insides end up at the odd positions (like fillWithEmoji).
+  const parts = text.split(/```(?:[\w+#-]*\n)?([\s\S]*?)```/);
+  parts.forEach((part, index) => {
+    if (index % 2 === 1) {
+      const block = document.createElement("pre");
+      block.className = "code-block";
+      // The server turned @kari and :pog: into tokens (<@2>, <:17>): show them as typed.
+      block.textContent = tokensToCodes(part.replace(/\n$/, ""));
+      element.appendChild(block);
+    } else {
+      // A block is on lines of its own anyway, so the line break next to it would be one too many.
+      if (index > 0) part = part.replace(/^\n/, "");
+      if (index < parts.length - 1) part = part.replace(/\n$/, "");
+      appendLines(element, part);
+    }
+  });
+}
+
+// Text between code blocks: lines starting with "> " (or a lone ">") become quotes, and
+// neighbouring lines of the same kind go together, so a three-line quote is one quote.
+function appendLines(element, text) {
+  const isQuote = (line) => line.startsWith("> ") || line === ">";
+  const lines = text.split("\n");
+  let start = 0;
+  while (start < lines.length) {
+    const quote = isQuote(lines[start]);
+    let end = start;
+    while (end < lines.length && isQuote(lines[end]) === quote) end++;  // the group: start..end-1
+    const group = lines.slice(start, end);
+    if (quote) {
+      const block = document.createElement("blockquote");
+      block.className = "quote";
+      formatInline(block, group.map((line) => line.slice(2)).join("\n"));  // without the "> "
+      element.appendChild(block);
+    } else {
+      formatInline(element, group.join("\n"));
+    }
+    start = end;
+  }
+}
+
+// The inline markers, as one pattern with a (group) for each kind. exec() finds the earliest
+// place where any of them matches; where two could start at the same place, the first one
+// listed wins (so "**" is bold before it's two italic stars).
+const INLINE_PATTERN = [
+  /\\([\\*~|`>])/.source,                // 1: \* is a real star (an "escaped" marker)
+  /(`+)([^`][\s\S]*?)\2(?!`)/.source,    // 2, 3: `code` (``code with a ` in it`` too)
+  /(https?:\/\/[^\s<]+)/.source,         // 4: a web address, so formatting can't cut through one
+  /\*\*([\s\S]+?)\*\*(?!\*)/.source,     // 5: **bold** (the (?!\*) makes ***this*** bold italic)
+  /\*(?![\s*])([\s\S]*?\S)\*/.source,    // 6: *italic* (not "5 * 3 * 2": no space inside the stars)
+  /~~([\s\S]+?)~~/.source,               // 7: ~~strikethrough~~
+  /\|\|([\s\S]+?)\|\|/.source,           // 8: ||spoiler||
+].join("|");
+
+function formatInline(element, text) {
+  // A new pattern each call: a "g" pattern remembers where it got to (lastIndex), and the
+  // calls inside this one (for what's between the markers) would otherwise move it.
+  const pattern = new RegExp(INLINE_PATTERN, "g");
+  let position = 0;  // how far into the text we've added
+  while (true) {
+    pattern.lastIndex = position;
+    const match = pattern.exec(text);
+    if (match === null) break;
+    appendWithEmoji(element, text.slice(position, match.index), true);  // plain text before it
+    position = match.index + match[0].length;
+
+    // A group that took no part in the match is undefined; the one that did says which kind.
+    if (match[1] !== undefined) {
+      element.appendChild(document.createTextNode(match[1]));
+    } else if (match[3] !== undefined) {
+      const code = document.createElement("code");
+      code.textContent = tokensToCodes(match[3]);  // as typed: no emoji, links or formatting
+      element.appendChild(code);
+    } else if (match[4] !== undefined) {
+      const url = trimUrl(match[4]);
+      element.appendChild(makeLink(url));
+      position = match.index + url.length;  // what trimUrl cut off is looked at again
+    } else if (match[5] !== undefined) {
+      element.appendChild(makeFormatted("strong", match[5]));
+    } else if (match[6] !== undefined) {
+      element.appendChild(makeFormatted("em", match[6]));
+    } else if (match[7] !== undefined) {
+      element.appendChild(makeFormatted("s", match[7]));
+    } else {
+      element.appendChild(makeSpoiler(match[8]));
+    }
+  }
+  appendWithEmoji(element, text.slice(position), true);  // the plain text after the last one
+}
+
+// <strong>, <em> or <s> around the inside, which is formatted the same way (so **bold *and
+// italic*** works): formatInline calls this, and this calls formatInline. That's recursion.
+function makeFormatted(tag, text) {
+  const wrapper = document.createElement(tag);
+  formatInline(wrapper, text);
+  return wrapper;
+}
+
+// A dark bar until clicked. The inner span is what gets hidden (visibility: hidden, chat.css),
+// which hides pictures and emoji too; the outer one keeps its background, so the bar stays.
+function makeSpoiler(text) {
+  const spoiler = document.createElement("span");
+  spoiler.className = "spoiler";
+  spoiler.title = "Click to reveal";
+  const inside = document.createElement("span");
+  inside.className = "spoiler-inside";
+  formatInline(inside, text);
+  spoiler.appendChild(inside);
+  // `true`: "capture" this click on its way *down* to what was clicked, before a link or an
+  // @mention inside gets it. While hidden, the click only reveals: no link opens, no profile.
+  spoiler.addEventListener("click", (event) => {
+    if (spoiler.classList.contains("revealed")) return;
+    event.preventDefault();
+    event.stopPropagation();
+    spoiler.classList.add("revealed");
+    spoiler.removeAttribute("title");
+  }, true);
+  return spoiler;
 }
 
 // "@kari", highlighted. Shows the person's *current* name; click for their profile.
@@ -1108,7 +1250,7 @@ function showMessage(message, follow = true) {
   } else if (message.text) {
     const text = document.createElement("div");
     text.className = isOnlyEmoji(message.text) ? "message-text jumbo" : "message-text";
-    fillWithEmoji(text, message.text, true);
+    formatText(text, message.text);
     if (message.edited_at) {
       const label = document.createElement("span");
       label.className = "edited-label";

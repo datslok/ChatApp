@@ -62,7 +62,7 @@
     - [x] Automatic restart of the app when a new update is available after a disconnect (and after leaving a call; release-upload.ps1 restarts the chat)
     - [x] Bugs & ideas: a form in Settings, saved on the server and emailed to the admins, an Inbox in Settings for admins (and tools/feedback.py)
     - [x] Loading older messages when scrolling up (past the newest 50)
-    - [ ] Text formatting: **bold**, *italic*, `code`, code blocks, > quotes, ||spoilers||, ~~strikethrough~~
+    - [x] Text formatting: **bold**, *italic*, `code`, code blocks, > quotes, ||spoilers||, ~~strikethrough~~
     - [ ] Link previews (title and picture for pasted links, fetched safely by the server)
 - [ ] **16.** Organising the chat
     - [ ] Admins create, rename, delete and reorder channels from the app, with headings to group them

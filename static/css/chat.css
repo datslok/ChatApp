@@ -2325,6 +2325,51 @@ body {
   white-space: pre-wrap;
 }
 
+/* Formatting (messages.js, formatText). `code` and code blocks in a monospace font. */
+.message-text code,
+.message-text .code-block {
+  font-family: Consolas, "Cascadia Mono", Menlo, monospace;
+  font-size: 0.875em;
+  background: #2b2d31;
+  border: 1px solid #1e1f22;
+  border-radius: 4px;
+}
+
+.message-text code {
+  padding: 0 4px;
+}
+
+.message-text .code-block {
+  margin: 4px 0;
+  padding: 8px;
+  white-space: pre-wrap;      /* long lines wrap instead of making the page wider */
+  overflow-wrap: anywhere;
+}
+
+/* > A quote: a grey bar on the left. */
+.message-text .quote {
+  margin: 2px 0;
+  padding-left: 12px;
+  border-left: 4px solid #4e5058;
+}
+
+/* ||A spoiler||: a dark bar until clicked. The inside is hidden, not just made transparent,
+   because colour emoji and pictures would still show through. */
+.spoiler {
+  background: #1e1f22;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.spoiler:not(.revealed) > .spoiler-inside {
+  visibility: hidden;
+}
+
+.spoiler.revealed {
+  background: rgba(255, 255, 255, 0.1);
+  cursor: auto;
+}
+
 /* A message that's only emoji: shown big, like Discord's "jumbo" emoji. */
 .message-text.jumbo {
   font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif;
