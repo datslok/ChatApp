@@ -1788,6 +1788,10 @@ async def chat(websocket: WebSocket):
 
             if kind == "join":
                 new_channel = data.get("channel")
+                if new_channel is None:
+                    # Looking at no channel (the Friends page): new messages anywhere count as unread.
+                    clients[websocket]["channel"] = None
+                    continue
                 if not can_join(new_channel, user_id):
                     continue
                 # Switch channel and fetch its history with no await in between,

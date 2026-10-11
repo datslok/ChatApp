@@ -134,6 +134,20 @@
       font-size: 0.9rem;
     }
 
+    /* The two things the chat area can show: a channel, or the Friends page. Each fills the
+       space below the top bar. (min-height: 0 lets the list inside scroll instead of growing.) */
+    #channel-view, #friends-view {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* display: flex above would beat the "hidden" attribute, so say it explicitly. */
+    #channel-view[hidden], #friends-view[hidden] {
+      display: none;
+    }
+
     #messages {
       flex: 1;
       overflow-y: auto;
@@ -1243,49 +1257,29 @@
       color: #949ba4;
     }
 
-    /* The People popup. */
-    #people {
-      width: min(460px, 100% - 32px);
-      box-sizing: border-box;
-      max-height: 85vh;
-      padding: 24px;
-      border: none;
-      border-radius: 8px;
-      background: #2b2d31;
-      color: inherit;
+    /* The Friends page, in the chat's place. "Friends" as the heading, the tabs next to it. */
+    #friends-view {
+      padding: 16px 24px;
     }
 
-    #people[open] {
-      display: flex;  /* only when open: a closed dialog must stay hidden */
-      flex-direction: column;
+    .friends-header {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;  /* on a narrow phone the tabs may go below the heading */
+      gap: 8px 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid #3f4147;
     }
 
-    #people::backdrop {
-      background: rgba(0, 0, 0, 0.6);
-    }
-
-    #people h2 {
-      margin: 0 0 12px;
+    .friends-header h2 {
+      margin: 0;
+      font-size: 1.1rem;
       color: white;
-    }
-
-    #people-close {
-      position: absolute;
-      top: 16px;
-      right: 16px;
-      width: 32px;
-      height: 32px;
-      border: none;
-      border-radius: 50%;
-      background: #1e1f22;
-      color: white;
-      cursor: pointer;
     }
 
     .tabs {
       display: flex;
       gap: 4px;
-      margin-bottom: 8px;
     }
 
     .tab {
@@ -1304,7 +1298,9 @@
     }
 
     #people-list {
-      overflow-y: auto;  /* scroll inside the popup if the list is long */
+      flex: 1;
+      overflow-y: auto;  /* scroll inside the page if the list is long */
+      max-width: 720px;  /* rows don't stretch across a wide screen */
     }
 
     .people-subheading {
@@ -1562,7 +1558,7 @@
 <body>
   <nav id="sidebar">
     <div id="sidebar-lists">
-      <button id="friends-button" class="channel">
+      <button id="friends-button" class="channel" data-channel="friends">
         Friends <span id="request-badge" class="badge" hidden></span>
       </button>
       <div id="channel-list"></div>
@@ -1581,37 +1577,54 @@
       <button type="button" id="open-members" title="Online">👥</button>
     </header>
     <div id="banner" hidden>Connection lost, reconnecting…</div>
-    <div id="messages"></div>
-    <div id="status-line">
-      <span id="typing"></span>
-      <span class="status-right">
-        <span id="char-count"></span>
-        <span id="upload-status"></span>
-      </span>
+
+    <!-- The Friends page: shown instead of a channel when "Friends" is picked in the sidebar. -->
+    <section id="friends-view" hidden>
+      <header class="friends-header">
+        <h2>Friends</h2>
+        <div class="tabs">
+          <button type="button" class="tab active" data-tab="friends">Friends</button>
+          <button type="button" class="tab" data-tab="requests">Requests <span id="requests-tab-count"></span></button>
+        </div>
+      </header>
+      <div id="people-list"></div>
+      <p id="people-status" class="action-status"></p>
+    </section>
+
+    <!-- A channel or DM: the messages and everything for writing one. -->
+    <div id="channel-view">
+      <div id="messages"></div>
+      <div id="status-line">
+        <span id="typing"></span>
+        <span class="status-right">
+          <span id="char-count"></span>
+          <span id="upload-status"></span>
+        </span>
+      </div>
+
+      <div id="tray" hidden></div>
+
+      <!-- Shown while replying to a message. -->
+      <div id="reply-bar" hidden>
+        Replying to <strong id="reply-name"></strong>
+        <button type="button" id="reply-cancel" title="Cancel reply (Esc)">×</button>
+      </div>
+
+      <form id="chat-form">
+        <!-- type="button": clicking it must not submit (send) the form -->
+        <button type="button" id="attach-button" title="Upload a file">+</button>
+        <!-- The browser's own file picker. Hidden; the + button opens it. -->
+        <input type="file" id="file-input" multiple hidden>
+        <!-- Emoji suggestions while typing ":po": shown just above the text box. -->
+        <div id="autocomplete" hidden></div>
+        <!-- A textarea (not an input) so long messages can be several lines. It grows as you type. -->
+        <!-- maxlength: the browser itself refuses typing or pasting beyond this. The page sets it to
+             the server's limit when it connects; 2000 is just the starting value. -->
+        <textarea id="message-input" rows="1" maxlength="2000" autocomplete="off"></textarea>
+        <button type="button" id="compose-emoji" class="emoji open-picker" title="Emoji">😀</button>
+        <button>Send</button>
+      </form>
     </div>
-
-    <div id="tray" hidden></div>
-
-    <!-- Shown while replying to a message. -->
-    <div id="reply-bar" hidden>
-      Replying to <strong id="reply-name"></strong>
-      <button type="button" id="reply-cancel" title="Cancel reply (Esc)">×</button>
-    </div>
-
-    <form id="chat-form">
-      <!-- type="button": clicking it must not submit (send) the form -->
-      <button type="button" id="attach-button" title="Upload a file">+</button>
-      <!-- The browser's own file picker. Hidden; the + button opens it. -->
-      <input type="file" id="file-input" multiple hidden>
-      <!-- Emoji suggestions while typing ":po": shown just above the text box. -->
-      <div id="autocomplete" hidden></div>
-      <!-- A textarea (not an input) so long messages can be several lines. It grows as you type. -->
-      <!-- maxlength: the browser itself refuses typing or pasting beyond this. The page sets it to
-           the server's limit when it connects; 2000 is just the starting value. -->
-      <textarea id="message-input" rows="1" maxlength="2000" autocomplete="off"></textarea>
-      <button type="button" id="compose-emoji" class="emoji open-picker" title="Emoji">😀</button>
-      <button>Send</button>
-    </form>
 
     <div id="drop-overlay" hidden>Drop to upload</div>
   </main>
@@ -1784,19 +1797,6 @@
     </div>
   </dialog>
 
-  <!-- Friends, friend requests, and everyone with an account. -->
-  <dialog id="people">
-    <button type="button" id="people-close" title="Close">×</button>
-    <h2>Friends</h2>
-    <div class="tabs">
-      <button type="button" class="tab active" data-tab="friends">Friends</button>
-      <button type="button" class="tab" data-tab="requests">Requests <span id="requests-tab-count"></span></button>
-      <button type="button" class="tab" data-tab="all">All users</button>
-    </div>
-    <div id="people-list"></div>
-    <p id="people-status" class="action-status"></p>
-  </dialog>
-
   <!-- The emoji picker for reactions: one element, reused for every message. -->
   <div id="emoji-picker" hidden>
     <input id="emoji-search" placeholder="Search emoji" autocomplete="off">
@@ -1863,8 +1863,8 @@
     const profileActionStatus = document.getElementById("profile-action-status");
     const friendsButton = document.getElementById("friends-button");
     const requestBadge = document.getElementById("request-badge");
-    const peopleDialog = document.getElementById("people");
-    const peopleClose = document.getElementById("people-close");
+    const friendsView = document.getElementById("friends-view");
+    const channelView = document.getElementById("channel-view");
     const peopleList = document.getElementById("people-list");
     const peopleStatus = document.getElementById("people-status");
     const requestsTabCount = document.getElementById("requests-tab-count");
@@ -1915,6 +1915,9 @@
     let socket = null;         // our WebSocket (replaced with a new one if it drops)
     let currentChannel = null;  // the channel (or DM) we're looking at
     let firstChannel = null;    // where to start: the first channel in the list
+    // The Friends page counts as a "channel" of its own here: it's highlighted in the sidebar
+    // and is a step for the back button like any channel. (The server never hears this name.)
+    const FRIENDS = "friends";
     let myId = null;            // our own user id; the server tells us in its "welcome"
     let reconnectDelay = 1000;  // milliseconds to wait before the next reconnect attempt
     const unread = new Set();   // channels and DMs with messages we haven't seen
@@ -2129,7 +2132,18 @@
       lastShown = null;            // so the first message starts a fresh group (and date divider)
       clearReply();                // a reply belongs to the channel we just left
       clearTyping();
-      sendToServer({ type: "join", channel: currentChannel });
+      // Show either the Friends page or the channel, never both.
+      const inFriends = currentChannel === FRIENDS;
+      friendsView.hidden = !inFriends;
+      channelView.hidden = inFriends;
+      if (inFriends) {
+        peopleStatus.textContent = "";
+        renderPeopleList();
+        // null = "not looking at any channel", so new messages everywhere get their unread dots.
+        sendToServer({ type: "join", channel: null });
+      } else {
+        sendToServer({ type: "join", channel: currentChannel });
+      }
     }
 
     // The DM channel name for us and another person: both user ids, smallest first,
@@ -2334,8 +2348,9 @@
       return !document.hidden && document.hasFocus();
     }
 
-    // How a channel is called: "#memes", or "@kari" for a DM.
+    // How a channel is called: "#memes", or "@kari" for a DM (or "Friends" for that page).
     function channelLabel(channel) {
+      if (channel === FRIENDS) return "Friends";
       const partner = dmPartner(channel);
       return partner === null ? "#" + channel : "@" + (people.get(partner)?.name ?? "someone");
     }
@@ -3362,7 +3377,7 @@
       // Banners only appear in two places, so those are simply redrawn if they're open.
       if (profileDialog.open) renderProfile(profileUserId);
       if (settingsDialog.open) settingsBanner.replaceChildren(makeBanner(myId));
-      if (peopleDialog.open) renderPeopleList();  // names, pictures, online dots
+      if (currentChannel === FRIENDS) renderPeopleList();  // names, pictures, online dots
     }
 
     function fillPeopleList(list, users) {
@@ -3403,7 +3418,7 @@
     const friendIds = new Set();
     const incomingIds = new Set();  // they asked us
     const outgoingIds = new Set();  // we asked them
-    let peopleTab = "friends";      // which tab of the People popup is showing
+    let peopleTab = "friends";      // which tab of the Friends page is showing
 
     function setAll(set, ids) {
       set.clear();
@@ -3417,7 +3432,7 @@
       requestBadge.hidden = incomingIds.size === 0;
       requestsTabCount.textContent = incomingIds.size > 0 ? `(${incomingIds.size})` : "";
       updateSidebar();  // the dot on ☰ (phones) also counts friend requests
-      if (peopleDialog.open) renderPeopleList();
+      if (currentChannel === FRIENDS) renderPeopleList();
       if (profileDialog.open) renderProfile(profileUserId);
 
       // Looking at a DM with someone who's no longer a friend? Then it's gone: go to the first channel.
@@ -3445,7 +3460,6 @@
     function openDm(userId) {
       const person = people.get(userId);
       profileDialog.close();
-      peopleDialog.close();
       switchChannel(dmChannel(userId), "@" + person.name);
     }
 
@@ -3478,7 +3492,7 @@
       return buttons;
     }
 
-    // One person in the People popup: picture, name and status (click for their profile), and buttons.
+    // One person on the Friends page: picture, name and status (click for their profile), and buttons.
     function makePeopleRow(user) {
       const row = document.createElement("div");
       row.className = "people-row clickable";
@@ -3513,22 +3527,14 @@
 
       if (peopleTab === "friends") {
         section("", everyone.filter((user) => friendIds.has(user.id)),
-          "No friends yet. Find people under All users.");
-      } else if (peopleTab === "requests") {
+          "No friends yet. Click someone's name or picture in a channel to add them.");
+      } else {
         section("Received", everyone.filter((user) => incomingIds.has(user.id)), "No requests waiting.");
         section("Sent", everyone.filter((user) => outgoingIds.has(user.id)), "You haven't sent any requests.");
-      } else {
-        section("", everyone, "Nobody else has an account yet.");  // online and offline
       }
     }
 
-    friendsButton.addEventListener("click", () => {
-      closeDrawers();
-      peopleStatus.textContent = "";
-      renderPeopleList();
-      peopleDialog.showModal();
-    });
-    peopleClose.addEventListener("click", () => peopleDialog.close());
+    friendsButton.addEventListener("click", () => switchChannel(FRIENDS, "Friends"));
 
     for (const tab of document.querySelectorAll(".tab")) {
       tab.addEventListener("click", () => {
@@ -3781,7 +3787,7 @@
     }
 
     chat.addEventListener("dragover", (event) => {
-      if (!isDraggingFiles(event)) return;
+      if (!isDraggingFiles(event) || currentChannel === FRIENDS) return;  // (nowhere to send it there)
       event.preventDefault();  // required, or the browser won't let us accept the drop
       dropOverlay.hidden = false;
     });
@@ -3820,6 +3826,7 @@
     document.addEventListener("paste", (event) => {
       const files = [...event.clipboardData.files];
       if (files.length === 0) return;  // just text: let the normal paste happen
+      if (currentChannel === FRIENDS) return;  // no channel to send it to
       event.preventDefault();
       addToTray(files);
     });
