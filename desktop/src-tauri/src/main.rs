@@ -5,6 +5,7 @@ use std::os::windows::process::CommandExt;  // raw_arg
 use std::process::Command;
 use tauri::webview::{DownloadEvent, NewWindowResponse};
 use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri_plugin_notification::NotificationExt;
 use tauri_plugin_opener::OpenerExt;
 use tauri_plugin_updater::UpdaterExt;
 
@@ -54,6 +55,30 @@ fn main() {
                 })
                 .build()?;
 
+
+            // A click on one of our notifications ("tap"): bring the chat to the front and let the
+            // page open the message. The page put its channel and message id in the notification's
+            // "extra" (notifications.js); serde_json writes them as properly quoted JavaScript, so
+            // they can only ever be values, never code. (Windows reports clicks on a notification
+            // while it's on screen, not once it's in the Action Center.)
+            let handle = app.handle().clone();
+            app.notification().on_action(move |performed| {
+                if performed.action_id() != "tap" {
+                    return;
+                }
+                let Some(window) = handle.get_webview_window("main") else {
+                    return;
+                };
+                let _ = window.unminimize();
+                let _ = window.show();
+                let _ = window.set_focus();
+                let Some(extra) = performed.notification().map(|notification| notification.extra()) else {
+                    return;
+                };
+                if let (Some(channel), Some(message_id)) = (extra.get("channel"), extra.get("messageId")) {
+                    let _ = window.eval(format!("openMessage({channel}, {message_id})"));
+                }
+            })?;
 
             // Look for an update in the background, so the window opens right away.
             let handle = app.handle().clone();
