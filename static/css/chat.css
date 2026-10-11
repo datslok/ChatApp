@@ -219,9 +219,62 @@ body {
   align-content: center;
   gap: 8px;  /* TILE_GAP in rooms.js */
 }
-#call-tiles .call-tile {
+#call-tiles > .call-tile {
   width: var(--tile-width, 0px);
 }
+
+/* Focus (rooms.js, showTiles): the area holds a stage with the focused tile, as big as fits,
+   and a strip of thumbnails below it, instead of the tiles themselves. In the banner and on
+   the Lounge page alike (Lounge's area is otherwise a grid). */
+#call-tiles.focused,
+#lounge-tiles.focused {
+  display: flex;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  overflow: hidden;
+  gap: 8px;
+}
+.tile-stage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.tile-stage .call-tile {
+  width: var(--tile-width, 0px);  /* set on the stage by fitTiles */
+}
+/* The thumbnails: a row, centred, scrolling sideways when there are many. "safe center":
+   centred, but never pushed off the left edge where it couldn't be scrolled to. */
+.tile-strip {
+  flex-shrink: 0;
+  display: flex;
+  gap: 8px;
+  justify-content: safe center;
+  overflow-x: auto;
+}
+.tile-strip .call-tile {
+  flex: none;
+  height: 90px;  /* the width follows from the 16:9 shape */
+}
+.tile-strip .avatar {
+  width: 44px;
+  height: 44px;
+  font-size: 1.1rem;
+}
+.tile-strip .tile-name {
+  left: 4px;
+  bottom: 4px;
+  padding: 1px 6px;
+  font-size: 0.75rem;
+}
+
+/* Fullscreen: the browser makes the element fill the screen (whatever height it was dragged
+   to). No resizing there. */
+#call-panel:fullscreen #call-resize {
+  display: none;
+}
+
 /* The grab bar: a strip along the banner's bottom edge, with a short line in the middle that
    lights up under the mouse. "ns-resize": the up-and-down arrows cursor. */
 #call-resize {
@@ -338,7 +391,7 @@ body {
   cursor: pointer;
 }
 
-#lounge-tiles .call-tile {
+#lounge-tiles > .call-tile {
   max-height: 70vh;
 }
 /* A shared screen's tile: black around the screen, double-click for fullscreen. */
@@ -348,7 +401,7 @@ body {
 }
 /* On the Lounge page, across the whole width ("1 / -1": from the first grid line to the last),
    above everyone's tiles. */
-#lounge-tiles .screen-tile {
+#lounge-tiles > .screen-tile {
   grid-column: 1 / -1;
 }
 /* Screens are never cut off ("contain": the whole picture, black bars if needed) or mirrored. */

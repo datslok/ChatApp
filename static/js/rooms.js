@@ -278,6 +278,7 @@ const callPanelMute = document.getElementById("call-panel-mute");
 const callPanelCamera = document.getElementById("call-panel-camera");
 const callPanelEnd = document.getElementById("call-panel-end");
 const callPanelJoin = document.getElementById("call-panel-join");
+const callPanelFullscreen = document.getElementById("call-panel-fullscreen");
 
 // Who's in our DMs' calls, from the server: {"dm:3:7": [{id: 7, muted: false}]}.
 let dmCalls = {};
@@ -290,7 +291,10 @@ function renderCallPanel() {
   const inCall = partner !== null && voiceRoomName === channel;
   // Only in a DM, and only while someone is in its call.
   callPanel.hidden = partner === null || (!inCall && members.length === 0);
-  if (callPanel.hidden) return;
+  if (callPanel.hidden) {
+    if (document.fullscreenElement === callPanel) document.exitFullscreen().catch(() => {});  // the call ended
+    return;
+  }
 
   const partnerMember = members.find((member) => member.id === partner);
   // In the call ourselves, LiveKit knows best whether they're there; otherwise, the server.
@@ -300,7 +304,7 @@ function renderCallPanel() {
   // Shared screens first (ours too, so we see what they see; only while we're in the call),
   // then both of us: faded while not in the call, "Calling…" while it rings.
   const screens = inCall ? [myId, partner].filter((id) => screenTrack(id)).map(makeScreenTile) : [];
-  callTiles.replaceChildren(
+  showTiles(callTiles, [
     ...screens,
     makeTile(myId, { muted: inCall && micMuted, video: inCall ? cameraTrack(myId) : null, away: !inCall }),
     makeTile(partner, {
@@ -309,8 +313,8 @@ function renderCallPanel() {
       away: !partnerHere,
       note: !partnerHere && outgoingCall === channel ? "Calling…" : "",
     }),
-  );
-  fitTiles(callTiles);
+  ]);
+  callPanelFullscreen.hidden = !inCall;
   callPanelMute.hidden = !inCall;
   callPanelCamera.hidden = !inCall;
   callPanelShare.hidden = !inCall || !canShareScreen;
@@ -510,6 +514,7 @@ const loungeMute = document.getElementById("lounge-mute");
 const loungeCamera = document.getElementById("lounge-camera");
 const loungeLeave = document.getElementById("lounge-leave");
 const loungeJoin = document.getElementById("lounge-join");
+const loungeFullscreen = document.getElementById("lounge-fullscreen");
 
 function renderLoungeView() {
   if (currentChannel !== LOUNGE) return;  // not looking at it: nothing to draw
@@ -520,14 +525,17 @@ function renderLoungeView() {
     empty.className = "lounge-empty";
     empty.textContent = "Nobody's in Lounge right now.";
     loungeTiles.replaceChildren(empty);
+    loungeTiles.classList.remove("focused");
+    focusedTile["lounge-tiles"] = null;
   } else {
     // Shared screens first (only visible to those in Lounge, like cameras), then everyone.
     const screens = inLounge ? members.filter(({ id }) => screenTrack(id)).map(({ id }) => makeScreenTile(id)) : [];
-    loungeTiles.replaceChildren(
+    showTiles(loungeTiles, [
       ...screens,
       ...members.map(({ id, muted }) => makeTile(id, { muted, video: inLounge ? cameraTrack(id) : null })),
-    );
+    ]);
   }
+  loungeFullscreen.hidden = !inLounge;
   loungeMute.hidden = !inLounge;
   loungeCamera.hidden = !inLounge;
   loungeShare.hidden = !inLounge || !canShareScreen;
@@ -542,18 +550,24 @@ function renderLoungeView() {
 // One person's tile, on the Lounge page and in the DM call banner: their camera filling it
 // (`video`, a track, or null), or their picture in the middle; their name in the corner.
 // `away`: not in the call (yet), so the picture is faded; `note` replaces the name ("Calling…").
-// Click: their profile (and volume).
+// Click: focus it (or back to the grid); right-click: their profile (and volume).
 function makeTile(id, { muted = false, video = null, away = false, note = "" } = {}) {
   const name = people.has(id) ? people.get(id).name : "?";
   const tile = document.createElement("div");
   tile.className = away ? "call-tile away" : "call-tile";
   tile.dataset.userId = id;  // (for the speaking ring)
+  tile.dataset.key = "user:" + id;  // (which tile is focused, see showTiles)
   tile.append(video ? videoFor(video, id === myId) : makeAvatar(id, name, "large"));
   const label = document.createElement("span");
   label.className = "tile-name";
   label.textContent = note || (muted ? "🔇 " + name : name);
   tile.append(label);
-  tile.addEventListener("click", () => openProfile(id));
+  tile.addEventListener("click", () => toggleFocus(tile));
+  // "contextmenu": a right-click. preventDefault: no browser menu on top of the profile.
+  tile.addEventListener("contextmenu", (event) => {
+    event.preventDefault();
+    openProfile(id);
+  });
   return tile;
 }
 
@@ -563,12 +577,65 @@ function makeScreenTile(id) {
   const name = people.has(id) ? people.get(id).name : "?";
   const tile = document.createElement("div");
   tile.className = "call-tile screen-tile";
+  tile.dataset.key = "screen:" + id;
   const label = document.createElement("span");
   label.className = "tile-name";
   label.textContent = id === myId ? "Your screen" : name + "'s screen";
   tile.append(screenVideo(screenTrack(id), "tile-video screen"), label);
+  tile.addEventListener("click", () => toggleFocus(tile));
   return tile;
 }
+
+// ----- Focus: one tile big ("the stage"), the others as small thumbnails in a row below it
+// ("the strip"). The tiles are made anew every time something changes (a mute, a camera), so
+// what's focused is kept as the tile's key ("user:5", "screen:5"), one for each place.
+const focusedTile = { "call-tiles": null, "lounge-tiles": null };
+
+// Put these tiles in `area` (the banner's or Lounge's): as a grid, or with the focused one on
+// the stage. If the focused one is gone (they left, stopped sharing), back to the grid.
+function showTiles(area, tiles) {
+  const focused = tiles.find((tile) => tile.dataset.key === focusedTile[area.id]);
+  area.classList.toggle("focused", Boolean(focused));
+  if (!focused) {
+    focusedTile[area.id] = null;
+    area.replaceChildren(...tiles);
+    fitTiles(area);
+    return;
+  }
+  const stage = document.createElement("div");
+  stage.className = "tile-stage";
+  stage.append(focused);
+  const others = tiles.filter((tile) => tile !== focused);
+  const strip = document.createElement("div");
+  strip.className = "tile-strip";
+  strip.append(...others);
+  area.replaceChildren(stage, ...(others.length > 0 ? [strip] : []));
+  fitTiles(stage);  // one tile, as big as the stage allows
+}
+
+// A tile was clicked: focus it, or, if it's the focused one, back to the grid. Then draw again.
+function toggleFocus(tile) {
+  const area = tile.closest("#call-tiles, #lounge-tiles");  // the nearest of these around it
+  focusedTile[area.id] = focusedTile[area.id] === tile.dataset.key ? null : tile.dataset.key;
+  if (area === callTiles) renderCallPanel();
+  else renderLoungeView();
+}
+
+// ----- Fullscreen: the whole banner (or Lounge page), tiles and buttons. Esc leaves too.
+function toggleFullscreen(element) {
+  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  else element.requestFullscreen().catch(() => {});
+}
+callPanelFullscreen.addEventListener("click", () => toggleFullscreen(callPanel));
+loungeFullscreen.addEventListener("click", () => toggleFullscreen(loungeView));
+
+// Into or out of fullscreen (by the button, Esc, ...): the buttons say which it'll do next.
+document.addEventListener("fullscreenchange", () => {
+  for (const button of document.querySelectorAll(".fullscreen-button")) {
+    button.title = document.fullscreenElement ? "Exit fullscreen" : "Fullscreen";
+    button.setAttribute("aria-label", button.title);
+  }
+});
 
 // Make the tiles in `area` as big as possible while they all fit inside it, at 16:9. Try every
 // number of columns: with that many, how wide can a tile be before the tiles get wider than the
@@ -590,9 +657,16 @@ function fitTiles(area) {
   area.style.setProperty("--tile-width", Math.floor(best) + "px");
 }
 
-// Fit again whenever the banner's tile area changes size: the window resized, the banner shown.
-// (A ResizeObserver calls its function when a watched element's size changes.)
-new ResizeObserver(() => fitTiles(callTiles)).observe(callTiles);
+// Fit again whenever a tile area changes size: the window resized, the banner shown or dragged,
+// fullscreen. With a focused tile, it's the stage that's fitted. (A ResizeObserver calls its
+// function, with a list of what changed, when a watched element's size changes.)
+const tileResizeObserver = new ResizeObserver((entries) => {
+  for (const { target: area } of entries) {
+    fitTiles(area.querySelector(":scope > .tile-stage") || area);  // ":scope >": directly inside
+  }
+});
+tileResizeObserver.observe(callTiles);
+tileResizeObserver.observe(loungeTiles);
 
 // ----- Resizing the banner: drag the bar on its bottom edge. Pointer events, like dragging a
 // picture in the editor: remember where the drag started and how tall the banner was, then on
