@@ -1458,6 +1458,29 @@ async def delete_custom_emoji(request: Request, emoji_id: int):
     return {"ok": True}
 
 
+@app.post("/custom-emoji/{emoji_id}/picture")
+async def replace_custom_emoji(request: Request, emoji_id: int):
+    """A new picture for one of your own custom emoji (admins: anyone's). It keeps its id and name,
+    so every message and reaction that uses it shows the new picture."""
+    user_id, username, password_hash, email = logged_in_user(request)
+    row = db.execute("SELECT owner_id FROM custom_emoji WHERE id = ?", (emoji_id,)).fetchone()
+    if row is None or (row[0] != user_id and not is_admin(user_id)):
+        raise HTTPException(404, "That's not one of your emoji.")
+
+    folder = PICTURE_KINDS["emoji"]["folder"]
+    file = await receive_picture(request, "emoji")
+    # Look the old file up only now: someone might have replaced it while ours was uploading.
+    old = db.execute("SELECT file FROM custom_emoji WHERE id = ?", (emoji_id,)).fetchone()
+    if old is None:  # deleted while ours was uploading
+        (folder / file).unlink(missing_ok=True)
+        raise HTTPException(404, "That emoji was deleted.")
+    with db:
+        db.execute("UPDATE custom_emoji SET file = ? WHERE id = ?", (file, emoji_id))
+    (folder / old[0]).unlink(missing_ok=True)
+    await send_to_everyone(custom_emoji_message())  # everyone's pictures switch to the new file
+    return {"ok": True}
+
+
 @app.get("/custom-emoji/files/{file}")
 async def get_custom_emoji(request: Request, file: str):
     """A custom emoji's picture, for logged-in people only."""

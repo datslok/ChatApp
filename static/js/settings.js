@@ -79,8 +79,11 @@ setUpPictureButtons("banner", changeBannerButton, removeBannerButton, bannerInpu
 
 const MAX_CUSTOM_EMOJI = 12;
 let pendingEmojiName = "";  // the name for the emoji being edited/uploaded
+// The emoji getting a new picture ({id, name, ...}), or null when adding a new one. Replacing
+// keeps its id, so the messages and reactions that use it show the new picture.
+let replacingEmoji = null;
 
-// One custom emoji with its name (and, for others' emoji, whose it is) and a Delete button.
+// One custom emoji with its name (and, for others' emoji, whose it is), Replace and Delete buttons.
 function makeEmojiItem(emoji, showOwner) {
   const item = document.createElement("div");
   item.className = "my-emoji-item";
@@ -88,6 +91,17 @@ function makeEmojiItem(emoji, showOwner) {
   const name = document.createElement("span");
   name.textContent = ":" + emoji.name + ":" + (showOwner ? ` (${people.get(emoji.owner_id)?.name ?? "someone"})` : "");
   item.appendChild(name);
+  const replace = document.createElement("button");
+  replace.type = "button";
+  replace.className = "secondary";
+  replace.textContent = "Replace";
+  replace.title = "A new picture, same name: messages and reactions with it show the new one";
+  replace.addEventListener("click", () => {
+    replacingEmoji = emoji;
+    emojiStatus.textContent = "";
+    emojiInput.click();  // the same picker and editor as for a new emoji
+  });
+  item.appendChild(replace);
   const remove = document.createElement("button");
   remove.type = "button";
   remove.className = "secondary";
@@ -112,7 +126,7 @@ function renderMyEmoji() {
   if (amAdmin() && others.length) {
     const heading = document.createElement("p");
     heading.className = "admin-heading";
-    heading.textContent = "Everyone else's emoji (you can delete them as an admin):";
+    heading.textContent = "Everyone else's emoji (as an admin you can replace or delete them):";
     myEmojiList.appendChild(heading);
     for (const emoji of others) myEmojiList.appendChild(makeEmojiItem(emoji, true));
   }
@@ -131,6 +145,7 @@ addEmojiButton.addEventListener("click", () => {
     return;
   }
   pendingEmojiName = name;
+  replacingEmoji = null;  // a new one, not a replacement
   emojiStatus.textContent = "";
   emojiInput.click();
 });
@@ -160,9 +175,12 @@ function statusLineFor(kind) {
 // like {left: 0, top: 0, width: 200, height: 200} for a GIF's crop.
 async function uploadPicture(kind, picture, params = {}) {
   const statusLine = statusLineFor(kind);
-  if (kind === "emoji") params = { name: pendingEmojiName, ...params };  // ...params: copy in the rest
+  // A new emoji needs its name; a replaced one keeps its own (it's in the address instead).
+  if (kind === "emoji" && !replacingEmoji) params = { name: pendingEmojiName, ...params };  // ...params: copy in the rest
   const query = new URLSearchParams(params).toString();  // "name=pog&left=0&..."
-  const url = (kind === "emoji" ? "/custom-emoji" : "/settings/" + kind) + (query ? "?" + query : "");
+  let address = "/settings/" + kind;
+  if (kind === "emoji") address = replacingEmoji ? `/custom-emoji/${replacingEmoji.id}/picture` : "/custom-emoji";
+  const url = address + (query ? "?" + query : "");
 
   showStatus(statusLine, "Uploading…", "success");
   const response = await fetch(url, {
@@ -177,7 +195,9 @@ async function uploadPicture(kind, picture, params = {}) {
   }
   // The server sends everyone (us too) an updated list (users, or custom emoji), which
   // redraws the pictures, including the ones in Settings.
-  if (kind === "emoji") {
+  if (kind === "emoji" && replacingEmoji) {
+    showStatus(statusLine, `New picture for :${replacingEmoji.name}:`, "success");
+  } else if (kind === "emoji") {
     showStatus(statusLine, `Added :${pendingEmojiName}:`, "success");
     emojiNameInput.value = "";
   } else {

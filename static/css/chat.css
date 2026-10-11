@@ -906,10 +906,14 @@ body {
 }
 
 #settings .my-emoji-item button {
-  margin-left: auto;  /* pushed to the right end */
   padding: 4px 10px;
   font-size: 0.85rem;
   background: #4e5058;
+}
+
+/* Replace and Delete together at the right end: the first one takes all the free space on its left. */
+#settings .my-emoji-item button:first-of-type {
+  margin-left: auto;
 }
 
 #settings button:disabled {

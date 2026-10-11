@@ -353,6 +353,12 @@ function setCustomEmoji(list) {
   customEmoji = list;
   customById.clear();
   for (const emoji of list) customById.set(emoji.id, emoji);
+  // Pictures already on the page: a replaced emoji has a new file, so give them its new address.
+  for (const img of document.querySelectorAll("img.custom-emoji[data-custom-id]")) {
+    const custom = customById.get(Number(img.dataset.customId));
+    const src = custom && "/custom-emoji/files/" + encodeURIComponent(custom.file);
+    if (src && img.getAttribute("src") !== src) img.src = src;
+  }
   if (!emojiPicker.hidden) {  // the picker is open: show the new list straight away
     buildCategoryButtons();
     renderEmojiGrid(emojiSearch.value);
@@ -366,6 +372,7 @@ function makeEmojiElement(value) {
     const custom = customById.get(Number(value.slice("custom:".length)));
     const img = document.createElement("img");
     img.className = "custom-emoji";
+    img.dataset.customId = custom ? custom.id : "";  // data-custom-id: lets setCustomEmoji find it again
     if (custom) {
       img.src = "/custom-emoji/files/" + encodeURIComponent(custom.file);
       img.alt = ":" + custom.name + ":";
