@@ -140,7 +140,11 @@ Step "6. Starting the chat and voice with Windows"
 New-Item -ItemType Directory logs -Force | Out-Null
 Write-Host "The tasks run as your account, also when nobody is logged in, so Windows needs your"
 Write-Host "password once. (With a Microsoft account: its password, not the PIN.)"
-$credential = Get-Credential -UserName "$env:USERDOMAIN\$env:USERNAME" -Message "Your Windows password, for the ChatApp tasks"
+# Asked right here in the terminal (not in a separate window), so it also works over SSH from the
+# development PC. -AsSecureString: shown as dots, and kept encrypted in memory.
+$userName = "$env:USERDOMAIN\$env:USERNAME"
+$password = Read-Host "Your Windows password for $userName" -AsSecureString
+$credential = New-Object System.Management.Automation.PSCredential($userName, $password)
 
 $settings = New-ScheduledTaskSettingsSet `
     -ExecutionTimeLimit ([TimeSpan]::Zero) `
