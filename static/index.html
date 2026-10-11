@@ -144,6 +144,75 @@
       background: white;
     }
 
+    #voice-list {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    /* The voice channel you're in: green, like Discord's. */
+    .voice-channel.in-voice {
+      color: #23a55a;
+      font-weight: 600;
+    }
+
+    /* The voice bar at the bottom of the sidebar: what you're connected to, then mute and leave. */
+    #voice-bar {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      margin: 8px 0;
+      padding: 8px;
+      border-top: 1px solid #1e1f22;
+    }
+    #voice-bar[hidden] {
+      display: none;  /* display: flex above would otherwise win over the hidden attribute */
+    }
+    #voice-info {
+      flex: 1;
+      min-width: 0;  /* lets long names be cut off with "…" instead of pushing the buttons out */
+      display: flex;
+      flex-direction: column;
+    }
+    /* "Voice connected" and friends. It's a button only for the "tap to turn on sound" case. */
+    #voice-status {
+      padding: 0;
+      border: none;
+      background: none;
+      color: #23a55a;
+      font: inherit;
+      font-size: 0.85rem;
+      font-weight: 600;
+      text-align: left;
+      cursor: default;
+    }
+    #voice-status.waiting { color: #f0b232; }
+    #voice-status.error { color: #f23f43; }
+    #voice-status.clickable { cursor: pointer; text-decoration: underline; }
+    #voice-where {
+      font-size: 0.8rem;
+      color: #949ba4;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .voice-button {
+      width: 32px;
+      height: 32px;
+      border: none;
+      border-radius: 6px;
+      background: none;
+      font-size: 1rem;
+      cursor: pointer;
+    }
+    .voice-button:hover {
+      background: #35373c;
+    }
+    /* Muted: the microphone button turns red. */
+    #voice-mute.off {
+      background: #da373c;
+    }
+
     /* A small round status dot: grey for offline, green for online. */
     .dot {
       display: inline-block;
@@ -1620,9 +1689,24 @@
         Friends <span id="request-badge" class="badge" hidden></span>
       </button>
       <div id="channel-list"></div>
+      <h2 class="section-heading">Voice</h2>
+      <div id="voice-list">
+        <button class="channel voice-channel" data-room="lounge">🔊 Lounge</button>
+      </div>
       <h2 class="section-heading">Direct messages</h2>
       <div id="dm-list"></div>
     </div>
+    <!-- While you're in voice (or joining it): where, and the mute and leave buttons. -->
+    <div id="voice-bar" hidden>
+      <div id="voice-info">
+        <button type="button" id="voice-status">Connecting…</button>
+        <span id="voice-where"></span>
+      </div>
+      <button type="button" id="voice-mute" class="voice-button" title="Mute" aria-label="Mute">🎤</button>
+      <button type="button" id="voice-leave" class="voice-button" title="Leave voice" aria-label="Leave voice">📞</button>
+    </div>
+    <!-- The other people's voices play through <audio> elements in here (never shown). -->
+    <div id="voice-audio" hidden></div>
     <button id="settings-button" class="channel">Settings <span id="muted-icon" title="Notifications are muted" hidden>🔕</span></button>
     <button id="logout" class="channel">Log out</button>
   </nav>
@@ -1871,6 +1955,9 @@
     <img id="viewer-image" alt="">
   </dialog>
 
+  <!-- LiveKit's browser library, for voice: it creates the global LivekitClient. "async": load it in
+       the background without holding up the page (it's only needed once someone joins voice). -->
+  <script src="/livekit-client-2.22.3.umd.js" async></script>
   <script>
     // Grab the HTML elements we need, by their id.
     const channelList = document.getElementById("channel-list");
@@ -2880,6 +2967,170 @@
     logoutButton.addEventListener("click", async () => {
       await fetch("/logout", { method: "POST" });
       location.href = "/login";
+    });
+
+    // ---------- Voice ----------
+    //
+    // Voice goes through our LiveKit server (voice.ps1), not through the chat's WebSocket. Joining:
+    // ask our server for a ticket (/voice-token), connect to LiveKit with it, then turn the
+    // microphone on. In LiveKit's words, everyone in a room is a "participant" who "publishes" their
+    // microphone as an audio "track", and "subscribes" to (receives) everyone else's.
+
+    const voiceBar = document.getElementById("voice-bar");
+    const voiceStatus = document.getElementById("voice-status");
+    const voiceWhere = document.getElementById("voice-where");
+    const voiceMuteButton = document.getElementById("voice-mute");
+    const voiceLeaveButton = document.getElementById("voice-leave");
+    const voiceAudio = document.getElementById("voice-audio");
+
+    let voiceRoom = null;      // the LiveKit Room we're in (or joining), or null
+    let voiceRoomName = null;  // its name: "lounge", or a DM's "dm:3:7"
+    let micMuted = false;      // stays the same between calls, like Discord
+
+    // The status line in the voice bar. kind: "" (green), "waiting" (yellow) or "error" (red).
+    function setVoiceStatus(text, kind = "") {
+      voiceStatus.textContent = text;
+      voiceStatus.className = kind;
+    }
+
+    // Mark the voice channel we're in (green in the sidebar).
+    function markVoiceChannel() {
+      for (const button of document.querySelectorAll(".voice-channel")) {
+        button.classList.toggle("in-voice", button.dataset.room === voiceRoomName);
+      }
+    }
+
+    function showMuteButton() {
+      voiceMuteButton.classList.toggle("off", micMuted);
+      voiceMuteButton.title = micMuted ? "Unmute" : "Mute";
+      voiceMuteButton.setAttribute("aria-label", voiceMuteButton.title);
+    }
+
+    async function joinVoice(roomName, label) {
+      if (voiceRoomName === roomName) return;  // already there
+      if (voiceRoom) leaveVoice();             // one voice room at a time
+      if (!window.LivekitClient) {
+        // The library is still loading (or failed to): rare, since it starts loading with the page.
+        voiceBar.hidden = false;
+        voiceWhere.textContent = label;
+        setVoiceStatus("Voice isn't loaded yet, try again", "error");
+        return;
+      }
+
+      const room = new LivekitClient.Room({
+        // The browser's own clean-up of your microphone: no echo of the others from your speakers,
+        // less background noise, and an even volume.
+        audioCaptureDefaults: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      });
+      voiceRoom = room;
+      voiceRoomName = roomName;
+      voiceBar.hidden = false;
+      voiceWhere.textContent = label;
+      setVoiceStatus("Connecting…", "waiting");
+      markVoiceChannel();
+      showMuteButton();
+
+      // Someone else's audio has reached us: track.attach() makes an <audio> element that plays it.
+      room.on(LivekitClient.RoomEvent.TrackSubscribed, (track) => {
+        if (track.kind === "audio") voiceAudio.appendChild(track.attach());
+      });
+      // ...and when they leave or stop sending, remove it again.
+      room.on(LivekitClient.RoomEvent.TrackUnsubscribed, (track) => {
+        for (const element of track.detach()) element.remove();
+      });
+      // The connection dropped: LiveKit tries to get it back by itself.
+      room.on(LivekitClient.RoomEvent.Reconnecting, () => setVoiceStatus("Reconnecting…", "waiting"));
+      room.on(LivekitClient.RoomEvent.Reconnected, () => setVoiceStatus("Voice connected"));
+      // Disconnected for good (gave up reconnecting, or joined from another tab with the same account).
+      room.on(LivekitClient.RoomEvent.Disconnected, () => {
+        if (voiceRoom === room) {
+          leaveVoice();
+        }
+      });
+      // Browsers only play sound after you've clicked something on the page. Joining is a click,
+      // but if connecting took long, the browser may have stopped counting it: then ask for one more.
+      room.on(LivekitClient.RoomEvent.AudioPlaybackStatusChanged, () => {
+        if (!room.canPlaybackAudio) {
+          setVoiceStatus("Tap here to turn on sound", "waiting");
+          voiceStatus.classList.add("clickable");
+        }
+      });
+
+      try {
+        // Our server checks that we may join, and gives us LiveKit's address and a ticket.
+        const response = await fetch("/voice-token?room=" + encodeURIComponent(roomName));
+        const answer = await response.json();
+        if (!response.ok) throw new Error(answer.detail || "Couldn't join voice.");
+        await room.connect(answer.url, answer.token);
+      } catch (error) {
+        if (voiceRoom !== room) return;  // we left (or went elsewhere) while it was connecting
+        room.disconnect();
+        voiceRoom = null;
+        voiceRoomName = null;
+        markVoiceChannel();
+        setVoiceStatus(error.message || "Couldn't connect to voice", "error");
+        return;
+      }
+      if (voiceRoom !== room) {
+        room.disconnect();  // we left while it was connecting
+        return;
+      }
+      setVoiceStatus("Voice connected");
+
+      // The microphone. The first time, the browser asks whether we may use it. Without it you can
+      // still listen (and the mute button stays red).
+      if (!micMuted) {
+        try {
+          await room.localParticipant.setMicrophoneEnabled(true);
+        } catch (error) {
+          micMuted = true;
+          showMuteButton();
+          setVoiceStatus("Connected, no microphone", "error");
+          voiceStatus.title = "The browser didn't allow the microphone. Allow it (the icon in the address bar) and unmute.";
+        }
+      }
+    }
+
+    function leaveVoice() {
+      const room = voiceRoom;
+      voiceRoom = null;
+      voiceRoomName = null;
+      if (room) room.disconnect();  // also turns the microphone off, so the "mic in use" light goes out
+      voiceAudio.replaceChildren();  // remove every <audio> element
+      voiceBar.hidden = true;
+      voiceStatus.title = "";
+      markVoiceChannel();
+    }
+
+    // Clicking a voice channel in the sidebar joins it.
+    for (const button of document.querySelectorAll(".voice-channel")) {
+      button.addEventListener("click", () => joinVoice(button.dataset.room, button.textContent.replace("🔊", "").trim()));
+    }
+
+    voiceLeaveButton.addEventListener("click", leaveVoice);
+
+    voiceMuteButton.addEventListener("click", async () => {
+      micMuted = !micMuted;
+      showMuteButton();
+      if (!voiceRoom || voiceRoom.state !== "connected") return;  // takes effect once connected
+      try {
+        await voiceRoom.localParticipant.setMicrophoneEnabled(!micMuted);
+        setVoiceStatus("Voice connected");
+        voiceStatus.title = "";
+      } catch (error) {
+        micMuted = true;
+        showMuteButton();
+        setVoiceStatus("Connected, no microphone", "error");
+        voiceStatus.title = "The browser didn't allow the microphone. Allow it (the icon in the address bar) and unmute.";
+      }
+    });
+
+    // The "Tap here to turn on sound" case: this click lets the browser play the others' audio.
+    voiceStatus.addEventListener("click", async () => {
+      if (!voiceRoom || !voiceStatus.classList.contains("clickable")) return;
+      await voiceRoom.startAudio();
+      voiceStatus.classList.remove("clickable");
+      setVoiceStatus("Voice connected");
     });
 
     // ---------- Settings ----------

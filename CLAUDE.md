@@ -69,7 +69,8 @@ the point is for me to understand how it works, not just to have it done.
   github.com/livekit/livekit/releases, the windows_amd64 zip, checked against `checksums.txt`; git-ignored),
   settings in `livekit.yaml`, started by `voice.ps1`. Its key and secret are `LIVEKIT_API_KEY` and
   `LIVEKIT_API_SECRET` in `.env`. Ports: 7880 signalling (through the tunnel), 7881 TCP and 7882 UDP
-  for the audio (forwarded on the router).
+  for the audio (forwarded on the router). The page uses LiveKit's browser library, `static/livekit-client-<version>.umd.js`
+  (the UMD build from npm, checked against npm's integrity hash; served at `/livekit-client-<version>.umd.js`).
 
 ## Hosting
 

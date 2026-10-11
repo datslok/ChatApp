@@ -1591,6 +1591,17 @@ async def emoji_list():
     return FileResponse("static/emoji.json", headers={"Cache-Control": "public, max-age=86400"})
 
 
+# LiveKit's browser library (voice), one fixed version from npm (see CLAUDE.md). A new version gets
+# a new file name, so this address never changes its contents and browsers may keep it for a week.
+LIVEKIT_CLIENT_FILE = "livekit-client-2.22.3.umd.js"
+
+
+@app.get("/" + LIVEKIT_CLIENT_FILE)
+async def livekit_client():
+    return FileResponse("static/" + LIVEKIT_CLIENT_FILE, media_type="text/javascript",
+                        headers={"Cache-Control": "public, max-age=604800"})
+
+
 @app.get("/download")
 async def download_page():
     # "Get the Windows app" (app.datslok.no redirects here). No login needed.
