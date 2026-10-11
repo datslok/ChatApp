@@ -401,6 +401,21 @@
     </div>
   </dialog>
 
+  <!-- Desktop app: "Download this file?" before downloading one from a message (messages.js).
+       method="dialog": either button closes it, and its value becomes the dialog's returnValue. -->
+  <dialog id="download-ask">
+    <form method="dialog">
+      <h2>Download this file?</h2>
+      <p id="download-ask-file"></p>
+      <p id="download-ask-sender"></p>
+      <p id="download-ask-warning">Only open files from people you trust: programs and zips can contain viruses.</p>
+      <div class="share-menu-buttons">
+        <button value="cancel">Cancel</button>
+        <button value="download" id="download-ask-yes">Download</button>
+      </div>
+    </form>
+  </dialog>
+
   <!-- The emoji picker for reactions: one element, reused for every message. -->
   <div id="emoji-picker" hidden>
     <input id="emoji-search" placeholder="Search emoji" autocomplete="off">

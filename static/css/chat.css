@@ -416,6 +416,49 @@ body {
   background: #248046;
 }
 
+/* "Download this file?" (desktop app). Its padding is on the form inside, so a click on the
+   dialog itself can only be a click on the dimmed area around it: that closes it (messages.js). */
+#download-ask {
+  max-width: min(420px, 100% - 32px);
+  padding: 0;
+  border: none;
+  border-radius: 12px;
+  background: #313338;
+  color: #dbdee1;
+}
+#download-ask::backdrop {
+  background: rgba(0, 0, 0, 0.5);
+}
+#download-ask form {
+  padding: 20px 24px;
+}
+#download-ask h2 {
+  margin: 0 0 12px;
+  font-size: 1.1rem;
+}
+#download-ask p {
+  margin: 0 0 8px;
+  overflow-wrap: anywhere;  /* a very long file name wraps instead of widening the popup */
+}
+#download-ask-file {
+  color: #00a8fc;
+  font-weight: 600;
+}
+#download-ask-sender {
+  font-size: 0.9rem;
+  color: #b5bac1;
+}
+#download-ask-warning {
+  padding: 8px 12px;
+  border-left: 3px solid #f0b232;  /* the yellow of the "connection lost" bar */
+  border-radius: 4px;
+  background: #2b2d31;
+  font-size: 0.9rem;
+}
+#download-ask-yes {
+  background: #248046;
+}
+
 /* The camera buttons while the camera is on. */
 #voice-camera.on,
 .call-round.on {

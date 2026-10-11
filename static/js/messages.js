@@ -231,7 +231,8 @@ function formatSize(bytes) {
 }
 
 // The element showing an attached file: the picture itself, or a download link.
-function makeAttachment(file) {
+// message: the message it's in (who sent it, for "Download this file?").
+function makeAttachment(file, message) {
   const url = "/uploads/" + encodeURIComponent(file.id);
   const link = document.createElement("a");
   link.href = url;
@@ -253,17 +254,45 @@ function makeAttachment(file) {
   } else {
     link.className = "attachment-file";
     link.textContent = `📄 ${file.filename} (${formatSize(file.size)})`;
-    // In the desktop app a plain download happens silently, so the page downloads it itself and
-    // shows how far along it is. (Browsers have their own downloads bubble: there, a normal link.)
+    // In the desktop app a plain download happens silently, so the page asks first, then downloads
+    // it itself and shows how far along it is. (Browsers have their own: there, a normal link.)
     if (inDesktopApp) {
       link.addEventListener("click", (event) => {
         event.preventDefault();
-        downloadWithProgress(link, url, file);
+        askToDownload(link, url, file, message);
       });
     }
   }
   return link;
 }
+
+// ----- "Download this file?" (desktop app only): one dialog, reused for every file.
+const downloadAsk = document.getElementById("download-ask");
+let pendingDownload = null;  // what Download would download: {link, url, file}
+
+function askToDownload(link, url, file, message) {
+  if (link.querySelector("progress")) return;  // already downloading
+  pendingDownload = { link, url, file };
+  document.getElementById("download-ask-file").textContent =
+    `📄 ${file.filename} (${formatSize(file.size)})`;
+  const mine = message.user_id === myId;
+  document.getElementById("download-ask-sender").textContent = mine ? "Sent by you" : `Sent by ${message.name}`;
+  document.getElementById("download-ask-warning").hidden = mine;  // no need to warn about your own
+  downloadAsk.returnValue = "";  // Esc leaves it as it was: start empty, so Esc means no
+  downloadAsk.showModal();
+}
+
+// Closed: by a button (returnValue is its value), Esc, or a click on the dimmed area around it.
+downloadAsk.addEventListener("close", () => {
+  if (downloadAsk.returnValue === "download" && pendingDownload) {
+    const { link, url, file } = pendingDownload;
+    downloadWithProgress(link, url, file);
+  }
+  pendingDownload = null;
+});
+downloadAsk.addEventListener("click", (event) => {
+  if (event.target === downloadAsk) downloadAsk.close();  // the dialog itself, not what's inside it
+});
 
 // Download a file in the page, with a progress bar in its box, then save it like a normal
 // download (the app then shows it in Explorer).
@@ -1027,7 +1056,7 @@ function showMessage(message) {
     body.appendChild(text);
   }
   if (message.file) {
-    body.appendChild(makeAttachment(message.file));
+    body.appendChild(makeAttachment(message.file, message));
   }
   // The reaction chips (an empty row is hidden by the CSS).
   const reactions = document.createElement("div");
