@@ -3675,8 +3675,15 @@
         room.on(LivekitClient.RoomEvent.Reconnecting, () => setVoiceStatus("Reconnecting…", "waiting"));
         room.on(LivekitClient.RoomEvent.Reconnected, () => setVoiceStatus("Voice connected"));
         // Someone joined or left the room: their picture in the call banner lights up or fades.
-        room.on(LivekitClient.RoomEvent.ParticipantConnected, renderCallPanel);
-        room.on(LivekitClient.RoomEvent.ParticipantDisconnected, renderCallPanel);
+        // In a DM call, that's the call starting or ending: a cue. (Not in Lounge: too many sounds.)
+        room.on(LivekitClient.RoomEvent.ParticipantConnected, () => {
+          renderCallPanel();
+          if (roomName.startsWith("dm:")) playVoiceCue("join");
+        });
+        room.on(LivekitClient.RoomEvent.ParticipantDisconnected, () => {
+          renderCallPanel();
+          if (roomName.startsWith("dm:")) playVoiceCue("leave");
+        });
         // Who's talking: LiveKit measures it on the server and tells everyone in the room.
         room.on(LivekitClient.RoomEvent.ActiveSpeakersChanged, (speakers) => {
           speakingIds = new Set(speakers.map((participant) => participant.identity));
@@ -3715,6 +3722,9 @@
       }
       setVoiceStatus(outgoingCall === roomName ? "Calling…" : "Voice connected");
       sendVoiceState();  // we're in: show us under the channel
+      // We're in: the join cue. Except while our own call still rings: then the cue comes when
+      // they arrive (ParticipantConnected above), and until then there's the calling sound.
+      if (outgoingCall !== roomName) playVoiceCue("join");
 
       // The microphone. The first time, the browser asks whether we may use it. Without it you can
       // still listen (and the mute button stays red).
@@ -3733,6 +3743,8 @@
         setOutgoingCall(null);
       }
       const room = voiceRoom;
+      // Only a real leave gets the cue: not a failed or cancelled attempt to connect.
+      if (room && room.state === "connected") playVoiceCue("leave");
       voiceRoom = null;
       voiceRoomName = null;
       micPublication = null;
@@ -3929,6 +3941,30 @@
           tone.start(now + start);
           tone.stop(now + start + 0.6);
         }
+      } catch {}
+    }
+
+    // Short cues when you (or the other person in a call) come or go: "join" rises C5 → G5,
+    // "leave" falls G5 → C5. Like the other sounds: generated, following the notification volume.
+    function playVoiceCue(kind) {
+      if (notificationVolume <= 0) return;
+      try {
+        audio ??= new AudioContext();
+        const now = audio.currentTime;
+        const peak = 0.1 * (notificationVolume / 100);
+        const pitches = kind === "join" ? [523, 784] : [784, 523];
+        pitches.forEach((pitch, index) => {
+          const start = now + index * 0.12;  // the second note 0.12 s after the first
+          const tone = audio.createOscillator();
+          const volume = audio.createGain();
+          tone.frequency.value = pitch;
+          volume.gain.setValueAtTime(0.0001, start);
+          volume.gain.exponentialRampToValueAtTime(peak, start + 0.01);
+          volume.gain.exponentialRampToValueAtTime(0.0001, start + 0.18);
+          tone.connect(volume).connect(audio.destination);
+          tone.start(start);
+          tone.stop(start + 0.2);
+        });
       } catch {}
     }
 
