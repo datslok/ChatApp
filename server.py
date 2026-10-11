@@ -1666,6 +1666,18 @@ async def voice_gate():
     return FileResponse("static/voice-gate.js", media_type="text/javascript")
 
 
+@app.get("/rnnoise-0.4.1/{name}")
+async def rnnoise(name: str):
+    # RNNoise, the AI noise filter for "Noise suppression: On" (voice.js): an AudioWorklet and the
+    # compiled filter it runs (WebAssembly), from npm's @sapphi-red/web-noise-suppressor (see CLAUDE.md).
+    # Only these two files; the version is in the address, so browsers may keep them for a week.
+    media_types = {"rnnoise-worklet.js": "text/javascript", "rnnoise_simd.wasm": "application/wasm"}
+    if name not in media_types:
+        raise HTTPException(404)
+    return FileResponse("static/rnnoise-0.4.1/" + name, media_type=media_types[name],
+                        headers={"Cache-Control": "public, max-age=604800"})
+
+
 @app.get("/" + LIVEKIT_CLIENT_FILE)
 async def livekit_client():
     return FileResponse("static/" + LIVEKIT_CLIENT_FILE, media_type="text/javascript",

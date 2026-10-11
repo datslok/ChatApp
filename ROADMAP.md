@@ -34,6 +34,7 @@
     - [x] Voice tickets from our server (/voice-token: a JWT signed with the standard library)
     - [x] Lounge voice channel: join, mute, leave
     - [x] Voice settings: input and output device, mic and output volume, sensitivity (noise gate, with dB numbers)
+    - [x] Noise suppression like Discord's Krisp: Off / Light (the browser's own) / On (RNNoise, an AI filter; the default)
     - [x] Volume per person (in the profile popup, 0-200%)
     - [x] Who is in voice (in the sidebar, with 🔇 for muted) and a speaking ring
     - [x] Calls in DMs: ringing on every device, accept/decline, call notes in the DM

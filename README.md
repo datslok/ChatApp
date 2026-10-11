@@ -9,7 +9,7 @@ plain HTML, CSS and JavaScript. Voice, video and screen sharing go through a sel
 
 **Features:** text channels and direct messages, friends, accounts with profiles (pictures, banners,
 status), replies, reactions and custom emoji, @mentions, unread dots, notifications, image and file
-uploads, a Lounge voice channel and calls in DMs (with a noise gate and volume per person), cameras,
+uploads, a Lounge voice channel and calls in DMs (with AI noise suppression, a noise gate and volume per person), cameras,
 screen sharing (up to 1440p60), and a desktop app that updates itself.
 
 ## Scripts at a glance

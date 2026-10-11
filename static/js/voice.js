@@ -13,7 +13,8 @@
 //
 // The sound goes through the browser's Web Audio engine, as a chain of "nodes" (like guitar
 // pedals), all in one AudioContext:
-//   microphone → mic volume (a GainNode) → noise gate (static/voice-gate.js) → a track LiveKit sends
+//   microphone → noise suppression (RNNoise, when it's "On") → mic volume (a GainNode)
+//     → noise gate (static/voice-gate.js) → a track LiveKit sends
 //   each other person → their volume (a GainNode LiveKit makes for them) → speakers or headphones
 
 const voiceBar = document.getElementById("voice-bar");
@@ -47,8 +48,10 @@ let micTesting = false;     // "Test microphone" in Settings is on
 
 // ----- Settings, remembered in this browser: they belong to this device's microphone and speakers.
 // Device ids "" mean the computer's default. Volumes in %, gate in decibels (-100 = always on).
+// Noise suppression: "on" (RNNoise), "light" (the browser's own) or "off".
 const voiceSettings = {
   inputDevice: "", outputDevice: "", cameraDevice: "", micVolume: 100, outputVolume: 100, gate: -60,
+  noiseSuppression: "on",
   shareHeight: 1080, shareFps: 30,  // screen sharing quality: the last choice in the 🖥️ menu
 };
 try {
@@ -74,7 +77,9 @@ function getAudio() {
 }
 
 async function setUpAudio() {
-  const context = new AudioContext();
+  // 48 000 samples a second, because RNNoise only works at that rate. (The browser converts a
+  // microphone that uses another rate.)
+  const context = new AudioContext({ sampleRate: 48000 });
   await context.audioWorklet.addModule("/voice-gate.js");  // load our gate into the audio engine
   const micGain = context.createGain();
   const gate = new AudioWorkletNode(context, "voice-gate");
@@ -84,9 +89,33 @@ async function setUpAudio() {
   micGain.gain.value = voiceSettings.micVolume / 100;
   gate.port.postMessage({ threshold: voiceSettings.gate });
   gate.port.onmessage = (event) => showMicLevel(event.data);  // the gate's reports, ~30 a second
-  const nodes = { context, micGain, gate, destination };
+  const denoiser = await loadDenoiser(context);
+  if (denoiser) denoiser.connect(micGain);
+  const nodes = { context, micGain, gate, destination, denoiser };
   await applyOutputDevice(context);
   return nodes;
+}
+
+// RNNoise: a small neural network, trained to tell speech from everything else (keyboards, fans,
+// dogs, ...). Every 10 ms it looks at the last 480 samples and turns down what isn't voice. It's
+// written in C and compiled to WebAssembly (the .wasm file: code the browser runs almost as fast as
+// a normal program), and runs in an AudioWorklet like our gate. Both come from npm's
+// @sapphi-red/web-noise-suppressor; its worklet expects the .wasm file's bytes, so we fetch them
+// here and hand them over. Returns the node, or null if it couldn't load ("On" then works like "Light").
+async function loadDenoiser(context) {
+  try {
+    await context.audioWorklet.addModule("/rnnoise-0.4.1/rnnoise-worklet.js");
+    const response = await fetch("/rnnoise-0.4.1/rnnoise_simd.wasm");
+    if (!response.ok) throw new Error("RNNoise wasn't found");
+    const wasmBinary = await response.arrayBuffer();
+    // maxChannels 1: a microphone is one channel (mono).
+    return new AudioWorkletNode(context, "@sapphi-red/web-noise-suppressor/rnnoise", {
+      processorOptions: { wasmBinary, maxChannels: 1 },
+    });
+  } catch (error) {
+    console.warn("Noise suppression (RNNoise) didn't load:", error);
+    return null;
+  }
 }
 
 // Send the others' voices to the chosen speakers or headphones (where the browser can).
@@ -102,23 +131,26 @@ async function applyOutputDevice(context) {
 // ----- The microphone
 
 async function openMic() {
-  const { context, micGain } = await getAudio();
+  const { context, micGain, denoiser } = await getAudio();
   await context.resume();  // an AudioContext starts paused until the page has been clicked
+  // "On" uses RNNoise (if it loaded), and then not the browser's own suppression as well: two
+  // filters in a row can make voices sound watery. "Light" is the browser's own only.
+  const useRnnoise = voiceSettings.noiseSuppression === "on" && denoiser !== null;
   const stream = await navigator.mediaDevices.getUserMedia({
     audio: {
       // "ideal": this one if it's there, otherwise the default (if it was unplugged).
       deviceId: voiceSettings.inputDevice ? { ideal: voiceSettings.inputDevice } : undefined,
-      // The browser's own clean-up: no echo of the others from your speakers, less background
-      // noise, and an even volume.
+      // The browser's own clean-up: no echo of the others from your speakers, an even volume,
+      // and (unless it's off or RNNoise does it) less steady background noise like fans and hum.
       echoCancellation: true,
-      noiseSuppression: true,
+      noiseSuppression: voiceSettings.noiseSuppression !== "off" && !useRnnoise,
       autoGainControl: true,
     },
   });
   closeMic();  // another microphone was open (switching devices): close that one first
   micStream = stream;
   micSource = context.createMediaStreamSource(stream);
-  micSource.connect(micGain);
+  micSource.connect(useRnnoise ? denoiser : micGain);
   listDevices();  // now that we may use the microphone, the browser tells us the devices' names
 }
 

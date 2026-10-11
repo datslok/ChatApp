@@ -47,6 +47,16 @@ voiceInputSelect.addEventListener("change", async () => {
   if (micStream) await openMic().catch(() => {});
 });
 
+// Noise suppression: Off, Light or On (voice.js, openMic). Changing it opens the microphone again
+// with the new choice, the same way as switching microphones, so a call carries on.
+const voiceNoiseSelect = document.getElementById("voice-noise");
+voiceNoiseSelect.value = voiceSettings.noiseSuppression;
+voiceNoiseSelect.addEventListener("change", async () => {
+  voiceSettings.noiseSuppression = voiceNoiseSelect.value;
+  saveVoiceSettings();
+  if (micStream) await openMic().catch(() => {});
+});
+
 voiceOutputSelect.addEventListener("change", async () => {
   voiceSettings.outputDevice = voiceOutputSelect.value;
   saveVoiceSettings();
