@@ -2093,12 +2093,12 @@ body {
   gap: 10px;
 }
 
-/* Forms and groups stretch what's in them (text boxes, buttons, sliders) to their own width.
-   In the big popup that's too wide to look right, so they stop at about the width they had
-   before. Cards (What's new, Inbox) aren't in one, so they still use the whole page. */
-#settings form,
-#settings .settings-group {
+/* Each page is a column in the middle of the popup: forms stretch what's in them (text boxes,
+   buttons, sliders) to their own width, which across the whole big popup would be too wide.
+   margin-inline: auto shares the space left over equally between left and right. */
+.settings-page {
   max-width: 640px;
+  margin-inline: auto;
 }
 
 #settings label {
