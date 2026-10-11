@@ -2093,6 +2093,14 @@ body {
   gap: 10px;
 }
 
+/* Forms and groups stretch what's in them (text boxes, buttons, sliders) to their own width.
+   In the big popup that's too wide to look right, so they stop at about the width they had
+   before. Cards (What's new, Inbox) aren't in one, so they still use the whole page. */
+#settings form,
+#settings .settings-group {
+  max-width: 640px;
+}
+
 #settings label {
   display: flex;
   flex-direction: column;
