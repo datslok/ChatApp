@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<!-- The small window the app shows while it updates itself. It's bundled inside the app (not on
+     the website), so it works even while the app is between two versions. main.rs opens it and
+     moves the progress bar by calling showProgress() and showInstalling() below. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Updating ChatApp</title>
+  <style>
+    /* The same colours as the chat. */
+    body {
+      margin: 0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      background: #313338;
+      color: #dbdee1;
+      font-family: "Segoe UI", sans-serif;
+      user-select: none;  /* it's not a page to select text in */
+    }
+    img { width: 88px; height: 88px; }
+    h1 { margin: 4px 0 0; font-size: 18px; }
+    #version, #status { color: #949ba4; font-size: 13px; text-align: center; }
+    /* The progress bar: a grey track with a blue bar inside it, whose width we change. */
+    #track {
+      width: 240px;
+      height: 8px;
+      border-radius: 4px;
+      background: #1e1f22;
+      overflow: hidden;
+    }
+    #bar {
+      width: 0%;
+      height: 100%;
+      background: #5865f2;
+      transition: width 0.2s;  /* slide smoothly from one percentage to the next */
+    }
+  </style>
+</head>
+<body>
+  <img src="cat.png" alt="">
+  <h1>Updating ChatApp</h1>
+  <div id="version"></div>
+  <div id="track"><div id="bar"></div></div>
+  <div id="status">Downloading…</div>
+
+  <script>
+    // main.rs puts the new version number in window.NEW_VERSION before this page loads.
+    if (window.NEW_VERSION) {
+      document.getElementById("version").textContent = "Version " + window.NEW_VERSION;
+    }
+
+    // Called from main.rs while the update downloads, with a whole number from 0 to 100.
+    function showProgress(percent) {
+      document.getElementById("bar").style.width = percent + "%";
+      document.getElementById("status").textContent = "Downloading… " + percent + "%";
+    }
+
+    // Called from main.rs when the download is done. The installer then runs without a window,
+    // and closes this one, so this is the last thing people see before the new version opens.
+    function showInstalling() {
+      document.getElementById("bar").style.width = "100%";
+      document.getElementById("status").textContent = "Installing… ChatApp opens again in a few seconds.";
+    }
+  </script>
+</body>
+</html>

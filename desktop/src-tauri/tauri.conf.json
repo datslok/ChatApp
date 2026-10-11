@@ -1,16 +1,16 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "ChatApp",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "identifier": "no.datslok.chat",
   "build": {
-    "devUrl": "https://chat.datslok.no",
-    "frontendDist": "https://chat.datslok.no"
+    "frontendDist": "../ui"
   },
   "app": {
     "windows": [
       {
         "title": "ChatApp",
+        "url": "https://chat.datslok.no",
         "width": 1200,
         "height": 800,
         "dragDropEnabled": false
@@ -26,14 +26,21 @@
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.ico"
-    ]
+    ],
+    "windows": {
+      "nsis": {
+        "installerIcon": "icons/icon.ico",
+        "headerImage": "installer/header.bmp",
+        "sidebarImage": "installer/sidebar.bmp"
+      }
+    }
   },
   "plugins": {
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEY0RjYzMUZDRThERDI4MEIKUldRTEtOM28vREgyOVAzd2VWS0hkcFcySUhKa0lYQkpuWG03bjg3c0czR1dBbEx0a1l4Um51YkEK",
       "endpoints": ["https://chat.datslok.no/releases/latest.json"],
       "windows": {
-        "installMode": "passive"
+        "installMode": "quiet"
       }
     }
   }

@@ -1,6 +1,7 @@
 // In the finished app, don't open a console window next to it (development mode keeps it for errors).
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
 use tauri_plugin_updater::UpdaterExt;
 
 fn main() {
@@ -25,12 +26,59 @@ fn main() {
         .expect("error while running ChatApp");
 }
 
-// If releases/latest.json names a newer version: download it, check its signature, install it
-// and start the new version.
+// If releases/latest.json names a newer version: swap the chat for our own small update window
+// (ui/update.html), download the new version, check its signature, install it and start it.
 async fn update(app: tauri::AppHandle) -> tauri_plugin_updater::Result<()> {
-    if let Some(update) = app.updater()?.check().await? {
-        update.download_and_install(|_, _| {}, || {}).await?;
-        app.restart();
+    let Some(update) = app.updater()?.check().await? else {
+        return Ok(());  // already the newest version
+    };
+
+    // The update window. It runs before the page loads, so the page can show the version number.
+    // (serde_json turns the version into a properly quoted JavaScript string.)
+    let version = serde_json::to_string(&update.version)?;
+    let window = WebviewWindowBuilder::new(&app, "update", WebviewUrl::App("update.html".into()))
+        .title("Updating ChatApp")
+        .inner_size(360.0, 260.0)
+        .resizable(false)
+        .maximizable(false)
+        .closable(false)  // closing it wouldn't stop the update, only hide what's happening
+        .center()
+        .initialization_script(format!("window.NEW_VERSION = {version};"))
+        .build()?;
+    let main = app.get_webview_window("main");
+    if let Some(main) = &main {
+        main.hide()?;
     }
-    Ok(())
+
+    // Count the downloaded bytes, and move the progress bar each time the whole percentage changes
+    // (a few hundred chunks, but only 100 updates for the page).
+    let mut downloaded = 0;
+    let mut shown = 0;
+    let result = update
+        .download_and_install(
+            |chunk, total| {
+                downloaded += chunk as u64;
+                if let Some(total) = total {
+                    let percent = downloaded * 100 / total;
+                    if percent != shown {
+                        shown = percent;
+                        let _ = window.eval(format!("showProgress({percent})"));
+                    }
+                }
+            },
+            || {
+                let _ = window.eval("showInstalling()");
+            },
+        )
+        .await;
+
+    // On Windows we only get here if something went wrong: a successful install starts the
+    // installer and ends this program, and the installer starts the new version (installMode
+    // "quiet" in tauri.conf.json: no installer window). So: back to the chat, and try next start.
+    window.close()?;
+    if let Some(main) = &main {
+        main.show()?;
+    }
+    result?;
+    app.restart();
 }
