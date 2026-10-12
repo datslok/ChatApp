@@ -19,8 +19,10 @@ $ServerBackups = "E:\ChatApp-backups"  # where the server PC keeps them (its sec
 
 if ($Install) {
     # Runs as you, only while you're logged in (it needs your SSH key), so no password is needed.
-    $arguments = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$PSCommandPath`""
-    $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument $arguments
+    # Through "conhost.exe --headless": a console without a window. Started directly, Windows 11
+    # opens PowerShell in Windows Terminal, which shows its window even with -WindowStyle Hidden.
+    $arguments = "--headless powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`""
+    $action = New-ScheduledTaskAction -Execute "conhost.exe" -Argument $arguments
     $trigger = New-ScheduledTaskTrigger -Daily -At "05:00"  # an hour after the server's backup
     $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
     Register-ScheduledTask -TaskName "ChatApp backup fetch" -Action $action -Trigger $trigger -Settings $settings -Force | Out-Null
