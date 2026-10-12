@@ -55,7 +55,7 @@
     {
       "topic": "📱 On your phone",
       "items": [
-        "Install the chat as an app: open it in Chrome, ⋮ menu, Install app (iPhone: Safari, Share, Add to Home Screen). Its own icon and window, no address bar"
+        "Install the chat as an app: open it on your phone and tap Install in the banner (or Chrome's ⋮ menu, Install app; iPhone: Safari, Share, Add to Home Screen). Its own icon and window, no address bar"
       ]
     },
     {
@@ -72,7 +72,7 @@
       "date": "2026-10-12",
       "items": [
         "Settings → Appearance: themes, your own colours, fonts and text size, the same on all your devices",
-        "The chat can be installed on your phone as an app: Chrome, ⋮ menu, Install app",
+        "The chat can be installed on your phone as an app: open it on your phone and tap Install in the banner",
         "Notifications on your phone while the chat is closed: turn them on in Settings → Notifications (on the phone)",
         "Test microphone and Test camera say right below the button what went wrong, and where to allow them (also on Android phones)",
         "A phone's back camera is no longer shown mirrored to you",

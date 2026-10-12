@@ -86,6 +86,17 @@
       <a class="download-button" href="/download" target="_blank">Download</a>
       <button type="button" id="app-banner-close" title="Don't show this again" aria-label="Close">×</button>
     </div>
+    <!-- On phones: install the chat as an app, then turn on its notifications, one step at a time
+         (notifications.js, "The phone banner"), until they close it. -->
+    <div id="phone-banner" class="app-card" hidden>
+      <img class="phone-banner-icon" src="/icons/icon-192.png" alt="">
+      <div class="app-card-text">
+        <strong id="phone-banner-title"></strong>
+        <span id="phone-banner-text"></span>
+      </div>
+      <button type="button" id="phone-banner-action" class="download-button"></button>
+      <button type="button" id="phone-banner-close" title="Don't show this again" aria-label="Close">×</button>
+    </div>
 
     <!-- The Lounge page: everyone in Lounge as a tile (their camera, or their picture), and the
          voice buttons. Shown instead of a channel when Lounge is picked in the sidebar. -->

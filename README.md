@@ -454,8 +454,10 @@ the same page as in the browser, so it's always up to date. What makes it instal
 `static/manifest.json` (its name, icons and colours), the icons in `static/icons/` (made by
 `python tools\make_pwa_icons.py` from the app icon) and a service worker, `static/sw.js`.
 
-To install it: open the chat in **Chrome on Android**, ⋮ menu, **Install app** (or "Add to Home
-screen"). On an **iPhone**: Safari, the Share button, **Add to Home Screen**.
+To install it: open the chat on the phone. A banner above the messages offers **Install** (Chrome on
+Android opens its install dialog), and in the installed app then **Turn on** for notifications. By hand:
+Chrome's ⋮ menu, **Install app** (or "Add to Home screen"); on an **iPhone**: Safari, the Share
+button, **Add to Home Screen**.
 
 **Notifications while the chat is closed** (push notifications): Settings → Notifications → "Notifications
 on this device when the chat is closed", on each phone (or browser) that should get them. They come for

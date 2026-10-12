@@ -1270,7 +1270,7 @@ body.mini-hidden :fullscreen .tile-strip {
 .app-card[hidden] {
   display: none;
 }
-#app-banner {
+#app-banner, #phone-banner {
   margin: 8px 16px 0;
   border: 1px solid var(--accent);  /* a blue outline, so it stands out from the messages */
 }
@@ -1320,8 +1320,21 @@ body.mini-hidden :fullscreen .tile-strip {
 .download-button:hover {
   background: var(--button-green-hover);
 }
+/* The same look on a real button (the phone banner's Install and Turn on). */
+button.download-button {
+  border: none;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+/* The phone banner: the app's own icon instead of the download arrow. */
+.phone-banner-icon {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+}
 
-#app-banner-close {
+#app-banner-close, #phone-banner-close {
   flex-shrink: 0;
   width: 28px;
   height: 28px;
@@ -1334,7 +1347,7 @@ body.mini-hidden :fullscreen .tile-strip {
   line-height: 1;
   cursor: pointer;
 }
-#app-banner-close:hover {
+#app-banner-close:hover, #phone-banner-close:hover {
   background: var(--bg-panel);
   color: var(--text-strong);
 }

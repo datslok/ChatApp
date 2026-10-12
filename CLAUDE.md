@@ -66,6 +66,8 @@ the point is for me to understand how it works, not just to have it done.
   `{"type": "looking"}` on focus/visibility changes) or to a muted device (`/push/mute`). sw.js shows them
   (one per channel, `tag`) and on a tap focuses an open chat (postMessage "open") or opens
   `/?channel=..&message=..` (core.js reads it). A device with push on doesn't notify by itself (`pushOn`).
+  On phones, a banner (`#phone-banner`, notifications.js) offers Install (Chrome's `beforeinstallprompt`, kept and
+  used by our button; iPhones get the steps in words), then Turn on (push), until closed.
 - `static/login.html`: the login / create account page.
 - `static/reset.html`: "forgot password" (asks for a reset link) and, with `?token=`, choosing a new password.
 - Emails (reset links) go out through Resend's SMTP server, configured in `.env`. Without `SMTP_HOST`

@@ -263,6 +263,83 @@ pushBox.addEventListener("change", async () => {
   showPushSetting();
 });
 
+// ----- The phone banner: on a phone, offer the two steps that make the chat a real phone app,
+// one at a time, until they're done or the banner is closed:
+//   "install": install it (a PWA). Chrome on Android fires "beforeinstallprompt" when a site can
+//              be installed; we keep that event, and our button opens Chrome's install dialog
+//              with it. Safari on iPhones has no such thing: there, the steps in words.
+//   "notify":  turn on push notifications (the same as the switch in Settings).
+
+const phoneBanner = document.getElementById("phone-banner");
+const phoneBannerTitle = document.getElementById("phone-banner-title");
+const phoneBannerText = document.getElementById("phone-banner-text");
+const phoneBannerAction = document.getElementById("phone-banner-action");
+const onPhone = /Android|iPhone|iPad/.test(navigator.userAgent);
+const onIPhone = /iPhone|iPad/.test(navigator.userAgent);
+// Running as the installed app? It has no address bar ("standalone"); iPhones say it their own way.
+const runningAsApp = matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+let installPrompt = null;  // Chrome's install dialog, kept for our button
+
+window.addEventListener("beforeinstallprompt", (event) => {
+  event.preventDefault();  // not Chrome's own little bar: our banner asks instead
+  installPrompt = event;
+  showPhoneBanner();
+});
+window.addEventListener("appinstalled", () => {
+  installPrompt = null;
+  showPhoneBanner();
+});
+
+// Which step to offer now, if any: shown again whenever something changes (the install prompt
+// arrives, "welcome" brings the server's push key, a step is done).
+async function showPhoneBanner() {
+  let step = null;
+  if (onPhone && loadSetting("phoneBanner")) {
+    if (!runningAsApp && (installPrompt || onIPhone)) {
+      step = "install";
+    } else if (canPush && vapidPublicKey && !(await currentSubscription())) {
+      step = "notify";
+    }
+  }
+  phoneBanner.hidden = step === null;
+  phoneBanner.dataset.step = step ?? "";
+  if (step === "install") {
+    phoneBannerTitle.textContent = "Get ChatApp on your phone";
+    phoneBannerText.textContent = onIPhone
+      ? "In Safari: tap Share, then Add to Home Screen. Notifications work in the app."
+      : "Its own icon and window, and notifications when it's closed.";
+    phoneBannerAction.textContent = "Install";
+    phoneBannerAction.hidden = !installPrompt;  // (on an iPhone, the words above are the way)
+  } else if (step === "notify") {
+    phoneBannerTitle.textContent = "Get notifications";
+    phoneBannerText.textContent = "For DMs, mentions and calls, also when the chat is closed.";
+    phoneBannerAction.textContent = "Turn on";
+    phoneBannerAction.hidden = false;
+  }
+}
+
+phoneBannerAction.addEventListener("click", async () => {
+  if (phoneBanner.dataset.step === "install" && installPrompt) {
+    installPrompt.prompt();  // Chrome's own "Install app?" dialog
+    await installPrompt.userChoice;  // (Install or Cancel: either way, it can only be used once)
+    installPrompt = null;
+  } else if (phoneBanner.dataset.step === "notify") {
+    try {
+      await turnOnPush();  // (the same as the switch in Settings → Notifications)
+      pushOn = true;
+    } catch (error) {
+      phoneBannerText.textContent = "Couldn't turn them on: " + error.message;
+      return;
+    }
+  }
+  showPhoneBanner();
+});
+
+document.getElementById("phone-banner-close").addEventListener("click", () => {
+  phoneBanner.hidden = true;
+  saveSetting("phoneBanner", false);  // (Settings → Notifications still has the switch)
+});
+
 // The "get the app" banner above the chat: only in a browser on Windows (the app is Windows-only;
 // every browser's userAgent, the description it gives of itself, names the system it runs on),
 // and only until they close it. Closing it is remembered in this browser, like the settings above.

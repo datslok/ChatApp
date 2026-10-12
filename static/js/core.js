@@ -257,6 +257,7 @@ function handleServerMessage(event) {
     input.maxLength = maxTextLength;  // the textarea's maxlength, from the server's limit
     applyAppearance(data.appearance || {});  // the account's (appearance.js); null: the defaults
     vapidPublicKey = data.vapid_public_key;  // for push notifications (notifications.js)
+    showPhoneBanner();  // now that we know whether the server has push (notifications.js)
     if (pageVersion === null) {
       pageVersion = data.page_version;  // the first welcome: the version we were loaded with
     } else if (data.page_version !== pageVersion) {
