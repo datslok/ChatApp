@@ -1,13 +1,52 @@
 /* The chat page's styles (static/index.html). */
 
+/* The colours, as variables ("custom properties"): defined once here, used everywhere below as
+   var(--name). A theme only has to give these new values. Named by what they're for, not what
+   they look like, so they still make sense in a light theme. (Black for shadows, backdrops and
+   behind videos, and white text on coloured buttons, stay the same in every theme.) */
+:root {
+  /* Backgrounds, from the darkest to the lightest. */
+  --bg-deepest: #111214;     /* behind calls and the Lounge */
+  --bg-darkest: #1e1f22;     /* text fields, the ping graph, cards */
+  --bg-panel-alt: #232428;   /* popups, the panel at the bottom left, Settings' tab list */
+  --bg-panel: #2b2d31;       /* the sidebars, tiles, chips, Settings */
+  --bg-main: #313338;        /* the messages */
+  --bg-hover-dim: #2e3035;   /* a message (and Settings tab) under the mouse */
+  --bg-hover: #35373c;       /* a channel, person or button under the mouse */
+  --bg-active: #404249;      /* the selected channel or tab */
+  --bg-input: #383a40;       /* the message box */
+  --bg-neutral: #4e5058;     /* grey buttons (Cancel, Remove), quote bars */
+  --scrollbar: #1a1b1e;
+  --border: #1e1f22;         /* outlines of popups and menus */
+  --line: #3f4147;           /* dividers between things */
+  /* Text, from the brightest to the faintest. */
+  --text-strong: #ffffff;    /* headings, names, the selected thing */
+  --text: #dbdee1;           /* messages and most text */
+  --text-soft: #b5bac1;      /* labels, secondary text */
+  --text-muted: #949ba4;     /* times, hints, headings of sections */
+  --text-faint: #80848e;     /* the offline dot */
+  --text-disabled: #6d6f78;
+  /* Colours with a meaning. */
+  --accent: #5865f2;         /* buttons, mentions, your own reactions */
+  --mention-text: #c9cdfb;   /* the text of an @mention */
+  --link: #00a8fc;
+  --green: #23a55a;          /* online, talking, connected */
+  --button-green: #248046;   /* join, accept, download */
+  --button-green-hover: #1a6334;
+  --red: #f23f43;            /* errors, unread counts */
+  --button-red: #da373c;     /* hang up, muted */
+  --button-red-hover: #a12828;
+  --yellow: #f0b232;         /* mentions of you, warnings */
+}
+
 body {
   margin: 0;
   height: 100vh;   /* fallback for older browsers... */
   height: 100dvh;  /* ...the part of the screen that's really visible (phones: minus the address bar) */
   display: flex;  /* sidebar, chat and online list side by side */
   font-family: system-ui, sans-serif;
-  background: #313338;
-  color: #dbdee1;
+  background: var(--bg-main);
+  color: var(--text);
 }
 
 /* Scrollbars, like Discord's. "::-webkit-scrollbar" and friends are pseudo-elements: the parts
@@ -23,11 +62,11 @@ body {
   background: transparent;
 }
 *::-webkit-scrollbar-thumb {
-  background: #1a1b1e;
+  background: var(--scrollbar);
   border-radius: 4px;  /* half the width: fully rounded ends */
 }
 *::-webkit-scrollbar-thumb:hover {
-  background: #111214;  /* a little darker under the mouse: you can grab it */
+  background: var(--bg-deepest);  /* a little darker under the mouse: you can grab it */
 }
 *::-webkit-scrollbar-corner {
   background: transparent;  /* the square where a sideways and an up-down scrollbar meet */
@@ -40,17 +79,17 @@ body {
   width: 16px;
 }
 #messages::-webkit-scrollbar-track {
-  background: #2b2d31;
+  background: var(--bg-panel);
   border-radius: 8px;
 }
 #messages::-webkit-scrollbar-thumb {
-  background: #1a1b1e;
+  background: var(--scrollbar);
   background-clip: padding-box;
   border: 4px solid transparent;
   border-radius: 8px;
 }
 #messages::-webkit-scrollbar-thumb:hover {
-  background: #111214;
+  background: var(--bg-deepest);
   background-clip: padding-box;
 }
 
@@ -60,18 +99,18 @@ body {
 @supports not selector(::-webkit-scrollbar) {
   * {
     scrollbar-width: thin;
-    scrollbar-color: #1a1b1e transparent;
+    scrollbar-color: var(--scrollbar) transparent;
   }
   #messages {
     scrollbar-width: auto;
-    scrollbar-color: #1a1b1e #2b2d31;
+    scrollbar-color: var(--scrollbar) var(--bg-panel);
   }
 }
 
 #sidebar {
   width: 200px;
   padding: 16px 8px;
-  background: #2b2d31;
+  background: var(--bg-panel);
   display: flex;
   flex-direction: column;
 }
@@ -93,7 +132,7 @@ body {
   padding: 0 12px;
   font-size: 0.75rem;
   text-transform: uppercase;
-  color: #949ba4;
+  color: var(--text-muted);
 }
 
 .channel {
@@ -101,20 +140,20 @@ body {
   border: none;
   border-radius: 6px;
   background: none;
-  color: #949ba4;
+  color: var(--text-muted);
   font-size: 1rem;
   text-align: left;
   cursor: pointer;
 }
 
 .channel:hover {
-  background: #35373c;
-  color: #dbdee1;
+  background: var(--bg-hover);
+  color: var(--text);
 }
 
 .channel.active {
-  background: #404249;
-  color: white;
+  background: var(--bg-active);
+  color: var(--text-strong);
 }
 
 .channel {
@@ -122,7 +161,7 @@ body {
 }
 
 .channel.unread {
-  color: white;
+  color: var(--text-strong);
   font-weight: 600;  /* bold */
 }
 
@@ -136,7 +175,7 @@ body {
   height: 8px;
   margin-top: -4px;  /* half its height, so it sits exactly in the middle */
   border-radius: 50%;
-  background: white;
+  background: var(--text-strong);
 }
 
 #voice-list {
@@ -147,13 +186,13 @@ body {
 
 /* The voice channel you're in: green, like Discord's. */
 .voice-channel.in-voice {
-  color: #23a55a;
+  color: var(--green);
   font-weight: 600;
 }
 
 /* A call note in a DM: quieter than a normal message. */
 .call-note .message-text {
-  color: #949ba4;
+  color: var(--text-muted);
   font-style: italic;
 }
 
@@ -163,7 +202,7 @@ body {
   align-items: center;
   justify-content: space-between;
   padding: 8px 16px;
-  border-bottom: 1px solid #1e1f22;
+  border-bottom: 1px solid var(--border);
   font-weight: 600;
 }
 #dm-header[hidden] {
@@ -173,16 +212,16 @@ body {
   padding: 6px 12px;
   border: none;
   border-radius: 6px;
-  background: #248046;
+  background: var(--button-green);
   color: white;
   font-size: 0.9rem;
   cursor: pointer;
 }
 #call-button:hover {
-  background: #1a6334;
+  background: var(--button-green-hover);
 }
 #call-button:disabled {
-  background: #4e5058;
+  background: var(--bg-neutral);
   cursor: default;
 }
 
@@ -202,7 +241,7 @@ body {
   align-items: center;
   gap: 12px;
   padding: 16px;
-  background: #111214;
+  background: var(--bg-deepest);
 }
 #call-panel[hidden] {
   display: none;
@@ -290,7 +329,7 @@ body {
   padding: 6px;
   gap: 6px;
   border-radius: 12px;
-  background: rgba(17, 18, 20, 0.8);  /* the last number: 80% opaque */
+  background: color-mix(in srgb, var(--bg-deepest) 80%, transparent);  /* the last number: 80% opaque */
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
   cursor: grab;
   touch-action: none;  /* a finger drags it, instead of scrolling the page */
@@ -349,11 +388,11 @@ body.mini-hidden :fullscreen .tile-strip {
   height: 4px;
   margin-left: -20px;  /* half its width: centred */
   border-radius: 2px;
-  background: #4e5058;
+  background: var(--bg-neutral);
 }
 #call-resize:hover::after,
 #call-resize.dragging::after {
-  background: #b5bac1;
+  background: var(--text-soft);
 }
 /* The camera preview in Settings, mirrored like the one in calls. */
 #camera-preview {
@@ -369,7 +408,7 @@ body.mini-hidden :fullscreen .tile-strip {
 #lounge-view {
   gap: 16px;
   padding: 16px;
-  background: #111214;
+  background: var(--bg-deepest);
 }
 /* The grid: as many columns of at least 280px as fit ("auto-fit"), sharing the width equally
    ("1fr" each). One person gets the whole width, four make two rows of two, and so on. */
@@ -384,7 +423,7 @@ body.mini-hidden :fullscreen .tile-strip {
 }
 .lounge-empty {
   text-align: center;
-  color: #949ba4;
+  color: var(--text-muted);
 }
 /* One person: a 16:9 tile with their camera filling it, or their picture in the middle.
    (On the Lounge page and in the DM call banner, which sizes them with --tile-width.) */
@@ -392,7 +431,7 @@ body.mini-hidden :fullscreen .tile-strip {
   position: relative;  /* the video, the name and the ring are placed against it */
   aspect-ratio: 16 / 9;
   border-radius: 12px;
-  background: #2b2d31;
+  background: var(--bg-panel);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -424,7 +463,7 @@ body.mini-hidden :fullscreen .tile-strip {
   position: absolute;
   inset: 0;
   border-radius: 12px;
-  box-shadow: inset 0 0 0 3px #23a55a;
+  box-shadow: inset 0 0 0 3px var(--green);
   pointer-events: none;  /* clicks go through it, to the tile */
 }
 .lounge-buttons {
@@ -439,7 +478,7 @@ body.mini-hidden :fullscreen .tile-strip {
   padding: 10px 20px;
   border: none;
   border-radius: 24px;
-  background: #248046;
+  background: var(--button-green);
   color: white;
   font-size: 0.95rem;
   cursor: pointer;
@@ -494,7 +533,7 @@ body.mini-hidden :fullscreen .tile-strip {
 }
 /* The 🖥️ buttons while we're sharing. */
 .share-button.on {
-  background: #248046;
+  background: var(--button-green);
 }
 
 /* The "Share your screen" menu. */
@@ -502,8 +541,8 @@ body.mini-hidden :fullscreen .tile-strip {
   padding: 20px 24px;
   border: none;
   border-radius: 12px;
-  background: #313338;
-  color: #dbdee1;
+  background: var(--bg-main);
+  color: var(--text);
   min-width: 280px;
 }
 #share-menu::backdrop {
@@ -518,16 +557,16 @@ body.mini-hidden :fullscreen .tile-strip {
   gap: 16px;
   margin: 0 0 12px;
   padding: 8px 12px;
-  border: 1px solid #4e5058;
+  border: 1px solid var(--bg-neutral);
   border-radius: 8px;
 }
 #share-menu legend {
   padding: 0 4px;
   font-size: 0.8rem;
-  color: #949ba4;
+  color: var(--text-muted);
 }
 #share-menu label:has(input:disabled) {
-  color: #6d6f78;  /* greyed out: more than this screen has */
+  color: var(--text-disabled);  /* greyed out: more than this screen has */
 }
 .share-menu-buttons {
   display: flex;
@@ -539,13 +578,13 @@ body.mini-hidden :fullscreen .tile-strip {
   padding: 8px 16px;
   border: none;
   border-radius: 6px;
-  background: #4e5058;
+  background: var(--bg-neutral);
   color: white;
   font-size: 0.95rem;
   cursor: pointer;
 }
 #share-start {
-  background: #248046;
+  background: var(--button-green);
 }
 
 /* "Download this file?" (desktop app). Its padding is on the form inside, so a click on the
@@ -555,8 +594,8 @@ body.mini-hidden :fullscreen .tile-strip {
   padding: 0;
   border: none;
   border-radius: 12px;
-  background: #313338;
-  color: #dbdee1;
+  background: var(--bg-main);
+  color: var(--text);
 }
 #download-ask::backdrop {
   background: rgba(0, 0, 0, 0.5);
@@ -573,28 +612,28 @@ body.mini-hidden :fullscreen .tile-strip {
   overflow-wrap: anywhere;  /* a very long file name wraps instead of widening the popup */
 }
 #download-ask-file {
-  color: #00a8fc;
+  color: var(--link);
   font-weight: 600;
 }
 #download-ask-sender {
   font-size: 0.9rem;
-  color: #b5bac1;
+  color: var(--text-soft);
 }
 #download-ask-warning {
   padding: 8px 12px;
-  border-left: 3px solid #f0b232;  /* the yellow of the "connection lost" bar */
+  border-left: 3px solid var(--yellow);  /* the yellow of the "connection lost" bar */
   border-radius: 4px;
-  background: #2b2d31;
+  background: var(--bg-panel);
   font-size: 0.9rem;
 }
 #download-ask-yes {
-  background: #248046;
+  background: var(--button-green);
 }
 
 /* The camera buttons while the camera is on. */
 #voice-camera.on,
 .call-round.on {
-  background: #248046;
+  background: var(--button-green);
 }
 .call-tile.away .avatar {
   opacity: 0.35;  /* not in the call (yet) */
@@ -612,33 +651,33 @@ body.mini-hidden :fullscreen .tile-strip {
   height: 48px;
   border: none;
   border-radius: 50%;
-  background: #2b2d31;
+  background: var(--bg-panel);
   font-size: 1.2rem;
   cursor: pointer;
 }
 .call-round:hover {
-  background: #35373c;
+  background: var(--bg-hover);
 }
 .call-round.off {
-  background: #da373c;  /* muted */
+  background: var(--button-red);  /* muted */
 }
 .call-round.end {
-  background: #da373c;
+  background: var(--button-red);
 }
 .call-round.end:hover {
-  background: #a12828;
+  background: var(--button-red-hover);
 }
 #call-panel-join {
   padding: 10px 20px;
   border: none;
   border-radius: 24px;
-  background: #248046;
+  background: var(--button-green);
   color: white;
   font-size: 0.95rem;
   cursor: pointer;
 }
 #call-panel-join:hover {
-  background: #1a6334;
+  background: var(--button-green-hover);
 }
 
 /* "Mia is calling…": a box in the top middle of the window, on top of everything. */
@@ -649,8 +688,8 @@ body.mini-hidden :fullscreen .tile-strip {
   padding: 20px 24px;
   border: none;
   border-radius: 12px;
-  background: #2b2d31;
-  color: #dbdee1;
+  background: var(--bg-panel);
+  color: var(--text);
   text-align: center;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
   z-index: 100;
@@ -675,10 +714,10 @@ body.mini-hidden :fullscreen .tile-strip {
   cursor: pointer;
 }
 #call-accept {
-  background: #248046;
+  background: var(--button-green);
 }
 #call-decline {
-  background: #da373c;
+  background: var(--button-red);
 }
 
 /* Who's in a voice channel, listed under it, a little indented. */
@@ -696,14 +735,14 @@ body.mini-hidden :fullscreen .tile-strip {
   border: none;
   border-radius: 6px;
   background: none;
-  color: #949ba4;
+  color: var(--text-muted);
   font-size: 0.9rem;
   text-align: left;
   cursor: pointer;
 }
 .voice-member:hover {
-  background: #35373c;
-  color: #dbdee1;
+  background: var(--bg-hover);
+  color: var(--text);
 }
 .voice-member-name {
   flex: 1;
@@ -718,7 +757,7 @@ body.mini-hidden :fullscreen .tile-strip {
   transition: box-shadow 0.1s;
 }
 .voice-member.speaking .avatar {
-  box-shadow: 0 0 0 2px #23a55a;
+  box-shadow: 0 0 0 2px var(--green);
 }
 
 /* The voice bar at the bottom of the sidebar: what you're connected to, then mute and leave. */
@@ -731,7 +770,7 @@ body.mini-hidden :fullscreen .tile-strip {
   gap: 4px;
   margin: 8px 0;
   padding: 8px;
-  border-top: 1px solid #1e1f22;
+  border-top: 1px solid var(--border);
 }
 #voice-bar[hidden] {
   display: none;  /* display: flex above would otherwise win over the hidden attribute */
@@ -747,15 +786,15 @@ body.mini-hidden :fullscreen .tile-strip {
   padding: 0;
   border: none;
   background: none;
-  color: #23a55a;
+  color: var(--green);
   font: inherit;
   font-size: 0.85rem;
   font-weight: 600;
   text-align: left;
   cursor: default;
 }
-#voice-status.waiting { color: #f0b232; }
-#voice-status.error { color: #f23f43; }
+#voice-status.waiting { color: var(--yellow); }
+#voice-status.error { color: var(--red); }
 #voice-status.clickable { cursor: pointer; text-decoration: underline; }
 /* Clicking it opens the connection details (once in voice): underlined on hover, like a link. */
 #voice-status:hover { cursor: pointer; text-decoration: underline; }
@@ -777,9 +816,9 @@ body.mini-hidden :fullscreen .tile-strip {
 }
 #voice-signal[hidden] { display: none; }
 #voice-signal svg { width: 16px; height: 16px; fill: currentColor; }
-#voice-signal.good { color: #23a55a; }
-#voice-signal.fair { color: #f0b232; }
-#voice-signal.bad { color: #f23f43; }
+#voice-signal.good { color: var(--green); }
+#voice-signal.fair { color: var(--yellow); }
+#voice-signal.bad { color: var(--red); }
 
 /* The connection details popup, just above the voice bar (voice.js sets left and bottom). */
 #voice-stats {
@@ -789,10 +828,10 @@ body.mini-hidden :fullscreen .tile-strip {
   box-sizing: border-box;
   margin: 0;
   padding: 16px;
-  border: 1px solid #1e1f22;
+  border: 1px solid var(--border);
   border-radius: 8px;
-  background: #232428;
-  color: #dbdee1;
+  background: var(--bg-panel-alt);
+  color: var(--text);
   font-size: 0.85rem;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
 }
@@ -802,7 +841,7 @@ body.mini-hidden :fullscreen .tile-strip {
 #voice-stats h2 {
   margin: 0 0 12px;
   font-size: 1rem;
-  color: white;
+  color: var(--text-strong);
 }
 #voice-stats p {
   margin: 2px 0;
@@ -810,37 +849,37 @@ body.mini-hidden :fullscreen .tile-strip {
 #voice-stats #stat-server {
   margin-top: 10px;
   font-weight: 600;
-  color: white;
+  color: var(--text-strong);
 }
 /* A screen share's numbers (voice.js, screenBlock), under a line of their own. */
 #voice-stats .stat-screen {
   overflow-wrap: anywhere;  /* long encoder names wrap instead of sticking out */
   margin-top: 10px;
   padding-top: 8px;
-  border-top: 1px solid #3f4147;
+  border-top: 1px solid var(--line);
 }
 #voice-stats .stat-screen-title {
   font-weight: 600;
-  color: white;
+  color: var(--text-strong);
 }
 #voice-stats .voice-stats-help {
   margin-top: 12px;
   font-size: 0.8rem;
-  color: #949ba4;
+  color: var(--text-muted);
 }
 
 #ping-graph {
   display: block;
   width: 100%;
   border-radius: 4px;
-  background: #1e1f22;
+  background: var(--bg-darkest);
 }
-#ping-graph .graph-grid { stroke: #3f4147; stroke-width: 0.5; }
-#ping-graph .graph-label { fill: #949ba4; font-size: 8px; }
-#ping-graph .graph-line { fill: none; stroke: #5865f2; stroke-width: 1.5; stroke-linejoin: round; }
+#ping-graph .graph-grid { stroke: var(--line); stroke-width: 0.5; }
+#ping-graph .graph-label { fill: var(--text-muted); font-size: 8px; }
+#ping-graph .graph-line { fill: none; stroke: var(--accent); stroke-width: 1.5; stroke-linejoin: round; }
 #voice-where {
   font-size: 0.8rem;
-  color: #949ba4;
+  color: var(--text-muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -855,7 +894,7 @@ body.mini-hidden :fullscreen .tile-strip {
   cursor: pointer;
 }
 .voice-button:hover {
-  background: #35373c;
+  background: var(--bg-hover);
 }
 /* You, at the very bottom of the sidebar: [picture● name/status] 🎤 🎧 ⚙️ (like Discord). */
 #user-panel {
@@ -864,7 +903,7 @@ body.mini-hidden :fullscreen .tile-strip {
   gap: 2px;
   margin: 0 -8px -16px;  /* to the sidebar's edges and bottom, through its padding */
   padding: 6px 8px;
-  background: #232428;  /* a little darker than the sidebar */
+  background: var(--bg-panel-alt);  /* a little darker than the sidebar */
 }
 
 /* Your picture, name and status: takes the free space (flex: 1), and gets squeezed first
@@ -877,7 +916,7 @@ body.mini-hidden :fullscreen .tile-strip {
   border: none;
   border-radius: 6px;
   background: none;
-  color: #f2f3f5;
+  color: var(--text-strong);
   font: inherit;
   font-size: 0.85rem;
   font-weight: 600;
@@ -885,7 +924,7 @@ body.mini-hidden :fullscreen .tile-strip {
   cursor: pointer;
 }
 #user-panel-me:hover {
-  background: #35373c;
+  background: var(--bg-hover);
 }
 #user-panel-me .person-text span:first-child {
   overflow: hidden;
@@ -893,7 +932,7 @@ body.mini-hidden :fullscreen .tile-strip {
   white-space: nowrap;
 }
 #user-panel .person-picture .dot {
-  border-color: #232428;  /* the ring around the dot in the panel's colour */
+  border-color: var(--bg-panel-alt);  /* the ring around the dot in the panel's colour */
 }
 
 .user-panel-button {
@@ -909,11 +948,11 @@ body.mini-hidden :fullscreen .tile-strip {
   cursor: pointer;
 }
 .user-panel-button:hover {
-  background: #35373c;
+  background: var(--bg-hover);
 }
 /* Muted or deafened: the button turns red. */
 .user-panel-button.off {
-  background: #da373c;
+  background: var(--button-red);
 }
 /* Notifications muted: a small 🔕 on the corner of ⚙️. */
 #muted-icon {
@@ -929,7 +968,7 @@ body.mini-hidden :fullscreen .tile-strip {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #f23f43;
+  background: var(--red);
   vertical-align: middle;
 }
 
@@ -954,7 +993,7 @@ body.mini-hidden :fullscreen .tile-strip {
   right: -1px;
   top: 50%;
   height: 2px;
-  background: #f23f43;
+  background: var(--red);
   transform: rotate(-45deg);  /* a diagonal stroke */
 }
 
@@ -967,10 +1006,10 @@ body.mini-hidden :fullscreen .tile-strip {
   margin: 0;
   padding: 0;
   overflow: hidden;
-  border: 1px solid #1e1f22;
+  border: 1px solid var(--border);
   border-radius: 8px;
-  background: #232428;
-  color: #dbdee1;
+  background: var(--bg-panel-alt);
+  color: var(--text);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
 }
 #me-popup::backdrop {
@@ -985,18 +1024,18 @@ body.mini-hidden :fullscreen .tile-strip {
   width: 80px;
   height: 80px;
   margin: -40px 0 8px;
-  border: 5px solid #232428;
+  border: 5px solid var(--bg-panel-alt);
   font-size: 2rem;
 }
 #me-name {
   margin: 0;
   font-size: 1.2rem;
-  color: white;
+  color: var(--text-strong);
 }
 #me-status {
   margin: 2px 0 0;
   font-size: 0.85rem;
-  color: #b5bac1;
+  color: var(--text-soft);
 }
 #me-status:empty {
   display: none;
@@ -1007,7 +1046,7 @@ body.mini-hidden :fullscreen .tile-strip {
   margin-top: 12px;
   padding: 10px;
   border-radius: 8px;
-  background: #2b2d31;
+  background: var(--bg-panel);
 }
 #me-call[hidden] {
   display: none;
@@ -1015,7 +1054,7 @@ body.mini-hidden :fullscreen .tile-strip {
 #me-call h3 {
   margin: 0 0 8px;
   font-size: 0.75rem;
-  color: #b5bac1;
+  color: var(--text-soft);
 }
 #me-call-row {
   display: flex;
@@ -1037,15 +1076,15 @@ body.mini-hidden :fullscreen .tile-strip {
   padding: 8px 10px;
   border: none;
   border-radius: 6px;
-  background: #35373c;
-  color: #dbdee1;
+  background: var(--bg-hover);
+  color: var(--text);
   font: inherit;
   font-size: 0.9rem;
   cursor: pointer;
 }
 #me-call button:hover,
 .me-menu button:hover {
-  background: #404249;
+  background: var(--bg-active);
 }
 
 /* Edit profile and Log out: a list of plain rows in a box. */
@@ -1055,14 +1094,14 @@ body.mini-hidden :fullscreen .tile-strip {
   margin-top: 12px;
   padding: 4px;
   border-radius: 8px;
-  background: #2b2d31;
+  background: var(--bg-panel);
 }
 .me-menu button {
   background: none;
   text-align: left;
 }
 .me-menu button:hover {
-  background: #35373c;
+  background: var(--bg-hover);
 }
 
 /* A small round status dot: grey for offline, green for online. */
@@ -1072,11 +1111,11 @@ body.mini-hidden :fullscreen .tile-strip {
   height: 8px;
   margin-right: 8px;
   border-radius: 50%;  /* a square with fully rounded corners is a circle */
-  background: #80848e;
+  background: var(--text-faint);
 }
 
 .dot.online {
-  background: #23a55a;
+  background: var(--green);
 }
 
 #chat {
@@ -1094,10 +1133,10 @@ body.mini-hidden :fullscreen .tile-strip {
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 3px dashed #5865f2;
+  border: 3px dashed var(--accent);
   border-radius: 12px;
-  background: rgba(30, 31, 34, 0.9);  /* nearly opaque dark grey */
-  color: white;
+  background: color-mix(in srgb, var(--bg-darkest) 90%, transparent);  /* nearly opaque dark grey */
+  color: var(--text-strong);
   font-size: 1.3rem;
 }
 
@@ -1108,7 +1147,7 @@ body.mini-hidden :fullscreen .tile-strip {
 
 #banner {
   padding: 8px 16px;
-  background: #f0b232;
+  background: var(--yellow);
   color: #1e1f22;
   font-size: 0.9rem;
 }
@@ -1121,7 +1160,7 @@ body.mini-hidden :fullscreen .tile-strip {
   gap: 14px;
   padding: 12px 16px;
   border-radius: 8px;
-  background: #1e1f22;
+  background: var(--bg-darkest);
 }
 /* display: flex above would beat the "hidden" attribute, so say it explicitly. */
 .app-card[hidden] {
@@ -1129,7 +1168,7 @@ body.mini-hidden :fullscreen .tile-strip {
 }
 #app-banner {
   margin: 8px 16px 0;
-  border: 1px solid #5865f2;  /* a blue outline, so it stands out from the messages */
+  border: 1px solid var(--accent);  /* a blue outline, so it stands out from the messages */
 }
 
 /* The arrow is drawn as lines (stroke), not filled: an arrow pointing down at a tray.
@@ -1140,7 +1179,7 @@ body.mini-hidden :fullscreen .tile-strip {
   height: 40px;
   padding: 8px;
   border-radius: 50%;
-  background: #5865f2;
+  background: var(--accent);
   color: white;
   fill: none;
   stroke: currentColor;
@@ -1157,11 +1196,11 @@ body.mini-hidden :fullscreen .tile-strip {
   flex-direction: column;
   gap: 2px;
   font-size: 0.85rem;
-  color: #b5bac1;
+  color: var(--text-soft);
 }
 .app-card-text strong {
   font-size: 1rem;
-  color: white;
+  color: var(--text-strong);
 }
 
 /* A link that looks like a button. */
@@ -1169,13 +1208,13 @@ body.mini-hidden :fullscreen .tile-strip {
   flex-shrink: 0;
   padding: 10px 18px;
   border-radius: 6px;
-  background: #248046;
+  background: var(--button-green);
   color: white;
   font-weight: 600;
   text-decoration: none;
 }
 .download-button:hover {
-  background: #1a6334;
+  background: var(--button-green-hover);
 }
 
 #app-banner-close {
@@ -1186,14 +1225,14 @@ body.mini-hidden :fullscreen .tile-strip {
   border: none;
   border-radius: 50%;
   background: transparent;
-  color: #949ba4;
+  color: var(--text-muted);
   font-size: 1.3rem;
   line-height: 1;
   cursor: pointer;
 }
 #app-banner-close:hover {
-  background: #2b2d31;
-  color: white;
+  background: var(--bg-panel);
+  color: var(--text-strong);
 }
 
 /* The two things the chat area can show: a channel, or the Friends page. Each fills the
@@ -1243,7 +1282,7 @@ body.mini-hidden :fullscreen .tile-strip {
 }
 
 .message:hover {
-  background: #2e3035;  /* a slightly lighter row under the mouse */
+  background: var(--bg-hover-dim);  /* a slightly lighter row under the mouse */
 }
 
 /* The buttons in a message's top-right corner, shown when hovering it (or tapping, on phones). */
@@ -1255,9 +1294,9 @@ body.mini-hidden :fullscreen .tile-strip {
   display: none;
   gap: 2px;
   padding: 2px;
-  border: 1px solid #1e1f22;
+  border: 1px solid var(--border);
   border-radius: 6px;
-  background: #313338;
+  background: var(--bg-main);
 }
 
 .message:hover .message-actions {
@@ -1269,14 +1308,14 @@ body.mini-hidden :fullscreen .tile-strip {
   border: none;
   border-radius: 4px;
   background: none;
-  color: #b5bac1;
+  color: var(--text-soft);
   font-size: 0.8rem;
   cursor: pointer;
 }
 
 .message-actions button:hover {
-  background: #404249;
-  color: white;
+  background: var(--bg-active);
+  color: var(--text-strong);
 }
 
 /* Emoji are characters, drawn by the device's emoji font. Name the common ones explicitly,
@@ -1324,7 +1363,7 @@ body.mini-hidden :fullscreen .tile-strip {
 #settings .my-emoji-item button {
   padding: 4px 10px;
   font-size: 0.85rem;
-  background: #4e5058;
+  background: var(--bg-neutral);
 }
 
 /* Replace and Delete together at the right end: the first one takes all the free space on its left. */
@@ -1356,19 +1395,19 @@ body.mini-hidden :fullscreen .tile-strip {
   padding: 2px 8px;
   border: 1px solid transparent;
   border-radius: 8px;
-  background: #2b2d31;
-  color: #dbdee1;
+  background: var(--bg-panel);
+  color: var(--text);
   font-size: 0.85rem;
   cursor: pointer;
 }
 
 .reaction-chip:hover {
-  border-color: #4e5058;
+  border-color: var(--bg-neutral);
 }
 
 .reaction-chip.mine {
-  border-color: #5865f2;  /* one you reacted with yourself */
-  background: rgba(88, 101, 242, 0.15);
+  border-color: var(--accent);  /* one you reacted with yourself */
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
 }
 
 /* The emoji picker. Placed next to the 😀 button by JavaScript (position: fixed = relative to the window). */
@@ -1379,9 +1418,9 @@ body.mini-hidden :fullscreen .tile-strip {
   height: 380px;
   display: flex;
   flex-direction: column;
-  border: 1px solid #1e1f22;
+  border: 1px solid var(--border);
   border-radius: 8px;
-  background: #2b2d31;
+  background: var(--bg-panel);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
 }
 
@@ -1394,7 +1433,7 @@ body.mini-hidden :fullscreen .tile-strip {
   padding: 8px 10px;
   border: none;
   border-radius: 6px;
-  background: #1e1f22;
+  background: var(--bg-darkest);
   color: inherit;
   font-size: 0.95rem;
 }
@@ -1403,7 +1442,7 @@ body.mini-hidden :fullscreen .tile-strip {
   display: flex;
   justify-content: space-between;
   padding: 0 8px 6px;
-  border-bottom: 1px solid #1e1f22;
+  border-bottom: 1px solid var(--border);
 }
 
 #emoji-categories button {
@@ -1416,7 +1455,7 @@ body.mini-hidden :fullscreen .tile-strip {
 }
 
 #emoji-categories button:hover {
-  background: #404249;
+  background: var(--bg-active);
 }
 
 #emoji-grid {
@@ -1430,10 +1469,10 @@ body.mini-hidden :fullscreen .tile-strip {
   top: 0;
   margin: 0;
   padding: 8px 0 4px;
-  background: #2b2d31;
+  background: var(--bg-panel);
   font-size: 0.7rem;
   text-transform: uppercase;
-  color: #949ba4;
+  color: var(--text-muted);
 }
 
 /* CSS grid: as many 36px-wide columns as fit, sharing out any leftover space. */
@@ -1453,7 +1492,7 @@ body.mini-hidden :fullscreen .tile-strip {
 }
 
 .emoji-row button:hover {
-  background: #404249;
+  background: var(--bg-active);
 }
 
 /* The quote above a reply. */
@@ -1464,12 +1503,12 @@ body.mini-hidden :fullscreen .tile-strip {
   margin-bottom: 2px;
   min-width: 0;
   font-size: 0.8rem;
-  color: #949ba4;
+  color: var(--text-muted);
 }
 
 .reply-line strong {
   flex-shrink: 0;
-  color: #b5bac1;
+  color: var(--text-soft);
 }
 
 .reply-text {
@@ -1479,12 +1518,12 @@ body.mini-hidden :fullscreen .tile-strip {
 }
 
 .reply-line:hover .reply-text {
-  color: white;
+  color: var(--text-strong);
 }
 
 /* A web address in a message. */
 .message-link {
-  color: #00a8fc;
+  color: var(--link);
   text-decoration: none;
 }
 
@@ -1496,25 +1535,25 @@ body.mini-hidden :fullscreen .tile-strip {
 .mention {
   padding: 0 2px;
   border-radius: 3px;
-  background: rgba(88, 101, 242, 0.3);
-  color: #c9cdfb;
+  background: color-mix(in srgb, var(--accent) 30%, transparent);
+  color: var(--mention-text);
   font-weight: 500;
 }
 
 .mention.clickable:hover {
-  background: #5865f2;
+  background: var(--accent);
   color: white;
 }
 
 /* A message that mentions us: a yellowish background and a line on the left.
    (box-shadow "inset" draws the line inside the row, so nothing shifts sideways.) */
 .message.mentions-me {
-  background: rgba(240, 178, 50, 0.08);
-  box-shadow: inset 2px 0 0 #f0b232;
+  background: color-mix(in srgb, var(--yellow) 8%, transparent);
+  box-shadow: inset 2px 0 0 var(--yellow);
 }
 
 .message.mentions-me:hover {
-  background: rgba(240, 178, 50, 0.14);
+  background: color-mix(in srgb, var(--yellow) 14%, transparent);
 }
 
 /* The red number of unread mentions on a sidebar button. */
@@ -1527,7 +1566,7 @@ body.mini-hidden :fullscreen .tile-strip {
   padding: 0 5px;
   box-sizing: border-box;
   border-radius: 8px;
-  background: #f23f43;
+  background: var(--red);
   color: white;
   font-size: 0.7rem;
   font-weight: 700;
@@ -1541,7 +1580,7 @@ body.mini-hidden :fullscreen .tile-strip {
 
 .edited-label {
   font-size: 0.7rem;  /* rem: always small, even in a jumbo emoji message */
-  color: #949ba4;
+  color: var(--text-muted);
   font-family: system-ui, sans-serif;
 }
 
@@ -1553,7 +1592,7 @@ body.mini-hidden :fullscreen .tile-strip {
   padding: 8px 10px;
   border: none;
   border-radius: 8px;
-  background: #383a40;
+  background: var(--bg-input);
   color: inherit;
   font: inherit;
   line-height: 1.4;
@@ -1563,7 +1602,7 @@ body.mini-hidden :fullscreen .tile-strip {
 
 .editor-hint {
   font-size: 0.75rem;
-  color: #949ba4;
+  color: var(--text-muted);
 }
 
 /* "save" and "cancel" look like links. */
@@ -1571,7 +1610,7 @@ body.mini-hidden :fullscreen .tile-strip {
   padding: 0;
   border: none;
   background: none;
-  color: #00a8fc;
+  color: var(--link);
   font-size: inherit;
   cursor: pointer;
 }
@@ -1588,7 +1627,7 @@ body.mini-hidden :fullscreen .tile-strip {
   align-items: center;
   gap: 8px;
   font-size: 0.95rem;
-  color: #dbdee1;
+  color: var(--text);
   cursor: pointer;
 }
 
@@ -1617,13 +1656,13 @@ body.mini-hidden :fullscreen .tile-strip {
 #settings #inbox-filters button {
   padding: 6px 14px;
   border-radius: 16px;
-  background: #2e3035;
-  color: #b5bac1;
+  background: var(--bg-hover-dim);
+  color: var(--text-soft);
   font-size: 0.9rem;
 }
 
 #settings #inbox-filters button[aria-pressed="true"] {
-  background: #5865f2;
+  background: var(--accent);
   color: white;
 }
 
@@ -1636,7 +1675,7 @@ body.mini-hidden :fullscreen .tile-strip {
 .inbox-item {
   padding: 12px 14px;
   border-radius: 8px;
-  background: #2b2d31;
+  background: var(--bg-panel);
 }
 
 /* What's new: two sections that open and close (<details>), each with a clickable heading
@@ -1650,13 +1689,13 @@ body.mini-hidden :fullscreen .tile-strip {
   font-size: 0.8rem;
   font-weight: 600;
   text-transform: uppercase;
-  color: #b5bac1;
+  color: var(--text-soft);
   cursor: pointer;
   user-select: none;  /* clicking it quickly twice shouldn't select the text */
 }
 
 .changelog-section summary:hover {
-  color: white;
+  color: var(--text-strong);
 }
 
 /* What's new: one card per topic or day, like the Inbox's. */
@@ -1664,12 +1703,12 @@ body.mini-hidden :fullscreen .tile-strip {
   margin-bottom: 12px;
   padding: 12px 14px;
   border-radius: 8px;
-  background: #2b2d31;
+  background: var(--bg-panel);
 }
 
 .changelog-title {
   font-weight: 600;
-  color: white;
+  color: var(--text-strong);
 }
 
 .changelog-card ul {
@@ -1700,18 +1739,18 @@ body.mini-hidden :fullscreen .tile-strip {
 }
 
 .inbox-kind.bug {
-  background: #4d2427;
-  color: #fa777c;
+  background: color-mix(in srgb, var(--red) 20%, var(--bg-panel));
+  color: color-mix(in srgb, var(--red) 75%, white);
 }
 
 .inbox-kind.idea {
-  background: #22392b;
-  color: #57d28f;
+  background: color-mix(in srgb, var(--green) 20%, var(--bg-panel));
+  color: color-mix(in srgb, var(--green) 75%, white);
 }
 
 .inbox-head time {
   font-size: 0.8rem;
-  color: #949ba4;
+  color: var(--text-muted);
 }
 
 .inbox-text {
@@ -1726,7 +1765,7 @@ body.mini-hidden :fullscreen .tile-strip {
   justify-content: space-between;  /* the device on the left, the button on the right */
   gap: 10px;
   font-size: 0.8rem;
-  color: #949ba4;
+  color: var(--text-muted);
 }
 
 #settings .inbox-foot button {
@@ -1736,13 +1775,13 @@ body.mini-hidden :fullscreen .tile-strip {
 }
 
 #settings .inbox-item.done .inbox-foot button {
-  background: #4e5058;  /* Reopen: grey, not the main action */
+  background: var(--bg-neutral);  /* Reopen: grey, not the main action */
 }
 
 .settings-help {
   margin: 0;
   font-size: 0.8rem;
-  color: #949ba4;
+  color: var(--text-muted);
 }
 
 /* "Volume [——o——] 80%" on one line. */
@@ -1772,7 +1811,7 @@ body.mini-hidden :fullscreen .tile-strip {
   gap: 12px;
   margin-top: 12px;
   font-size: 0.85rem;
-  color: #b5bac1;
+  color: var(--text-soft);
 }
 #profile-volume-row[hidden] {
   display: none;
@@ -1787,7 +1826,7 @@ body.mini-hidden :fullscreen .tile-strip {
   position: relative;
   height: 24px;
   border-radius: 6px;
-  background: #1e1f22;
+  background: var(--bg-darkest);
   overflow: hidden;
 }
 #voice-meter-level {
@@ -1796,14 +1835,14 @@ body.mini-hidden :fullscreen .tile-strip {
   bottom: 0;
   left: 0;
   width: 0%;
-  background: #4e5058;
+  background: var(--bg-neutral);
 }
 #voice-meter-level.open {
-  background: #23a55a;
+  background: var(--green);
 }
 #voice-gate-readout {
   font-variant-numeric: tabular-nums;  /* digits all the same width, so the text doesn't jiggle */
-  color: #949ba4;
+  color: var(--text-muted);
 }
 /* The sensitivity slider covers the meter, see-through except for its handle: a yellow line.
    "appearance: none" turns off the browser's own look so we can draw it ourselves. */
@@ -1824,21 +1863,21 @@ body.mini-hidden :fullscreen .tile-strip {
   width: 4px;
   height: 24px;
   border-radius: 2px;
-  background: #f0b232;
+  background: var(--yellow);
 }
 #voice-gate::-moz-range-thumb {
   width: 4px;
   height: 24px;
   border: none;
   border-radius: 2px;
-  background: #f0b232;
+  background: var(--yellow);
 }
 
 #settings select {
   padding: 8px 10px;
   border: none;
   border-radius: 6px;
-  background: #1e1f22;
+  background: var(--bg-darkest);
   color: inherit;
   font-size: 0.95rem;
 }
@@ -1847,7 +1886,7 @@ body.mini-hidden :fullscreen .tile-strip {
   margin-left: 8px;
   padding: 2px 6px;
   border-radius: 4px;
-  background: #5865f2;
+  background: var(--accent);
   color: white;
   font-size: 0.7rem;
   vertical-align: middle;
@@ -1856,7 +1895,7 @@ body.mini-hidden :fullscreen .tile-strip {
 .admin-heading {
   margin: 8px 0 0;
   font-size: 0.8rem;
-  color: #949ba4;
+  color: var(--text-muted);
 }
 
 .avatar.tiny {
@@ -1867,7 +1906,7 @@ body.mini-hidden :fullscreen .tile-strip {
 
 /* Jumping to a message: its background lights up and fades out over 2 seconds. */
 @keyframes flash {
-  from { background: rgba(88, 101, 242, 0.35); }
+  from { background: color-mix(in srgb, var(--accent) 35%, transparent); }
   to { background: transparent; }
 }
 
@@ -1883,9 +1922,9 @@ body.mini-hidden :fullscreen .tile-strip {
   margin: 0 16px;
   padding: 6px 12px;
   border-radius: 8px 8px 0 0;
-  background: #2b2d31;
+  background: var(--bg-panel);
   font-size: 0.85rem;
-  color: #b5bac1;
+  color: var(--text-soft);
 }
 
 #reply-bar[hidden] {
@@ -1893,14 +1932,14 @@ body.mini-hidden :fullscreen .tile-strip {
 }
 
 #reply-bar strong {
-  color: white;
+  color: var(--text-strong);
 }
 
 #reply-cancel {
   margin-left: auto;  /* pushed to the right end */
   border: none;
   background: none;
-  color: #b5bac1;
+  color: var(--text-soft);
   font-size: 1rem;
   cursor: pointer;
 }
@@ -1913,7 +1952,7 @@ body.mini-hidden :fullscreen .tile-strip {
 
 .message-time {
   font-size: 0.75rem;
-  color: #949ba4;
+  color: var(--text-muted);
 }
 
 /* In a grouped message, the time sits where the picture would be, and only shows on hover. */
@@ -1922,7 +1961,7 @@ body.mini-hidden :fullscreen .tile-strip {
   flex-shrink: 0;
   padding-top: 3px;
   font-size: 0.7rem;
-  color: #949ba4;
+  color: var(--text-muted);
   text-align: center;
   visibility: hidden;  /* invisible, but still takes up its space */
 }
@@ -1939,7 +1978,7 @@ body.mini-hidden :fullscreen .tile-strip {
   margin: 16px 0 4px;
   font-size: 0.75rem;
   font-weight: 600;
-  color: #949ba4;
+  color: var(--text-muted);
 }
 
 .date-divider::before,
@@ -1947,18 +1986,18 @@ body.mini-hidden :fullscreen .tile-strip {
   content: "";
   flex: 1;  /* both lines stretch to fill the space on their side */
   height: 1px;
-  background: #3f4147;
+  background: var(--line);
 }
 
 /* "This is the beginning of #general", above a channel's first message. */
 .channel-start {
   margin: 8px 0 16px;
   font-size: 0.85rem;
-  color: #949ba4;
+  color: var(--text-muted);
 }
 
 .name {
-  color: white;
+  color: var(--text-strong);
   font-weight: 600;
 }
 
@@ -2021,7 +2060,7 @@ body.mini-hidden :fullscreen .tile-strip {
   width: 10px;
   height: 10px;
   margin: 0;
-  border: 2px solid #2b2d31;  /* a ring in the sidebar's colour, to separate it from the picture */
+  border: 2px solid var(--bg-panel);  /* a ring in the sidebar's colour, to separate it from the picture */
 }
 
 .person-text {
@@ -2036,7 +2075,7 @@ body.mini-hidden :fullscreen .tile-strip {
   white-space: nowrap;
   font-size: 0.75rem;
   font-weight: normal;
-  color: #949ba4;
+  color: var(--text-muted);
 }
 
 /* The link around a picture: on its own line (block), but only as wide as the picture, so a
@@ -2066,14 +2105,14 @@ body.mini-hidden :fullscreen .tile-strip {
   box-sizing: border-box;
   margin-top: 6px;
   padding: 10px 14px 12px;
-  border-left: 4px solid #1e1f22;
+  border-left: 4px solid var(--border);
   border-radius: 4px;
-  background: #2b2d31;
+  background: var(--bg-panel);
 }
 
 .preview-site {
   font-size: 0.75rem;
-  color: #b5bac1;
+  color: var(--text-soft);
 }
 
 .link-preview .preview-title {
@@ -2083,7 +2122,7 @@ body.mini-hidden :fullscreen .tile-strip {
 
 .preview-description {
   font-size: 0.85rem;
-  color: #dbdee1;
+  color: var(--text);
   overflow-wrap: anywhere;
 }
 
@@ -2135,7 +2174,7 @@ body.mini-hidden :fullscreen .tile-strip {
   overflow: hidden;
   border: none;
   border-radius: 8px;
-  background: #2b2d31;
+  background: var(--bg-panel);
   color: inherit;
 }
 
@@ -2155,7 +2194,7 @@ body.mini-hidden :fullscreen .tile-strip {
   gap: 2px;
   padding: 24px 8px 12px;
   overflow-y: auto;
-  background: #232428;  /* a little darker than the page, like Discord */
+  background: var(--bg-panel-alt);  /* a little darker than the page, like Discord */
 }
 
 #settings-tabs h3 {
@@ -2172,20 +2211,20 @@ body.mini-hidden :fullscreen .tile-strip {
   padding: 7px 10px;
   border-radius: 4px;
   background: none;
-  color: #b5bac1;
+  color: var(--text-soft);
   font-size: 0.95rem;
   text-align: left;
 }
 
 #settings .settings-tab:hover {
-  background: #2e3035;
-  color: #dbdee1;
+  background: var(--bg-hover-dim);
+  color: var(--text);
 }
 
 /* The chosen one (settings.js sets aria-selected, which also tells screen readers). */
 #settings .settings-tab[aria-selected="true"] {
-  background: #3f4147;
-  color: white;
+  background: var(--bg-active);
+  color: var(--text-strong);
 }
 
 /* "Get the Windows app", pushed to the bottom of the tabs (margin-top: auto takes up all the
@@ -2197,14 +2236,14 @@ body.mini-hidden :fullscreen .tile-strip {
   margin-top: auto;
   padding: 8px 10px;
   border-radius: 4px;
-  color: #dbdee1;
+  color: var(--text);
   font-size: 0.9rem;
   font-weight: 600;
   text-decoration: none;
 }
 
 #desktop-app:hover {
-  background: #2e3035;
+  background: var(--bg-hover-dim);
 }
 
 /* display: flex above would beat the "hidden" attribute (inside the app), so say it explicitly. */
@@ -2230,14 +2269,14 @@ body.mini-hidden :fullscreen .tile-strip {
 
 #settings h2 {
   margin: 0 0 16px;
-  color: white;
+  color: var(--text-strong);
 }
 
 #settings h3 {
   margin: 20px 0 8px;
   font-size: 0.75rem;
   text-transform: uppercase;
-  color: #949ba4;
+  color: var(--text-muted);
 }
 
 #settings form {
@@ -2268,14 +2307,14 @@ body.mini-hidden :fullscreen .tile-strip {
   flex-direction: column;
   gap: 6px;
   font-size: 0.85rem;
-  color: #b5bac1;
+  color: var(--text-soft);
 }
 
 #settings input {
   padding: 10px 12px;
   border: none;
   border-radius: 6px;
-  background: #1e1f22;
+  background: var(--bg-darkest);
   color: inherit;
   font-size: 1rem;
 }
@@ -2284,7 +2323,7 @@ body.mini-hidden :fullscreen .tile-strip {
   padding: 10px;
   border: none;
   border-radius: 6px;
-  background: #5865f2;
+  background: var(--accent);
   color: white;
   font-size: 1rem;
   cursor: pointer;
@@ -2298,7 +2337,7 @@ body.mini-hidden :fullscreen .tile-strip {
   height: 32px;
   padding: 0;
   border-radius: 50%;
-  background: #1e1f22;
+  background: var(--bg-darkest);
 }
 
 #settings .status {
@@ -2307,11 +2346,11 @@ body.mini-hidden :fullscreen .tile-strip {
 }
 
 #settings .status.error {
-  color: #f23f43;
+  color: var(--red);
 }
 
 #settings .status.success {
-  color: #23a55a;
+  color: var(--green);
 }
 
 #viewer-close {
@@ -2322,8 +2361,8 @@ body.mini-hidden :fullscreen .tile-strip {
   height: 36px;
   border: none;
   border-radius: 50%;
-  background: #2b2d31;
-  color: white;
+  background: var(--bg-panel);
+  color: var(--text-strong);
   font-size: 1.2rem;
   cursor: pointer;
 }
@@ -2333,8 +2372,8 @@ body.mini-hidden :fullscreen .tile-strip {
   margin-top: 4px;
   padding: 8px 12px;
   border-radius: 8px;
-  background: #2b2d31;
-  color: #00a8fc;
+  background: var(--bg-panel);
+  color: var(--link);
 }
 
 /* While the desktop app downloads a file (messages.js): a thin bar under its name.
@@ -2350,11 +2389,11 @@ body.mini-hidden :fullscreen .tile-strip {
 }
 .attachment-file progress::-webkit-progress-bar {
   border-radius: 2px;
-  background: #1e1f22;
+  background: var(--bg-darkest);
 }
 .attachment-file progress::-webkit-progress-value {
   border-radius: 2px;
-  background: #00a8fc;
+  background: var(--link);
 }
 
 /* "kari is typing…" on the left, "Uploading cat.png…" on the right */
@@ -2364,11 +2403,11 @@ body.mini-hidden :fullscreen .tile-strip {
   display: flex;
   justify-content: space-between;
   font-size: 0.85rem;
-  color: #949ba4;
+  color: var(--text-muted);
 }
 
 #upload-status.error {
-  color: #f23f43;
+  color: var(--red);
 }
 
 .status-right {
@@ -2378,7 +2417,7 @@ body.mini-hidden :fullscreen .tile-strip {
 
 /* "1850 / 2000" near the limit; red at the limit. */
 #char-count.limit {
-  color: #f23f43;
+  color: var(--red);
 }
 
 /* Files waiting to be sent, shown just above the text box. */
@@ -2398,7 +2437,7 @@ body.mini-hidden :fullscreen .tile-strip {
   width: 80px;
   height: 80px;
   border-radius: 8px;
-  background: #2b2d31;
+  background: var(--bg-panel);
   overflow: hidden;  /* cut off anything that sticks out, like the image's corners */
 }
 
@@ -2417,7 +2456,7 @@ body.mini-hidden :fullscreen .tile-strip {
 }
 
 .tray-item.failed {
-  outline: 2px solid #f23f43;
+  outline: 2px solid var(--red);
 }
 
 .tray-item .remove {
@@ -2429,7 +2468,7 @@ body.mini-hidden :fullscreen .tile-strip {
   padding: 0;
   border: none;
   border-radius: 50%;
-  background: #f23f43;
+  background: var(--red);
   color: white;
   font-size: 0.8rem;
   line-height: 20px;
@@ -2454,9 +2493,9 @@ body.mini-hidden :fullscreen .tile-strip {
   display: flex;
   flex-direction: column;
   padding: 4px;
-  border: 1px solid #1e1f22;
+  border: 1px solid var(--border);
   border-radius: 8px;
-  background: #2b2d31;
+  background: var(--bg-panel);
   box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.3);
 }
 
@@ -2474,14 +2513,14 @@ body.mini-hidden :fullscreen .tile-strip {
   border: none;
   border-radius: 4px;
   background: none;
-  color: #dbdee1;
+  color: var(--text);
   font-size: 0.95rem;
   text-align: left;
   cursor: pointer;
 }
 
 #chat-form #autocomplete button.active {
-  background: #404249;  /* the highlighted one: Enter or Tab picks it */
+  background: var(--bg-active);  /* the highlighted one: Enter or Tab picks it */
 }
 
 #autocomplete .custom-emoji,
@@ -2495,7 +2534,7 @@ body.mini-hidden :fullscreen .tile-strip {
 #autocomplete .detail {
   margin-left: auto;  /* pushed to the right */
   font-size: 0.8rem;
-  color: #949ba4;
+  color: var(--text-muted);
 }
 
 #message-input {
@@ -2504,7 +2543,7 @@ body.mini-hidden :fullscreen .tile-strip {
   padding: 10px 12px;
   border: none;
   border-radius: 8px;
-  background: #383a40;
+  background: var(--bg-input);
   color: inherit;
   font: inherit;     /* textareas don't use the page's font by default */
   font-size: 1rem;
@@ -2517,7 +2556,7 @@ body.mini-hidden :fullscreen .tile-strip {
   padding: 10px 16px;
   border: none;
   border-radius: 8px;
-  background: #5865f2;
+  background: var(--accent);
   color: white;
   font-size: 1rem;
   cursor: pointer;
@@ -2526,8 +2565,8 @@ body.mini-hidden :fullscreen .tile-strip {
 #chat-form #attach-button,
 #chat-form #compose-emoji {
   padding: 10px 14px;
-  background: #383a40;
-  color: #dbdee1;
+  background: var(--bg-input);
+  color: var(--text);
   font-size: 1.2rem;
   line-height: 1;
 }
@@ -2542,8 +2581,8 @@ body.mini-hidden :fullscreen .tile-strip {
 .message-text .code-block {
   font-family: Consolas, "Cascadia Mono", Menlo, monospace;
   font-size: 0.875em;
-  background: #2b2d31;
-  border: 1px solid #1e1f22;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
   border-radius: 4px;
 }
 
@@ -2562,13 +2601,13 @@ body.mini-hidden :fullscreen .tile-strip {
 .message-text .quote {
   margin: 2px 0;
   padding-left: 12px;
-  border-left: 4px solid #4e5058;
+  border-left: 4px solid var(--bg-neutral);
 }
 
 /* ||A spoiler||: a dark bar until clicked. The inside is hidden, not just made transparent,
    because colour emoji and pictures would still show through. */
 .spoiler {
-  background: #1e1f22;
+  background: var(--bg-darkest);
   border-radius: 4px;
   cursor: pointer;
 }
@@ -2578,7 +2617,7 @@ body.mini-hidden :fullscreen .tile-strip {
 }
 
 .spoiler.revealed {
-  background: rgba(255, 255, 255, 0.1);
+  background: color-mix(in srgb, var(--text-strong) 10%, transparent);
   cursor: auto;
 }
 
@@ -2598,7 +2637,7 @@ body.mini-hidden :fullscreen .tile-strip {
   width: 200px;
   padding: 16px;
   overflow-y: auto;  /* scroll if there are many people */
-  background: #2b2d31;
+  background: var(--bg-panel);
 }
 
 #members .section-heading {
@@ -2635,7 +2674,7 @@ body.mini-hidden :fullscreen .tile-strip {
   overflow: hidden;  /* ...and gets the popup's rounded corners */
   border: none;
   border-radius: 8px;
-  background: #2b2d31;
+  background: var(--bg-panel);
   color: inherit;
   text-align: center;
 }
@@ -2662,7 +2701,7 @@ body.mini-hidden :fullscreen .tile-strip {
   width: 124px;
   height: 124px;
   margin: -62px auto 14px;  /* pulled up by half its height, and centred */
-  border: 6px solid #2b2d31;
+  border: 6px solid var(--bg-panel);
   font-size: 3rem;  /* (for the letter, when there's no picture) */
 }
 
@@ -2681,18 +2720,18 @@ body.mini-hidden :fullscreen .tile-strip {
 }
 
 #settings #remove-banner {
-  background: #4e5058;
+  background: var(--bg-neutral);
 }
 
 #profile-name {
   margin: 0;
   font-size: 1.3rem;
-  color: white;
+  color: var(--text-strong);
 }
 
 #profile-status {
   margin: 4px 0 0;
-  color: #949ba4;
+  color: var(--text-muted);
 }
 
 #profile-bio {
@@ -2712,14 +2751,14 @@ body.mini-hidden :fullscreen .tile-strip {
   padding: 6px 10px;
   border: none;
   border-radius: 6px;
-  background: #5865f2;
+  background: var(--accent);
   color: white;
   font-size: 0.85rem;
   cursor: pointer;
 }
 
 .friend-actions button.secondary {
-  background: #4e5058;
+  background: var(--bg-neutral);
 }
 
 #profile .friend-actions {
@@ -2736,7 +2775,7 @@ body.mini-hidden :fullscreen .tile-strip {
   min-height: 1.2em;
   margin: 8px 0 0;
   font-size: 0.85rem;
-  color: #f23f43;
+  color: var(--red);
 }
 
 /* The red number on the Friends button: waiting friend requests. */
@@ -2747,7 +2786,7 @@ body.mini-hidden :fullscreen .tile-strip {
   padding: 0 6px;
   box-sizing: border-box;
   border-radius: 9px;
-  background: #f23f43;
+  background: var(--red);
   color: white;
   font-size: 0.75rem;
   font-weight: 700;
@@ -2762,7 +2801,7 @@ body.mini-hidden :fullscreen .tile-strip {
 .empty-note {
   margin: 4px 12px;
   font-size: 0.85rem;
-  color: #949ba4;
+  color: var(--text-muted);
 }
 
 /* The Friends page, in the chat's place. "Friends" as the heading, the tabs next to it. */
@@ -2776,13 +2815,13 @@ body.mini-hidden :fullscreen .tile-strip {
   flex-wrap: wrap;  /* on a narrow phone the tabs may go below the heading */
   gap: 8px 16px;
   padding-bottom: 12px;
-  border-bottom: 1px solid #3f4147;
+  border-bottom: 1px solid var(--line);
 }
 
 .friends-header h2 {
   margin: 0;
   font-size: 1.1rem;
-  color: white;
+  color: var(--text-strong);
 }
 
 .tabs {
@@ -2795,14 +2834,14 @@ body.mini-hidden :fullscreen .tile-strip {
   border: none;
   border-radius: 6px;
   background: none;
-  color: #949ba4;
+  color: var(--text-muted);
   font-size: 0.95rem;
   cursor: pointer;
 }
 
 .tab.active {
-  background: #404249;
-  color: white;
+  background: var(--bg-active);
+  color: var(--text-strong);
 }
 
 #people-list {
@@ -2815,7 +2854,7 @@ body.mini-hidden :fullscreen .tile-strip {
   margin: 12px 0 4px;
   font-size: 0.75rem;
   text-transform: uppercase;
-  color: #949ba4;
+  color: var(--text-muted);
 }
 
 .people-row {
@@ -2824,7 +2863,7 @@ body.mini-hidden :fullscreen .tile-strip {
   justify-content: space-between;
   gap: 8px;
   padding: 8px 4px;
-  border-bottom: 1px solid #3f4147;
+  border-bottom: 1px solid var(--line);
 }
 
 #profile-close {
@@ -2835,8 +2874,8 @@ body.mini-hidden :fullscreen .tile-strip {
   height: 32px;
   border: none;
   border-radius: 50%;
-  background: #1e1f22;
-  color: white;
+  background: var(--bg-darkest);
+  color: var(--text-strong);
   cursor: pointer;
 }
 
@@ -2847,7 +2886,7 @@ body.mini-hidden :fullscreen .tile-strip {
   padding: 24px;
   border: none;
   border-radius: 8px;
-  background: #2b2d31;
+  background: var(--bg-panel);
   color: inherit;
   text-align: center;
 }
@@ -2858,13 +2897,13 @@ body.mini-hidden :fullscreen .tile-strip {
 
 #cropper h2 {
   margin: 0 0 4px;
-  color: white;
+  color: var(--text-strong);
 }
 
 .crop-hint {
   margin: 0 0 16px;
   font-size: 0.85rem;
-  color: #949ba4;
+  color: var(--text-muted);
 }
 
 /* Its size and shape (width, aspect-ratio) are set from JavaScript, per kind of picture. */
@@ -2876,7 +2915,7 @@ body.mini-hidden :fullscreen .tile-strip {
   margin: 0 auto;
   overflow: hidden;
   border-radius: 8px;
-  background: #1e1f22;
+  background: var(--bg-darkest);
 }
 
 #crop-frame.round {
@@ -2907,7 +2946,7 @@ body.mini-hidden :fullscreen .tile-strip {
   gap: 12px;
   margin-top: 16px;
   font-size: 0.85rem;
-  color: #b5bac1;
+  color: var(--text-soft);
 }
 
 .crop-zoom input {
@@ -2925,14 +2964,14 @@ body.mini-hidden :fullscreen .tile-strip {
   padding: 10px;
   border: none;
   border-radius: 6px;
-  background: #5865f2;
+  background: var(--accent);
   color: white;
   font-size: 1rem;
   cursor: pointer;
 }
 
 .crop-buttons #crop-cancel {
-  background: #4e5058;
+  background: var(--bg-neutral);
 }
 
 /* Settings: your picture with its two buttons next to it. */
@@ -2948,14 +2987,14 @@ body.mini-hidden :fullscreen .tile-strip {
 }
 
 #settings #remove-avatar {
-  background: #4e5058;
+  background: var(--bg-neutral);
 }
 
 #settings textarea {
   padding: 10px 12px;
   border: none;
   border-radius: 6px;
-  background: #1e1f22;
+  background: var(--bg-darkest);
   color: inherit;
   font: inherit;  /* textareas don't use the page's font by default */
   resize: vertical;
@@ -2975,7 +3014,7 @@ body.mini-hidden :fullscreen .tile-strip {
     align-items: center;
     gap: 4px;
     padding: 4px;
-    border-bottom: 1px solid #26272b;
+    border-bottom: 1px solid var(--border);
   }
 
   #topbar button {
@@ -2983,7 +3022,7 @@ body.mini-hidden :fullscreen .tile-strip {
     padding: 8px 12px;
     border: none;
     background: none;
-    color: #dbdee1;
+    color: var(--text);
     font-size: 1.3rem;
     cursor: pointer;
   }
@@ -2994,7 +3033,7 @@ body.mini-hidden :fullscreen .tile-strip {
     text-overflow: ellipsis;  /* ...with "…" */
     white-space: nowrap;
     font-weight: 600;
-    color: white;
+    color: var(--text-strong);
   }
 
   /* Something unread somewhere: a red dot on the ☰ button. */
@@ -3006,7 +3045,7 @@ body.mini-hidden :fullscreen .tile-strip {
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    background: #f23f43;
+    background: var(--red);
   }
 
   /* Both side columns become drawers: taken out of the row, laid over the chat,

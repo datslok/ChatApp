@@ -87,3 +87,7 @@
     - [x] A small floating window with the call's participants (who's talking), also while a share is in fullscreen
     - [x] A volume slider for a screen share's sound (separate from the person's voice)
     - [x] Bug: sharing a screen with YouTube on it, the share went black after tabbing out (alt-tab): the browser stops drawing a covered window (occlusion), not our code; workarounds in the README, "A shared window goes black"
+- [ ] **20.** Appearance (Settings → Appearance, saved with your account)
+    - [x] The colours as CSS variables, so themes can change them
+    - [ ] Saved on the server with the account (checked there), applied before the page is drawn
+    - [ ] The Appearance page: themes (Dark, Darker, Light, a few coloured ones), colour pickers for the main colours, font (Windows' own), font size, scale
