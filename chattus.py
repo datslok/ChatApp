@@ -21,8 +21,9 @@ import base64
 import io
 import json
 import re
+import urllib.parse
 import urllib.request
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 from PIL import Image  # Pillow (in requirements.txt, for the server's pictures): shrinking pictures for the model
@@ -49,14 +50,23 @@ Right now it's {now}.
 You answer with JSON: "reply" is your message, and "reaction" is one emoji to put under the message you're answering.
 - Most of the time, react with nothing (""). Only react when it adds something, like 🎉 for good news or 😂 for a really good joke.
 - When a reaction says it all (a thanks, a goodbye, an "ok"), react and leave "reply" empty ("").
-- Questions and requests always get a reply.{custom}"""
+- Questions and requests always get a reply.
+- "search": when you'd need facts you don't know, or that may have changed since you learned them (news, dates,
+  prices, results, anything recent), write a short web search here and leave "reply" and "reaction" empty: you'll
+  get the results and answer then. For everything else (chatting, opinions, things you know well) leave it "".{custom}"""
 
 # The shape every answer must have. llama-server turns it into grammar rules, so the model can't write
-# anything else: always valid JSON with exactly these two texts (either can be empty).
+# anything else: always valid JSON with exactly these texts (any of them can be empty).
 ANSWER_SCHEMA = {
     "type": "object",
     "properties": {"reaction": {"type": "string"}, "reply": {"type": "string"}},
     "required": ["reaction", "reply"],
+}
+# The first time he's asked, he may also ask for a search; after the results, he has to answer.
+ANSWER_OR_SEARCH_SCHEMA = {
+    "type": "object",
+    "properties": {"search": {"type": "string"}, "reaction": {"type": "string"}, "reply": {"type": "string"}},
+    "required": ["search", "reaction", "reply"],
 }
 MAX_CUSTOM_EMOJI = 50  # how many of the chat's own emoji the prompt lists by name
 
@@ -65,6 +75,19 @@ PICTURE_SIZE = 768      # pixels on the longest side, shrunk to before the model
 PICTURE_LOOKBACK = 5    # besides the message he answers: the newest picture this many messages before it
 EMOJI_NOTES = Path("chattus-emoji.json")  # what each custom emoji shows, in his words (git-ignored)
 LOOK_AT_EMOJI = "(look at the custom emoji)"  # a job in the queue that isn't a channel
+
+# Web search. Only the search words leave the server, never the chat's messages.
+EXA_MCP = "https://mcp.exa.ai/mcp"  # Exa's search, through its MCP server: works without an account, but limited
+WIKIPEDIA_API = "https://en.wikipedia.org/w/api.php"  # when Exa says no: free, no account
+USER_AGENT = "ChatApp-Chattus/1.0 (https://github.com/datslok/ChatApp)"  # who's asking (Wikipedia wants one)
+SEARCH_RESULTS = 3          # results per search
+SEARCH_TEXT = 1500          # characters per result the model reads (3 x 1500 ~ 1100 tokens)
+MAX_SEARCHES_PER_DAY = 100  # so nobody can use up the free searches by spamming him
+searches_today = {"day": None, "count": 0}  # (outside the Chattus object: kept when he reconnects)
+
+
+class SearchRefused(Exception):
+    """Exa's free limit was reached (or it said no in another way)."""
 
 
 def log(text):
@@ -107,12 +130,81 @@ def picture_data_url(raw, size=PICTURE_SIZE):
     return "data:image/jpeg;base64," + base64.b64encode(buffer.getvalue()).decode()
 
 
+# ---------- Web search ----------
+
+def exa_search(query, api_key=None):
+    """Search the web with Exa, through its MCP server. Blocking. Raises SearchRefused at its limit.
+
+    MCP (Model Context Protocol) is a standard way for AI programs to use tools. Underneath, it's
+    JSON-RPC: small JSON messages like {"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": ...},
+    each POSTed to the server. A conversation is: "initialize" (the server answers with a session id,
+    which every later message carries), "notifications/initialized" (we're ready), then "tools/call".
+    Answers come as "server-sent events": lines like "data: {...}"."""
+    url = EXA_MCP + (f"?exaApiKey={api_key}" if api_key else "")  # with a key: our own (bigger) allowance
+    session = None
+
+    def send(method, params, expect_answer=True):
+        nonlocal session
+        message = {"jsonrpc": "2.0", "method": method, "params": params}
+        if expect_answer:
+            message["id"] = 1  # (a "notification" has no id, and gets no answer)
+        headers = {"Content-Type": "application/json", "Accept": "application/json, text/event-stream",
+                   "User-Agent": USER_AGENT}
+        if session:
+            headers["Mcp-Session-Id"] = session
+        request = urllib.request.Request(url, json.dumps(message).encode(), headers=headers, method="POST")
+        with urllib.request.urlopen(request, timeout=30) as response:
+            session = response.headers.get("Mcp-Session-Id") or session
+            raw = response.read().decode("utf-8", "replace")
+        if not expect_answer:
+            return None
+        for line in raw.splitlines():  # an event stream: the JSON is on the "data:" line
+            if line.startswith("data:"):
+                return json.loads(line[5:])
+        return json.loads(raw)  # (or plain JSON)
+
+    send("initialize", {"protocolVersion": "2025-06-18", "capabilities": {},
+                        "clientInfo": {"name": "chattus", "version": "1.0"}})
+    send("notifications/initialized", {}, expect_answer=False)
+    answer = send("tools/call", {"name": "web_search_exa", "arguments": {"query": query, "numResults": SEARCH_RESULTS}})
+    if "error" in answer:
+        raise SearchRefused(answer["error"].get("message", "error"))
+    text = "".join(part.get("text", "") for part in answer["result"]["content"])
+    if "rate limit" in text.lower() or answer["result"].get("isError"):
+        raise SearchRefused(text[:200])
+    return text[:SEARCH_RESULTS * SEARCH_TEXT]
+
+
+def wikipedia_search(query):
+    """Search English Wikipedia: the best few articles' titles, addresses and opening paragraphs.
+    Blocking. Free and without an account, for when Exa says no."""
+    def get(params):
+        address = WIKIPEDIA_API + "?" + urllib.parse.urlencode({**params, "format": "json"})
+        request = urllib.request.Request(address, headers={"User-Agent": USER_AGENT})
+        with urllib.request.urlopen(request, timeout=20) as response:
+            return json.loads(response.read())
+
+    found = get({"action": "query", "list": "search", "srsearch": query, "srlimit": SEARCH_RESULTS})
+    titles = [hit["title"] for hit in found["query"]["search"]]
+    if not titles:
+        return ""
+    # The articles' opening sections as plain text ("extracts"), all in one request.
+    pages = get({"action": "query", "prop": "extracts", "exintro": 1, "explaintext": 1, "titles": "|".join(titles)})
+    extracts = {page["title"]: page.get("extract", "") for page in pages["query"]["pages"].values()}
+    results = []
+    for title in titles:
+        link = "https://en.wikipedia.org/wiki/" + urllib.parse.quote(title.replace(" ", "_"))
+        results.append(f"Title: {title}\nURL: {link}\n{extracts.get(title, '')[:SEARCH_TEXT]}")
+    return "\n\n".join(results)
+
+
 class Chattus:
-    def __init__(self, chat_url, llama_url, password, llama_key):
+    def __init__(self, chat_url, llama_url, password, llama_key, exa_key=None):
         self.chat_url = chat_url
         self.llama_url = llama_url
         self.password = password
         self.llama_key = llama_key
+        self.exa_key = exa_key  # optional: Exa's search works without one, but with a smaller, shared limit
         self.cookie = None      # "session=..." after logging in
         self.websocket = None
         self.my_id = None
@@ -410,20 +502,66 @@ class Chattus:
             else:
                 conversation.append({"role": "user", "content": line})
 
+        # "@Chattus search: ..." always searches. Otherwise he decides: his first answer may be a search.
+        forced = re.match(r"^\s*(?:@\S+\s+)?search:\s*(.+)", self.readable(target["text"]), re.IGNORECASE | re.DOTALL)
+        if forced:
+            query = forced[1].strip()
+        else:
+            answer = self.complete(conversation, ANSWER_OR_SEARCH_SCHEMA)
+            query = answer.get("search", "").strip()
+            if not query:
+                return answer.get("reaction", ""), answer.get("reply", "")
+
+        # The results go into the conversation as a note, and he's asked again: this time he can
+        # only answer (the schema has no "search"), so he can't keep searching.
+        conversation.append({"role": "user", "content": (
+            f"[Web search for \"{query}\"]\n{self.search(query)}\n\n"
+            "[Now answer the conversation above with this. If a source helps, put its link in your reply.]"
+        )})
+        answer = self.complete(conversation, ANSWER_SCHEMA)
+        return answer.get("reaction", ""), answer.get("reply", "")
+
+    def complete(self, conversation, schema):
+        """Ask the model, in the JSON shape `schema`. Blocking."""
         answer, _ = post_json(
             f"{self.llama_url}/v1/chat/completions",
             {
                 "messages": conversation, "max_tokens": MAX_ANSWER_TOKENS, "temperature": 0.7,
-                "response_format": {"type": "json_schema", "json_schema": {"schema": ANSWER_SCHEMA}},
+                "response_format": {"type": "json_schema", "json_schema": {"schema": schema}},
             },
             {"Authorization": f"Bearer {self.llama_key}"},
         )
         content = answer["choices"][0]["message"]["content"] or ""
         try:
             parsed = json.loads(content)
-            return parsed["reaction"], parsed["reply"]
-        except (ValueError, KeyError, TypeError):  # cut off by max_tokens, say: use what's there as text
-            return "", content
+            return {key: str(value) for key, value in parsed.items()}
+        except (ValueError, AttributeError):  # cut off by max_tokens, say: use what's there as text
+            return {"reply": content}
+
+    def search(self, query):
+        """Search results as text for the model (or a note saying why there are none). Exa first;
+        Wikipedia when Exa says no. At most MAX_SEARCHES_PER_DAY a day. Blocking."""
+        today = date.today()
+        if searches_today["day"] != today:
+            searches_today.update(day=today, count=0)
+        if searches_today["count"] >= MAX_SEARCHES_PER_DAY:
+            log(f"Not searching {query!r}: the daily limit is used up.")
+            return "(No results: searching is used up for today. Say you can't look it up until tomorrow.)"
+        searches_today["count"] += 1
+
+        try:
+            results = exa_search(query, self.exa_key)
+            log(f"Searched Exa for {query!r}.")
+            return results
+        except Exception as error:  # its free limit (SearchRefused), or it's down: try Wikipedia
+            log(f"Exa didn't search {query!r} ({error!r:.100}); trying Wikipedia.")
+        try:
+            results = wikipedia_search(query)
+            log(f"Searched Wikipedia for {query!r}.")
+            return results or "(Wikipedia found nothing. Say you couldn't find it.)"
+        except Exception as error:
+            log(f"Wikipedia didn't search {query!r} either: {error!r}")
+            return "(The search didn't work. Say you couldn't look it up right now.)"
 
     def reaction_code(self, reaction):
         """The model's reaction as the server wants it, or None if the server wouldn't accept it:
@@ -466,7 +604,8 @@ async def main():
             raise SystemExit(f"{name} is missing in {args.env} (see the README, 'Optional: an AI bot').")
 
     while True:  # forever: when the chat restarts (every deploy), the connection drops; log in again
-        bot = Chattus(args.chat, args.llama, settings["CHATTUS_PASSWORD"], settings["LLAMA_API_KEY"])
+        bot = Chattus(args.chat, args.llama, settings["CHATTUS_PASSWORD"], settings["LLAMA_API_KEY"],
+                      settings.get("EXA_API_KEY") or None)
         try:
             await bot.run()
             log("The connection closed.")

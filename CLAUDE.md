@@ -238,7 +238,14 @@ the point is for me to understand how it works, not just to have it done.
   describes each new picture once (256 px, 8 words) into `chattus-emoji.json` (git-ignored, keyed by file
   name); the prompt lists ":name: (note)". A message he reacted to counts as answered (after restarts too).
   Known quirks: he sometimes thinks a cat picture is him; small-model limits.
-  Still to do: Wikipedia + Tavily search.
+  Web search: the first model call uses `ANSWER_OR_SEARCH_SCHEMA` (a `search` field); if he fills it (or the
+  message starts with "search:"), `search()` runs it and the results go in as a user note, then a second call
+  with `ANSWER_SCHEMA` (no more searching). `exa_search` is a hand-written MCP client (JSON-RPC over HTTP
+  POSTs: initialize, notifications/initialized, tools/call web_search_exa; SSE "data:" lines; needs a
+  User-Agent) to `https://mcp.exa.ai/mcp`, keyless by default: its free limit is per IP and tight (often
+  refuses a second search within seconds; "rate limit" text -> `SearchRefused`). Then `wikipedia_search`
+  (en.wikipedia.org API, search + intro extracts). Optional `EXA_API_KEY` in .env (`?exaApiKey=`). Max 100
+  searches a day (`searches_today`, kept across reconnects). Tavily was dropped for Exa (no account needed).
 
 ## Hosting
 

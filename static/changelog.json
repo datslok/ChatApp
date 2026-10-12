@@ -67,6 +67,7 @@
         "In a DM with a friend, write @Chattus to ask him something there: he only answers when mentioned. Mentioning him lets him read that DM's latest messages for an hour (on our own server, never sent anywhere)",
         "He reacts to messages too (🎉 for good news, 🐾 for a thanks), and knows our own emoji by name",
         "He can see pictures: send one in #chattus (or with @Chattus), or ask about \"the picture above\"",
+        "He searches the web when he needs fresh facts (start with \"search:\" to make him). Only his search words leave our server, never the chat",
         "He runs on our own server, so nothing goes to an AI company. He can be wrong, and only knows the last messages of a channel"
       ]
     },
@@ -87,6 +88,7 @@
         "Chattus in DMs with friends: write @Chattus in a DM and he answers there, only when mentioned. A mention lets him read that DM's latest messages for an hour (on our own server)",
         "Chattus reacts: sometimes an emoji under your message instead of (or as well as) an answer, and he can use our own emoji",
         "Chattus can see pictures: send him one, or ask about the picture above. He also knows what our own emoji look like",
+        "Chattus can search the web for fresh facts, with a link to where he found it. \"search: ...\" makes him look something up",
         "Maths in messages: $x^2$ in a sentence, or $$\\int_0^1 f(x)\\,dx$$ for a formula on its own line (LaTeX, drawn like in a textbook)",
         "Settings → Appearance: themes, your own colours, fonts and text size, the same on all your devices",
         "The chat can be installed on your phone as an app: open it on your phone and tap Install in the banner",

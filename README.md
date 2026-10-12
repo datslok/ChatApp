@@ -298,8 +298,13 @@ calls), and only answers mentions. He can react instead of (or as well as) answe
 chat's custom emoji by name. He sees pictures: the one in the message he answers and the newest one
 just before it (shrunk to 768 pixels first). He looks at each custom emoji once, and keeps a note of
 what it shows in `chattus-emoji.json` (git-ignored; delete it to make him look again). The server knows he's a bot from `users.is_bot`, which only
-`tools\make_bot.py` sets, so nobody can get this by naming themselves Chattus. Web search is still
-to come.
+`tools\make_bot.py` sets, so nobody can get this by naming themselves Chattus.
+
+He searches the web when he needs fresh facts ("search: ..." makes him), at most 100 times a day:
+with [Exa](https://exa.ai) through its MCP server, which works without an account but only allows a
+few searches now and then from one internet address. When it says no, he searches Wikipedia instead.
+For your own, bigger allowance, make a free account at exa.ai and put its key in `.env` as
+`EXA_API_KEY`. Only the search words leave the server, never the chat's messages.
 
 His language model runs on the server's own graphics card, with
 [llama.cpp](https://github.com/ggml-org/llama.cpp) (`llama-server`): Qwen 3.5 9B, shrunk to 4 bits

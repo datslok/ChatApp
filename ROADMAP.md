@@ -114,5 +114,5 @@
     - [x] The channel's recent messages as context, answers as replies, a friendly personality with short chat-sized answers (English)
     - [x] Reactions, emoji in his answers, the custom emoji by name
     - [x] Looking at pictures (and what the custom emoji show)
-    - [ ] Web search: Wikipedia and Tavily (a daily limit; "@Chattus search: ..." forces one)
+    - [x] Web search: Exa through its MCP server (no account; EXA_API_KEY optional), Wikipedia when Exa says no (a daily limit; "@Chattus search: ..." forces one)
     - [ ] Maybe: reminders, searching the chat, dice and polls, a "bot" badge
