@@ -138,10 +138,15 @@ button, input, select, textarea {
   font-family: inherit;
 }
 
+/* Exactly the window, never more: pinned to it ("fixed", with all four sides at 0), so the browser
+   works out the size itself. (100dvh counted the space behind Android's status and navigation bars
+   in the installed app, which made the whole page scroll a little.) The page itself never scrolls:
+   only the parts meant to (the messages, the lists, Settings) scroll inside themselves. */
 body {
   margin: 0;
-  height: 100vh;   /* fallback for older browsers... */
-  height: 100dvh;  /* ...the part of the screen that's really visible (phones: minus the address bar) */
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
   display: flex;  /* sidebar, chat and online list side by side */
   font-family: var(--font);  /* Settings → Appearance (appearance.js) */
   background: var(--bg-main);
