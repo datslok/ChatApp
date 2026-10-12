@@ -804,8 +804,34 @@ async def login(credentials: Credentials, response: Response):
     return {"ok": True}
 
 
+def allow_landing_page(request, response):
+    """Let the landing page (on LANDING_HOST, a different address than the chat) read this answer.
+    Browsers only let a page read answers from its own address, unless the server says otherwise
+    ("CORS"): we say so for exactly that one address, never for anyone. The login cookie still
+    reaches us because the two addresses are the same *site* (example.com and chat.example.com),
+    which SameSite=Lax allows."""
+    origin = request.headers.get("origin")
+    if LANDING_HOST and origin == f"https://{LANDING_HOST}":
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Credentials"] = "true"  # with the cookie
+    response.headers["Vary"] = "Origin"  # the answer depends on who asks: caches mustn't mix them up
+
+
+@app.get("/whoami")
+async def whoami(request: Request, response: Response):
+    """For the landing page: who's logged in in this browser, if anyone. Only the name and picture."""
+    allow_landing_page(request, response)
+    response.headers["Cache-Control"] = "no-store"  # different for everyone: never keep a copy
+    user_id = current_user(request)
+    if user_id is None:
+        return {"username": None}
+    username, avatar = db.execute("SELECT username, avatar_id FROM users WHERE id = ?", (user_id,)).fetchone()
+    return {"username": username, "avatar": f"{PUBLIC_URL}/avatars/{avatar}" if avatar else None}
+
+
 @app.post("/logout")
 async def logout(request: Request, response: Response):
+    allow_landing_page(request, response)  # (the landing page's "Log out" too)
     token = request.cookies.get(SESSION_COOKIE)
     if token:
         # Delete it on the server too, so the token stops working even if someone copied it.

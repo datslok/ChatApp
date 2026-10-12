@@ -266,7 +266,10 @@ show it on your main domain (`https://example.com`) instead:
    If Cloudflare says a DNS record for it already exists, delete that record first (and any Redirect
    Rule for it, under your domain → Rules).
 
-The page's buttons lead to your `PUBLIC_URL` by themselves. Its texts and pictures (`logo.png`,
+The page's buttons lead to your `PUBLIC_URL` by themselves. Someone logged in to the chat sees their
+name and **Log out** at the top (the page asks the chat's `/whoami`, which only answers your
+`LANDING_HOST`; this needs the main domain and the chat to be the same site, like `example.com` and
+`chat.example.com`). Its texts and pictures (`logo.png`,
 `screenshot.png`) are yours to change.
 
 ### 8. Optional: update from your other PC

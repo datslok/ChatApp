@@ -105,6 +105,55 @@
       font-size: 0.9rem;
     }
 
+    /* "Log out" is a <button>, not a link: buttons have their own border and font, so undo those. */
+    button.button {
+      border: none;
+      font-family: inherit;
+      line-height: inherit;
+      cursor: pointer;
+    }
+
+    /* display: inline-block above would otherwise beat the hidden attribute. */
+    .button[hidden],
+    #me[hidden] {
+      display: none;
+    }
+
+    /* Who's logged in: picture (or first letter) and name. */
+    #me {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: white;
+      font-weight: 600;
+    }
+
+    #me-picture,
+    #me-letter {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+    }
+
+    #me-letter {
+      display: grid;
+      place-items: center;  /* the letter in the middle of the circle */
+      background: var(--blue);
+      font-size: 0.85rem;
+    }
+
+    #me-letter[hidden],
+    #me-picture[hidden] {
+      display: none;
+    }
+
+    /* On a narrow phone there's no room for the name: the picture is enough. */
+    @media (max-width: 480px) {
+      #me-name {
+        display: none;
+      }
+    }
+
     /* ----- The top part: logo, name, what it is, the main buttons. */
     .hero {
       padding: 64px 0 40px;
@@ -243,7 +292,14 @@
   <header>
     <div class="wrap">
       <a class="brand" href="/"><img src="/landing/logo.png" alt=""> ChatApp</a>
-      <a class="button grey" href="{{CHAT}}/login">Log in</a>
+      <!-- Shown instead of "Log in" when this browser is logged in to the chat (the script below). -->
+      <span id="me" hidden>
+        <img id="me-picture" alt="" hidden>
+        <span id="me-letter" hidden></span>
+        <span id="me-name"></span>
+      </span>
+      <button type="button" class="button grey" id="logout-button" hidden>Log out</button>
+      <a class="button grey" id="login-button" href="{{CHAT}}/login">Log in</a>
       <a class="button" href="{{CHAT}}">Open chat</a>
     </div>
   </header>
@@ -257,7 +313,7 @@
         <a class="button" href="{{CHAT}}">Open ChatApp</a>
         <a class="button grey" href="{{CHAT}}/download">⬇ Get the Windows app</a>
       </div>
-      <p class="register">Got an invite code? <a href="{{CHAT}}/login?register">Create an account →</a></p>
+      <p class="register" id="register-line">Got an invite code? <a href="{{CHAT}}/login?register">Create an account →</a></p>
       <img class="screenshot" src="/landing/screenshot.png" alt="ChatApp: channels on the left, messages in the middle, who's online on the right">
     </div>
 
@@ -318,5 +374,55 @@
     <a href="{{CHAT}}/download">Download</a> ·
     <a href="https://github.com/datslok/ChatApp">GitHub</a>
   </footer>
+  <script>
+    // Logged in to the chat in this browser? Then show who, and "Log out" instead of "Log in".
+    //
+    // The chat is at another address ({{CHAT}}), so we ask it: "credentials: include" sends the
+    // chat's login cookie along, and the chat allows this page to read the answer (server.py,
+    // allow_landing_page). If anything fails (offline, chat down), the page stays as it is.
+    const CHAT = "{{CHAT}}";
+    const me = document.getElementById("me");
+    const mePicture = document.getElementById("me-picture");
+    const meLetter = document.getElementById("me-letter");
+    const loginButton = document.getElementById("login-button");
+    const logoutButton = document.getElementById("logout-button");
+    const registerLine = document.getElementById("register-line");
+
+    function showLoggedIn(username, picture) {
+      const loggedIn = username !== null;
+      me.hidden = !loggedIn;
+      logoutButton.hidden = !loggedIn;
+      loginButton.hidden = loggedIn;
+      registerLine.hidden = loggedIn;  // they have an account already
+      if (!loggedIn) return;
+      document.getElementById("me-name").textContent = username;  // as text, never as HTML
+      mePicture.hidden = !picture;
+      meLetter.hidden = Boolean(picture);
+      if (picture) mePicture.src = picture;
+      else meLetter.textContent = username.charAt(0).toUpperCase();
+    }
+
+    async function checkLogin() {
+      try {
+        const response = await fetch(CHAT + "/whoami", { credentials: "include" });
+        if (!response.ok) return;
+        const answer = await response.json();
+        showLoggedIn(answer.username, answer.avatar);
+      } catch {
+        // Can't reach the chat: leave the page as for someone logged out.
+      }
+    }
+
+    logoutButton.addEventListener("click", async () => {
+      try {
+        await fetch(CHAT + "/logout", { method: "POST", credentials: "include" });
+      } catch {
+        return;  // didn't get through: still logged in, so leave everything as it is
+      }
+      showLoggedIn(null, null);
+    });
+
+    checkLogin();
+  </script>
 </body>
 </html>

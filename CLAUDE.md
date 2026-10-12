@@ -129,6 +129,10 @@ the point is for me to understand how it works, not just to have it done.
   `{{CHAT}}` in it becomes PUBLIC_URL (server.py, `landing_page`). Its pictures are under `/landing/`.
   The screenshot is of a throwaway server with test accounts (never the real chat). `/login?register`
   opens the login page in register mode.
+  Logged in to the chat? The page asks `PUBLIC_URL/whoami` (name and picture only) with the cookie, and
+  shows the name and "Log out" (`POST /logout`). Both answer with CORS headers for exactly
+  `https://LANDING_HOST` (`allow_landing_page`); the cookie stays host-only, SameSite=Lax lets it through
+  because datslok.no and chat.datslok.no are the same site.
 - `releases/`: the app's installers and `latest.json`, served without login at `/releases/` (git-ignored).
   The app checks `latest.json` at startup and installs a newer version by itself.
 - The updates' private signing key is `~\.tauri\chatapp.key` in the user folder (no password, never commit
