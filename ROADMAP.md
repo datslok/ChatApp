@@ -85,5 +85,5 @@
     - [ ] Bug: after scrolling up, sending a message doesn't scroll back down to it (sending should always jump to the bottom)
 - [ ] **19.** Watching together in calls
     - [x] A small floating window with the call's participants (who's talking), also while a share is in fullscreen
-    - [ ] A volume slider for a screen share's sound (separate from the person's voice)
+    - [x] A volume slider for a screen share's sound (separate from the person's voice)
     - [ ] Bug: sharing a screen with YouTube on it, the share went black after tabbing out (alt-tab) of the video

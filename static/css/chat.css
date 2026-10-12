@@ -454,6 +454,36 @@ body.mini-hidden :fullscreen .tile-strip {
 .tile-video.screen {
   object-fit: contain;
 }
+/* A shared screen's volume (rooms.js, makeScreenVolume): 🔊 and a slider in the bottom-right
+   corner, shown while the mouse is over the screen. Touch screens can't hover ("hover: none"):
+   always shown there. Not in the strip's small thumbnails. */
+.screen-volume {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  display: none;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.6);
+  font-size: 0.85rem;
+  cursor: default;
+}
+.screen-volume input {
+  width: 100px;
+}
+.screen-tile:hover .screen-volume {
+  display: flex;
+}
+@media (hover: none) {
+  .screen-volume {
+    display: flex;
+  }
+}
+.tile-strip .screen-tile .screen-volume {
+  display: none;  /* (as specific as the :hover rule above, and later, so it wins) */
+}
 /* The 🖥️ buttons while we're sharing. */
 .share-button.on {
   background: #248046;

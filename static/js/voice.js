@@ -256,14 +256,38 @@ function setPersonVolume(userId, percent) {
   if (participant) applyVolume(participant);
 }
 
+// The sound of each person's shared screen, in %, kept the same way but on its own: a video can
+// be turned down without turning them down too. (Set with the slider on the screen, rooms.js.)
+let screenVolumes = {};
+try {
+  screenVolumes = JSON.parse(localStorage.getItem("voiceScreenVolumes")) || {};
+} catch {}
+
+function screenVolume(userId) {
+  return screenVolumes[userId] ?? 100;
+}
+
+function setScreenVolume(userId, percent) {
+  if (percent === 100) {
+    delete screenVolumes[userId];
+  } else {
+    screenVolumes[userId] = percent;
+  }
+  try {
+    localStorage.setItem("voiceScreenVolumes", JSON.stringify(screenVolumes));
+  } catch {}
+  const participant = voiceRoom && voiceRoom.remoteParticipants.get(String(userId));
+  if (participant) applyVolume(participant);
+}
+
 // How loud one person is for us: everyone's volume (Settings) times their own (profile popup).
 // 150% × 120% = 180%: LiveKit's GainNode for them simply multiplies the sound by 1.8.
-// Deafened: times 0. (Their own volume stays as it was, for when we undeafen.)
+// Their shared screen's sound: everyone's volume times the screen's own. LiveKit keeps a
+// volume per source. Deafened: times 0. (Their own volumes stay as they were, for when we undeafen.)
 function applyVolume(participant) {
-  const volume = deafened ? 0 : (voiceSettings.outputVolume / 100) * (personVolume(participant.identity) / 100);
-  participant.setVolume(volume);  // their voice
-  // ...and the sound of their shared screen (LiveKit keeps a volume per source).
-  participant.setVolume(volume, LivekitClient.Track.Source.ScreenShareAudio);
+  const everyone = deafened ? 0 : voiceSettings.outputVolume / 100;
+  participant.setVolume(everyone * (personVolume(participant.identity) / 100));  // their voice
+  participant.setVolume(everyone * (screenVolume(participant.identity) / 100), LivekitClient.Track.Source.ScreenShareAudio);
 }
 
 // ----- Who's in voice (in the sidebar, for everyone) and who's talking (only while you're in there)

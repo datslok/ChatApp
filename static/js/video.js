@@ -196,4 +196,13 @@ function screenTrack(userId) {
   return publication && publication.track && !publication.isMuted ? publication.track : null;
 }
 
+// Does someone else's shared screen come with sound ("Share audio" ticked in their picker),
+// and has it reached us? (We never hear our own.)
+function screenHasSound(userId) {
+  if (!voiceRoom || userId === myId) return false;
+  const participant = voiceRoom.remoteParticipants.get(String(userId));
+  const publication = participant && participant.getTrackPublication(LivekitClient.Track.Source.ScreenShareAudio);
+  return Boolean(publication && publication.track);
+}
+
 showShareButtons();

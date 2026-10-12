@@ -93,6 +93,8 @@ async function joinVoice(roomName, label) {
       }
       voiceAudio.appendChild(track.attach());
       applyVolume(participant);
+      // A shared screen's sound: its tile gets a volume slider.
+      if (publication.source === LivekitClient.Track.Source.ScreenShareAudio) renderCallPanel();
     });
     // ...and when they leave or stop sending, stop it again.
     room.on(LivekitClient.RoomEvent.TrackUnsubscribed, (track) => {
@@ -634,9 +636,40 @@ function makeScreenTile(id) {
   label.className = "tile-name";
   label.textContent = id === myId ? "Your screen" : name + "'s screen";
   tile.append(videoFor(screenTrack(id), false, "tile-video screen"), label);
+  if (screenHasSound(id)) tile.append(makeScreenVolume(id));
   tile.title = "Double-click for fullscreen";  // (handled by the tile areas, see "Fullscreen")
   tile.addEventListener("click", () => toggleFocus(tile));
   return tile;
+}
+
+// 🔊 and a slider in a shared screen's corner: how loud its sound is for us (voice.js,
+// setScreenVolume). Shown while the mouse is over the screen (chat.css, .screen-volume).
+function makeScreenVolume(id) {
+  const box = document.createElement("label");  // (a label: its text belongs to the slider)
+  box.className = "screen-volume";
+  box.title = "This screen's volume";
+  const slider = document.createElement("input");
+  slider.type = "range";
+  slider.min = "0";
+  slider.max = "200";
+  slider.step = "5";
+  slider.value = screenVolume(id);
+  slider.setAttribute("aria-label", "Screen volume");
+  const value = document.createElement("span");
+  value.className = "slider-value";
+  value.textContent = slider.value + "%";
+  // "input": while it's being dragged, not only when let go.
+  slider.addEventListener("input", () => {
+    setScreenVolume(id, Number(slider.value));
+    value.textContent = slider.value + "%";
+  });
+  box.append("🔊", slider, value);
+  // Clicks and drags here are for the slider: stop them from going on up ("bubbling") to the
+  // tile (focus) and its area (double-click for fullscreen).
+  for (const type of ["click", "dblclick", "pointerdown"]) {
+    box.addEventListener(type, (event) => event.stopPropagation());
+  }
+  return box;
 }
 
 // ----- Focus: one tile big ("the stage"), the others as small thumbnails in a row below it
