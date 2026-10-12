@@ -300,17 +300,15 @@ body {
   cursor: grabbing;
 }
 /* Sized by the screen: "vh" is 1% of its height (in fullscreen, the window is the screen), so
-   10vh is 108px on a 1080p screen and 144px on 1440p. max(): never smaller than 44px. The
-   pictures take 60% of the tile's height (and as much width: "aspect-ratio: 1"), the letters
-   in letter pictures follow the screen too. */
+   10vh is 108px on a 1080p screen and 144px on 1440p. max(): never smaller than their first
+   sizes here (72px tiles; 44px pictures and 1.1rem letters, as in the strip outside fullscreen). */
 :fullscreen .tile-strip .call-tile {
-  height: max(44px, 10vh);
+  height: max(72px, 10vh);
 }
 :fullscreen .tile-strip .avatar {
-  width: auto;
-  height: 60%;
-  aspect-ratio: 1;
-  font-size: max(0.7rem, 2.4vh);
+  width: max(44px, 6.1vh);
+  height: max(44px, 6.1vh);
+  font-size: max(1.1rem, 2.4vh);
 }
 :fullscreen .tile-strip.corner-top-left { top: 8px; left: 8px; }
 :fullscreen .tile-strip.corner-top-right { top: 8px; right: 8px; }
