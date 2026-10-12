@@ -122,6 +122,8 @@ the point is for me to understand how it works, not just to have it done.
   `npm run tauri icon ../icon/chattuschattus_square.png` in `desktop/` makes every size (delete the android/ios/Store/Mac ones and 64x64.png); `static/favicon.ico` is a copy of
   the resulting `icon.ico`, served at `/favicon.ico` for the browser tab and linked from every page as
   `/favicon.ico?v=2` (raise the number with each new icon: browsers and Cloudflare keep it a day).
+  `scripts\refresh-icons.bat` (double-click; a .bat so it runs when downloaded too, CRLF kept by
+  `.gitattributes`) clears Windows' icon cache when the taskbar or Start menu still shows an old icon.
 - `static/download.html`: the download page (`/download`, no login), linked from the login page and
   Settings (hidden inside the app). `/download/windows` always redirects to the newest installer.
 - `static/landing/`: the landing page (`index.html`, `logo.png` from `icon/chattuschattus_square.png`,

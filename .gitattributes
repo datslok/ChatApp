@@ -1,0 +1,3 @@
+# .bat files need Windows line endings (CRLF), also in copies downloaded from GitHub: cmd can
+# misread them otherwise.
+*.bat text eol=crlf

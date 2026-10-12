@@ -71,6 +71,7 @@ the same PC, but the scripts assume two).
 | `scripts\usage.ps1` | your PC | runs `usage.ps1` on the server |
 | `scripts\backup-fetch.ps1` | your PC | copies the server's newest backup here (`-Install`: every day) |
 | `scripts\release-upload.ps1` | your PC | puts a new desktop app version on the server |
+| `scripts\refresh-icons.bat` | any Windows PC | double-click: Windows shows programs' new icons (after a new app icon) |
 | `tools\make_admin.py` | either | make someone an admin, or take it away |
 | `tools\feedback.py` | either | read the bug reports and ideas, mark them done |
 
@@ -503,6 +504,19 @@ Put the new picture (a 1024×1024 PNG) in `icon\`, then in `desktop\`:
 the new one instead of keeping the old one for a day), point `tools\make_installer_images.py` at the
 new file (its `ICON` line), run `python tools\make_installer_images.py` (the installer's pictures and the
 update window's cat), and release a new version.
+
+### The old icon is still showing after an update
+
+Windows keeps a cache of every icon it has shown, and doesn't always notice when a program's icon
+changes: the taskbar, Start menu or desktop can keep showing the old one after the app has updated.
+**`scripts\refresh-icons.bat`** fixes that: double-click it. It stops Explorer (the taskbar and desktop
+disappear for a moment; nothing else closes), deletes the icon cache, and starts Explorer again, which
+then reads every icon fresh. If a program pinned to the taskbar still shows its old icon, unpin it and
+pin it again.
+
+It's a plain `.bat` file, so you can send it to the people using your chat (in the chat itself, for
+example) and they can run it with a double-click. Downloaded files make Windows ask first: choose
+**Run** (or **More info → Run anyway**).
 
 ---
 
