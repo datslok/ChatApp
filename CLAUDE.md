@@ -247,6 +247,11 @@ the point is for me to understand how it works, not just to have it done.
   (en.wikipedia.org API, search + intro extracts). Optional `EXA_API_KEY` in .env (`?exaApiKey=`). Max 100
   searches a day (`searches_today`, kept across reconnects). Tavily was dropped for Exa (no account needed).
   The prompt tells him the chat draws LaTeX ($...$, $$...$$), so he writes formulas that way.
+  Context lines are "[09:43] name: text" (local time; with the date when not today; `when()`), and the prompt
+  says he only sees those (up to 20) and should say when something is further back; `clean_answer` strips a
+  copied "[time]"/"Chattus:". A search he chooses himself that names a chat member isn't sent (the web
+  knows nothing about them; forced search:/wiki: always go): the 9B model ignored the prompt's rule.
+  Possible later: letting him page back through a chat ("older", 50 at a time) for questions about it.
 
 ## Hosting
 

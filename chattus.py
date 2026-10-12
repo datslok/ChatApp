@@ -40,7 +40,10 @@ MAX_AGE = timedelta(hours=1)  # older messages are never answered (after he was 
 SYSTEM_PROMPT = """You are Chattus, a friendly and helpful cat who lives in a small group chat of friends.
 Write like a person in a chat: usually one to three short sentences, no headings or bullet lists.
 Only write more when someone asks you to explain something in detail. Use at most one emoji in a message, often none.
-Each message from the others starts with the sender's name, like "kari: hi". Don't start yours with your name.
+The messages you're given are the latest ones in this chat (up to 20), oldest first. Each one from the others starts
+with when it was sent and who sent it, like "[14:05] kari: hi" (with the date when it wasn't today). Don't start
+yours with a time or your name. You can't see anything older than these: if someone asks about something further
+back, say it's too far back for you to see.
 If you don't know something, say so instead of making it up.
 The chat draws maths written in LaTeX: $...$ inside a sentence, $$...$$ on a line of its own (no space just inside
 the dollar signs). Use it whenever you write a formula, an equation or a symbol, like $E = mc^2$.
@@ -55,7 +58,8 @@ You answer with JSON: "reply" is your message, and "reaction" is one emoji to pu
 - Questions and requests always get a reply.
 - "search": when you'd need facts you don't know, or that may have changed since you learned them (news, dates,
   prices, results, anything recent), write a short web search here and leave "reply" and "reaction" empty: you'll
-  get the results and answer then. For everything else (chatting, opinions, things you know well) leave it "".{custom}"""
+  get the results and answer then. For everything else (chatting, opinions, things you know well) leave it "".
+  Never search for things about this chat or the people in it: the web knows nothing about them.{custom}"""
 
 # The shape every answer must have. llama-server turns it into grammar rules, so the model can't write
 # anything else: always valid JSON with exactly these texts (any of them can be empty).
@@ -435,6 +439,12 @@ class Chattus:
         text = text.replace("<@everyone>", "@everyone")
         return re.sub(r"<:(\d+)>", lambda m: ":" + self.emoji.get(int(m[1]), "emoji") + ":", text)
 
+    def when(self, message):
+        """When a message was sent, in this PC's time: "09:43" today, "11 Oct 09:43" on other days.
+        (The server sends UTC, like "2026-10-12T07:43:00Z".)"""
+        sent = datetime.fromisoformat(message["sent_at"].replace("Z", "+00:00")).astimezone()
+        return f"{sent:%H:%M}" if sent.date() == date.today() else f"{sent:%d %b %H:%M}"
+
     def where(self, channel):
         if channel == HOME:
             return "You're in #chattus, your own channel: every message there is for you."
@@ -493,7 +503,7 @@ class Chattus:
                 conversation.append({"role": "assistant", "content": text})
                 continue
             replying = f"(replying to {message['reply']['name']}) " if (message.get("reply") or {}).get("name") else ""
-            line = f"{message['name']}: {replying}{text}"
+            line = f"[{self.when(message)}] {message['name']}: {replying}{text}"
             if picture:
                 # A message with a picture: its content is a list of parts, the text and the picture.
                 line += " [sent this picture:]" if text else "[sent this picture:]"
@@ -517,10 +527,20 @@ class Chattus:
             if not query:
                 return answer.get("reaction", ""), answer.get("reply", "")
 
+        # A search he chose himself about someone in the chat ("what did kari say last week?") would
+        # find nothing on the web, however the prompt asks him not to: don't send it. (A search someone
+        # asked for with "search:" or "wiki:" always goes, in case a friend shares a famous name.)
+        about_us = [name for name in self.names.values() if re.search(rf"\b{re.escape(name)}\b", query, re.IGNORECASE)]
+        if about_us and not forced:
+            log(f"Not searching {query!r}: it's about {', '.join(about_us)}, in the chat.")
+            results = "(Not searched: the web knows nothing about the people in this chat. Answer from the messages you can see.)"
+        else:
+            results = self.search(query, wiki_only)
+
         # The results go into the conversation as a note, and he's asked again: this time he can
         # only answer (the schema has no "search"), so he can't keep searching.
         conversation.append({"role": "user", "content": (
-            f"[{'Wikipedia' if wiki_only else 'Web'} search for \"{query}\"]\n{self.search(query, wiki_only)}\n\n"
+            f"[{'Wikipedia' if wiki_only else 'Web'} search for \"{query}\"]\n{results}\n\n"
             "[Now answer the conversation above with this. If a source helps, put its link in your reply.]"
         )})
         answer = self.complete(conversation, ANSWER_SCHEMA)
@@ -592,7 +612,8 @@ class Chattus:
 
     def clean_answer(self, text):
         text = text.strip()
-        text = re.sub(r"^\s*Chattus:\s*", "", text)  # in case it copies the "name: text" pattern
+        # In case it copies the "[time] name: text" pattern of the messages it reads.
+        text = re.sub(r"^\s*(\[(\d{1,2} \w{3} )?\d{1,2}:\d{2}\]\s*)?(Chattus:\s*)?", "", text)
         # Never ping everyone: "@everyone" and "@here" lose their @ (the server only expands "@name").
         text = re.sub(r"@(everyone|here)\b", r"\1", text, flags=re.IGNORECASE)
         return text[:MAX_TEXT_LENGTH].strip()

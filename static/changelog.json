@@ -91,6 +91,7 @@
         "Chattus can see pictures: send him one, or ask about the picture above. He also knows what our own emoji look like",
         "Chattus can search the web for fresh facts, with a link to where he found it. \"search: ...\" makes him look something up, \"wiki: ...\" on Wikipedia",
         "Chattus writes maths as formulas ($...$), like everyone can",
+        "Chattus knows when messages were sent, and says so when something is too far back for him (he sees a chat's latest 20 messages)",
         "Maths in messages: $x^2$ in a sentence, or $$\\int_0^1 f(x)\\,dx$$ for a formula on its own line (LaTeX, drawn like in a textbook)",
         "Settings → Appearance: themes, your own colours, fonts and text size, the same on all your devices",
         "The chat can be installed on your phone as an app: open it on your phone and tap Install in the banner",
