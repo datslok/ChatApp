@@ -1,4 +1,4 @@
-# Runs the chat for real, for chat.datslok.no (the Cloudflare Tunnel connects to it).
+# Runs the chat for real (the Cloudflare Tunnel connects to it, see README, "Host your own").
 # For development, use start.ps1 instead.
 #
 # Run it from this folder with:   .\serve.ps1

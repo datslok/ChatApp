@@ -15,7 +15,7 @@ import ssl
 import time
 import warnings
 from email.message import EmailMessage
-from email.utils import formatdate, make_msgid
+from email.utils import formatdate, make_msgid, parseaddr
 from html.parser import HTMLParser
 from io import BytesIO
 from pathlib import Path
@@ -63,7 +63,8 @@ SMTP_HOST = os.environ.get("SMTP_HOST", "")
 SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
 SMTP_USER = os.environ.get("SMTP_USER", "")
 SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "")
-MAIL_FROM = os.environ.get("MAIL_FROM", "ChatApp <noreply@datslok.no>")
+# Who emails come from. By default noreply@ the site's own domain (from PUBLIC_URL).
+MAIL_FROM = os.environ.get("MAIL_FROM", f"ChatApp <noreply@{urlsplit(PUBLIC_URL).hostname}>")
 # The LiveKit server that carries voice (voice.ps1), and the key and secret it shares with us:
 # we sign the tickets ("tokens") that let people into a voice room, and LiveKit checks them.
 LIVEKIT_URL = os.environ.get("LIVEKIT_URL", "")
@@ -827,7 +828,7 @@ def send_email(to, subject, body):
     message["Subject"] = subject
     # Every normal email has a date and a unique id; spam filters distrust emails without them.
     message["Date"] = formatdate(localtime=True)
-    message["Message-ID"] = make_msgid(domain="datslok.no")
+    message["Message-ID"] = make_msgid(domain=parseaddr(MAIL_FROM)[1].rpartition("@")[2])  # the sender's domain
     message.set_content(body)
     try:
         # SMTP: the protocol mail servers use. starttls() switches the connection to encrypted
@@ -1848,7 +1849,7 @@ async def livekit_client():
 
 @app.get("/download")
 async def download_page():
-    # "Get the Windows app" (app.datslok.no redirects here). No login needed.
+    # "Get the Windows app". No login needed.
     return FileResponse("static/download.html")
 
 
@@ -2124,7 +2125,7 @@ async def voice_token(room: str, request: Request):
 # talk to us, never to the linked site.
 #
 # The danger is SSRF ("server-side request forgery"): this server sits inside the home network,
-# so a link to http://192.168.10.1 (the router) or http://localhost:7880 (LiveKit) would make it
+# so a link to http://192.168.1.1 (the router) or http://localhost:7880 (LiveKit) would make it
 # visit those, and show what's there. So: only http/https on the normal ports, only addresses
 # on the public internet (looked up by us, then connected to directly, so a host name can't
 # answer "public" when we check and "192.168..." when we connect), redirects checked the same
@@ -2140,7 +2141,7 @@ MAX_PREVIEW_REDIRECTS = 3
 PREVIEW_IMAGE_SIZE = (480, 480)   # at most this big, keeping its shape
 PREVIEW_LIMIT = 10                # previews per person...
 PREVIEW_WINDOW = 60               # ...within this many seconds
-PREVIEW_USER_AGENT = "Mozilla/5.0 (compatible; ChatAppBot/1.0; +https://chat.datslok.no)"
+PREVIEW_USER_AGENT = f"Mozilla/5.0 (compatible; ChatAppBot/1.0; +{PUBLIC_URL})"  # sites see who's asking
 preview_times = {}                # user id -> times of their recent previews (for the limit)
 background_tasks = set()          # running previews (asyncio only keeps a weak reference to tasks)
 

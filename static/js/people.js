@@ -381,7 +381,7 @@ function renderMePopup() {
   document.getElementById("me-name").textContent = me.name;
   document.getElementById("me-status").textContent = me.status || "";
 
-  // In voice: where ("Lounge", "@mongri") and the pictures of who's there (the server's lists:
+  // In voice: where ("Lounge", "@alex") and the pictures of who's there (the server's lists:
   // voiceMembers for Lounge, dmCalls for a DM's call).
   const callSection = document.getElementById("me-call");
   callSection.hidden = !voiceRoomName;

@@ -147,7 +147,7 @@ async function joinVoice(roomName, label) {
     const answer = await response.json();
     if (!response.ok) throw new Error(answer.detail || "Couldn't join voice.");
     await room.connect(answer.url, answer.token);
-    voiceServer = new URL(answer.url).host;  // "wss://voice.datslok.no" -> "voice.datslok.no" (voice.js)
+    voiceServer = new URL(answer.url).host;  // "wss://voice.example.com" -> "voice.example.com" (voice.js)
   } catch (error) {
     if (voiceRoomName !== roomName || (room && voiceRoom !== room)) return;  // we left meanwhile
     if (room) room.disconnect(false);  // false: don't stop our microphone track (see sendMic)

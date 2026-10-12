@@ -8,7 +8,7 @@
 
 param([switch]$Voice)
 
-$ServerFolder = "C:\ChatApp"  # where the code is on the server PC (README, step 2)
+$ServerFolder = "C:\ChatApp"  # where the code is on the server PC (README, Host your own, step 2)
 
 Set-Location (Split-Path $PSScriptRoot)  # the project folder: one up from scripts\
 

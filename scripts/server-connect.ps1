@@ -1,7 +1,7 @@
 # Run once on the development PC, after scripts\server\install.ps1 has run on the server PC. Afterwards
 # "ssh chatserver" logs in there without a password, which scripts\deploy.ps1 and scripts\release-upload.ps1 use.
 #
-#   .\scripts\server-connect.ps1 192.168.10.123 axel     (the server PC's address and your username there;
+#   .\scripts\server-connect.ps1 192.168.1.50 alex       (the server PC's address and your username there;
 #                                                  scripts\server\install.ps1 prints both at its step 7)
 #
 # What it does:

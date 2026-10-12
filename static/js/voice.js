@@ -358,7 +358,7 @@ let connection = null;  // the latest: {ping, protocol, outLoss, inLoss} (null w
 let lastCounts = null;  // the packet counters last time
 let screenStats = { sending: null, watching: [] };  // screen shares, the latest (measureScreens)
 let lastScreenCounts = new Map();  // "out" or "in:<user id>" -> the counters last time
-let voiceServer = "";   // LiveKit's address, e.g. "voice.datslok.no" (rooms.js, joinVoice)
+let voiceServer = "";   // LiveKit's address, e.g. "voice.example.com" (rooms.js, joinVoice)
 
 function startConnectionStats() {
   stopConnectionStats();

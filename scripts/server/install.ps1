@@ -1,4 +1,4 @@
-# Sets up this PC as the chat's server (see README, "Running the server on its own PC"):
+# Sets up this PC as the chat's server (see README, "Host your own"):
 #
 #   1. Python, and a virtual environment (.venv) with the packages from requirements.txt
 #   2. LiveKit (voice), downloaded into livekit/ and checked against its published checksums
@@ -105,7 +105,7 @@ if (Get-Service Cloudflared -ErrorAction SilentlyContinue) {
     Write-Host "The tunnel service is already installed."
 } else {
     Write-Host "The tunnel needs its token. In Cloudflare's Zero Trust dashboard: Networks -> Tunnels ->"
-    Write-Host "chatapp -> Add a connector (or Configure). The install command there ends with a long"
+    Write-Host "your tunnel -> Add a connector (or Configure). The install command there ends with a long"
     Write-Host "token starting with eyJ. Copy just that token."
     $token = Read-Host "Paste the token (or press Enter to skip this for now)"
     if ($token) {
@@ -247,5 +247,5 @@ if (Test-Path .env) {
 }
 
 Write-Host ""
-Write-Host "Done. Still to do by hand (see the README): the router's port forwarding to this PC, and" -ForegroundColor Cyan
-Write-Host "removing cloudflared from the old PC." -ForegroundColor Cyan
+Write-Host "Done. Still to do by hand (README, Host your own): the router's port forwarding to this PC" -ForegroundColor Cyan
+Write-Host "(step 5), and making yourself an admin (step 6). Moving from an old PC? Remove cloudflared there." -ForegroundColor Cyan

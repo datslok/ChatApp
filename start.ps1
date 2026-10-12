@@ -1,5 +1,5 @@
 # Starts the chat server for development. Run setup.ps1 once first.
-# (The real site, chat.datslok.no, is started with serve.ps1 instead.)
+# (The real site is started with serve.ps1 instead.)
 #
 # Run it from this folder with:   .\start.ps1
 # Then open http://localhost:8001. Stop the server with Ctrl+C.

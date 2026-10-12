@@ -2,7 +2,7 @@
 # secret come from .env, through the LIVEKIT_KEYS environment variable.
 
 # Signalling: the WebSocket browsers use to join a room and hear who's in it. The Cloudflare
-# Tunnel forwards wss://voice.datslok.no here, like it forwards the chat to port 8000.
+# Tunnel forwards your voice address (like wss://voice.example.com) here, like it forwards the chat to port 8000.
 port: 7880
 
 rtc:

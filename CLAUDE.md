@@ -18,6 +18,9 @@ the point is for me to understand how it works, not just to have it done.
 - **The README is the manual.** Everything I might want to do by hand (scripts, releasing the app,
   server commands, restoring backups) must be described in README.md, not only here: when adding or
   changing a script or a manual step, update the README too (including "Scripts at a glance").
+  The repo is public: the README is written for anyone hosting their own copy (example.com addresses,
+  "your PC" and "the server"), so our own specifics (datslok.no, Cloudflare redirects, addresses) belong
+  here in CLAUDE.md, not in the README.
 - **Security basics still matter**, since friends will use this for real: never insert user text with
   `innerHTML`, hash passwords with a proper library, never commit secrets.
 
@@ -78,7 +81,7 @@ the point is for me to understand how it works, not just to have it done.
 - `serve.ps1`: runs the real site for chat.datslok.no: no reload, localhost only, settings from `.env`.
   Uses `.venv` if there is one (the server PC), else the conda environment. `-LogFile` (used by the
   scheduled tasks) writes everything to a log instead of the window; `voice.ps1` has the same.
-- Moving the server to its own PC (README, "Running the server on its own PC"): `scripts\server\export.ps1`
+- Setting up and moving the server (README, "Host your own" and "Moving to another PC"): `scripts\server\export.ps1`
   (old PC: `chatapp-data.zip` with chat.db, uploads/, releases/, .env), `scripts\server\import.ps1` (new PC),
   `scripts\server\install.ps1` (new PC, as admin: Python + `.venv`, LiveKit, cloudflared service, firewall,
   power settings, scheduled tasks "ChatApp" and "ChatApp voice" at boot and every 5 minutes if not
@@ -120,7 +123,7 @@ the point is for me to understand how it works, not just to have it done.
   Settings (hidden inside the app). `/download/windows` always redirects to the newest installer.
 - `releases/`: the app's installers and `latest.json`, served without login at `/releases/` (git-ignored).
   The app checks `latest.json` at startup and installs a newer version by itself.
-- The updates' private signing key is `C:\Users\axelk\.tauri\chatapp.key` (no password, never commit
+- The updates' private signing key is `~\.tauri\chatapp.key` in the user folder (no password, never commit
   it; losing it means friends must reinstall by hand). The public key is in `tauri.conf.json`.
 - `dev.env`: development settings for start.ps1: its own `dev.db` and `dev-uploads/`, so tests never
   touch the real chat's `chat.db` and `uploads/`.
@@ -145,17 +148,20 @@ the point is for me to understand how it works, not just to have it done.
 
 ## Hosting
 
-The live site is https://chat.datslok.no, served from this PC through a Cloudflare Tunnel
-(`cloudflared` runs as a Windows service and forwards to http://localhost:8000). The domain is
+The live site is https://chat.datslok.no, served from the separate server PC (`ssh chatserver`; set
+up with `scripts\server\install.ps1`) through a Cloudflare Tunnel (`cloudflared` runs there as a
+Windows service and forwards to http://localhost:8000). The domain is
 registered at domene.shop with its DNS on Cloudflare. `datslok.no` and `www.datslok.no` redirect (302) to
 the chat through a Cloudflare Redirect Rule (their DNS records are proxied placeholders, 192.0.2.1).
 `app.datslok.no` redirects (302) the same way, to https://chat.datslok.no/download.
 
 Voice: the tunnel also carries `voice.datslok.no` → http://localhost:7880 (LiveKit's signalling; a
 "published application route" in Cloudflare's Zero Trust dashboard, Networks → Tunnels → chatapp).
-The audio can't go through the tunnel (UDP), so the router (http://192.168.10.1) forwards UDP 7882
-(`livekit_udp`) and TCP 7881 (`livekit_tcp`) to this PC, 192.168.10.110, and two Windows Firewall rules
-("LiveKit voice (UDP 7882)" / "(TCP 7881)") let them in, only to `livekit\livekit-server.exe`.
+The audio can't go through the tunnel (UDP), so the router forwards UDP 7882 (`livekit_udp`) and
+TCP 7881 (`livekit_tcp`) to the server PC (which has a DHCP reservation there), and two Windows
+Firewall rules ("LiveKit voice (UDP 7882)" / "(TCP 7881)") let them in, only to `livekit\livekit-server.exe`.
+The router's and the server PC's local addresses aren't written here (the repo is public): look them
+up on the server (`ipconfig`, "Default Gateway" is the router) when needed.
 
 ## Running it
 

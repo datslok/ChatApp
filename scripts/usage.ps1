@@ -5,7 +5,7 @@
 #
 # It runs scripts\server\usage.ps1 on the server over SSH (set up once with scripts\server-connect.ps1).
 
-$ServerFolder = "C:\ChatApp"  # where the code is on the server PC (README, step 2)
+$ServerFolder = "C:\ChatApp"  # where the code is on the server PC (README, Host your own, step 2)
 
 ssh chatserver "cd $ServerFolder; .\scripts\server\usage.ps1"
 exit $LASTEXITCODE

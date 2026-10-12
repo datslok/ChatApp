@@ -5,9 +5,9 @@ website on purpose: only someone with access to this PC can run this script, whi
 the right permission. The server checks is_admin on every action, so no restart is needed.
 
 Run it from the project folder:
-    python tools/make_admin.py datslok                 # make datslok an admin (in the real chat.db)
-    python tools/make_admin.py mongri --remove         # take it away again
-    python tools/make_admin.py datslok --db dev.db     # in the development database
+    python tools/make_admin.py alex                    # make alex an admin (in the real chat.db)
+    python tools/make_admin.py alex --remove           # take it away again
+    python tools/make_admin.py alex --db dev.db        # in the development database
     python tools/make_admin.py --list                  # who's an admin?
 """
 import argparse
@@ -30,7 +30,7 @@ if args.list or not args.username:
     sys.exit()
 
 with db:
-    # COLLATE NOCASE on the column: "Datslok" finds "datslok".
+    # COLLATE NOCASE on the column: "Alex" finds "alex".
     cursor = db.execute("UPDATE users SET is_admin = ? WHERE username = ?", (0 if args.remove else 1, args.username))
 if cursor.rowcount == 0:
     print(f"There's no user called {args.username!r} in {args.db}.")
