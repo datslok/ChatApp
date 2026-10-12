@@ -137,6 +137,10 @@ notifySoundBox.addEventListener("change", () => {
 
 showNotificationSettings();
 
+// The service worker (static/sw.js): with it and the manifest, phones offer "Install app".
+// ("in navigator": only browsers that have service workers; .catch: nothing to do without one.)
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
+
 // Already in the desktop app? Then "download the app" makes no sense: hide it.
 // (Tauri puts __TAURI_INTERNALS__ on its pages; ordinary browsers don't have it.)
 const inDesktopApp = "__TAURI_INTERNALS__" in window;

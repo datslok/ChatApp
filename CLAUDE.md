@@ -52,6 +52,10 @@ the point is for me to understand how it works, not just to have it done.
   `/`. The server hashes the page's files at startup (`PAGE_VERSION`, sent in "welcome"); a page that
   reconnects to a different one reloads itself (core.js, `reloadIfOutdated`; not in a call, with files
   in the tray, or while sending or editing; the text box is kept through sessionStorage).
+- The phone app is a PWA: `static/manifest.json` (served at `/manifest.json`), `static/sw.js` (the service
+  worker, at `/sw.js` so it covers the whole site; registered by notifications.js; deliberately no offline
+  copies), icons in `static/icons/` (at `/icons/`, made by `tools/make_pwa_icons.py`). Linked from
+  index.html and login.html. My girlfriend's phone is Android, so Android comes first.
 - `static/login.html`: the login / create account page.
 - `static/reset.html`: "forgot password" (asks for a reset link) and, with `?token=`, choosing a new password.
 - Emails (reset links) go out through Resend's SMTP server, configured in `.env`. Without `SMTP_HOST`

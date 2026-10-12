@@ -1873,6 +1873,20 @@ async def favicon():
     return FileResponse("static/favicon.ico", headers={"Cache-Control": "public, max-age=86400"})
 
 
+# The phone app: the chat installed as a PWA. The manifest gives its name, icons and look
+# (static/icons/ from tools/make_pwa_icons.py); the service worker has to be at the top level,
+# /sw.js, to look after every page of the site. No login needed: nothing private in them.
+@app.get("/manifest.json")
+async def manifest():
+    return FileResponse("static/manifest.json", media_type="application/manifest+json",
+                        headers={"Cache-Control": "no-cache"})
+
+
+@app.get("/sw.js")
+async def service_worker():
+    return FileResponse("static/sw.js", media_type="text/javascript", headers={"Cache-Control": "no-cache"})
+
+
 def page_version():
     """A fingerprint of the chat page's files: a hash (SHA-256) of all of them together. Change
     one letter in any of them and it comes out completely different. Each page gets it in its
@@ -1906,6 +1920,7 @@ class FreshStaticFiles(StaticFiles):
 app.mount("/static/css", FreshStaticFiles(directory="static/css"), name="css")
 app.mount("/static/js", FreshStaticFiles(directory="static/js"), name="js")
 app.mount("/landing", FreshStaticFiles(directory="static/landing"), name="landing")  # its pictures
+app.mount("/icons", FreshStaticFiles(directory="static/icons"), name="icons")  # the phone app's (manifest.json)
 
 
 @app.get("/emoji.json")

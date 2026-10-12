@@ -25,7 +25,7 @@ JavaScript for the page, no frameworks.
   60 fps with sound, encoded on the graphics card where possible.
 - **Notifications** for DMs and mentions, with sounds and muting. Clicking one goes to the message.
 - **A Windows app** (optional) with real Windows notifications and automatic updates. Everything also
-  works in the browser, on phones too.
+  works in the browser, and on phones it installs as an app of its own (a PWA).
 - **For the people running it:** a "What's new" page you write yourself, bug reports and ideas sent
   to the admins, nightly backups, and one-command updates.
 
@@ -49,6 +49,7 @@ are PowerShell scripts for Windows 10/11. Linux support is planned for later.
 - [Try it on your own PC](#try-it-on-your-own-pc) (10 minutes)
 - [Host your own](#host-your-own): from nothing to your own chat on the internet
 - [Running it](#running-it): updating, What's new, handy commands, backups, moving to another PC, a shared window going black
+- [The phone app](#the-phone-app): installing the chat on a phone
 - [The desktop app](#the-desktop-app) (optional)
 - [Working on the code](#working-on-the-code)
 - [Credits](#credits) and [License](#license)
@@ -78,6 +79,7 @@ the same PC, but the scripts assume two).
 | `scripts\refresh-icons.bat` | any Windows PC | double-click: Windows shows programs' new icons (after a new app icon) |
 | `tools\make_admin.py` | either | make someone an admin, or take it away |
 | `tools\feedback.py` | either | read the bug reports and ideas, mark them done |
+| `tools\make_pwa_icons.py` | your PC | makes the phone app's icons from the app icon |
 
 ---
 
@@ -442,6 +444,23 @@ power, without knowing that another program is capturing it. Ways around it, for
 
 ---
 
+## The phone app
+
+The chat installs on phones as a **PWA** ("progressive web app"): its own icon on the home screen and
+its own window without the browser's address bar, straight from the website, with no app store. It's
+the same page as in the browser, so it's always up to date. What makes it installable:
+`static/manifest.json` (its name, icons and colours), the icons in `static/icons/` (made by
+`python tools\make_pwa_icons.py` from the app icon) and a service worker, `static/sw.js`.
+
+To install it: open the chat in **Chrome on Android**, ⋮ menu, **Install app** (or "Add to Home
+screen"). On an **iPhone**: Safari, the Share button, **Add to Home Screen**.
+
+Calls keep going with the screen off on most Android phones. If a call stops when the phone is in a
+pocket, set the browser's battery use to "Unrestricted" in Android's app settings. iPhones often stop
+web pages when they're locked, calls included.
+
+---
+
 ## The desktop app
 
 Optional: everything works in the browser. The Windows app (`desktop\`, made with
@@ -519,7 +538,8 @@ Put the new picture (a 1024×1024 PNG) in `icon\`, then in `desktop\`:
 (the browser tab's icon; also raise the number in the pages' `favicon.ico?v=` links, so browsers fetch
 the new one instead of keeping the old one for a day), point `tools\make_installer_images.py` at the
 new file (its `ICON` line), run `python tools\make_installer_images.py` (the installer's pictures and the
-update window's cat), and release a new version.
+update window's cat), and release a new version. The phone app's icons: `python tools\make_pwa_icons.py`
+(it reads the same `ICON` file name; change it there too).
 
 ### The old icon is still showing after an update
 
