@@ -33,11 +33,25 @@ MAX_AGE = timedelta(hours=1)  # older messages are never answered (after he was 
 
 SYSTEM_PROMPT = """You are Chattus, a friendly and helpful cat who lives in a small group chat of friends.
 Write like a person in a chat: usually one to three short sentences, no headings or bullet lists.
-Only write more when someone asks you to explain something in detail. An emoji now and then is fine.
+Only write more when someone asks you to explain something in detail. Use at most one emoji in a message, often none.
 Each message from the others starts with the sender's name, like "kari: hi". Don't start yours with your name.
 If you don't know something, say so instead of making it up.
 {where}
-Right now it's {now}."""
+Right now it's {now}.
+
+You answer with JSON: "reply" is your message, and "reaction" is one emoji to put under the message you're answering.
+- Most of the time, react with nothing (""). Only react when it adds something, like 🎉 for good news or 😂 for a really good joke.
+- When a reaction says it all (a thanks, a goodbye, an "ok"), react and leave "reply" empty ("").
+- Questions and requests always get a reply.{custom}"""
+
+# The shape every answer must have. llama-server turns it into grammar rules, so the model can't write
+# anything else: always valid JSON with exactly these two texts (either can be empty).
+ANSWER_SCHEMA = {
+    "type": "object",
+    "properties": {"reaction": {"type": "string"}, "reply": {"type": "string"}},
+    "required": ["reaction", "reply"],
+}
+MAX_CUSTOM_EMOJI = 50  # how many of the chat's own emoji the prompt lists by name
 
 
 def log(text):
@@ -75,6 +89,7 @@ class Chattus:
         self.my_id = None
         self.names = {}         # user id -> username, for turning <@2> into @kari
         self.emoji = {}         # custom emoji id -> name, for turning <:17> into :pog:
+        self.allowed_emoji = set()  # every emoji the server accepts as a reaction (static/emoji.json)
         self.channel = None     # the channel we've joined
         self.messages = {}      # channel -> its latest messages (from "history", then live ones)
         self.history_arrived = None  # a Future the reader completes when a joined channel's history comes
@@ -93,9 +108,17 @@ class Chattus:
                 return
         raise RuntimeError("Logged in, but got no session cookie.")
 
+    def load_emoji(self):
+        """The emoji list the page's picker uses: {"groups": [{"name", "emoji": [["😀", "grinning face"], ...]}]}.
+        The server only accepts reactions from it (and custom emoji), so we check against it first."""
+        with urllib.request.urlopen(f"{self.chat_url}/emoji.json", timeout=30) as response:
+            groups = json.loads(response.read())["groups"]
+        self.allowed_emoji = {emoji for group in groups for emoji, _ in group["emoji"]}
+
     async def run(self):
         """Log in, connect and work, until the connection drops (then run() returns or raises)."""
         await asyncio.to_thread(self.log_in)
+        await asyncio.to_thread(self.load_emoji)
         ws_url = self.chat_url.replace("http", "ws", 1) + "/ws"
         async with connect(ws_url, additional_headers={"Cookie": self.cookie}, max_size=2**24) as websocket:
             self.websocket = websocket
@@ -212,12 +235,17 @@ class Chattus:
         log(f"Answering {target['name']} in {channel}: {target['text'][:80]!r}")
         typing = asyncio.create_task(self.keep_typing())
         try:
-            text = await asyncio.to_thread(self.ask_model, channel, messages)
+            reaction, text = await asyncio.to_thread(self.ask_model, channel, messages)
         finally:
             typing.cancel()
+
+        reaction = self.reaction_code(reaction)
+        mine = any(r["emoji"] == reaction and self.my_id in r["user_ids"] for r in target.get("reactions") or [])
+        if reaction and not mine:  # (reacting again would take it away: reactions are a toggle)
+            await self.send({"type": "react", "message_id": target["id"], "emoji": reaction})
         text = self.clean_answer(text)
         if not text:
-            return
+            return  # just a reaction (or nothing at all)
 
         reply = {"type": "message", "text": text}
         # Shown as a reply when it isn't obvious what he's answering: always where he only answers
@@ -253,10 +281,15 @@ class Chattus:
         return f"You're in #{channel}, a channel for everyone. Someone mentioned you (@Chattus)."
 
     def ask_model(self, channel, messages):
-        """The latest messages as a conversation for the model, and its answer. Blocking (a thread)."""
+        """The latest messages as a conversation for the model, and its answer: (reaction, reply).
+        Blocking (run it in a thread)."""
+        names = sorted(self.emoji.values(), key=str.lower)[:MAX_CUSTOM_EMOJI]
+        custom = ("\nThe chat also has its own emoji, which you can use in your reply or as your reaction by writing "
+                  "their name like this: " + ", ".join(f":{name}:" for name in names)) if names else ""
         conversation = [{
             "role": "system",
-            "content": SYSTEM_PROMPT.format(where=self.where(channel), now=f"{datetime.now():%A %d %B %Y, %H:%M}"),
+            "content": SYSTEM_PROMPT.format(where=self.where(channel), now=f"{datetime.now():%A %d %B %Y, %H:%M}",
+                                            custom=custom),
         }]
         for message in messages[-CONTEXT_MESSAGES:]:
             if message.get("kind"):
@@ -273,10 +306,38 @@ class Chattus:
 
         answer, _ = post_json(
             f"{self.llama_url}/v1/chat/completions",
-            {"messages": conversation, "max_tokens": MAX_ANSWER_TOKENS, "temperature": 0.7},
+            {
+                "messages": conversation, "max_tokens": MAX_ANSWER_TOKENS, "temperature": 0.7,
+                "response_format": {"type": "json_schema", "json_schema": {"schema": ANSWER_SCHEMA}},
+            },
             {"Authorization": f"Bearer {self.llama_key}"},
         )
-        return answer["choices"][0]["message"]["content"] or ""
+        content = answer["choices"][0]["message"]["content"] or ""
+        try:
+            parsed = json.loads(content)
+            return parsed["reaction"], parsed["reply"]
+        except (ValueError, KeyError, TypeError):  # cut off by max_tokens, say: use what's there as text
+            return "", content
+
+    def reaction_code(self, reaction):
+        """The model's reaction as the server wants it, or None if the server wouldn't accept it:
+        an emoji from emoji.json as it is, a custom emoji's :name: as "custom:17"."""
+        reaction = reaction.strip()
+        if not reaction:
+            return None
+        if reaction in self.allowed_emoji:
+            return reaction
+        # The same emoji with or without the invisible "show as emoji" mark (U+FE0F) after it:
+        # models and emoji lists don't always agree on it.
+        for variant in (reaction + "️", reaction.replace("️", "")):
+            if variant in self.allowed_emoji:
+                return variant
+        match = re.fullmatch(r":?([A-Za-z0-9_]{2,32}):?", reaction)
+        if match:
+            for emoji_id, name in self.emoji.items():
+                if name.lower() == match[1].lower():
+                    return f"custom:{emoji_id}"
+        return None  # something else: no reaction
 
     def clean_answer(self, text):
         text = text.strip()

@@ -227,7 +227,12 @@ the point is for me to understand how it works, not just to have it done.
   (`<@id>` -> @name, `<:id>` -> :name:, files as "[sent a picture]"). Personality: `SYSTEM_PROMPT`.
   Development: `.\chattus.ps1 -Dev` with start.ps1 and `ssh -L 8080:127.0.0.1:8080 chatserver`; its
   `dev-chattus.env` (git-ignored) has a dev.db Chattus password and the server's LLAMA_API_KEY.
-  Still to do: reactions/emoji/custom emoji (structured output), pictures (mmproj), Wikipedia + Tavily search.
+  Reactions: every answer is JSON `{"reaction", "reply"}` (`ANSWER_SCHEMA`, llama-server's
+  `response_format` json_schema, enforced by grammar), either empty; the prompt asks for a reaction only
+  when it adds something, reaction-only for thanks/goodbyes, at most one emoji per message.
+  `reaction_code` checks it against `/emoji.json` (fetched at start; with/without U+FE0F) or a custom
+  emoji's name (-> `custom:<id>`); anything else is dropped. Up to 50 custom emoji names are in the prompt.
+  Still to do: pictures (mmproj; also to see what custom emoji show), Wikipedia + Tavily search.
 
 ## Hosting
 

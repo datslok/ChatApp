@@ -65,6 +65,7 @@
         "Chattus is a friendly cat who answers everything in #chattus, and anywhere else when you write @Chattus",
         "Add him as a friend to DM him: he accepts by himself",
         "In a DM with a friend, write @Chattus to ask him something there: he only answers when mentioned. Mentioning him lets him read that DM's latest messages for an hour (on our own server, never sent anywhere)",
+        "He reacts to messages too (🎉 for good news, 🐾 for a thanks), and knows our own emoji by name",
         "He runs on our own server, so nothing goes to an AI company. He can be wrong, and only knows the last messages of a channel"
       ]
     },
@@ -83,6 +84,7 @@
       "items": [
         "Meet Chattus 🐱, an AI cat: talk to him in the new #chattus channel, @Chattus anywhere, or DM him (add him as a friend first)",
         "Chattus in DMs with friends: write @Chattus in a DM and he answers there, only when mentioned. A mention lets him read that DM's latest messages for an hour (on our own server)",
+        "Chattus reacts: sometimes an emoji under your message instead of (or as well as) an answer, and he can use our own emoji",
         "Maths in messages: $x^2$ in a sentence, or $$\\int_0^1 f(x)\\,dx$$ for a formula on its own line (LaTeX, drawn like in a textbook)",
         "Settings → Appearance: themes, your own colours, fonts and text size, the same on all your devices",
         "The chat can be installed on your phone as an app: open it on your phone and tap Install in the banner",
