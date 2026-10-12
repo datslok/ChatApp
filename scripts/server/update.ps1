@@ -2,10 +2,11 @@
 #
 #   .\scripts\server\update.ps1          the chat (calls in Lounge and DMs carry on: voice isn't touched)
 #   .\scripts\server\update.ps1 -Voice   the chat and LiveKit (everyone in a call is dropped for a moment)
+#   .\scripts\server\update.ps1 -AI      the chat and llama-server (after changes to llama.ps1)
 #
 # Run it in PowerShell as administrator (stopping and starting the tasks needs it), in the project folder.
 
-param([switch]$Voice)
+param([switch]$Voice, [switch]$AI)
 
 $ErrorActionPreference = "Stop"
 $root = Split-Path (Split-Path $PSScriptRoot)  # the project folder: two up from scripts\server\
@@ -41,6 +42,9 @@ function Restart-ChatTask($taskName, $processName, $commandPart) {
 Restart-ChatTask "ChatApp" "python.exe" "uvicorn server:app --host 127.0.0.1 --port 8000"
 if ($Voice) {
     Restart-ChatTask "ChatApp voice" "livekit-server.exe" "--config livekit.yaml"
+}
+if ($AI) {
+    Restart-ChatTask "ChatApp AI" "llama-server.exe" "--port 8080"
 }
 
 # Is the chat back? It is once something listens on port 8000 again (uvicorn only starts listening

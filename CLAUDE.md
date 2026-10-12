@@ -200,6 +200,18 @@ the point is for me to understand how it works, not just to have it done.
   `video/h264` too (LiveKit checks the name alone first; without it, it falls back to VP8). Changing it needs
   `deploy.ps1 -Voice`, which ends ongoing calls. The connection popup (voice.js) shows each share's encoder,
   profile and "held back by", to check.
+- The AI bot Chattus (milestone 23, in progress; English, friendly, short chat-sized answers). His model runs
+  on the server's GTX 1070 (8 GB; i7-6700HQ, 16 GB RAM): llama.cpp's `llama-server` (`llama/`, git-ignored;
+  version `$LlamaVersion` in install.ps1, the CUDA 12.4 build + cudart zip, checked against GitHub's digests)
+  with Qwen 3.5 9B Q4_K_M + its mmproj (pictures) from `unsloth/Qwen3.5-9B-GGUF` in `llama/models/`. Started
+  by `llama.ps1` (task "ChatApp AI", logs\ai.log; `install.ps1 -AI` sets it all up, `deploy.ps1 -AI`
+  restarts it): all layers on the GPU, 8K context, 1 slot, 4 threads, thinking off, only 127.0.0.1:8080,
+  key `LLAMA_API_KEY` in `.env` (made on the server). Measured: ~25 tokens/s, 7.1 GB VRAM, ~13% CPU, ~110 W.
+  Ollama was tried first and dropped: 0.40's GPU discovery crashes (0xc0000005, ollama#16957, not Python's
+  vcruntime on PATH), and 0.24 found the GPU but couldn't pull Qwen 3.5. Gemma 4 E4B was faster (38/s) but
+  Qwen won on tools and tone. A system prompt asking for 1–3 short sentences keeps answers chat-sized.
+  Planned: a bot account + Python script (localhost:8000 WebSocket), #chattus (every message) and @Chattus
+  elsewhere, DMs, replies, reactions/emoji/custom emoji (structured output), pictures, Wikipedia + Tavily search.
 
 ## Hosting
 

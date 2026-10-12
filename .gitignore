@@ -31,6 +31,9 @@ releases/
 # The LiveKit server program (downloaded, see CLAUDE.md)
 livekit/
 
+# The AI bot's llama-server and language model (downloaded by scripts\server\install.ps1 -AI)
+llama/
+
 # The server PC's Python environment and logs (made by server-install.ps1)
 .venv/
 logs/

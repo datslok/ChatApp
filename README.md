@@ -38,6 +38,7 @@ JavaScript for the page, no frameworks.
 | Voice, video, screen sharing | A self-hosted [LiveKit](https://livekit.io/) server (WebRTC). |
 | Reaching it from the internet | A [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/), so no ports need opening for the chat itself. |
 | Desktop app | [Tauri](https://tauri.app/) (`desktop/`): a small window around the site. |
+| AI bot (optional, in progress) | A language model on the server's graphics card, with [llama.cpp](https://github.com/ggml-org/llama.cpp). |
 | Phone app (in progress) | [React Native](https://reactnative.dev/) with [Expo](https://expo.dev/) (`mobile/`), Android first. Until it's ready, the site installs as a PWA. |
 
 **Windows only, for now.** The server itself is plain Python, but the scripts that install and run it
@@ -66,14 +67,15 @@ the same PC, but the scripts assume two).
 | `setup.ps1` | your PC | makes a conda environment and installs the Python packages |
 | `start.ps1` | your PC | the chat for trying and developing (http://localhost:8001, its own `dev.db`) |
 | `voice.ps1 -Dev` | your PC | voice for development (only reachable from this PC) |
-| `scripts\server\install.ps1` | server (as admin) | installs and sets up everything; safe to run again |
+| `scripts\server\install.ps1` | server (as admin) | installs and sets up everything; safe to run again (`-AI`: also the AI bot's model) |
 | `serve.ps1`, `voice.ps1` | server | the chat and voice; scheduled tasks start them at boot |
-| `scripts\server\update.ps1` | server (as admin) | gets the newest code and restarts the chat |
+| `llama.ps1` | server | the AI bot's language model (optional); a scheduled task starts it at boot |
+| `scripts\server\update.ps1` | server (as admin) | gets the newest code and restarts the chat (`-Voice`, `-AI`: also those) |
 | `scripts\server\backup.ps1` | server | the nightly backup (also by hand) |
 | `scripts\server\usage.ps1` | server | how much space everything takes (only reads) |
 | `scripts\server\export.ps1` / `import.ps1` | old / new server | pack and unpack the data, to move the server |
 | `scripts\server-connect.ps1` | your PC | once: SSH access to the server, named `chatserver` |
-| `scripts\deploy.ps1` | your PC | pushes your code and runs `update.ps1` on the server (`-Voice`: also restarts voice) |
+| `scripts\deploy.ps1` | your PC | pushes your code and runs `update.ps1` on the server (`-Voice`, `-AI`: also restarts those) |
 | `scripts\usage.ps1` | your PC | runs `usage.ps1` on the server |
 | `scripts\backup-fetch.ps1` | your PC | copies the server's newest backup here (`-Install`: every day) |
 | `scripts\release-upload.ps1` | your PC | puts a new desktop app version on the server |
@@ -284,6 +286,35 @@ name and **Log out** at the top (the page asks the chat's `/whoami`, which only 
 `chat.example.com`). Its texts and pictures (`logo.png`,
 `screenshot.png`) are yours to change.
 
+### Optional: an AI bot
+
+**In progress:** so far this sets up the language model the bot will use; the bot itself comes next.
+
+The bot's language model runs on the server's own graphics card, with
+[llama.cpp](https://github.com/ggml-org/llama.cpp) (`llama-server`): Qwen 3.5 9B, shrunk to 4 bits
+per number, which also understands pictures. Nothing goes to an AI company. It needs an **NVIDIA
+graphics card with 8 GB** (a GTX 1070 is enough: about 25 tokens, or 18 words, a second) with a driver
+from 2024 or newer, and 7 GB of disk. In PowerShell as administrator:
+
+```powershell
+cd C:\ChatApp
+.\scripts\server\install.ps1 -AI
+```
+
+It runs all of step 4 again (same questions), and then step 9: it downloads llama.cpp into `llama\`
+and the model into `llama\models\` (6.3 GB; both checked against their published checksums), puts a
+key for it (`LLAMA_API_KEY`) in `.env`, and makes a scheduled task **ChatApp AI** that runs
+`llama.ps1` at boot. It's only reachable from the server itself (`http://127.0.0.1:8080`), and only
+with that key.
+
+The model lives on the graphics card the whole time (about 7 GB of its memory). The CPU stays nearly
+free, so calls aren't affected. While it writes an answer, the graphics card works at full power for
+a few seconds and the laptop gets warmer.
+
+To try it: llama-server has its own chat page. From your PC, open a tunnel to it with
+`ssh -L 8080:127.0.0.1:8080 chatserver`, leave that window open, and go to http://localhost:8080. It
+asks for the key: on the server, `Select-String LLAMA_API_KEY .env` shows it.
+
 ### 8. Optional: update from your other PC
 
 So you can work on the code on your own PC and update the server without walking over to it. Step 4
@@ -308,6 +339,7 @@ From your own PC, after committing your changes:
 ```powershell
 .\scripts\deploy.ps1          # pushes to GitHub if needed, then updates the server and restarts the chat
 .\scripts\deploy.ps1 -Voice   # also restart LiveKit (after changing voice.ps1 or livekit.yaml); ends ongoing calls
+.\scripts\deploy.ps1 -AI      # also restart the AI bot's llama-server (after changing llama.ps1)
 ```
 
 Or on the server itself (PowerShell as administrator, in `C:\ChatApp`): `.\scripts\server\update.ps1`.
@@ -361,10 +393,11 @@ the server itself, in PowerShell as administrator.
 .venv\Scripts\python.exe tools\feedback.py --done 12             # tick off #12 (--undo 12: back again)
 .venv\Scripts\python.exe tools\feedback.py --all                 # every one, done ones too
 
-# Is everything running? (ChatApp and ChatApp voice: Running. ChatApp backup: Ready.)
+# Is everything running? (ChatApp, ChatApp voice and ChatApp AI: Running. ChatApp backup: Ready.)
 Get-ScheduledTask ChatApp*
 
-# The logs. chat.log: starts and errors; chat.out.log: every request; voice.log: LiveKit.
+# The logs. chat.log: starts and errors; chat.out.log: every request; voice.log: LiveKit;
+# ai.log: llama-server (the AI bot's model).
 Get-Content logs\chat.log -Tail 30
 Get-Content logs\chat.log -Tail 30 -Wait                         # keep following it (Ctrl+C stops)
 Get-Content logs\backup.log -Tail 5
@@ -372,6 +405,10 @@ Get-Content logs\backup.log -Tail 5
 # Restart by hand (update.ps1 does this too).
 Stop-ScheduledTask ChatApp; Start-ScheduledTask ChatApp
 Stop-ScheduledTask "ChatApp voice"; Start-ScheduledTask "ChatApp voice"
+Stop-ScheduledTask "ChatApp AI"; Start-ScheduledTask "ChatApp AI"
+
+# The graphics card: its memory in use, how busy it is, its temperature (for the AI bot).
+nvidia-smi
 
 # The tasks start again by themselves within 5 minutes when they aren't running. To keep one off
 # for a while, disable it, and enable it again afterwards:
