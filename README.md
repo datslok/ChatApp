@@ -1,3 +1,5 @@
+<p align="center"><img src="static/landing/logo.png" alt="ChatApp's cat" width="128"></p>
+
 # ChatApp
 
 **ChatApp is a lightweight chat app, inspired by Discord, that you can host yourself.** Text
@@ -7,6 +9,8 @@ channels and DMs, voice and video calls, screen sharing, and a Windows app, for 
 The original runs at https://chat.datslok.no for a group of friends. It started as a learning project,
 and is still small and readable on purpose: one Python file for the server, plain HTML, CSS and
 JavaScript for the page, no frameworks.
+
+![ChatApp: channels on the left, messages in the middle, who's online on the right](static/landing/screenshot.png)
 
 ## Features
 
