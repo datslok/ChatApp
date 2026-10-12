@@ -71,7 +71,7 @@ the same PC, but the scripts assume two).
 | `serve.ps1`, `voice.ps1` | server | the chat and voice; scheduled tasks start them at boot |
 | `llama.ps1` | server | the AI bot's language model (optional); a scheduled task starts it at boot |
 | `chattus.ps1` | server | the AI bot, Chattus (optional); a scheduled task starts it at boot (`-Dev`: on your PC, with `start.ps1`) |
-| `tools\make_bot.py` | either | makes the bot's account, or gives it a new password |
+| `tools\make_bot.py` | either | makes the bot's account, or gives it a new password (then restart the bot) |
 | `scripts\server\update.ps1` | server (as admin) | gets the newest code and restarts the chat (`-Voice`, `-AI`: also those) |
 | `scripts\server\backup.ps1` | server | the nightly backup (also by hand) |
 | `scripts\server\usage.ps1` | server | how much space everything takes (only reads) |
@@ -292,7 +292,10 @@ name and **Log out** at the top (the page asks the chat's `/whoami`, which only 
 
 **Chattus** is a friendly AI cat in the chat: an account like everyone's, which answers every message
 in **#chattus**, anything that mentions **@Chattus** elsewhere (as a reply), and DMs to him (he
-accepts friend requests by himself). He reads the channel's last 20 messages. Reactions, pictures and
+accepts friend requests by himself). He reads the channel's last 20 messages. In a DM between two
+people, a mention invites him in: he may then read and write there for an hour (never join its
+calls), and only answers mentions. The server knows he's a bot from `users.is_bot`, which only
+`tools\make_bot.py` sets, so nobody can get this by naming themselves Chattus. Reactions, pictures and
 web search are still to come.
 
 His language model runs on the server's own graphics card, with

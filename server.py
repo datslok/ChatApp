@@ -483,6 +483,17 @@ if "appearance" not in table_columns("users"):
     with db:
         db.execute("ALTER TABLE users ADD COLUMN appearance TEXT")
 
+if "is_bot" not in table_columns("users"):
+    # From before the AI bot: nobody is one, until tools/make_bot.py makes its account.
+    with db:
+        db.execute("ALTER TABLE users ADD COLUMN is_bot INTEGER NOT NULL DEFAULT 0")
+
+
+def is_bot(user_id):
+    """Is this the AI bot's account (tools/make_bot.py)? Bots may be invited into DMs (see can_join)."""
+    row = db.execute("SELECT is_bot FROM users WHERE id = ?", (user_id,)).fetchone()
+    return row is not None and row[0] == 1
+
 
 def is_admin(user_id):
     """Checked fresh from the database every time, so tools/make_admin.py works straight away."""
@@ -1760,14 +1771,17 @@ def expand_mentions(text):
 
 def save_mentions(message_id, channel, sender_id, mentioned, everyone):
     """Remember who a message mentions (replacing what was there, for edits). Only people who can
-    see the channel, and never the sender themselves. @everyone = everyone who can see it."""
+    see the channel, and never the sender themselves. @everyone = everyone who can see it.
+    A bot named in a DM counts too: its mention is what invites it in (see bot_invited)."""
+    invited = {user_id for user_id in mentioned if channel.startswith("dm:") and is_bot(user_id)}  # (by name: not @everyone)
     if everyone:
         mentioned = {user_id for (user_id,) in db.execute("SELECT id FROM users")}
     if channel.startswith("dm:"):
         # In a DM, every message counts as mentioning the other person (like Discord): it gets a
         # red number and a notification. "dm:3:7" -> both ids; the sender is left out below.
         mentioned = set(mentioned) | {int(part) for part in channel.split(":")[1:]}
-    people = [user_id for user_id in mentioned if user_id != sender_id and can_join(channel, user_id)]
+    people = [user_id for user_id in mentioned
+              if user_id != sender_id and (can_join(channel, user_id) or user_id in invited)]
     with db:
         db.execute("DELETE FROM mentions WHERE message_id = ?", (message_id,))
         db.executemany(  # executemany: the same INSERT once for each item in the list
@@ -2196,7 +2210,7 @@ def users_message():
     [{"id": 3, "name": "axel", "online": True, "avatar": "Xk9...webp", "status": "...", "bio": "..."}, ...]"""
     online = online_user_ids()
     rows = db.execute(
-        "SELECT id, username, avatar_id, banner_id, status, bio, is_admin FROM users ORDER BY username COLLATE NOCASE"
+        "SELECT id, username, avatar_id, banner_id, status, bio, is_admin, is_bot FROM users ORDER BY username COLLATE NOCASE"
     ).fetchall()
     return {
         "type": "users",
@@ -2204,31 +2218,67 @@ def users_message():
             {
                 "id": user_id, "name": name, "online": user_id in online,
                 "avatar": avatar, "banner": banner, "status": status, "bio": bio, "admin": bool(admin),
+                "bot": bool(bot),  # the AI bot: the page offers it in DMs' @ suggestions too
             }
-            for user_id, name, avatar, banner, status, bio, admin in rows
+            for user_id, name, avatar, banner, status, bio, admin, bot in rows
         ],
     }
 
 
-def can_join(channel, user_id):
-    """May this user join this channel? Normal channels: anyone logged in.
-    DMs ("dm:3:7", the two user ids, smallest first): only the two people in it, and only
-    while they're friends."""
-    if channel in CHANNELS:
-        return True
-    if not isinstance(channel, str) or not channel.startswith("dm:"):
-        return False
+BOT_INVITE_TIME = "-1 hour"  # how long a mention lets a bot into a DM (SQLite's way of writing it)
 
+
+def dm_people(channel):
+    """The two user ids of a DM's name ("dm:3:7" -> (3, 7)), or None if it isn't exactly the
+    shape the page builds (smallest first, no leading zeros)."""
+    if not isinstance(channel, str) or not channel.startswith("dm:"):
+        return None
     parts = channel.split(":")[1:]  # "dm:3:7" -> ["3", "7"]
     if len(parts) != 2 or not all(part.isdigit() for part in parts):
-        return False
+        return None
     first, second = int(parts[0]), int(parts[1])
     if channel != f"dm:{first}:{second}" or first >= second:
-        return False  # not the exact shape the page builds (smallest first, no leading zeros)
-    if user_id not in (first, second):
-        return False  # someone else's DM: never
-    other = second if user_id == first else first
+        return None
+    return first, second
+
+
+def is_dm_member(channel, user_id):
+    """Is this one of the two people of this DM, and are they still friends? (Calls only ever
+    use this: a bot invited to read a DM is never let into its calls.)"""
+    people = dm_people(channel)
+    if people is None or user_id not in people:
+        return False
+    other = people[1] if user_id == people[0] else people[0]
     return are_friends(user_id, other)  # (a friendship also means the other person exists)
+
+
+def bot_invited(channel, user_id):
+    """A bot may read and write in someone else's DM for an hour after one of them mentions it
+    there (that's how you invite it). Only a bot (users.is_bot), and only while they're friends."""
+    people = dm_people(channel)
+    if people is None or not is_bot(user_id) or not are_friends(*people):
+        return False
+    row = db.execute(
+        """
+        SELECT 1 FROM mentions JOIN messages ON messages.id = mentions.message_id
+        WHERE mentions.user_id = ? AND messages.channel = ? AND messages.sent_at > datetime('now', ?)
+        LIMIT 1
+        """,
+        (user_id, channel, BOT_INVITE_TIME),
+    ).fetchone()
+    return row is not None
+
+
+def can_join(channel, user_id):
+    """May this user read and write in this channel? Normal channels: anyone logged in.
+    DMs ("dm:3:7", the two user ids, smallest first): the two people in it, while they're
+    friends; and the AI bot for an hour after one of them mentioned it there."""
+    if channel in CHANNELS:
+        return True
+    if is_dm_member(channel, user_id):
+        return True
+    people = dm_people(channel)  # (a member who's no longer friends stays out, even a bot)
+    return people is not None and user_id not in people and bot_invited(channel, user_id)
 
 
 # ---------- Voice ----------
@@ -2328,7 +2378,7 @@ def call_message(channel):
 
 
 async def start_call(channel, caller):
-    if not (isinstance(channel, str) and channel.startswith("dm:") and can_join(channel, caller)):
+    if not is_dm_member(channel, caller):
         return  # only in your own DMs with friends
     call = calls.get(channel)
     if call is not None:
@@ -2420,8 +2470,8 @@ async def voice_token(room: str, request: Request):
     user_id, username, password_hash, email = logged_in_user(request)
     if not (LIVEKIT_URL and LIVEKIT_API_KEY and LIVEKIT_API_SECRET):
         raise HTTPException(503, "Voice isn't set up on this server.")
-    # Lounge: anyone logged in. A DM call: the same rule as the DM's messages (the two friends).
-    if room not in VOICE_ROOMS and not (room.startswith("dm:") and can_join(room, user_id)):
+    # Lounge: anyone logged in. A DM call: only the two friends (not a bot invited to read the DM).
+    if room not in VOICE_ROOMS and not is_dm_member(room, user_id):
         raise HTTPException(403, "You can't join that voice room.")
     return {"url": LIVEKIT_URL, "token": make_voice_token(user_id, username, room)}
 
@@ -3009,9 +3059,7 @@ async def chat(websocket: WebSocket):
                 # muted, unmuted or deafened ({"muted": true, "deafened": false}). Only for showing
                 # who's in voice: getting into the audio itself still needs a ticket from /voice-token.
                 room = data.get("room")
-                if room is not None and room not in VOICE_ROOMS and not (
-                    isinstance(room, str) and room.startswith("dm:") and can_join(room, user_id)
-                ):
+                if room is not None and room not in VOICE_ROOMS and not is_dm_member(room, user_id):
                     continue  # not a room they may be in
                 old_room = clients[websocket]["voice"]
                 clients[websocket]["voice"] = room

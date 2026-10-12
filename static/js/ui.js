@@ -177,12 +177,12 @@ function updateAutocomplete() {
   renderAutocomplete();
 }
 
-// People for "@ka": whoever can see this channel (in a DM: just the other person),
-// names starting with it first, then names containing it; and @everyone.
+// People for "@ka": whoever can see this channel (in a DM: just the other person, and the AI bot,
+// which a mention invites in), names starting with it first, then names containing it; and @everyone.
 function findPeople(query) {
   const partner = dmPartner(currentChannel);
   const candidates = [...people.values()].filter((person) =>
-    person.id !== myId && (partner === null || person.id === partner)
+    person.id !== myId && (partner === null || person.id === partner || person.bot)
   );
   const name = (person) => person.name.toLowerCase();
   const ordered = [

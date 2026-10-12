@@ -145,18 +145,23 @@ class Chattus:
             for channel in data["channels"]:
                 if channel == self.channel:
                     continue  # we get those live
-                if channel == HOME or channel.startswith("dm:") or channel == notified or mentions.get(channel):
+                if self.answers_everything(channel) or channel == notified or mentions.get(channel):
                     self.enqueue(channel)
+
+    def answers_everything(self, channel):
+        """#chattus and DMs with him: every message is for him. Everywhere else (other channels, and
+        DMs between two friends, which a mention lets him into for an hour) only mentions are."""
+        return channel == HOME or (channel.startswith("dm:") and str(self.my_id) in channel.split(":")[1:])
 
     def should_answer(self, message, channel):
         """Is this a message we should answer? Not our own (no talking to ourselves), not a call
-        note, not too old, and: anything in #chattus and in DMs, elsewhere only when it mentions us."""
+        note, not too old, and: anything in #chattus and his DMs, elsewhere only when it mentions us."""
         if message["user_id"] in (None, self.my_id) or message.get("kind") or not message["text"]:
             return False
         sent = datetime.fromisoformat(message["sent_at"].replace("Z", "+00:00"))
         if datetime.now(timezone.utc) - sent > MAX_AGE:
             return False
-        return channel == HOME or channel.startswith("dm:") or f"<@{self.my_id}>" in message["text"]
+        return self.answers_everything(channel) or f"<@{self.my_id}>" in message["text"]
 
     def enqueue(self, channel):
         if channel not in self.queued:
@@ -215,9 +220,9 @@ class Chattus:
             return
 
         reply = {"type": "message", "text": text}
-        # Shown as a reply when it isn't obvious what he's answering: always in shared channels,
-        # and in #chattus and DMs when someone else wrote after that message.
-        if not (channel == HOME or channel.startswith("dm:")) or messages[-1] is not target:
+        # Shown as a reply when it isn't obvious what he's answering: always where he only answers
+        # mentions, and in #chattus and his DMs when someone else wrote after that message.
+        if not self.answers_everything(channel) or messages[-1] is not target:
             reply["reply_to"] = target["id"]
         await self.send(reply)
         # (Messages that came while he was thinking queued this channel again: handle() did that.)
@@ -240,8 +245,11 @@ class Chattus:
         if channel == HOME:
             return "You're in #chattus, your own channel: every message there is for you."
         if channel.startswith("dm:"):
-            other = [int(part) for part in channel.split(":")[1:] if int(part) != self.my_id][0]
-            return f"You're in a private chat with {self.names.get(other, 'someone')}."
+            people = [self.names.get(int(part), "someone") for part in channel.split(":")[1:] if int(part) != self.my_id]
+            if len(people) == 1:
+                return f"You're in a private chat with {people[0]}."
+            return (f"You're in a private chat between {people[0]} and {people[1]}. One of them mentioned "
+                    "you (@Chattus) to ask you something: answer that, and keep out of the rest.")
         return f"You're in #{channel}, a channel for everyone. Someone mentioned you (@Chattus)."
 
     def ask_model(self, channel, messages):
