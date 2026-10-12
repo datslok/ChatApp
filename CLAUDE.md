@@ -68,6 +68,11 @@ the point is for me to understand how it works, not just to have it done.
   `/?channel=..&message=..` (core.js reads it). A device with push on doesn't notify by itself (`pushOn`).
   On phones, a banner (`#phone-banner`, notifications.js) offers Install (Chrome's `beforeinstallprompt`, kept and
   used by our button; iPhones get the steps in words), then Turn on (push), until closed.
+- Next: a native phone app (milestone 22), chosen because the PWA felt janky: React Native with Expo
+  (development builds, so native modules like LiveKit's work), in JavaScript (not TypeScript), in
+  `mobile/`, Android first (my girlfriend's phone; iPhones maybe later via Expo's cloud builds). It talks
+  to the same server: `/login` and its cookie, the same WebSocket messages and endpoints. Native push
+  will go through Firebase Cloud Messaging instead of Web Push. The web app and PWA stay meanwhile.
 - `static/login.html`: the login / create account page.
 - `static/reset.html`: "forgot password" (asks for a reset link) and, with `?token=`, choosing a new password.
 - Emails (reset links) go out through Resend's SMTP server, configured in `.env`. Without `SMTP_HOST`

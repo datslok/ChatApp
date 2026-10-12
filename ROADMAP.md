@@ -96,3 +96,13 @@
     - [x] Installable: manifest, icons (tools/make_pwa_icons.py), a service worker
     - [x] Push notifications for DMs, mentions and calls while the chat is closed (Web Push, VAPID keys), opening the message when tapped
     - [x] Polish: a banner on phones: Install (Chrome's own dialog), then Turn on notifications
+- [ ] **22.** A native phone app: React Native with Expo, in `mobile/`, Android first (iPhone later from the same code)
+    - [ ] Setup: Android Studio and its SDK, an Expo project (JavaScript), a development build on the phone that updates live
+    - [ ] Log in, the channel list, and reading messages live over the WebSocket
+    - [ ] Writing: sending, replies, reactions, editing and deleting
+    - [ ] DMs, friends, unread dots and mentions
+    - [ ] Pictures and files: viewing, uploading, downloading
+    - [ ] Voice and video calls (LiveKit's React Native library), also with the phone locked
+    - [ ] Push notifications through Firebase Cloud Messaging, ringing calls
+    - [ ] Settings: profile, appearance, notifications
+    - [ ] Distribution: an APK on the download page, and updates

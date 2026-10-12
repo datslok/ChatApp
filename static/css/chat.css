@@ -2483,6 +2483,11 @@ button.download-button {
   font-size: 0.85rem;
   color: var(--text-soft);
 }
+/* "display: flex" above would otherwise beat the hidden attribute (the push switch in the Windows
+   app, Desktop notifications on phones). */
+#settings label[hidden] {
+  display: none;
+}
 
 #settings input {
   padding: 10px 12px;

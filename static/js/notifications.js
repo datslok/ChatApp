@@ -293,6 +293,13 @@ const onIPhone = /iPhone|iPad/.test(navigator.userAgent);
 const runningAsApp = matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
 let installPrompt = null;  // Chrome's install dialog, kept for our button
 
+// "Desktop notifications" means nothing on a phone: phone browsers only show notifications
+// through the service worker (pushes), never the page's own. The push switch is the one there.
+if (onPhone) {
+  notifyDesktopBox.closest("label").hidden = true;
+  notifyHelp.hidden = true;  // (its hints are about that checkbox)
+}
+
 window.addEventListener("beforeinstallprompt", (event) => {
   event.preventDefault();  // not Chrome's own little bar: our banner asks instead
   installPrompt = event;
