@@ -77,7 +77,7 @@
     - [ ] Roles with colours (coloured names and headings in the member list)
 - [ ] **18.** Smaller polish
     - [x] Clicking a reply's quote jumps to the original message (was already there)
-    - [ ] Up arrow in an empty text box edits your last message
+    - [x] Up arrow in an empty text box edits your last message (was already there)
     - [ ] A "New messages" divider where you stopped reading
     - [ ] GIF search (Tenor or Giphy)
     - [ ] Soundboard in voice
