@@ -56,12 +56,78 @@ function showSettingsPage(name) {
   }
   settingsPagesBox.scrollTop = 0;  // start at the top of the new page
   if (name === "changelog" && settingsDialog.open) showChangelog();  // (also marks it as seen)
+  if (name === "appearance") showAppearanceSettings();
 }
 
 for (const tab of settingsTabs) {
   tab.addEventListener("click", () => showSettingsPage(tab.dataset.tab));
 }
 showSettingsPage(settingsPage);  // at the start: hide every page but the first
+
+// ---------- Settings: Appearance ----------
+//
+// Theme, colours, font and text size, kept with the account. appearance.js does the work:
+// applyAppearance shows settings on the whole page, saveAppearance also saves them. Every change
+// here shows at once; sliders and colour pickers save when let go ("change"), not while they're
+// moving ("input"), so the server gets one save instead of dozens a second.
+
+const themeSwatches = document.querySelectorAll(".theme-swatch");
+const colourInputs = document.querySelectorAll(".colour-pickers input");
+const coloursReset = document.getElementById("colours-reset");
+const fontRadios = document.querySelectorAll('input[name="font"]');
+const fontSizeSlider = document.getElementById("font-size");
+const fontSizeValue = document.getElementById("font-size-value");
+const appearanceStatus = document.getElementById("appearance-status");
+
+// Each font's name written in that font (its label is the radio button's parent).
+for (const radio of fontRadios) {
+  radio.parentElement.style.fontFamily = APPEARANCE_FONTS[radio.value];
+}
+
+// Set the controls to what's showing now (`appearance`, in appearance.js).
+function showAppearanceSettings() {
+  for (const swatch of themeSwatches) {
+    swatch.setAttribute("aria-pressed", swatch.dataset.theme === appearance.theme ? "true" : "false");
+  }
+  // Each picker: the colour in use now, picked or the theme's, as the browser works it out.
+  const styles = getComputedStyle(document.documentElement);
+  for (const input of colourInputs) {
+    input.value = styles.getPropertyValue("--" + input.dataset.colour).trim();
+  }
+  for (const radio of fontRadios) radio.checked = radio.value === appearance.font;
+  fontSizeSlider.value = appearance.font_size;
+  fontSizeValue.textContent = appearance.font_size + "px";
+}
+
+// Change some settings (the rest stay as they are): shown at once, then saved.
+async function changeAppearance(changes) {
+  const saving = saveAppearance({ ...appearance, ...changes });  // (shows them before it saves)
+  showAppearanceSettings();
+  appearanceStatus.textContent = (await saving) ? "" : "Couldn't save that. Is the connection lost?";
+}
+
+// A theme starts from its own colours: picked ones would clash (dark text on a dark background).
+for (const swatch of themeSwatches) {
+  swatch.addEventListener("click", () => changeAppearance({ theme: swatch.dataset.theme, colours: {} }));
+}
+
+for (const input of colourInputs) {
+  // The colours with this one changed. (`[input.dataset.colour]`: a key whose name is worked out.)
+  const withThisColour = () => ({ ...appearance.colours, [input.dataset.colour]: input.value });
+  input.addEventListener("input", () => applyAppearance({ ...appearance, colours: withThisColour() }));
+  input.addEventListener("change", () => changeAppearance({ colours: withThisColour() }));
+}
+coloursReset.addEventListener("click", () => changeAppearance({ colours: {} }));
+
+for (const radio of fontRadios) {
+  radio.addEventListener("change", () => changeAppearance({ font: radio.value }));
+}
+
+fontSizeSlider.addEventListener("input", () => {
+  applyAppearance({ ...appearance, font_size: Number(fontSizeSlider.value) });
+  fontSizeValue.textContent = fontSizeSlider.value + "px";
+});
+fontSizeSlider.addEventListener("change", () => changeAppearance({ font_size: Number(fontSizeSlider.value) }));
 
 // ---------- Settings: What's new ----------
 //

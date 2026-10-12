@@ -232,6 +232,7 @@
       <h3>User settings</h3>
       <button type="button" class="settings-tab" role="tab" data-tab="account">My Account</button>
       <button type="button" class="settings-tab" role="tab" data-tab="profile">Profile</button>
+      <button type="button" class="settings-tab" role="tab" data-tab="appearance">Appearance</button>
       <button type="button" class="settings-tab" role="tab" data-tab="emoji">Emoji</button>
       <h3>App settings</h3>
       <button type="button" class="settings-tab" role="tab" data-tab="notifications">Notifications</button>
@@ -336,6 +337,48 @@
           <div id="profile-status-line" class="status"></div>
           <button>Save profile</button>
         </form>
+      </section>
+
+      <!-- Theme, colours, font and text size (settings.js, "Appearance"; kept with the account). -->
+      <section class="settings-page" data-page="appearance" role="tabpanel" aria-label="Appearance">
+        <h2>Appearance</h2>
+        <h3>Theme</h3>
+        <!-- Each swatch has its theme's data-theme, so it shows that theme's colours (chat.css). -->
+        <div class="theme-swatches">
+          <button type="button" class="theme-swatch" data-theme="dark" title="Dark" aria-label="Dark"></button>
+          <button type="button" class="theme-swatch" data-theme="darker" title="Darker" aria-label="Darker"></button>
+          <button type="button" class="theme-swatch" data-theme="light" title="Light" aria-label="Light"></button>
+          <button type="button" class="theme-swatch" data-theme="blue" title="Blue" aria-label="Blue"></button>
+          <button type="button" class="theme-swatch" data-theme="purple" title="Purple" aria-label="Purple"></button>
+          <button type="button" class="theme-swatch" data-theme="green" title="Green" aria-label="Green"></button>
+        </div>
+        <h3>Colours</h3>
+        <p class="settings-help">Change any of these on top of the theme. Picking a theme starts again from its own colours.</p>
+        <div class="colour-pickers">
+          <label class="colour-row">Background <input type="color" data-colour="bg-main"></label>
+          <label class="colour-row">Panels <input type="color" data-colour="bg-panel"></label>
+          <label class="colour-row">Text <input type="color" data-colour="text"></label>
+          <label class="colour-row">Faded text <input type="color" data-colour="text-muted"></label>
+          <label class="colour-row">Accent <input type="color" data-colour="accent"></label>
+          <label class="colour-row">Links <input type="color" data-colour="link"></label>
+        </div>
+        <button type="button" id="colours-reset" class="secondary">Reset colours</button>
+        <h3>Font</h3>
+        <!-- Each name is shown in its own font (settings.js, from APPEARANCE_FONTS). -->
+        <div class="font-choices">
+          <label class="checkbox"><input type="radio" name="font" value="system"> System (Segoe UI)</label>
+          <label class="checkbox"><input type="radio" name="font" value="calibri"> Calibri</label>
+          <label class="checkbox"><input type="radio" name="font" value="georgia"> Georgia</label>
+          <label class="checkbox"><input type="radio" name="font" value="consolas"> Consolas</label>
+          <label class="checkbox"><input type="radio" name="font" value="comic"> Comic Sans</label>
+        </div>
+        <h3>Text size</h3>
+        <label class="slider-row">
+          Text size
+          <input type="range" id="font-size" min="12" max="20" step="1">
+          <span id="font-size-value" class="slider-value"></span>
+        </label>
+        <p id="appearance-status" class="status error"></p>
       </section>
 
       <section class="settings-page" data-page="emoji" role="tabpanel" aria-label="Emoji">

@@ -3,8 +3,9 @@
 /* The colours, as variables ("custom properties"): defined once here, used everywhere below as
    var(--name). A theme only has to give these new values. Named by what they're for, not what
    they look like, so they still make sense in a light theme. (Black for shadows, backdrops and
-   behind videos, and white text on coloured buttons, stay the same in every theme.) */
-:root {
+   behind videos, and white text on coloured buttons, stay the same in every theme.)
+   These are the Dark theme, the default; the other themes follow. */
+:root, [data-theme="dark"] {
   /* Backgrounds, from the darkest to the lightest. */
   --bg-deepest: #111214;     /* behind calls and the Lounge */
   --bg-darkest: #1e1f22;     /* text fields, the ping graph, cards */
@@ -38,6 +39,98 @@
   --button-red-hover: #a12828;
   --yellow: #f0b232;         /* mentions of you, warnings */
   --font: system-ui, sans-serif;  /* Settings → Appearance can choose another (appearance.js) */
+}
+
+/* The other themes (Settings → Appearance; appearance.js sets data-theme on <html>): only what
+   differs from Dark. "[data-theme=...]" and not only ":root[...]": any element with it gets that
+   theme's colours, for itself and what's inside it, which is how each theme's swatch in Settings
+   shows its own colours. */
+[data-theme="darker"] {
+  --bg-deepest: #000000;
+  --bg-darkest: #0b0b0d;
+  --bg-panel-alt: #0f0f11;
+  --bg-panel: #111214;
+  --bg-main: #18191c;
+  --bg-hover-dim: #1d1e21;
+  --bg-hover: #232428;
+  --bg-active: #2b2d31;
+  --bg-input: #222327;
+  --bg-neutral: #3a3c42;
+  --scrollbar: #2b2d31;
+  --border: #000000;
+  --line: #2b2d31;
+}
+[data-theme="light"] {
+  --bg-deepest: #e3e5e8;
+  --bg-darkest: #ebedef;
+  --bg-panel-alt: #ebedef;
+  --bg-panel: #f2f3f5;
+  --bg-main: #ffffff;
+  --bg-hover-dim: #f5f6f7;
+  --bg-hover: #e3e5e8;
+  --bg-active: #d4d7dc;
+  --bg-input: #ebedef;
+  --bg-neutral: #6d6f78;
+  --scrollbar: #c4c9ce;
+  --border: #d4d7dc;
+  --line: #e3e5e8;
+  --text-strong: #060607;
+  --text: #313338;
+  --text-soft: #4e5058;
+  --text-muted: #5c5e66;
+  --text-faint: #80848e;
+  --text-disabled: #a0a3a8;
+  /* A little deeper than in Dark, to stay readable on white. */
+  --mention-text: #3c45a5;
+  --link: #006ce7;
+  --green: #1e8e4e;
+  --red: #d83a42;
+  --yellow: #b97d0c;
+}
+[data-theme="blue"] {
+  --bg-deepest: #0b1220;
+  --bg-darkest: #0f1a2e;
+  --bg-panel-alt: #13203a;
+  --bg-panel: #172540;
+  --bg-main: #1c2c4a;
+  --bg-hover-dim: #1a2945;
+  --bg-hover: #233558;
+  --bg-active: #2b3f66;
+  --bg-input: #22355a;
+  --bg-neutral: #3d5078;
+  --scrollbar: #0f1a2e;
+  --border: #0f1a2e;
+  --line: #2b3f66;
+}
+[data-theme="purple"] {
+  --bg-deepest: #130d1c;
+  --bg-darkest: #1a1226;
+  --bg-panel-alt: #1f162e;
+  --bg-panel: #251a36;
+  --bg-main: #2c2040;
+  --bg-hover-dim: #291e3c;
+  --bg-hover: #34264b;
+  --bg-active: #3e2e59;
+  --bg-input: #372a4f;
+  --bg-neutral: #54456e;
+  --scrollbar: #1a1226;
+  --border: #1a1226;
+  --line: #3e2e59;
+}
+[data-theme="green"] {
+  --bg-deepest: #0b1510;
+  --bg-darkest: #0f1c16;
+  --bg-panel-alt: #13221b;
+  --bg-panel: #17291f;
+  --bg-main: #1c3026;
+  --bg-hover-dim: #1a2d23;
+  --bg-hover: #22392d;
+  --bg-active: #2a4536;
+  --bg-input: #253e31;
+  --bg-neutral: #3f5a4b;
+  --scrollbar: #0f1c16;
+  --border: #0f1c16;
+  --line: #2a4536;
 }
 
 /* Buttons and text fields use the system font unless told otherwise: the chosen one instead. */
@@ -461,6 +554,7 @@ body.mini-hidden :fullscreen .tile-strip {
   padding: 2px 8px;
   border-radius: 6px;
   background: rgba(0, 0, 0, 0.6);
+  color: white;  /* on the dark band, in every theme */
   font-size: 0.85rem;
 }
 /* The speaking ring: drawn by a layer on top of the tile (::after), so a video can't cover it. */
@@ -520,6 +614,7 @@ body.mini-hidden :fullscreen .tile-strip {
   padding: 4px 8px;
   border-radius: 6px;
   background: rgba(0, 0, 0, 0.6);
+  color: white;  /* on the dark band, in every theme */
   font-size: 0.85rem;
   cursor: default;
 }
@@ -2333,6 +2428,60 @@ body.mini-hidden :fullscreen .tile-strip {
   color: white;
   font-size: 1rem;
   cursor: pointer;
+}
+
+/* Settings → Appearance. The swatches: round, half the theme's panel colour and half its
+   background (a diagonal "linear-gradient" with a hard edge at 50%). Their colours come from
+   their own data-theme. The chosen one gets a ring in the page's text colour ("currentColor":
+   the text colour, which the swatch takes from the page around it). */
+.theme-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+#settings .theme-swatch {
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  border: 2px solid var(--line);
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--bg-panel) 50%, var(--bg-main) 50%);
+  color: inherit;
+}
+#settings .theme-swatch[aria-pressed="true"] {
+  outline: 3px solid currentColor;
+  outline-offset: 2px;
+}
+.colour-pickers {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 280px;
+}
+#settings label.colour-row {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.95rem;
+  color: var(--text);
+}
+#settings .colour-row input {
+  width: 48px;
+  height: 32px;
+  padding: 2px;
+  border: 1px solid var(--line);
+  background: none;
+  cursor: pointer;
+}
+#settings #colours-reset {
+  margin-top: 12px;
+  padding: 8px 16px;
+  background: var(--bg-neutral);
+}
+.font-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 #settings #settings-close {
