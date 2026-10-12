@@ -496,7 +496,9 @@ The app then believes it's old, finds the live version, and updates to it.
 Put the new picture (a 1024×1024 PNG) in `icon\`, then in `desktop\`:
 `npm run tauri icon ../icon/<file>.png` (delete the `android`, `ios`, `Square*`/`StoreLogo` and
 `icon.icns` files it also makes), copy `desktop\src-tauri\icons\icon.ico` to `static\favicon.ico`
-(the browser tab's icon), run `python tools\make_installer_images.py` (the installer's pictures and the
+(the browser tab's icon; also raise the number in the pages' `favicon.ico?v=` links, so browsers fetch
+the new one instead of keeping the old one for a day), point `tools\make_installer_images.py` at the
+new file (its `ICON` line), run `python tools\make_installer_images.py` (the installer's pictures and the
 update window's cat), and release a new version.
 
 ---

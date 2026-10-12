@@ -120,7 +120,8 @@ the point is for me to understand how it works, not just to have it done.
   `chattuschattus_square.png`, her line drawing `chattuschattus.png` centred in a blue rounded square
   (`_centered` and `_round` are the versions not chosen). The earlier black cat was `fin2.png` / `fin2_round.png`.
   `npm run tauri icon ../icon/chattuschattus_square.png` in `desktop/` makes every size (delete the android/ios/Store/Mac ones and 64x64.png); `static/favicon.ico` is a copy of
-  the resulting `icon.ico`, served at `/favicon.ico` for the browser tab.
+  the resulting `icon.ico`, served at `/favicon.ico` for the browser tab and linked from every page as
+  `/favicon.ico?v=2` (raise the number with each new icon: browsers and Cloudflare keep it a day).
 - `static/download.html`: the download page (`/download`, no login), linked from the login page and
   Settings (hidden inside the app). `/download/windows` always redirects to the newest installer.
 - `static/landing/`: the landing page (`index.html`, `logo.png` from `icon/chattuschattus_square.png`,
