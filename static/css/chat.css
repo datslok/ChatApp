@@ -154,19 +154,19 @@
 
 /* Light pink: like Light (dark text on light backgrounds), in pastel pink, with a pink accent. */
 [data-theme="lightpink"] {
-  --bg-deepest: #f3d9e6;
-  --bg-darkest: #f8e4ee;
-  --bg-panel-alt: #f8e4ee;
-  --bg-panel: #fcedf4;
-  --bg-main: #fff7fb;
-  --bg-hover-dim: #fdeff6;
-  --bg-hover: #f5dbe8;
-  --bg-active: #efc9dc;
-  --bg-input: #f8e4ee;
+  --bg-deepest: #e9bfd3;
+  --bg-darkest: #f0cfdf;
+  --bg-panel-alt: #f0cfdf;
+  --bg-panel: #f5d9e6;
+  --bg-main: #fae6ef;
+  --bg-hover-dim: #f6dce8;
+  --bg-hover: #edc7d9;
+  --bg-active: #e6b5cc;
+  --bg-input: #f0cfdf;
   --bg-neutral: #8a6878;
-  --scrollbar: #e8b9d0;
-  --border: #efc9dc;
-  --line: #f3d9e6;
+  --scrollbar: #dca3be;
+  --border: #e6b5cc;
+  --line: #e9bfd3;
   --text-strong: #2a0f1d;
   --text: #3d2230;
   --text-soft: #5e4250;
