@@ -6,7 +6,7 @@
 - desktop/src-tauri/installer/sidebar.bmp (164x314 at 100%): left side of its first and last page
 - desktop/ui/cat.png: the cat in the update window (ui/update.html)
 
-NSIS (the installer) only takes BMP pictures without transparency, so the round icon is put on
+NSIS (the installer) only takes BMP pictures without transparency, so the icon is put on
 a solid background first.
 
 The pictures are made SCALE times bigger than NSIS's standard sizes: on screens with Windows
@@ -17,7 +17,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 
 ROOT = Path(__file__).resolve().parent.parent
-ICON = Image.open(ROOT / "icon" / "fin2_round.png").convert("RGBA")
+ICON = Image.open(ROOT / "icon" / "chattuschattus_square.png").convert("RGBA")  # the app icon in use
 INSTALLER = ROOT / "desktop" / "src-tauri" / "installer"
 FONT = "C:/Windows/Fonts/segoeuib.ttf"  # Segoe UI Bold, Windows' own font
 SCALE = 2
@@ -27,7 +27,7 @@ LIGHT = (219, 222, 225)    # the chat's text, #dbdee1
 
 
 def cat(size):
-    """The round icon, scaled down to size x size pixels."""
+    """The icon, scaled down to size x size pixels."""
     return ICON.resize((size, size), Image.LANCZOS)
 
 

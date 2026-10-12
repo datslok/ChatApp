@@ -24,9 +24,10 @@ SOFTWARE.
 
 Not covered by this license:
 
-- The app icon (the black cat) by Niamh Hannon: icon/, static/favicon.ico,
+- The app icons (the cats) by Niamh Hannon: icon/, static/favicon.ico,
   desktop/src-tauri/icons/, desktop/src-tauri/installer/*.bmp and
-  desktop/ui/cat.png. All rights reserved by Niamh Hannon. If you run your own
+  desktop/ui/cat.png and static/landing/logo.png. All rights reserved by Niamh
+  Hannon. If you run your own
   copy of ChatApp, please use your own icon.
 - Third-party files included under their own licenses:
   static/livekit-client-*.umd.js (LiveKit, Apache License 2.0) and

@@ -116,8 +116,10 @@ the point is for me to understand how it works, not just to have it done.
 - `tools/make_installer_images.py`: makes the installer's pictures (`desktop/src-tauri/installer/`)
   and the update window's cat (`desktop/ui/cat.png`) from the icon, at twice NSIS's sizes so they stay sharp
   with Windows scaling (`installer/hooks.nsh` keeps their shape). Run it again after changing the icon.
-- `icon/`: the app icon, made by Niamh Hannon (1024×1024). `fin2.png` is her drawing; `fin2_round.png`
-  is the one in use (the oval made a circle, stray marks outside it removed). `npm run tauri icon ../icon/fin2_round.png` in `desktop/` makes every size (delete the android/ios/Store/Mac ones); `static/favicon.ico` is a copy of
+- `icon/`: the app icon, made by Niamh Hannon (1024×1024). In use since desktop app 0.1.14:
+  `chattuschattus_square.png`, her line drawing `chattuschattus.png` centred in a blue rounded square
+  (`_centered` and `_round` are the versions not chosen). The earlier black cat was `fin2.png` / `fin2_round.png`.
+  `npm run tauri icon ../icon/chattuschattus_square.png` in `desktop/` makes every size (delete the android/ios/Store/Mac ones and 64x64.png); `static/favicon.ico` is a copy of
   the resulting `icon.ico`, served at `/favicon.ico` for the browser tab.
 - `static/download.html`: the download page (`/download`, no login), linked from the login page and
   Settings (hidden inside the app). `/download/windows` always redirects to the newest installer.

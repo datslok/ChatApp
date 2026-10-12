@@ -521,7 +521,7 @@ write your own `CLAUDE.md`.
 
 ## Credits
 
-The app icon (the black cat) is made by Niamh Hannon.
+The app icons (the cats) are made by Niamh Hannon.
 
 ## License
 
