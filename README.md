@@ -208,8 +208,9 @@ that's done; a half-typed message is kept.
 **What's new** (Settings → What's new) is written by hand in `static/changelog.json`, in two parts:
 `features`, an overview of everything the chat can do (by topic), and `changes`, one entry per day,
 newest first. Both are short lines for friends (not for developers), and they can use the chat's
-formatting (`**bold**`, `` `code` `` and so on). A new date at the top of `changes` puts a red dot on
-everyone's ⚙️ until they've opened the page. To add something, edit the file and deploy:
+formatting (`**bold**`, `` `code` `` and so on). Any change to `changes` (a new line, or an edited
+one) puts a red dot on everyone's ⚙️ until they've opened the page. In Settings, the two parts are
+sections that open and close: Changes (open at first) and Everything ChatApp can do. To add something, edit the file and deploy:
 
 ```json
 {

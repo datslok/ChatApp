@@ -442,8 +442,17 @@
 
       <section class="settings-page" data-page="changelog" role="tabpanel" aria-label="What's new">
         <h2>What's new</h2>
-        <!-- One card per day, newest first, from static/changelog.json (settings.js). -->
-        <div id="changelog-list"></div>
+        <!-- From static/changelog.json (settings.js). <details> is a section that opens and closes
+             by clicking its <summary>: built into the browser, no script needed. "open" = open
+             at the start. -->
+        <details class="changelog-section" open>
+          <summary>Changes</summary>
+          <div id="changelog-changes"></div>
+        </details>
+        <details class="changelog-section">
+          <summary>Everything ChatApp can do</summary>
+          <div id="changelog-features"></div>
+        </details>
       </section>
 
       <section class="settings-page" data-page="feedback" role="tabpanel" aria-label="Bugs &amp; ideas">

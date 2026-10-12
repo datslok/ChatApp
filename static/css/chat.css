@@ -1555,6 +1555,26 @@ body {
   background: #2b2d31;
 }
 
+/* What's new: two sections that open and close (<details>), each with a clickable heading
+   (<summary>). The browser draws a ▶ in front, turned ▼ while open. */
+.changelog-section {
+  margin-bottom: 12px;
+}
+
+.changelog-section summary {
+  padding: 8px 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: #b5bac1;
+  cursor: pointer;
+  user-select: none;  /* clicking it quickly twice shouldn't select the text */
+}
+
+.changelog-section summary:hover {
+  color: white;
+}
+
 /* What's new: one card per topic or day, like the Inbox's. */
 .changelog-card {
   margin-bottom: 12px;

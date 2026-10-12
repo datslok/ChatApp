@@ -66,14 +66,16 @@ showSettingsPage(settingsPage);  // at the start: hide every page but the first
 // ---------- Settings: What's new ----------
 //
 // Written by hand in static/changelog.json, in two parts:
-//   "features": everything the chat can do, by topic: [{"topic": "💬 Messages", "items": [...]}]
 //   "changes":  what changed when, newest day first: [{"date": "2026-10-12", "items": [...]}]
-// This browser remembers the newest date it has shown (localStorage "changelogSeen"); a newer
-// one in "changes" puts a red dot on ⚙️ and on the tab. Editing "features" alone doesn't.
+//   "features": everything the chat can do, by topic: [{"topic": "💬 Messages", "items": [...]}]
+// This browser remembers a fingerprint of the "changes" it has shown (localStorage
+// "changelogSeen"). Any change there (a new line, or an edited one) gives a different
+// fingerprint, which puts a red dot on ⚙️ and on the tab. Editing "features" alone doesn't.
 
 const settingsNewDot = document.getElementById("settings-new-dot");
 const changelogNewDot = document.getElementById("changelog-new-dot");
-const changelogList = document.getElementById("changelog-list");
+const changesBox = document.getElementById("changelog-changes");
+const featuresBox = document.getElementById("changelog-features");
 let changelog = { features: [], changes: [] };  // the file's contents, once fetched
 
 async function loadChangelog() {
@@ -87,11 +89,21 @@ async function loadChangelog() {
   updateChangelogDots();
 }
 
-// Dates written as YYYY-MM-DD sort like plain text: "2026-10-12" > "2026-10-11", and anything
-// is > "" (nothing seen yet, like on a new device).
+// A short fingerprint of the changes: the same text always gives the same number, and any
+// change to it almost certainly a different one. (A simple "hash": each character's code
+// mixes into the number so far. Math.imul multiplies like 32-bit whole numbers do, and ">>> 0"
+// keeps the result a positive number.)
+function changesFingerprint() {
+  const text = JSON.stringify(changelog.changes);
+  let hash = 0;
+  for (let i = 0; i < text.length; i++) {
+    hash = (Math.imul(hash, 31) + text.charCodeAt(i)) >>> 0;
+  }
+  return String(hash);
+}
+
 function updateChangelogDots() {
-  const newest = changelog.changes.length > 0 ? changelog.changes[0].date : "";
-  const unseen = newest > (localStorage.getItem("changelogSeen") || "");
+  const unseen = changelog.changes.length > 0 && changesFingerprint() !== localStorage.getItem("changelogSeen");
   settingsNewDot.hidden = !unseen;
   changelogNewDot.hidden = !unseen;
 }
@@ -112,22 +124,9 @@ function makeChangelogCard(title, items) {
   return card;
 }
 
-function makeChangelogHeading(text) {
-  const heading = document.createElement("h3");
-  heading.textContent = text;
-  return heading;
-}
-
-// Draw both parts, and remember that we've seen the newest changes.
+// Draw both parts (each in its own section, index.html), and remember that we've seen the changes.
 function showChangelog() {
-  changelogList.replaceChildren(makeChangelogHeading("Everything ChatApp can do"));
-  for (const group of changelog.features) {
-    const topic = document.createElement("div");
-    topic.className = "changelog-title";
-    topic.textContent = group.topic;
-    changelogList.appendChild(makeChangelogCard(topic, group.items));
-  }
-  changelogList.appendChild(makeChangelogHeading("Changes"));
+  changesBox.replaceChildren();
   for (const entry of changelog.changes) {
     const date = document.createElement("time");
     date.className = "changelog-title";
@@ -137,9 +136,16 @@ function showChangelog() {
     date.textContent = new Date(entry.date + "T12:00").toLocaleDateString(undefined, {
       weekday: "long", day: "numeric", month: "long", year: "numeric",
     });
-    changelogList.appendChild(makeChangelogCard(date, entry.items));
+    changesBox.appendChild(makeChangelogCard(date, entry.items));
   }
-  if (changelog.changes.length > 0) localStorage.setItem("changelogSeen", changelog.changes[0].date);
+  featuresBox.replaceChildren();
+  for (const group of changelog.features) {
+    const topic = document.createElement("div");
+    topic.className = "changelog-title";
+    topic.textContent = group.topic;
+    featuresBox.appendChild(makeChangelogCard(topic, group.items));
+  }
+  if (changelog.changes.length > 0) localStorage.setItem("changelogSeen", changesFingerprint());
   updateChangelogDots();
 }
 
