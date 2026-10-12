@@ -90,7 +90,7 @@
 - [x] **20.** Appearance (Settings → Appearance, saved with your account)
     - [x] The colours as CSS variables, so themes can change them
     - [x] Saved on the server with the account (checked there), applied before the page is drawn
-    - [x] The Appearance page: themes (Dark, Darker, Light, Blue, Purple, Green), colour pickers for the main colours, font (Windows' own), text size
+    - [x] The Appearance page: themes (Dark, Darker, Light, Blue, Purple, Green, Pink), colour pickers for the main colours, font (Windows' own), text size
     - [x] Scale, in the desktop app only (WebView2's own zoom, through a new app version; browsers have Ctrl + and Ctrl −)
 - [x] **21.** The phone app (a PWA: installed from the website, no app store)
     - [x] Installable: manifest, icons (tools/make_pwa_icons.py), a service worker

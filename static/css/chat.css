@@ -133,6 +133,25 @@
   --line: #2a4536;
 }
 
+[data-theme="pink"] {
+  --bg-deepest: #1a0d15;
+  --bg-darkest: #22111c;
+  --bg-panel-alt: #281420;
+  --bg-panel: #2f1826;
+  --bg-main: #381d2d;
+  --bg-hover-dim: #331a29;
+  --bg-hover: #432436;
+  --bg-active: #4f2b40;
+  --bg-input: #46263a;
+  --bg-neutral: #6a4058;
+  --scrollbar: #22111c;
+  --border: #22111c;
+  --line: #4f2b40;
+  /* The only theme with its own accent too: blue buttons on pink looked out of place. */
+  --accent: #eb459e;
+  --mention-text: #f9c6e0;
+}
+
 /* Buttons and text fields use the system font unless told otherwise: the chosen one instead. */
 button, input, select, textarea {
   font-family: inherit;

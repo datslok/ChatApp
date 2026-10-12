@@ -1399,7 +1399,7 @@ async def change_profile(data: ProfileChange, request: Request):
 # puts these values into its CSS, so only names from these lists and real colours get in: without
 # that check, anyone could put any text into their own page's styles with a hand-made request.
 
-APPEARANCE_THEMES = {"dark", "darker", "light", "blue", "purple", "green"}
+APPEARANCE_THEMES = {"dark", "darker", "light", "blue", "purple", "green", "pink"}
 APPEARANCE_FONTS = {"system", "calibri", "georgia", "consolas", "comic"}
 # The colours with a picker: names of the CSS variables in chat.css (without the "--").
 APPEARANCE_COLOURS = {"bg-main", "bg-panel", "text", "text-muted", "accent", "link"}
