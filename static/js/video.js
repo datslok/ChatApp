@@ -145,7 +145,10 @@ async function startScreenShare() {
     await room.localParticipant.setScreenShareEnabled(true, {
       // What the browser captures: at most this size and frame rate.
       resolution: { width: Math.round((height * 16) / 9), height, frameRate: fps },
-      audio: true,               // shows "Share audio" in the picker
+      // Shows "Share audio" in the picker. A whole screen's sound is everything the PC plays,
+      // including the call itself, so people would hear themselves back: restrictOwnAudio leaves
+      // out the sound this page plays. (Browsers without it ignore it and capture everything.)
+      audio: { restrictOwnAudio: true },
       systemAudio: "include",    // ...also when sharing a whole screen, not only a tab
       // A hint for the video encoder: keep text crisp ("detail"), or keep movement smooth ("motion").
       contentHint: fps === 60 ? "motion" : "detail",
