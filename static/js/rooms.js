@@ -633,7 +633,8 @@ function makeScreenTile(id) {
   const label = document.createElement("span");
   label.className = "tile-name";
   label.textContent = id === myId ? "Your screen" : name + "'s screen";
-  tile.append(screenVideo(screenTrack(id), "tile-video screen"), label);
+  tile.append(videoFor(screenTrack(id), false, "tile-video screen"), label);
+  tile.title = "Double-click for fullscreen";  // (handled by the tile areas, see "Fullscreen")
   tile.addEventListener("click", () => toggleFocus(tile));
   return tile;
 }
@@ -661,13 +662,18 @@ function showTiles(area, tiles) {
   const strip = document.createElement("div");
   strip.className = "tile-strip";
   strip.append(...others);
+  makeStripMovable(strip);  // (only in fullscreen, where it's a mini window)
   area.replaceChildren(stage, ...(others.length > 0 ? [strip] : []));
   fitTiles(stage);  // one tile, as big as the stage allows
 }
 
+// The tile clicked last, for a double-click (see "Fullscreen").
+let lastClickedKey = null;
+
 // A tile was clicked: focus it, or, if it's the focused one, back to the grid. Then draw again.
 function toggleFocus(tile) {
   const area = tile.closest("#call-tiles, #lounge-tiles");  // the nearest of these around it
+  lastClickedKey = tile.dataset.key;
   focusedTile[area.id] = focusedTile[area.id] === tile.dataset.key ? null : tile.dataset.key;
   if (area === callTiles) renderCallPanel();
   else renderLoungeView();
@@ -680,6 +686,91 @@ function toggleFullscreen(element) {
 }
 callPanelFullscreen.addEventListener("click", () => toggleFullscreen(callPanel));
 loungeFullscreen.addEventListener("click", () => toggleFullscreen(loungeView));
+
+// Double-clicking a shared screen: the same fullscreen, with that screen focused. (Not just the
+// <video>: then nobody else and none of the buttons would show.) The two clicks before a
+// double-click each redraw the tiles, so the tile under the pointer may be a different one by
+// now: the first click's tile is the one meant. The areas themselves are never redrawn, so they
+// listen, and get the event from whatever is under the pointer ("bubbling").
+for (const [area, element] of [[callTiles, callPanel], [loungeTiles, loungeView]]) {
+  area.addEventListener("dblclick", () => {
+    if (!lastClickedKey || !lastClickedKey.startsWith("screen:")) return;
+    focusedTile[area.id] = lastClickedKey;
+    if (area === callTiles) renderCallPanel();
+    else renderLoungeView();
+    toggleFullscreen(element);
+  });
+}
+
+// ----- The mini window: in fullscreen, the strip of thumbnails floats over the stage (chat.css,
+// ":fullscreen .tile-strip") in one of four corners. Drag it anywhere, and when let go it snaps
+// to the nearest corner, which is kept for next time (voiceSettings.miniCorner).
+const CORNERS = ["top-left", "top-right", "bottom-left", "bottom-right"];
+const DRAG_THRESHOLD = 5;  // pixels the pointer must move before it's a drag, not a click
+
+// Put the strip in this corner: one of the four "corner-..." classes on, the others off.
+function placeStrip(strip, corner) {
+  for (const name of CORNERS) strip.classList.toggle("corner-" + name, name === corner);
+}
+
+// Pointer events, like resizing the banner below. A strip is made anew with every redraw, and
+// these listeners (and `start`, `dragged`) go with it.
+function makeStripMovable(strip) {
+  placeStrip(strip, voiceSettings.miniCorner);
+  let start = null;      // while the button is held: where the pointer went down
+  let dragged = false;   // did it move far enough to be a drag?
+  strip.addEventListener("pointerdown", (event) => {
+    if (!document.fullscreenElement || event.button !== 0) return;  // left button only
+    start = { x: event.clientX, y: event.clientY };
+    dragged = false;
+  });
+  strip.addEventListener("pointermove", (event) => {
+    if (!start) return;
+    const dx = event.clientX - start.x;
+    const dy = event.clientY - start.y;
+    if (!dragged) {
+      if (Math.hypot(dx, dy) < DRAG_THRESHOLD) return;  // (hypot: the straight-line distance)
+      dragged = true;
+      // Only now: catching the pointer from the start would take the click away from the tiles.
+      strip.setPointerCapture(event.pointerId);
+      strip.classList.add("dragging");
+    }
+    strip.style.transform = `translate(${dx}px, ${dy}px)`;  // follow the pointer
+  });
+  const letGo = () => {
+    if (dragged) snapStrip(strip);
+    start = null;
+  };
+  strip.addEventListener("pointerup", letGo);
+  strip.addEventListener("pointercancel", letGo);  // (the browser took the pointer, e.g. a gesture)
+  // Letting go also counts as a click: after a drag, it mustn't reach a tile and focus it.
+  // "true": this listener runs on the way down to the tile ("capture"), before the tile's own.
+  strip.addEventListener("click", (event) => {
+    if (dragged) event.stopPropagation();
+  }, true);
+}
+
+// Let go: which half of the area is the strip's middle in, across and down? That's its corner.
+// Then glide there ("FLIP"): move it to the new corner, shift it back to where it was let go,
+// and let a CSS transition take the shift away.
+function snapStrip(strip) {
+  const before = strip.getBoundingClientRect();
+  const area = strip.parentElement.getBoundingClientRect();
+  const vertical = before.top + before.height / 2 < area.top + area.height / 2 ? "top" : "bottom";
+  const horizontal = before.left + before.width / 2 < area.left + area.width / 2 ? "left" : "right";
+  voiceSettings.miniCorner = vertical + "-" + horizontal;
+  saveVoiceSettings();
+  strip.classList.remove("dragging");
+  placeStrip(strip, voiceSettings.miniCorner);
+  strip.style.transform = "";
+  const after = strip.getBoundingClientRect();
+  strip.style.transform = `translate(${before.left - after.left}px, ${before.top - after.top}px)`;
+  // Reading a size makes the browser apply the shift now, so the transition starts from it.
+  strip.offsetWidth;
+  strip.classList.add("snapping");
+  strip.style.transform = "";
+  strip.addEventListener("transitionend", () => strip.classList.remove("snapping"), { once: true });
+}
 
 // Into or out of fullscreen (by the button, Esc, ...): the buttons say which it'll do next.
 document.addEventListener("fullscreenchange", () => {

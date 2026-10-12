@@ -196,15 +196,4 @@ function screenTrack(userId) {
   return publication && publication.track && !publication.isMuted ? publication.track : null;
 }
 
-// A shared screen as a <video> (never mirrored, never cut off). Double-click: fullscreen.
-function screenVideo(track, look) {
-  const video = videoFor(track, false, look);
-  video.title = "Double-click for fullscreen";
-  video.ondblclick = () => {
-    if (document.fullscreenElement) document.exitFullscreen();
-    else video.requestFullscreen().catch(() => {});
-  };
-  return video;
-}
-
 showShareButtons();

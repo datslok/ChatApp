@@ -54,6 +54,7 @@ const voiceSettings = {
   inputDevice: "", outputDevice: "", cameraDevice: "", micVolume: 100, outputVolume: 100, gate: -60,
   noiseSuppression: "on",
   shareHeight: 1080, shareFps: 30,  // screen sharing quality: the last choice in the 🖥️ menu
+  miniCorner: "bottom-right",  // where the others float in fullscreen (rooms.js, the mini window)
 };
 try {
   Object.assign(voiceSettings, JSON.parse(localStorage.getItem("voiceSettings")) || {});

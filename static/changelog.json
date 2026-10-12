@@ -30,7 +30,7 @@
       "items": [
         "The Lounge: a voice channel anyone can join. 📞 in a DM calls your friend, and it rings on all their devices",
         "🎤 mute and 🎧 deafen at the bottom left. 📷 camera and 🖥️ screen sharing (up to 1440p and 60 fps, with your PC's sound but not the call's) in calls and the Lounge",
-        "Click a tile to make it big, right-click it for the profile. ⛶ for fullscreen. In a DM, drag the call's bottom edge to resize it",
+        "Click a tile to make it big, right-click it for the profile. ⛶ or double-click a screen for fullscreen, where the others float in a small window: drag it to any corner. In a DM, drag the call's bottom edge to resize it",
         "Volume per person (0–200%) in their profile: click them, also in the voice list",
         "Settings → Voice & audio: microphone, speakers, volumes, sensitivity and noise suppression. Settings → Video: your camera, with a preview",
         "The signal icon in a call shows your ping. Click it for details, including how a screen share is doing (frame rate, data, and whether the graphics card encodes it)"
@@ -62,6 +62,7 @@
     {
       "date": "2026-10-12",
       "items": [
+        "Fullscreen keeps everyone in view: double-click a shared screen, and the others float in a small window you can drag to any corner",
         "Sharing your screen with sound no longer sends the call back: the others don't hear themselves anymore",
         "Text formatting: **bold**, *italic*, ~~strikethrough~~, `code`, code blocks, quotes and ||spoilers||",
         "Scroll up in a channel to load older messages, all the way to the beginning",

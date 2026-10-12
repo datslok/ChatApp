@@ -275,6 +275,41 @@ body {
   display: none;
 }
 
+/* The mini window: in fullscreen, the strip floats over the stage instead of taking a row
+   below it ("position: absolute" takes it out of the layout, so the stage gets all the space).
+   It's placed against the tile area ("position: relative"), in one of four corners, and can be
+   dragged to another (rooms.js, makeStripMovable). */
+:fullscreen #call-tiles.focused,
+:fullscreen #lounge-tiles.focused {
+  position: relative;
+}
+:fullscreen .tile-strip {
+  position: absolute;
+  z-index: 1;  /* above the stage */
+  max-width: calc(100% - 16px);
+  padding: 6px;
+  gap: 6px;
+  border-radius: 12px;
+  background: rgba(17, 18, 20, 0.8);  /* the last number: 80% opaque */
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+  cursor: grab;
+  touch-action: none;  /* a finger drags it, instead of scrolling the page */
+}
+:fullscreen .tile-strip.dragging {
+  cursor: grabbing;
+}
+:fullscreen .tile-strip .call-tile {
+  height: 72px;
+}
+:fullscreen .tile-strip.corner-top-left { top: 8px; left: 8px; }
+:fullscreen .tile-strip.corner-top-right { top: 8px; right: 8px; }
+:fullscreen .tile-strip.corner-bottom-left { bottom: 8px; left: 8px; }
+:fullscreen .tile-strip.corner-bottom-right { bottom: 8px; right: 8px; }
+/* Gliding into a corner after a drag (snapStrip). */
+.tile-strip.snapping {
+  transition: transform 0.2s ease-out;
+}
+
 /* The grab bar: a strip along the banner's bottom edge, with a short line in the middle that
    lights up under the mouse. "ns-resize": the up-and-down arrows cursor. */
 #call-resize {
