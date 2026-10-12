@@ -1184,9 +1184,11 @@ function makeDateDivider(date) {
 // scroll to the bottom, not even later when a picture finishes loading.
 function showMessage(message, follow = true) {
   // Were we scrolled to (or near) the bottom before this message arrived?
-  // (Measured before adding anything, including a date divider.)
+  // (Measured before adding anything, including a date divider.) Our own messages always
+  // count as at the bottom: sending one takes us down to it, even from older messages.
   const distanceFromBottom = messages.scrollHeight - messages.scrollTop - messages.clientHeight;
-  const wasAtBottom = follow && distanceFromBottom < 50;
+  const mine = message.user_id === myId;
+  const wasAtBottom = follow && (mine || distanceFromBottom < 50);
 
   const time = new Date(message.sent_at);
   // Who sent it: the user id, or for messages from before accounts existed, the typed name.

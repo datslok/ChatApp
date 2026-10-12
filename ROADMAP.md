@@ -82,7 +82,7 @@
     - [ ] GIF search (Tenor or Giphy)
     - [ ] Soundboard in voice
     - [ ] Push-to-talk, as an alternative to the noise gate
-    - [ ] Bug: after scrolling up, sending a message doesn't scroll back down to it (sending should always jump to the bottom)
+    - [x] Bug: after scrolling up, sending a message doesn't scroll back down to it (sending should always jump to the bottom)
 - [x] **19.** Watching together in calls
     - [x] A small floating window with the call's participants (who's talking), also while a share is in fullscreen
     - [x] A volume slider for a screen share's sound (separate from the person's voice)

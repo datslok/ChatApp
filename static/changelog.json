@@ -63,6 +63,7 @@
     {
       "date": "2026-10-12",
       "items": [
+        "Sending a message while scrolled up now takes you down to it",
         "A volume slider for shared screens: hover over someone's screen and turn their video up or down without changing their voice",
         "Fullscreen keeps everyone in view: double-click a shared screen, and the others float in a small window you can drag to any corner or hide with 👥",
         "Sharing your screen with sound no longer sends the call back: the others don't hear themselves anymore",
