@@ -1,4 +1,4 @@
-// Appearance (Settings → Appearance): theme, colours, font and text size.
+// Appearance (Settings → Appearance): theme, colours, font, text size and (in the app) scale.
 //
 // Loaded in <head>, unlike the other scripts: it runs before the browser draws anything, so the
 // page appears in your theme straight away, from the copy kept in this browser. The server keeps
@@ -7,7 +7,8 @@
 //
 // Everything works through chat.css's variables: data-theme on <html> picks a theme's colours,
 // colours picked by hand are set on <html> itself (which beats the theme), and so are the font
-// (--font) and the text size (everything in rem follows <html>'s font size).
+// (--font) and the text size (everything in rem follows <html>'s font size). The scale is the
+// desktop app's own zoom (main.rs, set_zoom); browsers have Ctrl + and Ctrl − for that.
 
 // The fonts to choose from: Windows' own, each with a similar one for other systems after it.
 // (The names must be the same as APPEARANCE_FONTS in server.py.)
@@ -19,7 +20,10 @@ const APPEARANCE_FONTS = {
   comic: "'Comic Sans MS', 'Comic Neue', cursive",
 };
 
-const DEFAULT_APPEARANCE = { theme: "dark", colours: {}, font: "system", font_size: 16 };
+const DEFAULT_APPEARANCE = { theme: "dark", colours: {}, font: "system", font_size: 16, scale: 100 };
+
+// Tauri puts __TAURI_INTERNALS__ on the app's pages (before any of ours run); browsers don't have it.
+const canZoom = "__TAURI_INTERNALS__" in window;
 let appearance = DEFAULT_APPEARANCE;
 
 // Show these settings (missing ones: the defaults), and keep them in this browser for next time.
@@ -36,6 +40,11 @@ function applyAppearance(settings) {
   }
   root.style.setProperty("--font", APPEARANCE_FONTS[appearance.font] || APPEARANCE_FONTS.system);
   root.style.fontSize = appearance.font_size + "px";
+  // The app: zoom to the scale (1.2 for 120%). An app from before 0.1.15 has no set_zoom, and
+  // refuses: nothing to do, it updates itself soon.
+  if (canZoom) {
+    window.__TAURI_INTERNALS__.invoke("set_zoom", { scale: appearance.scale / 100 }).catch(() => {});
+  }
   try {
     localStorage.setItem("appearance", JSON.stringify(appearance));
   } catch {}

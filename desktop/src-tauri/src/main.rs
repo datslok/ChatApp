@@ -27,8 +27,8 @@ fn main() {
         // clicks on links and asks for that from the page instead, which is refused: nothing happened.
         .plugin(tauri_plugin_opener::Builder::new().open_js_links_on_click(false).build())
         // The commands the page may call (window.__TAURI_INTERNALS__.invoke("check_for_update")).
-        // Made a permission in build.rs, allowed for the chat page in capabilities/default.json.
-        .invoke_handler(tauri::generate_handler![check_for_update])
+        // Made permissions in build.rs, allowed for the chat page in capabilities/default.json.
+        .invoke_handler(tauri::generate_handler![check_for_update, set_zoom])
         .setup(|app| {
             // The chat window, from its settings in tauri.conf.json ("create": false there, so that
             // we make it here, with a handler added): it shows https://chat.datslok.no.
@@ -103,6 +103,15 @@ static UPDATING: AtomicBool = AtomicBool::new(false);
 #[tauri::command]
 fn check_for_update(app: tauri::AppHandle) {
     update_in_background(app);
+}
+
+// Settings → Appearance's scale (appearance.js): WebView2's own zoom, like Ctrl + in Edge, so
+// everything grows together (CSS zoom got sizes and mouse positions out of step). WebView2
+// doesn't remember it, so the page asks again every time it loads. `window`: the one asking;
+// `scale`: 1.2 for 120%, kept between 80% and 150% so a wrong value can't make the chat unusable.
+#[tauri::command]
+fn set_zoom(window: tauri::WebviewWindow, scale: f64) -> Result<(), String> {
+    window.set_zoom(scale.clamp(0.8, 1.5)).map_err(|error| error.to_string())
 }
 
 // Look for an update in the background (so the window stays usable), unless one is already running.

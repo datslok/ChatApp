@@ -78,6 +78,13 @@ const fontRadios = document.querySelectorAll('input[name="font"]');
 const fontSizeSlider = document.getElementById("font-size");
 const fontSizeValue = document.getElementById("font-size-value");
 const appearanceStatus = document.getElementById("appearance-status");
+const scaleRow = document.getElementById("scale-row");
+const scaleSlider = document.getElementById("scale");
+const scaleValue = document.getElementById("scale-value");
+
+// Scale: a slider in the app (canZoom, appearance.js), the note about Ctrl + in a browser.
+scaleRow.hidden = !canZoom;
+document.getElementById("scale-note").hidden = canZoom;
 
 // Each font's name written in that font (its label is the radio button's parent).
 for (const radio of fontRadios) {
@@ -97,6 +104,8 @@ function showAppearanceSettings() {
   for (const radio of fontRadios) radio.checked = radio.value === appearance.font;
   fontSizeSlider.value = appearance.font_size;
   fontSizeValue.textContent = appearance.font_size + "px";
+  scaleSlider.value = appearance.scale;
+  scaleValue.textContent = appearance.scale + "%";
 }
 
 // Change some settings (the rest stay as they are): shown at once, then saved.
@@ -128,6 +137,13 @@ fontSizeSlider.addEventListener("input", () => {
   fontSizeValue.textContent = fontSizeSlider.value + "px";
 });
 fontSizeSlider.addEventListener("change", () => changeAppearance({ font_size: Number(fontSizeSlider.value) }));
+
+// The scale only changes once let go: zooming while dragging would move the slider away under
+// the mouse (the zoom makes the slider itself bigger or smaller). Meanwhile only the number moves.
+scaleSlider.addEventListener("input", () => {
+  scaleValue.textContent = scaleSlider.value + "%";
+});
+scaleSlider.addEventListener("change", () => changeAppearance({ scale: Number(scaleSlider.value) }));
 
 // ---------- Settings: What's new ----------
 //

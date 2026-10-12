@@ -378,6 +378,14 @@
           <input type="range" id="font-size" min="12" max="20" step="1">
           <span id="font-size-value" class="slider-value"></span>
         </label>
+        <h3>Scale</h3>
+        <!-- Only in the desktop app (its own zoom); browsers get the note instead (settings.js). -->
+        <label class="slider-row" id="scale-row" hidden>
+          Scale
+          <input type="range" id="scale" min="80" max="150" step="10">
+          <span id="scale-value" class="slider-value"></span>
+        </label>
+        <p id="scale-note" class="settings-help">Everything bigger or smaller: Ctrl + and Ctrl − in your browser (Ctrl 0 goes back). In the Windows app, there's a slider here.</p>
         <p id="appearance-status" class="status error"></p>
       </section>
 

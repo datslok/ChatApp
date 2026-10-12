@@ -1378,7 +1378,7 @@ async def change_profile(data: ProfileChange, request: Request):
     return {"ok": True}
 
 
-# ---------- Appearance (Settings → Appearance): theme, colours, font and text size ----------
+# ---------- Appearance (Settings → Appearance): theme, colours, font, text size and scale ----------
 #
 # Kept with the account, so it's the same on every device. The page (static/js/appearance.js)
 # puts these values into its CSS, so only names from these lists and real colours get in: without
@@ -1396,6 +1396,7 @@ class Appearance(BaseModel):
     colours: dict[str, str] = {}  # only the ones picked by hand: {"accent": "#e91e63"}
     font: str = "system"
     font_size: int = 16  # pixels: everything written in rem in chat.css follows it
+    scale: int = 100  # percent: the desktop app zooms the whole page (main.rs, set_zoom)
 
 
 def appearance_of(user_id):
@@ -1416,6 +1417,8 @@ async def change_appearance(data: Appearance, request: Request):
             raise HTTPException(400, "Unknown colour.")
     if not 12 <= data.font_size <= 20:
         raise HTTPException(400, "The text size must be between 12 and 20.")
+    if not 80 <= data.scale <= 150:
+        raise HTTPException(400, "The scale must be between 80 and 150.")
     appearance = data.model_dump()  # the checked values, back as a plain dict
     with db:
         db.execute("UPDATE users SET appearance = ? WHERE id = ?", (json.dumps(appearance), user_id))
