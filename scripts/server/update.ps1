@@ -2,7 +2,10 @@
 #
 #   .\scripts\server\update.ps1          the chat (calls in Lounge and DMs carry on: voice isn't touched)
 #   .\scripts\server\update.ps1 -Voice   the chat and LiveKit (everyone in a call is dropped for a moment)
-#   .\scripts\server\update.ps1 -AI      the chat and llama-server (after changes to llama.ps1)
+#   .\scripts\server\update.ps1 -AI      the chat, llama-server and the bot (after changes to llama.ps1)
+#
+# The bot (chattus.py) is restarted every time, also without -AI: its connection drops when the chat
+# restarts anyway (it would log in again by itself), and this way it runs the new code too.
 #
 # Run it in PowerShell as administrator (stopping and starting the tasks needs it), in the project folder.
 
@@ -45,6 +48,9 @@ if ($Voice) {
 }
 if ($AI) {
     Restart-ChatTask "ChatApp AI" "llama-server.exe" "--port 8080"
+}
+if (Get-ScheduledTask -TaskName "ChatApp bot" -ErrorAction SilentlyContinue) {  # (only set up with install.ps1 -AI)
+    Restart-ChatTask "ChatApp bot" "python.exe" "chattus.py"
 }
 
 # Is the chat back? It is once something listens on port 8000 again (uvicorn only starts listening

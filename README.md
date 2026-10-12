@@ -38,7 +38,7 @@ JavaScript for the page, no frameworks.
 | Voice, video, screen sharing | A self-hosted [LiveKit](https://livekit.io/) server (WebRTC). |
 | Reaching it from the internet | A [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/), so no ports need opening for the chat itself. |
 | Desktop app | [Tauri](https://tauri.app/) (`desktop/`): a small window around the site. |
-| AI bot (optional, in progress) | A language model on the server's graphics card, with [llama.cpp](https://github.com/ggml-org/llama.cpp). |
+| AI bot (optional) | Chattus (`chattus.py`), an account that talks over the same WebSocket, with a language model on the server's graphics card ([llama.cpp](https://github.com/ggml-org/llama.cpp)). |
 | Phone app (in progress) | [React Native](https://reactnative.dev/) with [Expo](https://expo.dev/) (`mobile/`), Android first. Until it's ready, the site installs as a PWA. |
 
 **Windows only, for now.** The server itself is plain Python, but the scripts that install and run it
@@ -70,6 +70,8 @@ the same PC, but the scripts assume two).
 | `scripts\server\install.ps1` | server (as admin) | installs and sets up everything; safe to run again (`-AI`: also the AI bot's model) |
 | `serve.ps1`, `voice.ps1` | server | the chat and voice; scheduled tasks start them at boot |
 | `llama.ps1` | server | the AI bot's language model (optional); a scheduled task starts it at boot |
+| `chattus.ps1` | server | the AI bot, Chattus (optional); a scheduled task starts it at boot (`-Dev`: on your PC, with `start.ps1`) |
+| `tools\make_bot.py` | either | makes the bot's account, or gives it a new password |
 | `scripts\server\update.ps1` | server (as admin) | gets the newest code and restarts the chat (`-Voice`, `-AI`: also those) |
 | `scripts\server\backup.ps1` | server | the nightly backup (also by hand) |
 | `scripts\server\usage.ps1` | server | how much space everything takes (only reads) |
@@ -263,7 +265,7 @@ cd C:\ChatApp
 Then share the address and the invite code with your friends.
 
 **Make it your own:** the channels are a list at the top of `server.py` (`CHANNELS = ["general",
-"memes"]`) and the voice channel is `VOICE_ROOMS`; change them and update (see below). The "What's
+"memes", "chattus"]`; #chattus is the AI bot's, see below) and the voice channel is `VOICE_ROOMS`; change them and update (see below). The "What's
 new" page is yours to write (see [What's new](#whats-new)), and the icon should be your own too (see
 [License](#license)).
 
@@ -288,9 +290,12 @@ name and **Log out** at the top (the page asks the chat's `/whoami`, which only 
 
 ### Optional: an AI bot
 
-**In progress:** so far this sets up the language model the bot will use; the bot itself comes next.
+**Chattus** is a friendly AI cat in the chat: an account like everyone's, which answers every message
+in **#chattus**, anything that mentions **@Chattus** elsewhere (as a reply), and DMs to him (he
+accepts friend requests by himself). He reads the channel's last 20 messages. Reactions, pictures and
+web search are still to come.
 
-The bot's language model runs on the server's own graphics card, with
+His language model runs on the server's own graphics card, with
 [llama.cpp](https://github.com/ggml-org/llama.cpp) (`llama-server`): Qwen 3.5 9B, shrunk to 4 bits
 per number, which also understands pictures. Nothing goes to an AI company. It needs an **NVIDIA
 graphics card with 8 GB** (a GTX 1070 is enough: about 25 tokens, or 18 words, a second) with a driver
@@ -303,17 +308,33 @@ cd C:\ChatApp
 
 It runs all of step 4 again (same questions), and then step 9: it downloads llama.cpp into `llama\`
 and the model into `llama\models\` (6.3 GB; both checked against their published checksums), puts a
-key for it (`LLAMA_API_KEY`) in `.env`, and makes a scheduled task **ChatApp AI** that runs
-`llama.ps1` at boot. It's only reachable from the server itself (`http://127.0.0.1:8080`), and only
-with that key.
+key for it (`LLAMA_API_KEY`) in `.env`, makes the bot's account (`tools\make_bot.py`: the account
+**Chattus** with the app icon as its picture, and a random password in `.env` as `CHATTUS_PASSWORD`),
+and makes two scheduled tasks: **ChatApp AI** runs `llama.ps1` (the model) and **ChatApp bot** runs
+`chattus.ps1` (the bot, `chattus.py`), both at boot. The model is only reachable from the server
+itself (`http://127.0.0.1:8080`), and only with that key. The bot connects to the chat on the server
+too (`http://127.0.0.1:8000`), and logs in again by itself whenever the chat restarts.
+
+The channel **#chattus** is in `CHANNELS` in `server.py`; without the bot, it's just a quiet channel
+(take it out if you don't use the bot). His personality is `SYSTEM_PROMPT` at the top of
+`chattus.py`.
 
 The model lives on the graphics card the whole time (about 7 GB of its memory). The CPU stays nearly
 free, so calls aren't affected. While it writes an answer, the graphics card works at full power for
 a few seconds and the laptop gets warmer.
 
-To try it: llama-server has its own chat page. From your PC, open a tunnel to it with
-`ssh -L 8080:127.0.0.1:8080 chatserver`, leave that window open, and go to http://localhost:8080. It
-asks for the key: on the server, `Select-String LLAMA_API_KEY .env` shows it.
+To talk to the model directly: llama-server has its own chat page. From your PC, open a tunnel to it
+with `ssh -L 8080:127.0.0.1:8080 chatserver`, leave that window open, and go to http://localhost:8080.
+It asks for the key: on the server, `Select-String LLAMA_API_KEY .env` shows it.
+
+**Working on the bot** on your PC, with the development chat (`start.ps1`) and the server's model
+through that same tunnel:
+
+```powershell
+python tools\make_bot.py --db dev.db --uploads dev-uploads --env dev-chattus.env   # once: Chattus in dev.db
+# then add the server's key to dev-chattus.env (git-ignored), as a line LLAMA_API_KEY=...
+.\chattus.ps1 -Dev    # with start.ps1 running, and the tunnel open in another window
+```
 
 ### 8. Optional: update from your other PC
 
@@ -341,6 +362,8 @@ From your own PC, after committing your changes:
 .\scripts\deploy.ps1 -Voice   # also restart LiveKit (after changing voice.ps1 or livekit.yaml); ends ongoing calls
 .\scripts\deploy.ps1 -AI      # also restart the AI bot's llama-server (after changing llama.ps1)
 ```
+
+The AI bot (if you set it up) restarts with every update, so it always runs the newest `chattus.py`.
 
 Or on the server itself (PowerShell as administrator, in `C:\ChatApp`): `.\scripts\server\update.ps1`.
 Both fetch the newest code from GitHub, install any new packages and restart the chat. Calls carry on
@@ -393,11 +416,11 @@ the server itself, in PowerShell as administrator.
 .venv\Scripts\python.exe tools\feedback.py --done 12             # tick off #12 (--undo 12: back again)
 .venv\Scripts\python.exe tools\feedback.py --all                 # every one, done ones too
 
-# Is everything running? (ChatApp, ChatApp voice and ChatApp AI: Running. ChatApp backup: Ready.)
+# Is everything running? (ChatApp, voice, AI and bot: Running. ChatApp backup: Ready.)
 Get-ScheduledTask ChatApp*
 
 # The logs. chat.log: starts and errors; chat.out.log: every request; voice.log: LiveKit;
-# ai.log: llama-server (the AI bot's model).
+# ai.log: llama-server (the AI bot's model); bot.log: what the bot answered, bot.errors.log: its crashes.
 Get-Content logs\chat.log -Tail 30
 Get-Content logs\chat.log -Tail 30 -Wait                         # keep following it (Ctrl+C stops)
 Get-Content logs\backup.log -Tail 5
@@ -406,6 +429,7 @@ Get-Content logs\backup.log -Tail 5
 Stop-ScheduledTask ChatApp; Start-ScheduledTask ChatApp
 Stop-ScheduledTask "ChatApp voice"; Start-ScheduledTask "ChatApp voice"
 Stop-ScheduledTask "ChatApp AI"; Start-ScheduledTask "ChatApp AI"
+Stop-ScheduledTask "ChatApp bot"; Start-ScheduledTask "ChatApp bot"
 
 # The graphics card: its memory in use, how busy it is, its temperature (for the AI bot).
 nvidia-smi
@@ -650,6 +674,7 @@ example) and they can run it with a double-click. Downloaded files make Windows 
 - `static/index.html`, `static/css/chat.css` and `static/js/`: the chat page. The scripts are plain
   scripts sharing one global scope, loaded in the order listed in `index.html`.
 - `static/login.html`, `reset.html`, `download.html`: the other pages.
+- `chattus.py`: the AI bot (optional), a separate program that talks to the server like a browser.
 - `livekit.yaml`: LiveKit's settings. `desktop/`: the Windows app. `mobile/`: the native phone app
   (in progress). `tools/`: small helper programs.
 - [ROADMAP.md](ROADMAP.md): what's done and what's planned.

@@ -110,8 +110,8 @@
     - [ ] Distribution: an APK on the download page, and updates
 - [ ] **23.** Chattus, an AI bot in the chat, with a language model on the server's graphics card
     - [x] A local model answering (llama.cpp's llama-server with Qwen 3.5 9B; Ollama couldn't find the GTX 1070), started at boot ("ChatApp AI", install.ps1 -AI)
-    - [ ] A bot account and a script that logs in and connects to the WebSocket: answers @Chattus anywhere, and everything in #chattus and in DMs to him
-    - [ ] The channel's recent messages as context, answers as replies, a friendly personality with short chat-sized answers (English)
+    - [x] A bot account and a script that logs in and connects to the WebSocket: answers @Chattus anywhere, and everything in #chattus and in DMs to him
+    - [x] The channel's recent messages as context, answers as replies, a friendly personality with short chat-sized answers (English)
     - [ ] Reactions, emoji in his answers, the custom emoji by name
     - [ ] Looking at pictures
     - [ ] Web search: Wikipedia and Tavily (a daily limit; "@Chattus search: ..." forces one)

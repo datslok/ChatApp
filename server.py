@@ -84,7 +84,7 @@ if not INVITE_CODE:
 if not SMTP_HOST:
     print("No SMTP_HOST set: emails will be printed here instead of sent.")
 
-CHANNELS = ["general", "memes"]  # add a name here to make a new channel
+CHANNELS = ["general", "memes", "chattus"]  # add a name here to make a new channel (chattus: the AI bot's own)
 
 # Every emoji allowed as a reaction, from static/emoji.json (made from Unicode's official list by
 # tools/make_emoji_json.py). The page's emoji picker uses the same file, so they always agree.

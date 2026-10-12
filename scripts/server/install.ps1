@@ -11,7 +11,8 @@
 #   7. Windows' SSH server, so the development PC can update this one (scripts\deploy.ps1)
 #   8. A nightly backup ("ChatApp backup", 04:00) onto a second disk, with scripts\server\backup.ps1
 #   9. Only with -AI: llama.cpp and a language model for the AI bot (needs an NVIDIA graphics card
-#      with 8 GB), a key for it in .env, and a scheduled task "ChatApp AI" that runs llama.ps1
+#      with 8 GB), a key for it in .env, the bot's account (tools\make_bot.py), and two scheduled
+#      tasks: "ChatApp AI" runs llama.ps1, "ChatApp bot" runs chattus.ps1
 #
 # Run it in PowerShell *as administrator* (right-click PowerShell, "Run as administrator"),
 # from the project folder:   .\scripts\server\install.ps1      (or .\scripts\server\install.ps1 -AI)
@@ -308,7 +309,19 @@ if ($AI) {
         Write-Host "Made LLAMA_API_KEY in .env."
     }
 
+    # The bot's account (Chattus), with its password in .env. Needs the database, which the chat
+    # makes the first time it starts.
+    if ((Test-Path .env) -and -not (Select-String -Path .env -Pattern '^\s*CHATTUS_PASSWORD=.+' -Quiet)) {
+        if (Test-Path chat.db) {
+            .venv\Scripts\python.exe tools\make_bot.py
+            if ($LASTEXITCODE -ne 0) { throw "Making the bot's account failed (see above)." }
+        } else {
+            Write-Host "No chat.db yet: start the chat once, then run this again with -AI for the bot's account." -ForegroundColor Yellow
+        }
+    }
+
     Register-ChatTask @{ Name = "ChatApp AI"; Script = "llama.ps1"; Log = "logs\ai.log" }
+    Register-ChatTask @{ Name = "ChatApp bot"; Script = "chattus.ps1"; Log = "logs\bot.log" }
     if (Test-Path .env) {
         Start-ScheduledTask -TaskName "ChatApp AI"
         # Loading the model onto the graphics card takes up to a minute. It's ready when port 8080 listens.
@@ -320,6 +333,9 @@ if ($AI) {
         }
         if ($running) { Write-Host "  AI: running" -ForegroundColor Green }
         else { Write-Host "  AI: not answering after 90 seconds: look in logs\ai.log." -ForegroundColor Yellow }
+        # The bot: it logs in to the chat by itself, and keeps trying if the chat isn't up yet.
+        Start-ScheduledTask -TaskName "ChatApp bot"
+        Write-Host "  Bot: started (logs\bot.log says 'Connected.' once it's in the chat)"
     }
 }
 

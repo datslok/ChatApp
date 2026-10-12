@@ -210,8 +210,19 @@ the point is for me to understand how it works, not just to have it done.
   Ollama was tried first and dropped: 0.40's GPU discovery crashes (0xc0000005, ollama#16957, not Python's
   vcruntime on PATH), and 0.24 found the GPU but couldn't pull Qwen 3.5. Gemma 4 E4B was faster (38/s) but
   Qwen won on tools and tone. A system prompt asking for 1–3 short sentences keeps answers chat-sized.
-  Planned: a bot account + Python script (localhost:8000 WebSocket), #chattus (every message) and @Chattus
-  elsewhere, DMs, replies, reactions/emoji/custom emoji (structured output), pictures, Wikipedia + Tavily search.
+  The bot is `chattus.py` (task "ChatApp bot" via `chattus.ps1`, logs\bot.log; `update.ps1` restarts it on
+  every deploy): the account Chattus (`tools/make_bot.py`: no email, random password in `.env` as
+  `CHATTUS_PASSWORD`, `icon/chattuschattus_square.png` as picture) logs in with `/login` and uses the normal
+  WebSocket at 127.0.0.1:8000, no server changes but `"chattus"` in `CHANNELS`. A connection is in one
+  channel at a time, so on an "unread" for #chattus, a DM or with "notify"/"mentions" (a mention) he
+  "join"s it and uses its "history". Answers the newest message after his own last one (`answered` ids
+  against double answers), never messages over 1 h old, one at a time (a queue), "typing" every 2 s,
+  `reply_to` in shared channels (and in #chattus/DMs when someone wrote after it), auto-accepts friend
+  requests, defuses @everyone/@here, max 400 tokens. Context: the last 20 messages as "name: text"
+  (`<@id>` -> @name, `<:id>` -> :name:, files as "[sent a picture]"). Personality: `SYSTEM_PROMPT`.
+  Development: `.\chattus.ps1 -Dev` with start.ps1 and `ssh -L 8080:127.0.0.1:8080 chatserver`; its
+  `dev-chattus.env` (git-ignored) has a dev.db Chattus password and the server's LLAMA_API_KEY.
+  Still to do: reactions/emoji/custom emoji (structured output), pictures (mmproj), Wikipedia + Tavily search.
 
 ## Hosting
 

@@ -4,6 +4,8 @@
 #   .\scripts\deploy.ps1 -Voice   the chat and LiveKit (after changes to voice.ps1 or livekit.yaml)
 #   .\scripts\deploy.ps1 -AI      the chat and llama-server (after changes to llama.ps1)
 #
+# The AI bot (if it's set up there) restarts every time, so it runs the newest chattus.py.
+#
 # It runs scripts\server\update.ps1 on the server over SSH (set up once with scripts\server-connect.ps1), which
 # fetches the code from GitHub. So only what's committed *and pushed* gets there: this checks that.
 
