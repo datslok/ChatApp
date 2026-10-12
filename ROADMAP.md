@@ -113,6 +113,6 @@
     - [x] A bot account and a script that logs in and connects to the WebSocket: answers @Chattus anywhere, and everything in #chattus and in DMs to him
     - [x] The channel's recent messages as context, answers as replies, a friendly personality with short chat-sized answers (English)
     - [x] Reactions, emoji in his answers, the custom emoji by name
-    - [ ] Looking at pictures
+    - [x] Looking at pictures (and what the custom emoji show)
     - [ ] Web search: Wikipedia and Tavily (a daily limit; "@Chattus search: ..." forces one)
     - [ ] Maybe: reminders, searching the chat, dice and polls, a "bot" badge

@@ -17,13 +17,18 @@ it, like clicking on it, and gets its history: exactly the context he needs.
 """
 import argparse
 import asyncio
+import base64
+import io
 import json
 import re
 import urllib.request
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from PIL import Image  # Pillow (in requirements.txt, for the server's pictures): shrinking pictures for the model
 from websockets.asyncio.client import connect  # the WebSocket library (installed with uvicorn[standard])
+
+Image.MAX_IMAGE_PIXELS = 25_000_000  # like server.py: refuse "decompression bombs" (tiny files claiming huge sizes)
 
 HOME = "chattus"           # his own channel: he answers every message there
 CONTEXT_MESSAGES = 20      # how many of the latest messages the model reads
@@ -36,6 +41,8 @@ Write like a person in a chat: usually one to three short sentences, no headings
 Only write more when someone asks you to explain something in detail. Use at most one emoji in a message, often none.
 Each message from the others starts with the sender's name, like "kari: hi". Don't start yours with your name.
 If you don't know something, say so instead of making it up.
+You can see pictures people send. A picture comes from the person whose message it's in; you never send pictures.
+Not every cat in a picture is you.
 {where}
 Right now it's {now}.
 
@@ -52,6 +59,12 @@ ANSWER_SCHEMA = {
     "required": ["reaction", "reply"],
 }
 MAX_CUSTOM_EMOJI = 50  # how many of the chat's own emoji the prompt lists by name
+
+# Pictures: each costs the model ~600 tokens (of its 8192) and a few seconds, so only a couple.
+PICTURE_SIZE = 768      # pixels on the longest side, shrunk to before the model sees it
+PICTURE_LOOKBACK = 5    # besides the message he answers: the newest picture this many messages before it
+EMOJI_NOTES = Path("chattus-emoji.json")  # what each custom emoji shows, in his words (git-ignored)
+LOOK_AT_EMOJI = "(look at the custom emoji)"  # a job in the queue that isn't a channel
 
 
 def log(text):
@@ -78,6 +91,22 @@ def post_json(url, data, headers=None):
         return json.loads(response.read() or b"null"), response.headers
 
 
+def picture_data_url(raw, size=PICTURE_SIZE):
+    """A picture (PNG, JPEG, GIF, WebP: any bytes Pillow reads) as a small JPEG in a data URL:
+    "data:image/jpeg;base64,..." is the picture's bytes written out as text, so it fits in the JSON
+    request. Shrunk so it costs the model few tokens; a GIF gives its first frame."""
+    with Image.open(io.BytesIO(raw)) as picture:
+        picture = picture.convert("RGBA")
+        # JPEG has no transparency: put transparent parts (custom emoji often have them) on white,
+        # or they'd turn black.
+        flat = Image.new("RGB", picture.size, "white")
+        flat.paste(picture, mask=picture.getchannel("A"))
+        flat.thumbnail((size, size))  # shrinks to fit inside size x size, keeping the shape
+        buffer = io.BytesIO()
+        flat.save(buffer, "JPEG", quality=85)
+    return "data:image/jpeg;base64," + base64.b64encode(buffer.getvalue()).decode()
+
+
 class Chattus:
     def __init__(self, chat_url, llama_url, password, llama_key):
         self.chat_url = chat_url
@@ -89,6 +118,9 @@ class Chattus:
         self.my_id = None
         self.names = {}         # user id -> username, for turning <@2> into @kari
         self.emoji = {}         # custom emoji id -> name, for turning <:17> into :pog:
+        self.emoji_files = {}   # custom emoji id -> its picture's file name
+        self.emoji_notes = json.loads(EMOJI_NOTES.read_text(encoding="utf-8")) if EMOJI_NOTES.exists() else {}
+        # (file name -> what it shows, like "a surprised face": a replaced picture gets a new file name)
         self.allowed_emoji = set()  # every emoji the server accepts as a reaction (static/emoji.json)
         self.channel = None     # the channel we've joined
         self.messages = {}      # channel -> its latest messages (from "history", then live ones)
@@ -114,6 +146,13 @@ class Chattus:
         with urllib.request.urlopen(f"{self.chat_url}/emoji.json", timeout=30) as response:
             groups = json.loads(response.read())["groups"]
         self.allowed_emoji = {emoji for group in groups for emoji, _ in group["emoji"]}
+
+    def fetch(self, path):
+        """A file from the chat (a picture), with our login: the server only gives it to people who
+        may see the message it's in. Blocking: run it in a thread."""
+        request = urllib.request.Request(f"{self.chat_url}{path}", headers={"Cookie": self.cookie})
+        with urllib.request.urlopen(request, timeout=30) as response:
+            return response.read()
 
     async def run(self):
         """Log in, connect and work, until the connection drops (then run() returns or raises)."""
@@ -143,8 +182,11 @@ class Chattus:
             self.my_id = data["id"]
         elif kind == "users":
             self.names = {user["id"]: user["name"] for user in data["users"]}
-        elif kind == "custom_emoji":
+        elif kind == "custom_emoji":  # at the start, and whenever one is added, replaced or deleted
             self.emoji = {emoji["id"]: emoji["name"] for emoji in data["emoji"]}
+            self.emoji_files = {emoji["id"]: emoji["file"] for emoji in data["emoji"]}
+            if any(file not in self.emoji_notes for file in self.emoji_files.values()):
+                self.enqueue(LOOK_AT_EMOJI)  # new ones to look at (in the queue: one model job at a time)
         elif kind == "friends":
             # Anyone may DM him: accept every friend request (DMs need a friendship).
             for user_id in data["incoming"]:
@@ -179,7 +221,7 @@ class Chattus:
     def should_answer(self, message, channel):
         """Is this a message we should answer? Not our own (no talking to ourselves), not a call
         note, not too old, and: anything in #chattus and his DMs, elsewhere only when it mentions us."""
-        if message["user_id"] in (None, self.my_id) or message.get("kind") or not message["text"]:
+        if message["user_id"] in (None, self.my_id) or message.get("kind") or not (message["text"] or message["file"]):
             return False
         sent = datetime.fromisoformat(message["sent_at"].replace("Z", "+00:00"))
         if datetime.now(timezone.utc) - sent > MAX_AGE:
@@ -199,9 +241,37 @@ class Chattus:
             channel = await self.queue.get()
             self.queued.discard(channel)
             try:
-                await self.answer(channel)
+                if channel == LOOK_AT_EMOJI:
+                    await asyncio.to_thread(self.look_at_emoji)
+                else:
+                    await self.answer(channel)
             except Exception as error:  # a broken answer must not stop the bot
                 log(f"Couldn't answer in {channel}: {error!r}")
+
+    def look_at_emoji(self):
+        """Look at each custom emoji we haven't seen, and note in a few words what it shows, so the
+        prompt can say ":pog: (a surprised face)". Once per picture, saved in EMOJI_NOTES. Blocking."""
+        for emoji_id, file in list(self.emoji_files.items()):
+            if file in self.emoji_notes:
+                continue
+            name = self.emoji.get(emoji_id, "emoji")
+            picture = picture_data_url(self.fetch(f"/custom-emoji/files/{file}"), size=256)
+            answer, _ = post_json(
+                f"{self.llama_url}/v1/chat/completions",
+                {
+                    "messages": [{"role": "user", "content": [
+                        {"type": "text", "text": f"This is a custom emoji called :{name}: in a group chat. "
+                                                 "What does it show? Answer in at most eight words, no full sentence."},
+                        {"type": "image_url", "image_url": {"url": picture}},
+                    ]}],
+                    "max_tokens": 30, "temperature": 0.2,
+                },
+                {"Authorization": f"Bearer {self.llama_key}"},
+            )
+            note = (answer["choices"][0]["message"]["content"] or "").strip().rstrip(".")
+            self.emoji_notes[file] = note[:100]
+            EMOJI_NOTES.write_text(json.dumps(self.emoji_notes, indent=1, ensure_ascii=False), encoding="utf-8")
+            log(f"Looked at :{name}: -> {note!r}")
 
     async def join(self, channel):
         """Open a channel (like clicking on it) and wait for its history."""
@@ -225,6 +295,8 @@ class Chattus:
         for message in reversed(messages):
             if message["user_id"] == self.my_id or message["id"] in self.answered:
                 break
+            if any(self.my_id in r["user_ids"] for r in message.get("reactions") or []):
+                break  # answered with just a reaction (remembered by the server, also after a restart)
             if self.should_answer(message, channel):
                 target = message
                 break
@@ -235,7 +307,7 @@ class Chattus:
         log(f"Answering {target['name']} in {channel}: {target['text'][:80]!r}")
         typing = asyncio.create_task(self.keep_typing())
         try:
-            reaction, text = await asyncio.to_thread(self.ask_model, channel, messages)
+            reaction, text = await asyncio.to_thread(self.ask_model, channel, messages, target)
         finally:
             typing.cancel()
 
@@ -280,29 +352,63 @@ class Chattus:
                     "you (@Chattus) to ask you something: answer that, and keep out of the rest.")
         return f"You're in #{channel}, a channel for everyone. Someone mentioned you (@Chattus)."
 
-    def ask_model(self, channel, messages):
+    def pictures_to_show(self, messages, target):
+        """The ids of the messages whose picture the model gets to see: the one he's answering, and
+        the newest picture in the few messages before it ("what's in the picture above?")."""
+        def has_picture(message):
+            return bool(message["file"] and message["file"]["image"])
+
+        shown = {target["id"]} if has_picture(target) else set()
+        before = [m for m in messages if m["id"] < target["id"]][-PICTURE_LOOKBACK:]
+        for message in reversed(before):
+            if has_picture(message):
+                shown.add(message["id"])
+                break
+        return shown
+
+    def ask_model(self, channel, messages, target):
         """The latest messages as a conversation for the model, and its answer: (reaction, reply).
         Blocking (run it in a thread)."""
-        names = sorted(self.emoji.values(), key=str.lower)[:MAX_CUSTOM_EMOJI]
+        custom_emoji = sorted(self.emoji.items(), key=lambda item: item[1].lower())[:MAX_CUSTOM_EMOJI]
+        listed = []
+        for emoji_id, name in custom_emoji:
+            note = self.emoji_notes.get(self.emoji_files.get(emoji_id))
+            listed.append(f":{name}: ({note})" if note else f":{name}:")
         custom = ("\nThe chat also has its own emoji, which you can use in your reply or as your reaction by writing "
-                  "their name like this: " + ", ".join(f":{name}:" for name in names)) if names else ""
+                  "their name like this: " + ", ".join(listed)) if listed else ""
         conversation = [{
             "role": "system",
             "content": SYSTEM_PROMPT.format(where=self.where(channel), now=f"{datetime.now():%A %d %B %Y, %H:%M}",
                                             custom=custom),
         }]
+        show = self.pictures_to_show(messages, target)
         for message in messages[-CONTEXT_MESSAGES:]:
             if message.get("kind"):
                 continue  # call notes ("a call started") aren't conversation
             text = self.readable(message["text"])
-            if message["file"]:  # he can't see files (yet): just that there was one
+            picture = None
+            if message["id"] in show:
+                try:
+                    picture = picture_data_url(self.fetch(f"/uploads/{message['file']['id']}"))
+                except Exception as error:  # gone, or not a picture Pillow can read: just say there was one
+                    log(f"Couldn't look at the picture in message {message['id']}: {error!r}")
+            if message["file"] and picture is None:  # files he doesn't see: just that there was one
                 sent = "a picture" if message["file"]["image"] else f"a file: {message['file']['filename']}"
                 text = (text + " " if text else "") + f"[sent {sent}]"
             if message["user_id"] == self.my_id:
                 conversation.append({"role": "assistant", "content": text})
+                continue
+            replying = f"(replying to {message['reply']['name']}) " if (message.get("reply") or {}).get("name") else ""
+            line = f"{message['name']}: {replying}{text}"
+            if picture:
+                # A message with a picture: its content is a list of parts, the text and the picture.
+                line += " [sent this picture:]" if text else "[sent this picture:]"
+                conversation.append({"role": "user", "content": [
+                    {"type": "text", "text": line},
+                    {"type": "image_url", "image_url": {"url": picture}},
+                ]})
             else:
-                replying = f"(replying to {message['reply']['name']}) " if (message.get("reply") or {}).get("name") else ""
-                conversation.append({"role": "user", "content": f"{message['name']}: {replying}{text}"})
+                conversation.append({"role": "user", "content": line})
 
         answer, _ = post_json(
             f"{self.llama_url}/v1/chat/completions",

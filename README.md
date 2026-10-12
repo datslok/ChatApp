@@ -295,9 +295,11 @@ in **#chattus**, anything that mentions **@Chattus** elsewhere (as a reply), and
 accepts friend requests by himself). He reads the channel's last 20 messages. In a DM between two
 people, a mention invites him in: he may then read and write there for an hour (never join its
 calls), and only answers mentions. He can react instead of (or as well as) answering, and knows the
-chat's custom emoji by name. The server knows he's a bot from `users.is_bot`, which only
-`tools\make_bot.py` sets, so nobody can get this by naming themselves Chattus. Pictures and web
-search are still to come.
+chat's custom emoji by name. He sees pictures: the one in the message he answers and the newest one
+just before it (shrunk to 768 pixels first). He looks at each custom emoji once, and keeps a note of
+what it shows in `chattus-emoji.json` (git-ignored; delete it to make him look again). The server knows he's a bot from `users.is_bot`, which only
+`tools\make_bot.py` sets, so nobody can get this by naming themselves Chattus. Web search is still
+to come.
 
 His language model runs on the server's own graphics card, with
 [llama.cpp](https://github.com/ggml-org/llama.cpp) (`llama-server`): Qwen 3.5 9B, shrunk to 4 bits

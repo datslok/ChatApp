@@ -232,7 +232,13 @@ the point is for me to understand how it works, not just to have it done.
   when it adds something, reaction-only for thanks/goodbyes, at most one emoji per message.
   `reaction_code` checks it against `/emoji.json` (fetched at start; with/without U+FE0F) or a custom
   emoji's name (-> `custom:<id>`); anything else is dropped. Up to 50 custom emoji names are in the prompt.
-  Still to do: pictures (mmproj; also to see what custom emoji show), Wikipedia + Tavily search.
+  Pictures: the target message's picture and the newest one in the 5 messages before it (`pictures_to_show`),
+  fetched from `/uploads/<id>` with his cookie, flattened on white, shrunk to 768 px JPEG, sent as a data URL
+  in an `image_url` content part (~600 tokens, ~6 s). Custom emoji: a `LOOK_AT_EMOJI` job in the same queue
+  describes each new picture once (256 px, 8 words) into `chattus-emoji.json` (git-ignored, keyed by file
+  name); the prompt lists ":name: (note)". A message he reacted to counts as answered (after restarts too).
+  Known quirks: he sometimes thinks a cat picture is him; small-model limits.
+  Still to do: Wikipedia + Tavily search.
 
 ## Hosting
 

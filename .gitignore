@@ -6,6 +6,9 @@ __pycache__/
 .env
 dev-chattus.env
 
+# The AI bot's notes on what each custom emoji shows (remade by itself when missing)
+chattus-emoji.json
+
 # The SQLite database (holds everyone's messages and accounts)
 *.db
 *.sqlite3
