@@ -455,6 +455,9 @@ the same page as in the browser, so it's always up to date. What makes it instal
 To install it: open the chat in **Chrome on Android**, ⋮ menu, **Install app** (or "Add to Home
 screen"). On an **iPhone**: Safari, the Share button, **Add to Home Screen**.
 
+If the microphone or camera "isn't allowed" although the site allows it, Android may be blocking the
+browser itself: Settings, Apps, Chrome (and the installed ChatApp), Permissions, Microphone and Camera.
+
 Calls keep going with the screen off on most Android phones. If a call stops when the phone is in a
 pocket, set the browser's battery use to "Unrestricted" in Android's app settings. iPhones often stop
 web pages when they're locked, calls included.

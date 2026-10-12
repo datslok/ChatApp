@@ -174,8 +174,8 @@ async function joinVoice(roomName, label) {
   if (!micMuted) {
     try {
       await sendMic(room);
-    } catch {
-      if (voiceRoom === room) showNoMicrophone();
+    } catch (error) {
+      if (voiceRoom === room) showNoMicrophone(error);
     }
   }
   if (voiceRoom === room) startConnectionStats();  // the signal icon and its popup (voice.js)
@@ -245,8 +245,8 @@ async function setMicMuted(muted) {
     await sendMic(room);
     setVoiceStatus("Voice connected");
     voiceStatus.title = "";
-  } catch {
-    if (voiceRoom === room) showNoMicrophone();
+  } catch (error) {
+    if (voiceRoom === room) showNoMicrophone(error);
   }
 }
 

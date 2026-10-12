@@ -72,7 +72,8 @@
       "items": [
         "Settings → Appearance: themes, your own colours, fonts and text size, the same on all your devices",
         "The chat can be installed on your phone as an app: Chrome, ⋮ menu, Install app",
-        "Test microphone and Test camera say right below the button when the browser doesn't allow them, and where to allow it",
+        "Test microphone and Test camera say right below the button what went wrong, and where to allow them (also on Android phones)",
+        "A phone's back camera is no longer shown mirrored to you",
         "Windows app 0.1.15: Settings → Appearance has a Scale slider to make everything bigger or smaller (it updates by itself)",
         "Sending a message while scrolled up now takes you down to it",
         "A volume slider for shared screens: hover over someone's screen and turn their video up or down without changing their voice",

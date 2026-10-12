@@ -493,13 +493,16 @@ body.mini-hidden :fullscreen .tile-strip {
 #call-resize.dragging::after {
   background: var(--text-soft);
 }
-/* The camera preview in Settings, mirrored like the one in calls. */
+/* The camera preview in Settings, mirrored like the one in calls when the camera faces you
+   (voice-settings.js; a phone's back camera isn't). */
 #camera-preview {
   width: 100%;
   aspect-ratio: 16 / 9;
   object-fit: cover;
   border-radius: 8px;
   background: #000;
+}
+#camera-preview.mirrored {
   transform: scaleX(-1);
 }
 
@@ -545,7 +548,7 @@ body.mini-hidden :fullscreen .tile-strip {
   object-fit: cover;
 }
 .tile-video.mine {
-  transform: scaleX(-1);  /* our own camera, mirrored */
+  transform: scaleX(-1);  /* our own camera, mirrored (video.js, videoFor: if it faces us) */
 }
 .tile-name {
   position: absolute;

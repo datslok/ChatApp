@@ -44,12 +44,20 @@ function cameraTrack(userId) {
   return publication && publication.track && !publication.isMuted ? publication.track : null;
 }
 
+// Does this camera face us? Then we see it mirrored, like a mirror. A phone's back camera faces
+// away ("environment") and isn't mirrored, or text would read backwards. getSettings() tells what
+// the camera ended up with; PC webcams usually don't say which way they face: those face us.
+function facesUser(mediaTrack) {
+  return mediaTrack.getSettings().facingMode !== "environment";
+}
+
 // A <video> showing this track. Reused if it already has one, so redrawing the banner doesn't
 // keep making new ones (each attach() makes another).
-// look: its class, "tile-video" (filling a tile) unless said otherwise.
+// look: its class, "tile-video" (filling a tile) unless said otherwise. mine: our own camera,
+// mirrored ("mine" in chat.css) if it faces us. (Only for us: the others see it the right way round.)
 function videoFor(track, mine, look = "tile-video") {
   const video = track.attachedElements[0] || track.attach();
-  video.className = mine ? look + " mine" : look;
+  video.className = mine && facesUser(track.mediaStreamTrack) ? look + " mine" : look;
   return video;
 }
 

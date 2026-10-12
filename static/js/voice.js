@@ -221,11 +221,26 @@ async function sendMic(room) {
   }
 }
 
-function showNoMicrophone() {
+// Where to allow the microphone or camera: the browser's site settings, and on a phone also the
+// phone's own permissions for the browser or the installed app (Android blocked Chrome itself
+// once: then Chrome can't even ask). Used here and by the tests in Settings (voice-settings.js).
+const ALLOW_HOW = "Allow it in the site's settings (the icon left of the address), and check that " +
+  "your phone allows it for the browser or the app (Android: Settings, Apps, Chrome or ChatApp, Permissions).";
+
+// What went wrong when the microphone or camera didn't start. Browser errors have a name that
+// says what kind they are: NotAllowedError means refused (by you, the browser or the phone),
+// NotReadableError that another program is using it. Anything else: the browser's own words.
+function describeMediaError(error, what) {
+  if (error.name === "NotAllowedError") return `The ${what} isn't allowed. ${ALLOW_HOW}`;
+  if (error.name === "NotReadableError") return `Another program is using the ${what}. Close it and try again.`;
+  return `The ${what} couldn't start: ${error.name} (${error.message})`;
+}
+
+function showNoMicrophone(error) {
   micMuted = true;
   showMuteButton();
   setVoiceStatus("Connected, no microphone", "error");
-  voiceStatus.title = "The browser didn't allow the microphone. Allow it (the icon in the address bar) and unmute.";
+  voiceStatus.title = (error ? describeMediaError(error, "microphone") : "") + " Then unmute.";
 }
 
 // ----- Volumes

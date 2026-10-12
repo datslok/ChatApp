@@ -103,10 +103,6 @@ function showTestButton() {
   voiceTestButton.textContent = micTesting ? "Stop test" : "Test microphone";
 }
 
-// Where to allow the microphone or camera: the browser's site settings, also in the phone app.
-const ALLOW_HOW = "Allow it in the site's settings (the icon left of the address; in the phone app: " +
-  "long-press its icon, App info, Permissions), then try again.";
-
 const voiceTestStatus = document.getElementById("voice-test-status");
 
 voiceTestButton.addEventListener("click", async () => {
@@ -119,10 +115,10 @@ voiceTestButton.addEventListener("click", async () => {
   }
   try {
     if (!micStream) await openMic();
-  } catch {
+  } catch (error) {
     micTesting = false;
     showTestButton();
-    voiceTestStatus.textContent = "The microphone isn't allowed. " + ALLOW_HOW;
+    voiceTestStatus.textContent = describeMediaError(error, "microphone");  // (voice.js)
   }
 });
 
@@ -139,6 +135,8 @@ async function startCameraPreview() {
     video: voiceSettings.cameraDevice ? { deviceId: { ideal: voiceSettings.cameraDevice } } : true,
   });
   cameraPreview.srcObject = previewStream;  // a <video> can show a live stream directly
+  // Mirrored if it faces us; a phone's back camera isn't (video.js, facesUser).
+  cameraPreview.classList.toggle("mirrored", facesUser(previewStream.getVideoTracks()[0]));
   cameraPreview.hidden = false;
   cameraTestButton.textContent = "Stop camera test";
   listDevices();  // now the browser tells us the cameras' names
@@ -164,10 +162,9 @@ cameraTestButton.addEventListener("click", async () => {
   }
   try {
     await startCameraPreview();
-  } catch {
+  } catch (error) {
     stopCameraPreview();
-    // (Before, this went to a line on the Voice & audio page, out of sight.)
-    cameraTestStatus.textContent = "The camera isn't allowed, or another program is using it. " + ALLOW_HOW;
+    cameraTestStatus.textContent = describeMediaError(error, "camera");  // (voice.js)
   }
 });
 
@@ -177,7 +174,8 @@ cameraSelect.addEventListener("change", async () => {
   if (previewStream) startCameraPreview().catch(stopCameraPreview);  // show the new one
   // In a call with the camera on: switch it there too ("Default" leaves the current one).
   if (voiceRoom && cameraOn && cameraSelect.value) {
-    voiceRoom.switchActiveDevice("videoinput", cameraSelect.value).catch(() => {});
+    // Then draw the tiles again: from the front camera to the back one, ours stops being mirrored.
+    voiceRoom.switchActiveDevice("videoinput", cameraSelect.value).then(renderCallPanel, () => {});
   }
 });
 
