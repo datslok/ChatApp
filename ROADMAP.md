@@ -82,3 +82,6 @@
     - [ ] GIF search (Tenor or Giphy)
     - [ ] Soundboard in voice
     - [ ] Push-to-talk, as an alternative to the noise gate
+- [ ] **19.** Watching together in calls
+    - [ ] A small floating window with the call's participants (who's talking), also while a share is in fullscreen
+    - [ ] A volume slider for a screen share's sound (separate from the person's voice)
