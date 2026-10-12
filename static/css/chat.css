@@ -37,6 +37,12 @@
   --button-red: #da373c;     /* hang up, muted */
   --button-red-hover: #a12828;
   --yellow: #f0b232;         /* mentions of you, warnings */
+  --font: system-ui, sans-serif;  /* Settings → Appearance can choose another (appearance.js) */
+}
+
+/* Buttons and text fields use the system font unless told otherwise: the chosen one instead. */
+button, input, select, textarea {
+  font-family: inherit;
 }
 
 body {
@@ -44,7 +50,7 @@ body {
   height: 100vh;   /* fallback for older browsers... */
   height: 100dvh;  /* ...the part of the screen that's really visible (phones: minus the address bar) */
   display: flex;  /* sidebar, chat and online list side by side */
-  font-family: system-ui, sans-serif;
+  font-family: var(--font);  /* Settings → Appearance (appearance.js) */
   background: var(--bg-main);
   color: var(--text);
 }
@@ -1581,7 +1587,7 @@ body.mini-hidden :fullscreen .tile-strip {
 .edited-label {
   font-size: 0.7rem;  /* rem: always small, even in a jumbo emoji message */
   color: var(--text-muted);
-  font-family: system-ui, sans-serif;
+  font-family: var(--font);
 }
 
 /* The edit box, in place of a message's text. */

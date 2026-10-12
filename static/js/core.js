@@ -248,12 +248,17 @@ function handleServerMessage(event) {
     myId = data.id;
     maxTextLength = data.max_text_length;
     input.maxLength = maxTextLength;  // the textarea's maxlength, from the server's limit
+    applyAppearance(data.appearance || {});  // the account's (appearance.js); null: the defaults
     if (pageVersion === null) {
       pageVersion = data.page_version;  // the first welcome: the version we were loaded with
     } else if (data.page_version !== pageVersion) {
       outdated = true;  // a reconnect after a deploy that changed the page
       reloadIfOutdated();
     }
+    return;
+  }
+  if (data.type === "appearance") {
+    applyAppearance(data.appearance);  // changed in Settings, here or on another device
     return;
   }
   if (data.type === "renamed") {

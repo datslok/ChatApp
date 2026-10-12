@@ -174,7 +174,8 @@ db.execute("""
         banner_id     TEXT,  -- profile banner's file name in uploads/banners; NULL = none
         status        TEXT,  -- a short line like "playing Minecraft"; NULL = none
         bio           TEXT,  -- a few lines about yourself; NULL = none
-        is_admin      INTEGER NOT NULL DEFAULT 0  -- 1 = may edit and delete anyone's messages (tools/make_admin.py)
+        is_admin      INTEGER NOT NULL DEFAULT 0, -- 1 = may edit and delete anyone's messages (tools/make_admin.py)
+        appearance    TEXT  -- Settings → Appearance as JSON, like {"theme": "light", ...}; NULL = the defaults
     )
 """)
 db.execute("""
@@ -461,6 +462,11 @@ if "is_admin" not in table_columns("users"):
     # From before admins existed: nobody is one, until tools/make_admin.py says so.
     with db:
         db.execute("ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0")
+
+if "appearance" not in table_columns("users"):
+    # From before themes existed: everyone keeps the defaults (NULL) until they pick something.
+    with db:
+        db.execute("ALTER TABLE users ADD COLUMN appearance TEXT")
 
 
 def is_admin(user_id):
@@ -1369,6 +1375,52 @@ async def change_profile(data: ProfileChange, request: Request):
         # `status or None`: an empty text is stored as NULL, meaning "none".
         db.execute("UPDATE users SET status = ?, bio = ? WHERE id = ?", (status or None, bio or None, user_id))
     await send_to_everyone(users_message())
+    return {"ok": True}
+
+
+# ---------- Appearance (Settings → Appearance): theme, colours, font and text size ----------
+#
+# Kept with the account, so it's the same on every device. The page (static/js/appearance.js)
+# puts these values into its CSS, so only names from these lists and real colours get in: without
+# that check, anyone could put any text into their own page's styles with a hand-made request.
+
+APPEARANCE_THEMES = {"dark", "darker", "light", "blue", "purple", "green"}
+APPEARANCE_FONTS = {"system", "calibri", "georgia", "consolas", "comic"}
+# The colours with a picker: names of the CSS variables in chat.css (without the "--").
+APPEARANCE_COLOURS = {"bg-main", "bg-panel", "text", "text-muted", "accent", "link"}
+HEX_COLOUR = re.compile(r"#[0-9a-fA-F]{6}")  # "#" and six hex digits, like "#5865f2"
+
+
+class Appearance(BaseModel):
+    theme: str = "dark"
+    colours: dict[str, str] = {}  # only the ones picked by hand: {"accent": "#e91e63"}
+    font: str = "system"
+    font_size: int = 16  # pixels: everything written in rem in chat.css follows it
+
+
+def appearance_of(user_id):
+    """Someone's saved appearance as a dict, or None if they never changed it."""
+    saved = db.execute("SELECT appearance FROM users WHERE id = ?", (user_id,)).fetchone()[0]
+    return json.loads(saved) if saved else None
+
+
+@app.post("/settings/appearance")
+async def change_appearance(data: Appearance, request: Request):
+    user_id, username, password_hash, email = logged_in_user(request)
+    if data.theme not in APPEARANCE_THEMES:
+        raise HTTPException(400, "Unknown theme.")
+    if data.font not in APPEARANCE_FONTS:
+        raise HTTPException(400, "Unknown font.")
+    for name, colour in data.colours.items():
+        if name not in APPEARANCE_COLOURS or not HEX_COLOUR.fullmatch(colour):
+            raise HTTPException(400, "Unknown colour.")
+    if not 12 <= data.font_size <= 20:
+        raise HTTPException(400, "The text size must be between 12 and 20.")
+    appearance = data.model_dump()  # the checked values, back as a plain dict
+    with db:
+        db.execute("UPDATE users SET appearance = ? WHERE id = ?", (json.dumps(appearance), user_id))
+    # Every open page of theirs (this one too, which already shows it): the app, their phone.
+    await send_to_user(user_id, {"type": "appearance", "appearance": appearance})
     return {"ok": True}
 
 
@@ -2551,6 +2603,7 @@ async def chat(websocket: WebSocket):
             "type": "welcome", "id": user_id, "username": username_of(user_id),
             "max_text_length": MAX_TEXT_LENGTH,  # so the page's text box uses the same limit
             "page_version": PAGE_VERSION,  # a different one than it was loaded with: it reloads
+            "appearance": appearance_of(user_id),  # Settings → Appearance (None: the defaults)
         })
         await send(websocket, friends_message(user_id))
         await send(websocket, custom_emoji_message())

@@ -44,7 +44,11 @@ the point is for me to understand how it works, not just to have it done.
   (joining/leaving, DM calls, call banner, Lounge page), `voice-settings.js`, `settings.js`,
   `people.js` (DM/online lists, friends, profile popup, typing) and `messages.js` (uploads, messages,
   reactions, replies, editing; ends with `start()`). Code that runs at load time may only use what
-  earlier files declare. Both folders are served with `Cache-Control: no-cache` (FreshStaticFiles), as is
+  earlier files declare. `appearance.js` alone is loaded in `<head>`, before anything is drawn:
+  Settings → Appearance (theme via `data-theme` on `<html>`, picked colours, `--font`, text size),
+  kept with the account (`users.appearance`, `POST /settings/appearance`, checked against the lists in
+  server.py, in "welcome" and sent to all the user's pages), with a copy in localStorage for the first paint.
+  Every colour in chat.css is a variable in its `:root`, named by role. Both folders are served with `Cache-Control: no-cache` (FreshStaticFiles), as is
   `/`. The server hashes the page's files at startup (`PAGE_VERSION`, sent in "welcome"); a page that
   reconnects to a different one reloads itself (core.js, `reloadIfOutdated`; not in a call, with files
   in the tray, or while sending or editing; the text box is kept through sessionStorage).
