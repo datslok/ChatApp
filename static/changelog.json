@@ -67,7 +67,7 @@
         "Settings → Bugs & ideas: tell us what's broken or what you'd like",
         "You at the bottom left, like Discord: your picture, status, mute and deafen",
         "What's new: this page, with a dot on ⚙️ when there's something new",
-        "Smoother screen sharing in games: encoded on the graphics card (H.264) when it can, and at 60 fps it keeps the frame rate instead of dropping frames",
+        "Smoother screen sharing in games: encoded on the graphics card (H.264 hardware acceleration, like Discord's), and at 60 fps it keeps the frame rate instead of dropping frames",
         "The connection popup shows how screen shares are doing"
       ]
     },

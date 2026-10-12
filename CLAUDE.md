@@ -128,6 +128,12 @@ the point is for me to understand how it works, not just to have it done.
   is RNNoise: `static/rnnoise-0.4.1/` (worklet + `rnnoise_simd.wasm`, from npm's
   `@sapphi-red/web-noise-suppressor` 0.4.1, checked against npm's integrity hash; served at `/rnnoise-0.4.1/`);
   "Light" is the browser's own, "Off" neither. The AudioContext runs at 48 kHz for RNNoise; voice settings are kept in the browser (localStorage "voiceSettings").
+- Screen shares (video.js): H.264, no simulcast, `maintain-framerate` at 60 fps. Chromium on Windows only uses the
+  graphics card (Media Foundation, e.g. NVENC) for H.264 profile `42001f`; for LiveKit's default `42e01f` it uses
+  OpenH264 on the CPU. So `livekit.yaml`'s `enabled_codecs` adds the `42001f` fmtp line, and must keep plain
+  `video/h264` too (LiveKit checks the name alone first; without it, it falls back to VP8). Changing it needs
+  `deploy.ps1 -Voice`, which ends ongoing calls. The connection popup (voice.js) shows each share's encoder,
+  profile and "held back by", to check.
 
 ## Hosting
 
