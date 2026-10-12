@@ -2833,6 +2833,20 @@ button.download-button {
   overflow-wrap: anywhere;
 }
 
+/* $Maths$, drawn by KaTeX (messages.js, makeMath; its own styles are katex.min.css). Not the
+   message's pre-wrap: KaTeX places everything itself. A $$formula$$ wider than the message
+   scrolls sideways instead of making the page wider. */
+.message-text .math {
+  white-space: normal;
+}
+
+.message-text .katex-display {
+  margin: 4px 0;
+  padding: 2px 0;             /* room for tall brackets, which the scrolling would cut off */
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
 /* > A quote: a grey bar on the left. */
 .message-text .quote {
   margin: 2px 0;

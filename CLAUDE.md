@@ -73,6 +73,16 @@ the point is for me to understand how it works, not just to have it done.
   `mobile/`, Android first (my girlfriend's phone; iPhones maybe later via Expo's cloud builds). It talks
   to the same server: `/login` and its cookie, the same WebSocket messages and endpoints. Native push
   will go through Firebase Cloud Messaging instead of Web Push. The web app and PWA stay meanwhile.
+  **Where we are (paused for a tangent, 2026-10-12), in the "Setup" step of milestone 22:**
+  done: Android Studio 2026.2 (winget) with its SDK in `%LOCALAPPDATA%\Android\Sdk`; user variables
+  `ANDROID_HOME`, `JAVA_HOME` (Android Studio's `jbr`, Java 25) and `platform-tools` on PATH; my phone
+  (Samsung S24 Ultra, SM-S928B) seen by `adb devices` over USB; `mobile/` created (not committed yet)
+  from the blank JS template (Expo SDK 57, React Native 0.86, React 19) plus `expo-dev-client`, the
+  template's `AGENTS.md` and `.claude/` deleted. Next: in `app.json` name "ChatApp" and Android package
+  `no.datslok.chat`, then the first `npx expo run:android` (if Gradle rejects Java 25, use a Java 17),
+  check Fast Refresh, then .gitignore, README ("Phone app" + "Scripts at a glance"), these notes (keep
+  from AGENTS.md: check Expo's docs for our SDK version, always `npx expo install`, never edit the
+  generated `android/`), tick the roadmap box, commit and push.
 - `static/login.html`: the login / create account page.
 - `static/reset.html`: "forgot password" (asks for a reset link) and, with `?token=`, choosing a new password.
 - Emails (reset links) go out through Resend's SMTP server, configured in `.env`. Without `SMTP_HOST`
@@ -86,6 +96,11 @@ the point is for me to understand how it works, not just to have it done.
   deploy reloads open pages.
 - `static/emoji.json`: every emoji for the reaction picker (and the server's list of allowed reactions),
   made from Unicode's `emoji-test.txt` by `tools/make_emoji_json.py`.
+- Maths in messages (messages.js, `makeMath`): `$...$` inline and `$$...$$` on its own line, with Pandoc's
+  rule so money stays text (no space inside the dollars, no digit after the closing one), `\$` a real dollar.
+  Drawn by KaTeX: `static/katex-0.18.9/` (`katex.min.js`, `katex.min.css`, the woff2 fonts and LICENSE, from
+  npm's tarball, checked against npm's integrity hash; served at `/katex-0.18.9/` with a week's caching,
+  `LastingStaticFiles`). Its defaults stay (trust off: no `\href`; maxExpand), plus `maxSize: 20`.
 - `tools/make_admin.py`: make someone an admin (or `--remove`, or `--list`); `--db dev.db` for development.
   Admins can edit and delete anyone's messages and custom emoji.
 - Settings → "Bugs & ideas": `/feedback` saves a report in the `feedback` table and emails it to every

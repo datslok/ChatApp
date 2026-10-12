@@ -754,8 +754,8 @@ function makePreviewCard(preview) {
 // so whatever someone types stays text.
 //
 // Two levels. Blocks first: ```code blocks``` (shown exactly as typed) and lines starting
-// with "> " (quotes). Then, inside the rest, the inline markers: `code`, **bold**, *italic*,
-// ~~strikethrough~~ and ||spoilers||.
+// with "> " (quotes). Then, inside the rest, the inline markers: `code`, $maths$, **bold**,
+// *italic*, ~~strikethrough~~ and ||spoilers||.
 
 // The message's text, formatted, into `element`.
 function formatText(element, text) {
@@ -806,14 +806,19 @@ function appendLines(element, text) {
 // The inline markers, as one pattern with a (group) for each kind. exec() finds the earliest
 // place where any of them matches; where two could start at the same place, the first one
 // listed wins (so "**" is bold before it's two italic stars).
+// $maths$ follows Pandoc's rule, so money stays text: the opening $ has no space after it,
+// the closing $ no space before it and no digit after it. "$5 and $10" isn't maths
+// (" and " ends with a space), "$x^2$" is.
 const INLINE_PATTERN = [
-  /\\([\\*~|`>])/.source,                // 1: \* is a real star (an "escaped" marker)
+  /\\([\\*~|`>$])/.source,               // 1: \* is a real star (an "escaped" marker)
   /(`+)([^`][\s\S]*?)\2(?!`)/.source,    // 2, 3: `code` (``code with a ` in it`` too)
-  /(https?:\/\/[^\s<]+)/.source,         // 4: a web address, so formatting can't cut through one
-  /\*\*([\s\S]+?)\*\*(?!\*)/.source,     // 5: **bold** (the (?!\*) makes ***this*** bold italic)
-  /\*(?![\s*])([\s\S]*?\S)\*/.source,    // 6: *italic* (not "5 * 3 * 2": no space inside the stars)
-  /~~([\s\S]+?)~~/.source,               // 7: ~~strikethrough~~
-  /\|\|([\s\S]+?)\|\|/.source,           // 8: ||spoiler||
+  /\$\$([\s\S]+?)\$\$/.source,           // 4: $$maths$$ on a line of its own, centred
+  /\$(?![\s$])([^$\n]*?[^\s\\])\$(?!\d)/.source,  // 5: $maths$ inside the sentence
+  /(https?:\/\/[^\s<]+)/.source,         // 6: a web address, so formatting can't cut through one
+  /\*\*([\s\S]+?)\*\*(?!\*)/.source,     // 7: **bold** (the (?!\*) makes ***this*** bold italic)
+  /\*(?![\s*])([\s\S]*?\S)\*/.source,    // 8: *italic* (not "5 * 3 * 2": no space inside the stars)
+  /~~([\s\S]+?)~~/.source,               // 9: ~~strikethrough~~
+  /\|\|([\s\S]+?)\|\|/.source,           // 10: ||spoiler||
 ].join("|");
 
 function formatInline(element, text) {
@@ -825,7 +830,10 @@ function formatInline(element, text) {
     pattern.lastIndex = position;
     const match = pattern.exec(text);
     if (match === null) break;
-    appendWithEmoji(element, text.slice(position, match.index), true);  // plain text before it
+    let before = text.slice(position, match.index);  // the plain text before it
+    // $$maths$$ is on a line of its own anyway, so the line breaks next to it would be one too many.
+    if (match[4] !== undefined) before = before.replace(/\n$/, "");
+    appendWithEmoji(element, before, true);
     position = match.index + match[0].length;
 
     // A group that took no part in the match is undefined; the one that did says which kind.
@@ -836,17 +844,22 @@ function formatInline(element, text) {
       code.textContent = tokensToCodes(match[3]);  // as typed: no emoji, links or formatting
       element.appendChild(code);
     } else if (match[4] !== undefined) {
-      const url = trimUrl(match[4]);
+      element.appendChild(makeMath(match[4], true));
+      if (text[position] === "\n") position++;
+    } else if (match[5] !== undefined) {
+      element.appendChild(makeMath(match[5], false));
+    } else if (match[6] !== undefined) {
+      const url = trimUrl(match[6]);
       element.appendChild(makeLink(url));
       position = match.index + url.length;  // what trimUrl cut off is looked at again
-    } else if (match[5] !== undefined) {
-      element.appendChild(makeFormatted("strong", match[5]));
-    } else if (match[6] !== undefined) {
-      element.appendChild(makeFormatted("em", match[6]));
     } else if (match[7] !== undefined) {
-      element.appendChild(makeFormatted("s", match[7]));
+      element.appendChild(makeFormatted("strong", match[7]));
+    } else if (match[8] !== undefined) {
+      element.appendChild(makeFormatted("em", match[8]));
+    } else if (match[9] !== undefined) {
+      element.appendChild(makeFormatted("s", match[9]));
     } else {
-      element.appendChild(makeSpoiler(match[8]));
+      element.appendChild(makeSpoiler(match[10]));
     }
   }
   appendWithEmoji(element, text.slice(position), true);  // the plain text after the last one
@@ -858,6 +871,23 @@ function makeFormatted(tag, text) {
   const wrapper = document.createElement(tag);
   formatInline(wrapper, text);
   return wrapper;
+}
+
+// $maths$, drawn by KaTeX (static/katex-0.18.9/). It reads the text as TeX, never as HTML, and
+// builds the elements itself. Its defaults keep friends' formulas harmless: no links or HTML
+// attributes (trust: false), and a limit on macros that expand forever (maxExpand). maxSize
+// caps sizes like \rule{999em}{1em}. A mistake shows as red text instead of an error.
+function makeMath(tex, display) {
+  const math = document.createElement("span");
+  math.className = "math";
+  // The server turned @kari and :pog: into tokens (<@2>, <:17>): show them as typed.
+  tex = tokensToCodes(tex);
+  if (typeof katex === "undefined") {  // the library didn't load: show the TeX as typed
+    math.textContent = display ? `$$${tex}$$` : `$${tex}$`;
+    return math;
+  }
+  katex.render(tex, math, { displayMode: display, throwOnError: false, maxSize: 20 });
+  return math;
 }
 
 // A dark bar until clicked. The inner span is what gets hidden (visibility: hidden, chat.css),

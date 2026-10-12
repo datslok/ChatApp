@@ -12,6 +12,7 @@
   <title>ChatApp</title>
   <!-- "?v=2": a new address, past a "not found" Cloudflare cached for the old one during an update. -->
   <link rel="stylesheet" href="/static/css/chat.css?v=2">
+  <link rel="stylesheet" href="/katex-0.18.9/katex.min.css">  <!-- the look of $maths$ -->
   <!-- Your theme, colours and font, before anything is drawn (the other scripts are at the end). -->
   <script src="/static/js/appearance.js"></script>
 </head>
@@ -684,6 +685,9 @@
   <!-- LiveKit's browser library, for voice: it creates the global LivekitClient. "async": load it in
        the background without holding up the page (it's only needed once someone joins voice). -->
   <script src="/livekit-client-2.22.3.umd.js" async></script>
+  <!-- KaTeX, which draws $maths$ in messages: it creates the global katex. Not async, since
+       messages.js needs it as soon as the first messages arrive. -->
+  <script src="/katex-0.18.9/katex.min.js"></script>
   <!-- The chat's own scripts, in this order (see static/js/). -->
   <script src="/static/js/core.js"></script>
   <script src="/static/js/notifications.js"></script>

@@ -2090,12 +2090,24 @@ class FreshStaticFiles(StaticFiles):
         return response
 
 
+class LastingStaticFiles(StaticFiles):
+    """For a library whose version is in its address: those files never change, so browsers may keep
+    them for a week without asking."""
+
+    async def get_response(self, path, scope):
+        response = await super().get_response(path, scope)
+        response.headers["Cache-Control"] = "public, max-age=604800"
+        return response
+
+
 # The chat page's styles and scripts (static/index.html loads them). Only these two folders:
 # the rest of static/ is served by its own routes, some of them only when logged in.
 app.mount("/static/css", FreshStaticFiles(directory="static/css"), name="css")
 app.mount("/static/js", FreshStaticFiles(directory="static/js"), name="js")
 app.mount("/landing", FreshStaticFiles(directory="static/landing"), name="landing")  # its pictures
 app.mount("/icons", FreshStaticFiles(directory="static/icons"), name="icons")  # the phone app's (manifest.json)
+# KaTeX, which draws the $maths$ in messages (messages.js), one fixed version from npm (see CLAUDE.md).
+app.mount("/katex-0.18.9", LastingStaticFiles(directory="static/katex-0.18.9"), name="katex")
 
 
 @app.get("/emoji.json")

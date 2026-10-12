@@ -5,6 +5,7 @@
       "items": [
         "Enter sends, Shift+Enter starts a new line. Up to 2000 characters",
         "Formatting: **bold**, *italic*, ~~strikethrough~~, `code`, code blocks (three backticks around them), \"> \" at the start of a line for a quote, and ||spoilers|| (click to reveal). A backslash before a star (`\\*`) shows a real one",
+        "Maths (LaTeX): $\\frac{a}{b}$ in a sentence, $$...$$ for a formula on its own line. Money stays money: \"$5 and $10\" isn't maths, and `\\$` always shows a real $",
         "Hover a message to react 😀, reply ↩, edit ✏️ or delete 🗑️ (hold Shift to skip the question). Esc cancels a reply or an edit",
         "↑ in an empty text box edits your last message",
         "Click a reply's quote to jump to the original message",
@@ -71,6 +72,7 @@
     {
       "date": "2026-10-12",
       "items": [
+        "Maths in messages: $x^2$ in a sentence, or $$\\int_0^1 f(x)\\,dx$$ for a formula on its own line (LaTeX, drawn like in a textbook)",
         "Settings → Appearance: themes, your own colours, fonts and text size, the same on all your devices",
         "The chat can be installed on your phone as an app: open it on your phone and tap Install in the banner",
         "Notifications on your phone while the chat is closed: turn them on in Settings → Notifications (on the phone)",
