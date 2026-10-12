@@ -167,6 +167,19 @@ if (canPush) currentSubscription().then((subscription) => { pushOn = Boolean(sub
 // each new connection (core.js). "blur": the window lost the focus.
 function sendLooking() {
   if (socket) sendToServer({ type: "looking", looking: isLooking() });  // (no connection yet: on "open")
+  clearSeenNotifications();
+}
+
+// Push notifications for the channel we're looking at have been seen: take them off the phone.
+// (They belong to the phone, not the page: only tapping one, or this, removes them. Each one
+// carries its channel in "data", sw.js; a call's is its DM.) Also after switching (core.js).
+async function clearSeenNotifications() {
+  if (!canPush || !isLooking() || currentChannel === null) return;
+  const registration = await navigator.serviceWorker.getRegistration();
+  if (!registration) return;
+  for (const notification of await registration.getNotifications()) {
+    if (notification.data?.channel === currentChannel) notification.close();
+  }
 }
 document.addEventListener("visibilitychange", sendLooking);
 window.addEventListener("focus", sendLooking);

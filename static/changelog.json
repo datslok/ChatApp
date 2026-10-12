@@ -74,6 +74,7 @@
         "Settings → Appearance: themes, your own colours, fonts and text size, the same on all your devices",
         "The chat can be installed on your phone as an app: open it on your phone and tap Install in the banner",
         "Notifications on your phone while the chat is closed: turn them on in Settings → Notifications (on the phone)",
+        "Opening a channel on your phone clears its notifications",
         "Test microphone and Test camera say right below the button what went wrong, and where to allow them (also on Android phones)",
         "A phone's back camera is no longer shown mirrored to you",
         "Windows app 0.1.15: Settings → Appearance has a Scale slider to make everything bigger or smaller (it updates by itself)",

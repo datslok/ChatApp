@@ -439,6 +439,7 @@ function switchChannel(channel, label, fromHistory = false) {
   mentionCounts.delete(channel);
   updateSidebar();
   joinCurrentChannel();
+  clearSeenNotifications();  // ...and its push notifications on this phone (notifications.js)
 }
 
 // Clear the screen and tell the server where we are. It answers with the history.
