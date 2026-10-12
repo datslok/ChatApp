@@ -38,6 +38,7 @@ JavaScript for the page, no frameworks.
 | Voice, video, screen sharing | A self-hosted [LiveKit](https://livekit.io/) server (WebRTC). |
 | Reaching it from the internet | A [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/), so no ports need opening for the chat itself. |
 | Desktop app | [Tauri](https://tauri.app/) (`desktop/`): a small window around the site. |
+| Phone app (in progress) | [React Native](https://reactnative.dev/) with [Expo](https://expo.dev/) (`mobile/`), Android first. Until it's ready, the site installs as a PWA. |
 
 **Windows only, for now.** The server itself is plain Python, but the scripts that install and run it
 are PowerShell scripts for Windows 10/11. Linux support is planned for later.
@@ -49,7 +50,7 @@ are PowerShell scripts for Windows 10/11. Linux support is planned for later.
 - [Try it on your own PC](#try-it-on-your-own-pc) (10 minutes)
 - [Host your own](#host-your-own): from nothing to your own chat on the internet
 - [Running it](#running-it): updating, What's new, handy commands, backups, moving to another PC, a shared window going black
-- [The phone app](#the-phone-app): installing the chat on a phone
+- [The phone app](#the-phone-app): installing the chat on a phone, and the native app in progress
 - [The desktop app](#the-desktop-app) (optional)
 - [Working on the code](#working-on-the-code)
 - [Credits](#credits) and [License](#license)
@@ -81,6 +82,8 @@ the same PC, but the scripts assume two).
 | `tools\feedback.py` | either | read the bug reports and ideas, mark them done |
 | `tools\make_pwa_icons.py` | your PC | makes the phone app's icons from the app icon |
 | `tools\make_vapid_keys.py` | either | once: the key pair for push notifications, for `.env` |
+| `npx expo run:android` (in `mobile\`) | your PC | builds the native phone app, installs it on a phone over USB and starts Metro |
+| `npx expo start` (in `mobile\`) | your PC | only Metro, for an app already installed by `run:android` |
 
 ---
 
@@ -472,6 +475,40 @@ Calls keep going with the screen off on most Android phones. If a call stops whe
 pocket, set the browser's battery use to "Unrestricted" in Android's app settings. iPhones often stop
 web pages when they're locked, calls included.
 
+### The native app (in progress)
+
+A real Android app is being built in `mobile\` with [React Native](https://reactnative.dev/) and
+[Expo](https://expo.dev/), talking to the same server. It can't do anything useful yet; the PWA above
+is the phone app for now. To work on it:
+
+1. Install [Node.js](https://nodejs.org/) (LTS), [Android Studio](https://developer.android.com/studio)
+   (`winget install Google.AndroidStudio`; open it once and let it install the Android SDK) and a
+   Java 17 (`winget install Microsoft.OpenJDK.17`; newer Java versions break the build).
+2. Set two user environment variables (Windows search, "Edit environment variables for your account"):
+   `ANDROID_HOME` to `%LOCALAPPDATA%\Android\Sdk` and `JAVA_HOME` to the Java 17 folder (in
+   `C:\Program Files\Microsoft\`), and add `%LOCALAPPDATA%\Android\Sdk\platform-tools` to `Path`.
+3. On the phone: turn on Developer options (Settings, About phone, Software information, tap
+   "Build number" seven times), then USB debugging in them. Plug it in and allow the PC.
+   `adb devices` should list it.
+4. In PowerShell:
+
+```powershell
+cd mobile
+npm install
+npx expo run:android
+```
+
+The first build downloads a lot (Gradle, the NDK) and takes a while. It installs a **development
+build** on the phone: the native part is built once, and the JavaScript comes live from **Metro**
+on your PC, so saving `App.js` changes the app within a second. The phone needs to be on the same
+network as the PC. Shake the phone for the developer menu (Reload, DevTools).
+
+Later, when only JavaScript changed, `npx expo start` is enough. Run `npx expo run:android` again
+after adding a package with native code. Add packages with `npx expo install <name>` (not
+`npm install`), so you get the version that matches Expo. The `android\` folder is generated from
+`app.json` (and not in git): never edit it by hand. After changing `app.json`, run
+`npx expo prebuild --clean` first, which makes it again, then `npx expo run:android`.
+
 ---
 
 ## The desktop app
@@ -576,7 +613,8 @@ example) and they can run it with a double-click. Downloaded files make Windows 
 - `static/index.html`, `static/css/chat.css` and `static/js/`: the chat page. The scripts are plain
   scripts sharing one global scope, loaded in the order listed in `index.html`.
 - `static/login.html`, `reset.html`, `download.html`: the other pages.
-- `livekit.yaml`: LiveKit's settings. `desktop/`: the Windows app. `tools/`: small helper programs.
+- `livekit.yaml`: LiveKit's settings. `desktop/`: the Windows app. `mobile/`: the native phone app
+  (in progress). `tools/`: small helper programs.
 - [ROADMAP.md](ROADMAP.md): what's done and what's planned.
 
 The code is written to be read: comments explain the *why*, and there are no build steps. Develop

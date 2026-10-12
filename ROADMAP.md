@@ -69,6 +69,8 @@
     - [ ] Admins create, rename, delete and reorder channels from the app, with headings to group them
     - [ ] Group DMs (private chats with 3-10 people)
     - [ ] Pinned messages per channel
+    - [x] LaTeX support (maths in messages, drawn by KaTeX)
+    - [ ] open on startup
     - [ ] Search messages (by text, person or channel; SQLite's FTS5)
 - [ ] **17.** Social and presence
     - [ ] Statuses: Online, Idle (automatic when away), Do Not Disturb (no notifications), Invisible
@@ -97,7 +99,7 @@
     - [x] Push notifications for DMs, mentions and calls while the chat is closed (Web Push, VAPID keys), opening the message when tapped
     - [x] Polish: a banner on phones: Install (Chrome's own dialog), then Turn on notifications
 - [ ] **22.** A native phone app: React Native with Expo, in `mobile/`, Android first (iPhone later from the same code)
-    - [ ] Setup: Android Studio and its SDK, an Expo project (JavaScript), a development build on the phone that updates live
+    - [x] Setup: Android Studio and its SDK, an Expo project (JavaScript), a development build on the phone that updates live
     - [ ] Log in, the channel list, and reading messages live over the WebSocket
     - [ ] Writing: sending, replies, reactions, editing and deleting
     - [ ] DMs, friends, unread dots and mentions
@@ -106,3 +108,8 @@
     - [ ] Push notifications through Firebase Cloud Messaging, ringing calls
     - [ ] Settings: profile, appearance, notifications
     - [ ] Distribution: an APK on the download page, and updates
+- [ ] **23.** An AI bot in the chat, running on a PC with a graphics card
+    - [ ] A local model (Ollama) answering in the terminal, to see its speed and quality
+    - [ ] A bot account and a script that logs in, connects to the WebSocket and answers @mentions
+    - [ ] The channel's recent messages as context, and a personality
+    - [ ] Maybe: a few harmless tools (reminders, searching the chat), and a "bot" badge

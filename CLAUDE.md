@@ -73,16 +73,17 @@ the point is for me to understand how it works, not just to have it done.
   `mobile/`, Android first (my girlfriend's phone; iPhones maybe later via Expo's cloud builds). It talks
   to the same server: `/login` and its cookie, the same WebSocket messages and endpoints. Native push
   will go through Firebase Cloud Messaging instead of Web Push. The web app and PWA stay meanwhile.
-  **Where we are (paused for a tangent, 2026-10-12), in the "Setup" step of milestone 22:**
-  done: Android Studio 2026.2 (winget) with its SDK in `%LOCALAPPDATA%\Android\Sdk`; user variables
-  `ANDROID_HOME`, `JAVA_HOME` (Android Studio's `jbr`, Java 25) and `platform-tools` on PATH; my phone
-  (Samsung S24 Ultra, SM-S928B) seen by `adb devices` over USB; `mobile/` created (not committed yet)
-  from the blank JS template (Expo SDK 57, React Native 0.86, React 19) plus `expo-dev-client`, the
-  template's `AGENTS.md` and `.claude/` deleted. Next: in `app.json` name "ChatApp" and Android package
-  `no.datslok.chat`, then the first `npx expo run:android` (if Gradle rejects Java 25, use a Java 17),
-  check Fast Refresh, then .gitignore, README ("Phone app" + "Scripts at a glance"), these notes (keep
-  from AGENTS.md: check Expo's docs for our SDK version, always `npx expo install`, never edit the
-  generated `android/`), tick the roadmap box, commit and push.
+  Setup done (2026-10-12): `mobile/` is the blank JS template (Expo SDK 57, React Native 0.86, React 19,
+  Gradle 9.3) plus `expo-dev-client`; `app.json` name "ChatApp", slug "chatapp", Android package
+  `no.datslok.chat` (permanent). Android Studio 2026.2 with its SDK in `%LOCALAPPDATA%\Android\Sdk`;
+  user variables `ANDROID_HOME`, `JAVA_HOME` = Microsoft OpenJDK 17 (`C:\Program Files\Microsoft\jdk-17...`;
+  Java 25 broke CMake's configure step: its "restricted method" warning counts as an error) and
+  `platform-tools` on PATH. My phone (Samsung S24 Ultra, SM-S928B) over USB; Metro reaches it over
+  Wi-Fi. Running it: README, "The native app (in progress)". The Bash tool doesn't see these user
+  variables: use PowerShell and read them with `[Environment]::GetEnvironmentVariable(..., 'User')`.
+  `adb shell screencap` shows me the phone's screen. Rules (from the template's AGENTS.md): check Expo's
+  docs for SDK 57 specifically, always `npx expo install` for packages, never edit the generated
+  `android/` (git-ignored; `npx expo prebuild --clean` after changing `app.json`).
 - `static/login.html`: the login / create account page.
 - `static/reset.html`: "forgot password" (asks for a reset link) and, with `?token=`, choosing a new password.
 - Emails (reset links) go out through Resend's SMTP server, configured in `.env`. Without `SMTP_HOST`
