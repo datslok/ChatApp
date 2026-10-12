@@ -62,7 +62,7 @@
       "topic": "⚙️ Settings and help",
       "items": [
         "My Account: change your username, email and password. Forgot your password? There's a link on the login page",
-        "Appearance: seven themes (Dark, Darker, Light, Blue, Purple, Green, Pink), your own colours on top, a font and a text size, and in the Windows app a scale (everything bigger or smaller). Saved with your account, so it's the same on every device",
+        "Appearance: eight themes (Dark, Darker, Light, Blue, Purple, Green, Pink, Light pink), your own colours on top, a font and a text size, and in the Windows app a scale (everything bigger or smaller). Saved with your account, so it's the same on every device",
         "Bugs & ideas: tell us what's broken or what you'd like"
       ]
     }
@@ -75,7 +75,7 @@
         "The chat can be installed on your phone as an app: open it on your phone and tap Install in the banner",
         "Notifications on your phone while the chat is closed: turn them on in Settings → Notifications (on the phone)",
         "Opening a channel on your phone clears its notifications",
-        "A Pink theme in Settings → Appearance",
+        "Two pink themes in Settings → Appearance: Pink (dark) and Light pink",
         "Test microphone and Test camera say right below the button what went wrong, and where to allow them (also on Android phones)",
         "A phone's back camera is no longer shown mirrored to you",
         "Windows app 0.1.15: Settings → Appearance has a Scale slider to make everything bigger or smaller (it updates by itself)",

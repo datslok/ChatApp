@@ -152,6 +152,35 @@
   --mention-text: #f9c6e0;
 }
 
+/* Light pink: like Light (dark text on light backgrounds), in pastel pink, with a pink accent. */
+[data-theme="lightpink"] {
+  --bg-deepest: #f3d9e6;
+  --bg-darkest: #f8e4ee;
+  --bg-panel-alt: #f8e4ee;
+  --bg-panel: #fcedf4;
+  --bg-main: #fff7fb;
+  --bg-hover-dim: #fdeff6;
+  --bg-hover: #f5dbe8;
+  --bg-active: #efc9dc;
+  --bg-input: #f8e4ee;
+  --bg-neutral: #8a6878;
+  --scrollbar: #e8b9d0;
+  --border: #efc9dc;
+  --line: #f3d9e6;
+  --text-strong: #2a0f1d;
+  --text: #3d2230;
+  --text-soft: #5e4250;
+  --text-muted: #7a5c6b;
+  --text-faint: #9a7f8c;
+  --text-disabled: #c0a8b4;
+  --accent: #d63384;
+  --mention-text: #8e1f57;
+  --link: #c2185b;
+  --green: #1e8e4e;
+  --red: #d83a42;
+  --yellow: #b97d0c;
+}
+
 /* Buttons and text fields use the system font unless told otherwise: the chosen one instead. */
 button, input, select, textarea {
   font-family: inherit;
