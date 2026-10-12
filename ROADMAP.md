@@ -87,3 +87,4 @@
     - [ ] A small floating window with the call's participants (who's talking), also while a share is in fullscreen
     - [ ] A volume slider for a screen share's sound (separate from the person's voice)
     - [ ] Bug: sharing a screen with YouTube on it, the share went black after tabbing out (alt-tab) of the video
+    - [ ] Bug: a screen share meant to be 60 fps arrived at 31 fps (the viewer saw 2560×1036, 7.1 Mbit/s, H.264 decoded on the graphics card, no packet loss or dropped frames; check the sharer's side: chosen fps, "held back by")
