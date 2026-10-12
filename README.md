@@ -48,7 +48,7 @@ are PowerShell scripts for Windows 10/11. Linux support is planned for later.
 
 - [Try it on your own PC](#try-it-on-your-own-pc) (10 minutes)
 - [Host your own](#host-your-own): from nothing to your own chat on the internet
-- [Running it](#running-it): updating, What's new, handy commands, backups, moving to another PC
+- [Running it](#running-it): updating, What's new, handy commands, backups, moving to another PC, a shared window going black
 - [The desktop app](#the-desktop-app) (optional)
 - [Working on the code](#working-on-the-code)
 - [Credits](#credits) and [License](#license)
@@ -427,6 +427,18 @@ Everything after that day's 04:00 is lost (messages, accounts, settings changed 
    some visitors to the old PC), and stop its scheduled tasks.
 4. **The router:** change the two port forwardings to the new PC's address, and give it a DHCP reservation.
 5. **On your PC:** `.\scripts\server-connect.ps1` with the new address, then check as in step 7.
+
+### A shared window goes black
+
+Sharing a single browser window (say, YouTube in Chrome) and then covering it with another window
+makes the share go black, and it comes back as soon as a bit of the window shows again. That's the
+browser, not the chat: Chrome and Edge stop drawing a window that's completely covered, to save
+power, without knowing that another program is capturing it. Ways around it, for whoever shares:
+
+- Share the **entire screen** instead of the window (the others then see whatever is on top).
+- Keep the shared window uncovered, for example on a second screen.
+- Start Chrome or Edge with `--disable-features=CalculateNativeWinOcclusion` (right-click its
+  shortcut, Properties, add it to the end of Target after a space; close every window of it first).
 
 ---
 

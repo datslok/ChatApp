@@ -33,7 +33,8 @@
         "Click a tile to make it big, right-click it for the profile. ⛶ or double-click a screen for fullscreen, where the others float in a small window: drag it to any corner, or hide it with 👥. In a DM, drag the call's bottom edge to resize it",
         "Volume per person (0–200%) in their profile: click them, also in the voice list. A shared screen has its own volume: hover over it for the slider",
         "Settings → Voice & audio: microphone, speakers, volumes, sensitivity and noise suppression. Settings → Video: your camera, with a preview",
-        "The signal icon in a call shows your ping. Click it for details, including how a screen share is doing (frame rate, data, and whether the graphics card encodes it)"
+        "The signal icon in a call shows your ping. Click it for details, including how a screen share is doing (frame rate, data, and whether the graphics card encodes it)",
+        "Sharing one browser window and covering it with another window makes the share go black (the browser stops drawing covered windows). Share the entire screen instead, or keep the window uncovered"
       ]
     },
     {
