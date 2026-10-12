@@ -14,5 +14,23 @@ rtc:
   # their audio there. After the internet provider changes the IP, restart LiveKit.
   use_external_ip: true
 
+room:
+  # The codecs calls may use: LiveKit's defaults, except H.264. By default LiveKit only accepts
+  # H.264 profile 42e01f ("Constrained Baseline"), for which Chromium on Windows encodes on the
+  # CPU (OpenH264). For 42001f ("Baseline") it can use the graphics card instead (Windows' Media
+  # Foundation). Every browser decodes both. The line must match LiveKit's own exactly.
+  enabled_codecs:
+    - mime: audio/opus
+    - mime: audio/red
+    - mime: audio/pcmu
+    - mime: audio/pcma
+    - mime: video/vp8
+    - mime: video/h264
+      fmtp_line: "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42001f"
+    - mime: video/vp9
+    - mime: video/av1
+    - mime: video/h265
+    - mime: video/rtx
+
 logging:
   level: info

@@ -522,6 +522,9 @@ function videoStats(report, type, key, counts) {
     // Bits per second (bytes × 8), in megabits (millions): what the stream uses of the connection.
     mbps: seconds > 0 ? ((now.bytes - last.bytes) * 8) / seconds / 1e6 : null,
     codec: codec ? codec.mimeType.replace("video/", "") : null,
+    // For H.264, which profile the call agreed on (like "42001f"): it decides whether Chromium
+    // may use the graphics card (livekit.yaml).
+    profile: codec?.sdpFmtpLine?.match(/profile-level-id=([0-9a-f]+)/i)?.[1] ?? null,
     hardware: main.powerEfficientEncoder ?? main.powerEfficientDecoder ?? null,  // true, false or unknown
     // The browser's own name for it, like "OpenH264" (CPU) or "MediaFoundationVideoEncodeAccelerator".
     implementation: main.encoderImplementation ?? main.decoderImplementation ?? null,
@@ -566,7 +569,8 @@ function screenBlock(title, stats, sending) {
   line("Picture", `${size} at ${fps}`);
   line("Data", stats.mbps === null ? "–" : stats.mbps.toFixed(1) + " Mbit/s");
   const where = stats.hardware === true ? "graphics card" : stats.hardware === false ? "CPU" : null;
-  line(sending ? "Encoder" : "Decoder", [stats.codec, where].filter(Boolean).join(", ") || "–");
+  const codec = stats.codec && stats.profile ? `${stats.codec} (${stats.profile})` : stats.codec;
+  line(sending ? "Encoder" : "Decoder", [codec, where].filter(Boolean).join(", ") || "–");
   if (stats.implementation) line("Using", stats.implementation);
   if (sending) {
     const reasons = { none: "nothing", cpu: "the CPU (too slow)", bandwidth: "the connection", other: "something else" };
