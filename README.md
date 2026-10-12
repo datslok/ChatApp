@@ -370,3 +370,9 @@ See [ROADMAP.md](ROADMAP.md) for what's planned and what's done.
 ## Credits
 
 The app icon (the black cat) is made by Niamh Hannon.
+
+## License
+
+The code is under the [MIT license](LICENSE): use it, change it and run your own copy. The cat icon
+isn't: it belongs to Niamh Hannon, so a copy of your own should use its own icon. LiveKit's browser
+library and the RNNoise files keep their own licenses (see [LICENSE](LICENSE)).
