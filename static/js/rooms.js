@@ -475,7 +475,8 @@ function startRinging(call) {
   playRingtone();
   ringTimer = setInterval(playRingtone, 2000);
   // Not looking at the chat: a desktop notification too (clicking it brings the window forward).
-  if (!isLooking() && desktopNotifications && !isMuted() && "Notification" in window &&
+  // (Not on a device with push on: it gets the call as a push, sw.js.)
+  if (!isLooking() && !pushOn && desktopNotifications && !isMuted() && "Notification" in window &&
       Notification.permission === "granted") {
     try {
       const avatar = people.get(call.from)?.avatar;

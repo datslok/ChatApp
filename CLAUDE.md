@@ -60,7 +60,12 @@ the point is for me to understand how it works, not just to have it done.
   server itself so the private key never left it; development ones in `dev.env`), the `push_subscriptions`
   table (one row per device), `/push/subscribe` and `/push/unsubscribe` (only https endpoints at the known
   push services, against SSRF), the switch in Settings → Notifications (notifications.js; not in the
-  Windows app). Sending them, and sw.js showing them, is milestone 21's next step.
+  Windows app). Sent by server.py's `send_push` (in a thread, in the background; 404/410 deletes the
+  subscription) for new messages to `save_mentions`' people (DMs, mentions, @everyone) and for DM calls
+  (ttl 30 s, urgency high), but never to someone "looking" at the chat on any device (each page sends
+  `{"type": "looking"}` on focus/visibility changes) or to a muted device (`/push/mute`). sw.js shows them
+  (one per channel, `tag`) and on a tap focuses an open chat (postMessage "open") or opens
+  `/?channel=..&message=..` (core.js reads it). A device with push on doesn't notify by itself (`pushOn`).
 - `static/login.html`: the login / create account page.
 - `static/reset.html`: "forgot password" (asks for a reset link) and, with `?token=`, choosing a new password.
 - Emails (reset links) go out through Resend's SMTP server, configured in `.env`. Without `SMTP_HOST`

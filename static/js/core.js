@@ -186,7 +186,14 @@ function connect() {
     reconnectDelay = 1000;  // it worked, so start from 1 second again next time
     banner.hidden = true;
     sendVoiceState();  // a new connection: the server doesn't know we're in voice yet
-    if (currentChannel === null) {
+    sendLooking();     // ...nor whether we're looking at the chat (no pushes then; notifications.js)
+    const opened = new URLSearchParams(location.search);  // "?channel=general&message=57"
+    if (currentChannel === null && opened.has("channel")) {
+      // Opened by tapping a push notification (sw.js): go to that message (or that DM, for a call).
+      // Then take the question mark part out of the address, so a reload doesn't go there again.
+      history.replaceState(null, "", "/");
+      openMessage(opened.get("channel"), opened.has("message") ? Number(opened.get("message")) : null);
+    } else if (currentChannel === null) {
       // First time: the channel we were in before a reload (F5), else the first channel.
       const start = channelBeforeReload() ?? firstChannel;
       switchChannel(start, channelLabel(start));

@@ -29,6 +29,7 @@ from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from PIL import Image, ImageSequence
 from pydantic import BaseModel
+from pywebpush import WebPushException, webpush
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 # docs_url etc. = None: turn off FastAPI's automatic API explorer pages (/docs, /redoc),
@@ -1500,6 +1501,107 @@ async def push_unsubscribe(data: PushSubscription, request: Request):
     return {"ok": True}
 
 
+class PushMute(BaseModel):
+    endpoint: str
+    until: float | None = None  # a Unix time in seconds; None = not muted (far future = until turned back on)
+
+
+@app.post("/push/mute")
+async def push_mute(data: PushMute, request: Request):
+    """"Mute notifications" in Settings, for this device's pushes (the page keeps its own copy)."""
+    user_id, username, password_hash, email = logged_in_user(request)
+    with db:
+        db.execute(
+            "UPDATE push_subscriptions SET muted_until = ? WHERE endpoint = ? AND user_id = ?",
+            (data.until, data.endpoint, user_id),
+        )
+    return {"ok": True}
+
+
+# Sending. A push service only passes a push on: pywebpush encrypts it for that one browser (with
+# the subscription's keys) and signs it with our private key. "sub" says who we are, for the push
+# service to contact if our pushes cause trouble: an email address, from MAIL_FROM.
+PUSH_CLAIMS_SUBJECT = "mailto:" + parseaddr(MAIL_FROM)[1]
+PUSH_TEXT_LENGTH = 200  # the start of a message is enough (and a push may be at most about 4 KB)
+
+
+def readable_text(text):
+    """A message's text as it was typed: <@2> back to @kari, <@everyone> to @everyone, <:17> to :pog:."""
+    names = dict(db.execute("SELECT id, username FROM users"))
+    emoji = dict(db.execute("SELECT id, name FROM custom_emoji"))
+    text = text.replace("<@everyone>", "@everyone")
+    text = re.sub(r"<@(\d+)>", lambda match: "@" + names.get(int(match[1]), "someone"), text)
+    return re.sub(r"<:(\d+)>", lambda match: ":" + emoji.get(int(match[1]), "emoji") + ":", text)
+
+
+def is_looking(user_id):
+    """Is this person looking at the chat right now, on any device? (Each page says so: "looking".)"""
+    return any(client["user_id"] == user_id and client["looking"] for client in clients.values())
+
+
+async def send_push(user_ids, payload, ttl=24 * 60 * 60, urgency="normal"):
+    """Push this to every device of these people that turned push on and isn't muted, unless they're
+    looking at the chat somewhere right now (then they see it there). ttl: how many seconds the push
+    service keeps trying a phone that's off or offline. Run it as a background task: each push
+    service takes a moment to answer, and the chat mustn't wait for that."""
+    user_ids = [user_id for user_id in user_ids if not is_looking(user_id)]
+    if not VAPID_PRIVATE_KEY or not user_ids:
+        return
+    marks = ",".join("?" * len(user_ids))  # "?,?,?": one placeholder per person
+    rows = db.execute(
+        f"SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE user_id IN ({marks})"
+        " AND (muted_until IS NULL OR muted_until < ?)",
+        (*user_ids, time.time()),
+    ).fetchall()
+    data = json.dumps(payload)
+    for endpoint, p256dh, auth in rows:
+        try:
+            # In a thread: webpush waits for the push service's answer, which would stop the whole
+            # server (everyone's chat) in the meantime if it ran here.
+            await asyncio.to_thread(
+                webpush,
+                subscription_info={"endpoint": endpoint, "keys": {"p256dh": p256dh, "auth": auth}},
+                data=data,
+                vapid_private_key=VAPID_PRIVATE_KEY,
+                vapid_claims={"sub": PUSH_CLAIMS_SUBJECT},
+                ttl=ttl,
+                headers={"Urgency": urgency},  # "high": deliver at once, even to a sleeping phone
+                timeout=10,
+            )
+        except WebPushException as error:
+            status = error.response.status_code if error.response is not None else None
+            if status in (404, 410):  # "this subscription doesn't exist (any more)": uninstalled, say
+                with db:
+                    db.execute("DELETE FROM push_subscriptions WHERE endpoint = ?", (endpoint,))
+            else:
+                print(f"A push to {urlsplit(endpoint).hostname} failed: {error}")
+        except Exception as error:  # (no connection, a timeout, ...): try again with the next message
+            print(f"A push to {urlsplit(endpoint).hostname} failed: {error}")
+
+
+def push_in_background(user_ids, payload, **options):
+    """Start send_push without waiting for it (kept in background_tasks, or asyncio may drop it)."""
+    task = asyncio.create_task(send_push(user_ids, payload, **options))
+    background_tasks.add(task)
+    task.add_done_callback(background_tasks.discard)
+
+
+def push_message(people, message):
+    """A new message for these people (a DM to them, or mentioning them): "axel in #general"."""
+    channel = message["channel"]
+    title = message["name"] if channel.startswith("dm:") else f'{message["name"]} in #{channel}'
+    body = readable_text(message["text"])
+    if len(body) > PUSH_TEXT_LENGTH:
+        body = body[:PUSH_TEXT_LENGTH] + "…"
+    if not body and message["file"]:
+        body = "📷 A picture" if message["file"]["image"] else "📎 " + message["file"]["filename"]
+    avatar = db.execute("SELECT avatar_id FROM users WHERE id = ?", (message["user_id"],)).fetchone()[0]
+    push_in_background(people, {
+        "title": title, "body": body, "channel": channel, "message_id": message["id"],
+        "icon": f"/avatars/{avatar}" if avatar else "/icons/icon-192.png",
+    })
+
+
 # ---------- Feedback: bug reports and ideas (Settings → Feedback) ----------
 
 FEEDBACK_KINDS = {"bug": "Bug report", "idea": "Idea"}
@@ -2230,6 +2332,11 @@ async def start_call(channel, caller):
         "ring": asyncio.create_task(ring_timeout(channel)),
     }
     await send_to_user(callee, call_message(channel))  # every tab and device they have open rings
+    # ...and their phones: "high" urgency (wake it now), and gone after the 30 s it rings.
+    push_in_background([callee], {
+        "title": username_of(caller), "body": "📞 Calling you", "channel": channel, "call": True,
+        "icon": "/icons/icon-192.png",
+    }, ttl=30, urgency="high")
 
 
 async def ring_timeout(channel):
@@ -2687,7 +2794,8 @@ async def chat(websocket: WebSocket):
     await websocket.accept()
     was_online = user_id in online_user_ids()  # already open in another tab?
     # No channel until they "join", no voice room until they say they joined one.
-    clients[websocket] = {"user_id": user_id, "channel": None, "voice": None, "muted": False, "deafened": False}
+    clients[websocket] = {"user_id": user_id, "channel": None, "voice": None, "muted": False, "deafened": False,
+                          "looking": False}  # looking at it right now (the page says, see "looking")
     try:
         # Tell the page who it is (the id is for building DM names).
         await send(websocket, {
@@ -2787,6 +2895,7 @@ async def chat(websocket: WebSocket):
                 }
                 await send_to_channel(channel, message)  # everyone in the channel, including us
                 await announce_new_message(channel, mentioned_people, message)  # read/unread, mentions, notifications
+                push_message(mentioned_people, message)  # their phones, if they're not looking at the chat
                 start_preview(message_id, channel, user_id, text)  # in the background, if it has a link
 
             elif kind == "react":
@@ -2904,6 +3013,11 @@ async def chat(websocket: WebSocket):
                         await announce_dm_call(changed)  # the two of them see who's in their call
                     if changed in calls:  # a DM call may have been called off, or ended
                         await check_call(changed)
+
+            elif kind == "looking":
+                # {"type": "looking", "looking": true}: the page is in sight and has the focus (or
+                # not any more). Nobody gets a push while they're looking at the chat somewhere.
+                clients[websocket]["looking"] = data.get("looking") is True
 
             elif kind == "call":
                 await start_call(data.get("channel"), user_id)

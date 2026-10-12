@@ -457,6 +457,12 @@ the same page as in the browser, so it's always up to date. What makes it instal
 To install it: open the chat in **Chrome on Android**, ⋮ menu, **Install app** (or "Add to Home
 screen"). On an **iPhone**: Safari, the Share button, **Add to Home Screen**.
 
+**Notifications while the chat is closed** (push notifications): Settings → Notifications → "Notifications
+on this device when the chat is closed", on each phone (or browser) that should get them. They come for
+DMs, mentions and calls, only while you're not looking at the chat on any device, and follow "Mute
+notifications". The server needs the VAPID keys in `.env` for this (see "The server: settings"). On an
+iPhone they only work in the installed app (Add to Home Screen), not in Safari itself.
+
 If the microphone or camera "isn't allowed" although the site allows it, Android may be blocking the
 browser itself: Settings, Apps, Chrome (and the installed ChatApp), Permissions, Microphone and Camera.
 

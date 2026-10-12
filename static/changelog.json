@@ -42,7 +42,8 @@
       "items": [
         "For DMs and mentions: a notification, a sound and a count in the tab's title. Click one to go to the message",
         "Unread channels get a dot, mentions a red count",
-        "Settings → Notifications: turn them on or off, the volume, and mute them for 1 hour, 8 hours, until morning, or until you turn them back on"
+        "Settings → Notifications: turn them on or off, the volume, and mute them for 1 hour, 8 hours, until morning, or until you turn them back on",
+        "On your phone, also while the chat is closed: Settings → Notifications → \"Notifications on this device when the chat is closed\". For DMs, mentions and calls, and not while you're looking at the chat somewhere else"
       ]
     },
     {
@@ -72,6 +73,7 @@
       "items": [
         "Settings → Appearance: themes, your own colours, fonts and text size, the same on all your devices",
         "The chat can be installed on your phone as an app: Chrome, ⋮ menu, Install app",
+        "Notifications on your phone while the chat is closed: turn them on in Settings → Notifications (on the phone)",
         "Test microphone and Test camera say right below the button what went wrong, and where to allow them (also on Android phones)",
         "A phone's back camera is no longer shown mirrored to you",
         "Windows app 0.1.15: Settings → Appearance has a Scale slider to make everything bigger or smaller (it updates by itself)",

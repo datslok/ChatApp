@@ -94,5 +94,5 @@
     - [x] Scale, in the desktop app only (WebView2's own zoom, through a new app version; browsers have Ctrl + and Ctrl −)
 - [ ] **21.** The phone app (a PWA: installed from the website, no app store)
     - [x] Installable: manifest, icons (tools/make_pwa_icons.py), a service worker
-    - [ ] Push notifications for DMs and mentions while the chat is closed (Web Push, VAPID keys), opening the message when tapped
+    - [x] Push notifications for DMs, mentions and calls while the chat is closed (Web Push, VAPID keys), opening the message when tapped
     - [ ] Polish: an "install the app" hint on phones

@@ -73,6 +73,7 @@ muteSelect.addEventListener("change", () => {
     localStorage.setItem("mutedUntil", mutedUntil === Infinity ? "forever" : String(mutedUntil));
   } catch {}
   showMuteState();
+  sendPushMute();  // this device's pushes too (below, "Push notifications")
 });
 
 // Show whether (and until when) we're muted: in Settings, and as 🔕 next to "Settings".
@@ -157,6 +158,39 @@ const pushBox = document.getElementById("notify-push");
 const pushHelp = document.getElementById("push-help");
 const canPush = "serviceWorker" in navigator && "PushManager" in window && !inDesktopApp;
 let vapidPublicKey = null;  // the server's public key, from "welcome" (core.js); null: not set up
+let pushOn = false;  // does this device get pushes? Then the page doesn't notify by itself (notify)
+
+if (canPush) currentSubscription().then((subscription) => { pushOn = Boolean(subscription); });
+
+// Tell the server whether we're looking at the chat (tab in sight and window focused): while we
+// are, on any device, nobody pushes us anything (server.py, send_push). On every change, and on
+// each new connection (core.js). "blur": the window lost the focus.
+function sendLooking() {
+  if (socket) sendToServer({ type: "looking", looking: isLooking() });  // (no connection yet: on "open")
+}
+document.addEventListener("visibilitychange", sendLooking);
+window.addEventListener("focus", sendLooking);
+window.addEventListener("blur", sendLooking);
+
+// A push notification was tapped while the chat was open on this device: sw.js asks us to go there.
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.addEventListener("message", (event) => {
+    if (event.data?.type === "open") openMessage(event.data.channel, event.data.messageId);
+  });
+}
+
+// "Mute notifications" for this device's pushes too: the server can't see our localStorage, so
+// it's told. In seconds (Unix time); "until I turn it back on" is the year 2100.
+async function sendPushMute() {
+  const subscription = canPush ? await currentSubscription() : null;
+  if (!subscription) return;
+  const until = !isMuted() ? null : mutedUntil === Infinity ? 4102444800 : mutedUntil / 1000;
+  fetch("/push/mute", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ endpoint: subscription.endpoint, until }),
+  }).catch(() => {});
+}
 
 // The browser wants the key as bytes; the server sends it as base64url text (- and _ instead of
 // + and /). atob turns ordinary base64 into a "binary string", one character per byte.
@@ -201,6 +235,7 @@ async function turnOnPush() {
     await subscription.unsubscribe();  // the server didn't take it: don't keep half of it
     throw new Error((await response.json()).detail || "The server didn't accept it.");
   }
+  sendPushMute();  // muted right now? Then the new subscription is too
 }
 
 async function turnOffPush() {
@@ -224,6 +259,7 @@ pushBox.addEventListener("change", async () => {
     pushHelp.textContent = "Couldn't change it: " + error.message;
   }
   pushBox.disabled = false;
+  pushOn = Boolean(await currentSubscription());
   showPushSetting();
 });
 
@@ -298,6 +334,7 @@ function channelLabel(channel) {
 // Notify: sound and/or a desktop notification. Clicking it opens that message.
 function notify(channel, messageId, senderId, senderName, text) {
   if (isMuted()) return;  // do not disturb: no sound, no popup (the red numbers still update)
+  if (pushOn) return;  // this device gets a push for it instead (sw.js): not twice
   if (notificationSound) playPing();
   if (!desktopNotifications || !("Notification" in window) || Notification.permission !== "granted") return;
   const isDm = dmPartner(channel) !== null;
@@ -326,10 +363,11 @@ function notify(channel, messageId, senderId, senderName, text) {
 // A notification was clicked: show that channel and go to the message. Called from the
 // click handler above, and by the desktop app (main.rs). In another channel, the message only
 // arrives with that channel's history, so the jump waits for it (core.js, "history").
+// messageId null: just the channel (a call's notification opens the DM).
 function openMessage(channel, messageId) {
   window.focus();
   if (channel === currentChannel) {
-    jumpToMessage(messageId);
+    if (messageId !== null) jumpToMessage(messageId);
     return;
   }
   switchChannel(channel, channelLabel(channel));
