@@ -56,6 +56,11 @@ the point is for me to understand how it works, not just to have it done.
   worker, at `/sw.js` so it covers the whole site; registered by notifications.js; deliberately no offline
   copies), icons in `static/icons/` (at `/icons/`, made by `tools/make_pwa_icons.py`). Linked from
   index.html and login.html. My girlfriend's phone is Android, so Android comes first.
+  Push notifications (Web Push, `pywebpush`): VAPID keys in `.env` (`tools/make_vapid_keys.py`; made on the
+  server itself so the private key never left it; development ones in `dev.env`), the `push_subscriptions`
+  table (one row per device), `/push/subscribe` and `/push/unsubscribe` (only https endpoints at the known
+  push services, against SSRF), the switch in Settings → Notifications (notifications.js; not in the
+  Windows app). Sending them, and sw.js showing them, is milestone 21's next step.
 - `static/login.html`: the login / create account page.
 - `static/reset.html`: "forgot password" (asks for a reset link) and, with `?token=`, choosing a new password.
 - Emails (reset links) go out through Resend's SMTP server, configured in `.env`. Without `SMTP_HOST`

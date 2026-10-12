@@ -80,6 +80,7 @@ the same PC, but the scripts assume two).
 | `tools\make_admin.py` | either | make someone an admin, or take it away |
 | `tools\feedback.py` | either | read the bug reports and ideas, mark them done |
 | `tools\make_pwa_icons.py` | your PC | makes the phone app's icons from the app icon |
+| `tools\make_vapid_keys.py` | either | once: the key pair for push notifications, for `.env` |
 
 ---
 
@@ -189,6 +190,7 @@ Every setting is explained in the file. The ones to change:
 | `LIVEKIT_URL` | `wss://voice.example.com` |
 | `LIVEKIT_API_SECRET` | A long random secret (see below). |
 | `SMTP_*`, `MAIL_FROM` | Your email service's details, or leave `SMTP_HOST` empty. |
+| `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` | For notifications on phones while the chat is closed: the two lines `python tools\make_vapid_keys.py` prints (on your PC after `setup.ps1`, or on the server after step 4, with `.venv\Scripts\python.exe`). Empty: no push notifications. |
 
 A random secret, made by PowerShell itself:
 
