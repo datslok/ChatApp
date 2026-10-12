@@ -25,7 +25,7 @@ from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.exception_handlers import http_exception_handler
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from PIL import Image, ImageSequence
 from pydantic import BaseModel
@@ -58,6 +58,9 @@ RELEASES_DIR = Path("releases")  # the desktop app's installers and latest.json 
 # The site's own address, for links in emails. Never taken from the request: a request can
 # claim any host name, which would let someone make us email links to *their* site.
 PUBLIC_URL = os.environ.get("PUBLIC_URL", "http://localhost:8000").rstrip("/")
+# The main domain (like "example.com"), if it should show the landing page (static/landing/): what
+# ChatApp is, with buttons to the chat. Empty = no landing page there (it's always at /welcome).
+LANDING_HOST = os.environ.get("LANDING_HOST", "").lower()
 # The mail server that sends our emails (password reset links). Empty = print emails here instead.
 SMTP_HOST = os.environ.get("SMTP_HOST", "")
 SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
@@ -1745,11 +1748,28 @@ async def friend_remove(data: FriendAction, request: Request):
 
 @app.get("/")
 async def index(request: Request):
+    # The main domain gets the landing page. The tunnel passes on the address the visitor asked
+    # for in the Host header ("example.com", or "chat.example.com" for the chat).
+    if LANDING_HOST and (request.headers.get("host") or "").split(":")[0].lower() == LANDING_HOST:
+        return landing_page()
     if current_user(request) is None:
         return RedirectResponse("/login")  # not logged in: send them to the login page
     # no-cache: the browser asks each time whether it changed, so a reload after a new version
     # (see PAGE_VERSION) never gets an old copy.
     return FileResponse("static/index.html", headers={"Cache-Control": "no-cache"})
+
+
+def landing_page():
+    """The landing page, with {{CHAT}} in it replaced by the chat's address (PUBLIC_URL, from our own
+    settings, never from the request), so its buttons lead to the right place on every copy."""
+    html = Path("static/landing/index.html").read_text(encoding="utf-8").replace("{{CHAT}}", PUBLIC_URL)
+    return HTMLResponse(html, headers={"Cache-Control": "no-cache"})
+
+
+@app.get("/welcome")
+async def welcome():
+    # The landing page on any address: for trying it out, and for linking to.
+    return landing_page()
 
 
 @app.get("/login")
@@ -1804,6 +1824,7 @@ class FreshStaticFiles(StaticFiles):
 # the rest of static/ is served by its own routes, some of them only when logged in.
 app.mount("/static/css", FreshStaticFiles(directory="static/css"), name="css")
 app.mount("/static/js", FreshStaticFiles(directory="static/js"), name="js")
+app.mount("/landing", FreshStaticFiles(directory="static/landing"), name="landing")  # its pictures
 
 
 @app.get("/emoji.json")

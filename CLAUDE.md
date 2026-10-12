@@ -121,6 +121,11 @@ the point is for me to understand how it works, not just to have it done.
   the resulting `icon.ico`, served at `/favicon.ico` for the browser tab.
 - `static/download.html`: the download page (`/download`, no login), linked from the login page and
   Settings (hidden inside the app). `/download/windows` always redirects to the newest installer.
+- `static/landing/`: the landing page (`index.html`, `logo.png` from `icon/chattuschattus_square.png`,
+  `screenshot.png`), served at `/` when the Host is `LANDING_HOST` (datslok.no) and always at `/welcome`;
+  `{{CHAT}}` in it becomes PUBLIC_URL (server.py, `landing_page`). Its pictures are under `/landing/`.
+  The screenshot is of a throwaway server with test accounts (never the real chat). `/login?register`
+  opens the login page in register mode.
 - `releases/`: the app's installers and `latest.json`, served without login at `/releases/` (git-ignored).
   The app checks `latest.json` at startup and installs a newer version by itself.
 - The updates' private signing key is `~\.tauri\chatapp.key` in the user folder (no password, never commit

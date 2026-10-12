@@ -253,6 +253,22 @@ Then share the address and the invite code with your friends.
 new" page is yours to write (see [What's new](#whats-new)), and the icon should be your own too (see
 [License](#license)).
 
+### Optional: a landing page
+
+`static/landing/` is a page about ChatApp (what it is, a screenshot, the features, and buttons to the
+chat, the Windows app and creating an account). It's always at `https://chat.example.com/welcome`. To
+show it on your main domain (`https://example.com`) instead:
+
+1. In `.env`: `LANDING_HOST=example.com`, then restart the chat (`Stop-ScheduledTask ChatApp;
+   Start-ScheduledTask ChatApp`).
+2. In the Zero Trust dashboard, add a third public hostname to your tunnel: `example.com` →
+   `HTTP` → `localhost:8000` (the same as the chat: the server looks at which address was asked for).
+   If Cloudflare says a DNS record for it already exists, delete that record first (and any Redirect
+   Rule for it, under your domain → Rules).
+
+The page's buttons lead to your `PUBLIC_URL` by themselves. Its texts and pictures (`logo.png`,
+`screenshot.png`) are yours to change.
+
 ### 8. Optional: update from your other PC
 
 So you can work on the code on your own PC and update the server without walking over to it. Step 4

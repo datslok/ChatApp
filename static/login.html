@@ -173,6 +173,10 @@
     toRegister.querySelector("button").addEventListener("click", () => showMode("register"));
     toLogin.querySelector("button").addEventListener("click", () => showMode("login"));
 
+    // Opened as /login?register (from the landing page's "Create an account"): start there.
+    // URLSearchParams reads the part of the address after the "?".
+    if (new URLSearchParams(location.search).has("register")) showMode("register");
+
     form.addEventListener("submit", async (event) => {
       event.preventDefault();  // stop the browser from reloading the page
       errorBox.textContent = "";

@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ChatApp: a self-hosted chat for friends</title>
+  <meta name="description" content="ChatApp is a lightweight chat app, inspired by Discord, that you can host yourself.">
+  <!-- What link previews (in ChatApp itself, Discord, ...) show when someone shares this page. -->
+  <meta property="og:title" content="ChatApp">
+  <meta property="og:description" content="A lightweight chat app, inspired by Discord, that you can host yourself.">
+  <meta property="og:image" content="{{CHAT}}/landing/logo.png">
+  <link rel="icon" href="/favicon.ico">
+  <style>
+    /* The chat's own colours, so the page feels like the same thing. Written once here as
+       "custom properties" (variables), used below as var(--name). */
+    :root {
+      --background: #313338;
+      --card: #2b2d31;
+      --darker: #1e1f22;
+      --text: #dbdee1;
+      --muted: #b5bac1;
+      --blue: #5865f2;
+      --blue-hover: #4752c4;
+      --link: #00a8fc;
+    }
+
+    body {
+      margin: 0;
+      font-family: system-ui, sans-serif;
+      line-height: 1.5;
+      background: var(--background);
+      color: var(--text);
+    }
+
+    a {
+      color: var(--link);
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    /* Every section's content: at most 1040px wide, in the middle, with room at the sides on phones. */
+    .wrap {
+      width: min(1040px, 100% - 32px);
+      margin-inline: auto;
+    }
+
+    /* ----- The bar at the top. "sticky" keeps it in view while scrolling. */
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 1;  /* above the screenshot while scrolling past it */
+      background: var(--darker);
+    }
+
+    header .wrap {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      height: 56px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-right: auto;  /* takes all the free space, pushing the buttons to the right */
+      color: white;
+      font-weight: 700;
+      font-size: 1.1rem;
+    }
+
+    .brand img {
+      width: 32px;
+      height: 32px;
+    }
+
+    /* The buttons (links that look like buttons). */
+    .button {
+      display: inline-block;
+      padding: 10px 20px;
+      border-radius: 6px;
+      background: var(--blue);
+      color: white;
+      font-weight: 600;
+    }
+
+    .button:hover {
+      background: var(--blue-hover);
+      text-decoration: none;
+    }
+
+    .button.grey {
+      background: #4e5058;
+    }
+
+    .button.grey:hover {
+      background: #5d6069;
+    }
+
+    header .button {
+      padding: 7px 14px;
+      font-size: 0.9rem;
+    }
+
+    /* ----- The top part: logo, name, what it is, the main buttons. */
+    .hero {
+      padding: 64px 0 40px;
+      text-align: center;
+    }
+
+    .hero .logo {
+      width: 128px;
+      height: 128px;
+    }
+
+    h1 {
+      margin: 16px 0 8px;
+      font-size: 2.6rem;
+      color: white;
+    }
+
+    .tagline {
+      max-width: 560px;
+      margin: 0 auto 28px;
+      font-size: 1.2rem;
+      color: var(--muted);
+    }
+
+    /* The buttons side by side, wrapping onto two lines on a narrow phone. */
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 12px;
+    }
+
+    .actions .button {
+      padding: 12px 24px;
+      font-size: 1.05rem;
+    }
+
+    .register {
+      margin-top: 16px;
+      color: var(--muted);
+    }
+
+    /* The screenshot, in a frame with a shadow, as if it were a window. */
+    .screenshot {
+      display: block;
+      width: 100%;
+      margin-top: 48px;
+      border: 1px solid var(--darker);
+      border-radius: 10px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+    }
+
+    /* ----- The other sections. */
+    section {
+      padding: 48px 0;
+    }
+
+    h2 {
+      margin: 0 0 24px;
+      font-size: 1.6rem;
+      color: white;
+      text-align: center;
+    }
+
+    /* The feature cards: as many columns as fit (each at least 260px), so 3 on a computer and
+       1 on a phone, without any extra rules. */
+    .features {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr));
+      gap: 16px;
+    }
+
+    .feature {
+      padding: 20px;
+      border-radius: 8px;
+      background: var(--card);
+    }
+
+    .feature h3 {
+      margin: 0 0 6px;
+      font-size: 1.05rem;
+      color: white;
+    }
+
+    .feature .icon {
+      font-size: 1.6rem;
+    }
+
+    .feature p {
+      margin: 0;
+      color: var(--muted);
+    }
+
+    /* "Host it yourself": a card with the text on the left and the button on the right
+       (one under the other on a phone). */
+    .self-host {
+      box-sizing: border-box;  /* the padding counts inside .wrap's width, instead of being added to it */
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 20px 32px;
+      padding: 28px;
+      border-radius: 8px;
+      background: var(--card);
+    }
+
+    .self-host div {
+      flex: 1 1 400px;  /* grows, and wraps below 400px */
+    }
+
+    .self-host h2 {
+      margin-bottom: 8px;
+      text-align: left;
+    }
+
+    .self-host p {
+      margin: 0;
+      color: var(--muted);
+    }
+
+    footer {
+      padding: 24px 0 40px;
+      font-size: 0.9rem;
+      color: #949ba4;
+      text-align: center;
+    }
+
+    footer a {
+      color: #949ba4;
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <!-- {{CHAT}} is replaced by the chat's address by the server (server.py, landing_page). -->
+  <header>
+    <div class="wrap">
+      <a class="brand" href="/"><img src="/landing/logo.png" alt=""> ChatApp</a>
+      <a class="button grey" href="{{CHAT}}/login">Log in</a>
+      <a class="button" href="{{CHAT}}">Open chat</a>
+    </div>
+  </header>
+
+  <main>
+    <div class="hero wrap">
+      <img class="logo" src="/landing/logo.png" alt="ChatApp's cat">
+      <h1>ChatApp</h1>
+      <p class="tagline">A lightweight app for chatting, inspired by Discord, that you can host yourself.</p>
+      <div class="actions">
+        <a class="button" href="{{CHAT}}">Open ChatApp</a>
+        <a class="button grey" href="{{CHAT}}/download">⬇ Get the Windows app</a>
+      </div>
+      <p class="register">Got an invite code? <a href="{{CHAT}}/login?register">Create an account →</a></p>
+      <img class="screenshot" src="/landing/screenshot.png" alt="ChatApp: channels on the left, messages in the middle, who's online on the right">
+    </div>
+
+    <section>
+      <div class="wrap">
+        <h2>What it can do</h2>
+        <div class="features">
+          <div class="feature">
+            <span class="icon">💬</span>
+            <h3>Messages</h3>
+            <p>Channels and DMs, with replies, reactions, custom emoji, @mentions, formatting and link previews.</p>
+          </div>
+          <div class="feature">
+            <span class="icon">🔊</span>
+            <h3>Voice &amp; video</h3>
+            <p>A voice channel and calls in DMs, with cameras, AI noise suppression and a volume per person.</p>
+          </div>
+          <div class="feature">
+            <span class="icon">🖥️</span>
+            <h3>Screen sharing</h3>
+            <p>Share your screen or a game at up to 1440p and 60 fps, with sound, encoded on your graphics card.</p>
+          </div>
+          <div class="feature">
+            <span class="icon">👥</span>
+            <h3>Friends &amp; profiles</h3>
+            <p>Friend requests, who's online, profile pictures and banners (GIFs too), a status and a bio.</p>
+          </div>
+          <div class="feature">
+            <span class="icon">🔔</span>
+            <h3>Notifications</h3>
+            <p>For DMs and mentions, with sounds and unread counts, and muting for when you need quiet.</p>
+          </div>
+          <div class="feature">
+            <span class="icon">💻</span>
+            <h3>Windows app</h3>
+            <p>Real Windows notifications and automatic updates. Or just use it in your browser, on your phone too.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap self-host">
+        <div>
+          <h2>Host it yourself</h2>
+          <p>ChatApp is free and open source. It's one Python program with a SQLite database, with
+            voice and video through LiveKit, and it runs on an ordinary PC at home, reachable through a
+            Cloudflare Tunnel. No cloud servers, and your messages stay with you.</p>
+        </div>
+        <a class="button" href="https://github.com/datslok/ChatApp">See how on GitHub →</a>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    Cat icon by Niamh Hannon ·
+    <a href="{{CHAT}}/login">Log in</a> ·
+    <a href="{{CHAT}}/download">Download</a> ·
+    <a href="https://github.com/datslok/ChatApp">GitHub</a>
+  </footer>
+</body>
+</html>
