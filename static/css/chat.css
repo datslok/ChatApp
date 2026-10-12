@@ -300,7 +300,12 @@ body {
   cursor: grabbing;
 }
 :fullscreen .tile-strip .call-tile {
-  height: 72px;
+  height: 108px;
+}
+:fullscreen .tile-strip .avatar {
+  width: 66px;
+  height: 66px;
+  font-size: 1.6rem;
 }
 :fullscreen .tile-strip.corner-top-left { top: 8px; left: 8px; }
 :fullscreen .tile-strip.corner-top-right { top: 8px; right: 8px; }
