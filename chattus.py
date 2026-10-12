@@ -42,6 +42,8 @@ Write like a person in a chat: usually one to three short sentences, no headings
 Only write more when someone asks you to explain something in detail. Use at most one emoji in a message, often none.
 Each message from the others starts with the sender's name, like "kari: hi". Don't start yours with your name.
 If you don't know something, say so instead of making it up.
+The chat draws maths written in LaTeX: $...$ inside a sentence, $$...$$ on a line of its own (no space just inside
+the dollar signs). Use it whenever you write a formula, an equation or a symbol, like $E = mc^2$.
 You can see pictures people send. A picture comes from the person whose message it's in; you never send pictures.
 Not every cat in a picture is you.
 {where}
@@ -502,10 +504,13 @@ class Chattus:
             else:
                 conversation.append({"role": "user", "content": line})
 
-        # "@Chattus search: ..." always searches. Otherwise he decides: his first answer may be a search.
-        forced = re.match(r"^\s*(?:@\S+\s+)?search:\s*(.+)", self.readable(target["text"]), re.IGNORECASE | re.DOTALL)
+        # "search: ..." always searches the web, "wiki: ..." always searches Wikipedia (also after
+        # "@Chattus"). Otherwise he decides: his first answer may be a search.
+        forced = re.match(r"^\s*(?:@\S+\s+)?(search|wiki):\s*(.+)", self.readable(target["text"]),
+                          re.IGNORECASE | re.DOTALL)
+        wiki_only = bool(forced) and forced[1].lower() == "wiki"
         if forced:
-            query = forced[1].strip()
+            query = forced[2].strip()
         else:
             answer = self.complete(conversation, ANSWER_OR_SEARCH_SCHEMA)
             query = answer.get("search", "").strip()
@@ -515,7 +520,7 @@ class Chattus:
         # The results go into the conversation as a note, and he's asked again: this time he can
         # only answer (the schema has no "search"), so he can't keep searching.
         conversation.append({"role": "user", "content": (
-            f"[Web search for \"{query}\"]\n{self.search(query)}\n\n"
+            f"[{'Wikipedia' if wiki_only else 'Web'} search for \"{query}\"]\n{self.search(query, wiki_only)}\n\n"
             "[Now answer the conversation above with this. If a source helps, put its link in your reply.]"
         )})
         answer = self.complete(conversation, ANSWER_SCHEMA)
@@ -538,9 +543,10 @@ class Chattus:
         except (ValueError, AttributeError):  # cut off by max_tokens, say: use what's there as text
             return {"reply": content}
 
-    def search(self, query):
+    def search(self, query, wiki_only=False):
         """Search results as text for the model (or a note saying why there are none). Exa first;
-        Wikipedia when Exa says no. At most MAX_SEARCHES_PER_DAY a day. Blocking."""
+        Wikipedia when Exa says no, or straight away with wiki_only ("wiki: ..."). At most
+        MAX_SEARCHES_PER_DAY a day. Blocking."""
         today = date.today()
         if searches_today["day"] != today:
             searches_today.update(day=today, count=0)
@@ -549,12 +555,13 @@ class Chattus:
             return "(No results: searching is used up for today. Say you can't look it up until tomorrow.)"
         searches_today["count"] += 1
 
-        try:
-            results = exa_search(query, self.exa_key)
-            log(f"Searched Exa for {query!r}.")
-            return results
-        except Exception as error:  # its free limit (SearchRefused), or it's down: try Wikipedia
-            log(f"Exa didn't search {query!r} ({error!r:.100}); trying Wikipedia.")
+        if not wiki_only:
+            try:
+                results = exa_search(query, self.exa_key)
+                log(f"Searched Exa for {query!r}.")
+                return results
+            except Exception as error:  # its free limit (SearchRefused), or it's down: try Wikipedia
+                log(f"Exa didn't search {query!r} ({error!r:.100}); trying Wikipedia.")
         try:
             results = wikipedia_search(query)
             log(f"Searched Wikipedia for {query!r}.")
