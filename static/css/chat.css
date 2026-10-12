@@ -2767,6 +2767,9 @@ button.download-button {
 
 #message-input {
   flex: 1;
+  /* The height includes the padding, like scrollHeight, which autoGrow (ui.js) sets it to.
+     Without this, the padding came on top once more: 20px taller after the first keystroke. */
+  box-sizing: border-box;
   max-height: 50vh;  /* grows up to half the screen, then scrolls inside itself */
   padding: 10px 12px;
   border: none;
