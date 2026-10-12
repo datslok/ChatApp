@@ -294,6 +294,7 @@ body {
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
   cursor: grab;
   touch-action: none;  /* a finger drags it, instead of scrolling the page */
+  user-select: none;   /* pressing on a name and moving drags it, instead of selecting the name */
 }
 :fullscreen .tile-strip.dragging {
   cursor: grabbing;

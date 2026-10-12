@@ -741,6 +741,9 @@ function makeStripMovable(strip) {
     if (dragged) snapStrip(strip);
     start = null;
   };
+  // Pressing on a picture and moving starts the browser's own drag-and-drop (dragging the image
+  // out of the page), which takes the pointer away from us: not here.
+  strip.addEventListener("dragstart", (event) => event.preventDefault());
   strip.addEventListener("pointerup", letGo);
   strip.addEventListener("pointercancel", letGo);  // (the browser took the pointer, e.g. a gesture)
   // Letting go also counts as a click: after a drag, it mustn't reach a tile and focus it.
