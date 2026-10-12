@@ -11,7 +11,7 @@
         "@name mentions someone, @everyone mentions everybody: they get a notification and a red count",
         "Type :name for emoji suggestions (↑↓ to choose, Enter or Tab to pick), or use the 😀 button. Messages with only emoji show them big",
         "Pictures and files up to 10 MB: the + button, drag and drop, or paste. Up to 10 at once, click a picture to see it big",
-        "Links are clickable",
+        "Links are clickable, and the first link in a message gets a preview card: the site, title, description and picture",
         "Scroll up to load older messages, all the way to the beginning"
       ]
     },
@@ -68,7 +68,8 @@
         "You at the bottom left, like Discord: your picture, status, mute and deafen",
         "What's new: this page, with a dot on ⚙️ when there's something new",
         "Smoother screen sharing in games: encoded on the graphics card (H.264 hardware acceleration, like Discord's), and at 60 fps it keeps the frame rate instead of dropping frames",
-        "The connection popup shows how screen shares are doing"
+        "The connection popup shows how screen shares are doing",
+        "Link previews: paste a link and a card with its title, description and picture appears under the message"
       ]
     },
     {

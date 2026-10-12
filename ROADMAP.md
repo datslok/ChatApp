@@ -52,7 +52,7 @@
     - [x] Scripts to run the server on its own PC (scripts\server\: install, export, import, update; scheduled tasks; README)
     - [x] Set up on the laptop and tested (a restart brings everything back by itself)
 - [x] **14.** Backups of chat.db and uploads/: nightly onto the server PC's second disk (30 days), and a copy fetched to the development PC
-- [ ] **15.** Everyday chat gaps, in this order:
+- [x] **15.** Everyday chat gaps, in this order:
     - [x] Clickable links in messages
     - [x] Clicking a notification goes to the message (browser and desktop app)
     - [x] F5 keeps you in the channel you were in
@@ -64,7 +64,7 @@
     - [x] What's new in Settings (a hand-written changelog), with a red dot on ⚙️ when there's something new
     - [x] Loading older messages when scrolling up (past the newest 50)
     - [x] Text formatting: **bold**, *italic*, `code`, code blocks, > quotes, ||spoilers||, ~~strikethrough~~
-    - [ ] Link previews (title and picture for pasted links, fetched safely by the server)
+    - [x] Link previews (title and picture for pasted links, fetched safely by the server)
 - [ ] **16.** Organising the chat
     - [ ] Admins create, rename, delete and reorder channels from the app, with headings to group them
     - [ ] Group DMs (private chats with 3-10 people)

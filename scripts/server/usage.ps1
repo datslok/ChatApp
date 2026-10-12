@@ -42,6 +42,7 @@ $messageFiles = Measure-Folder "uploads" -TopOnly
 $avatars = Measure-Folder "uploads\avatars"
 $banners = Measure-Folder "uploads\banners"
 $emoji = Measure-Folder "uploads\emoji"
+$previews = Measure-Folder "uploads\previews"
 $uploads = Measure-Folder "uploads"
 $releases = Measure-Folder "releases"
 $logs = Measure-Folder "logs"
@@ -56,6 +57,7 @@ Write-Row "  files in messages" $messageFiles -Files
 Write-Row "  profile pictures" $avatars -Files
 Write-Row "  banners" $banners -Files
 Write-Row "  custom emoji" $emoji -Files
+Write-Row "  link preview pictures" $previews -Files
 Write-Row "Desktop app releases" $releases -Files
 Write-Row "Logs" $logs
 if ($leftovers.Count -gt 0) {

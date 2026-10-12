@@ -710,6 +710,43 @@ function makeLink(url) {
   return link;
 }
 
+// A link's preview card, under its message: the site, the title (a link), a description and
+// a picture. The server fetched all of it (server.py, "Link previews"); the picture comes from
+// our own server too, so the linked site never sees who's looking. Text goes in as text.
+function makePreviewCard(preview) {
+  const card = document.createElement("div");
+  card.className = "link-preview";
+  if (preview.site) {
+    const site = document.createElement("div");
+    site.className = "preview-site";
+    site.textContent = preview.site;
+    card.appendChild(site);
+  }
+  if (preview.title) {
+    const title = makeLink(preview.url);  // (the server only makes previews for http and https)
+    title.classList.add("preview-title");
+    title.textContent = preview.title;
+    card.appendChild(title);
+  }
+  if (preview.description) {
+    const description = document.createElement("div");
+    description.className = "preview-description";
+    description.textContent = preview.description;
+    card.appendChild(description);
+  }
+  if (preview.image) {
+    const link = makeLink(preview.url);  // the picture opens the page too
+    link.textContent = "";
+    const picture = document.createElement("img");
+    picture.className = "preview-image";
+    picture.src = preview.image;
+    picture.alt = "";  // (decoration: the title already says what it is)
+    link.appendChild(picture);
+    card.appendChild(link);
+  }
+  return card;
+}
+
 // ----- Text formatting (a small part of Markdown, like Discord's)
 //
 // Only the page knows about it: a message is stored exactly as typed ("**hi**"), and drawn
@@ -1263,6 +1300,9 @@ function showMessage(message, follow = true) {
   if (message.file) {
     body.appendChild(makeAttachment(message.file, message));
   }
+  if (message.preview) {
+    body.appendChild(makePreviewCard(message.preview));
+  }
   // The reaction chips (an empty row is hidden by the CSS).
   const reactions = document.createElement("div");
   reactions.className = "reactions";
@@ -1275,7 +1315,7 @@ function showMessage(message, follow = true) {
   // to the bottom, or back to the message we jumped to (a reply or a notification).
   // (Only the attached picture: profile pictures always have the same fixed size.)
   if (wasAtBottom) jumpTarget = null;  // back at the bottom: follow new messages again
-  const img = div.querySelector(".attachment-image");
+  const img = div.querySelector(".attachment-image, .preview-image");
   if (img && wasAtBottom) {
     img.addEventListener("load", () => {
       if (jumpTarget) jumpTarget.scrollIntoView({ block: "center" });

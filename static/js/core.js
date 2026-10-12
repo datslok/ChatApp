@@ -351,6 +351,13 @@ function handleServerMessage(event) {
       updateTitle();
       notify(data.channel, data.id, data.user_id, data.name, data.text || (data.file ? "📎 Attachment" : ""));
     }
+  } else if (data.type === "preview") {
+    // A link's preview arrived (a moment after its message): add it, and redraw.
+    const message = shownMessages.find((m) => m.id === data.message_id);
+    if (message) {
+      message.preview = data.preview;
+      redrawMessages();
+    }
   } else if (data.type === "edited") {
     // A message was edited: update it in our list (and quotes of it in replies), then redraw.
     const edited = shownMessages.find((message) => message.id === data.message_id);

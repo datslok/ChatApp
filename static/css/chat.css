@@ -1953,6 +1953,44 @@ body {
   border-radius: 8px;
 }
 
+/* A link's preview (messages.js, makePreviewCard): a card with a bar on the left, like Discord's. */
+.link-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: min(432px, 100%);
+  box-sizing: border-box;
+  margin-top: 6px;
+  padding: 10px 14px 12px;
+  border-left: 4px solid #1e1f22;
+  border-radius: 4px;
+  background: #2b2d31;
+}
+
+.preview-site {
+  font-size: 0.75rem;
+  color: #b5bac1;
+}
+
+.link-preview .preview-title {
+  font-weight: 600;
+  overflow-wrap: anywhere;  /* a long title without spaces still wraps */
+}
+
+.preview-description {
+  font-size: 0.85rem;
+  color: #dbdee1;
+  overflow-wrap: anywhere;
+}
+
+.preview-image {
+  display: block;
+  max-width: 100%;
+  max-height: 300px;
+  margin-top: 6px;
+  border-radius: 4px;
+}
+
 /* The image popup ("lightbox"). A <dialog> that covers the whole window. */
 #image-viewer {
   width: 100vw;

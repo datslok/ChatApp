@@ -64,6 +64,13 @@ the point is for me to understand how it works, not just to have it done.
   `POST /feedback/{id}/done`, both admin-only on the server), or with `tools/feedback.py`
   (`--all`, `--done ID`, `--undo ID`, `--db dev.db`).
 - `uploads/`: uploaded files, saved under random names (git-ignored, like `chat.db`).
+- Link previews (server.py, "Link previews"): after a message with a link goes out, a background task fetches
+  the first link's page, reads its Open Graph tags and saves a card in `link_previews` (one per message) with a
+  shrunk WebP copy of its picture in `uploads/previews/` (served at `/previews/<name>` to whoever can see the
+  message); then a "preview" WebSocket message adds it. Against SSRF: http/https on ports 80/443 only, every
+  address of the host must be public (`ipaddress.is_global`), we connect to the checked address ourselves (no
+  DNS rebinding), redirects checked by hand (3 at most), 5 s timeouts, 1 MB HTML, 5 MB pictures, 10 previews per
+  person per minute. Not for links in `code`, not on edits.
 - `ROADMAP.md`: the milestones, ticked off as they're done.
 - `setup.ps1`: creates the `chatapp` conda environment and installs `requirements.txt`.
 - `start.ps1`: activates the environment and starts the server with auto-reload (development).

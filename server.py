@@ -2,18 +2,24 @@ import asyncio
 import base64
 import hashlib
 import hmac
+import http.client
+import ipaddress
 import json
 import os
 import re
 import secrets
 import smtplib
+import socket
 import sqlite3
 import ssl
 import time
 import warnings
 from email.message import EmailMessage
 from email.utils import formatdate, make_msgid
+from html.parser import HTMLParser
+from io import BytesIO
 from pathlib import Path
+from urllib.parse import urljoin, urlsplit
 
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
@@ -250,6 +256,16 @@ db.execute("""
         user_agent TEXT,  -- which browser (or the app) it was sent from, handy for bugs
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         done       INTEGER NOT NULL DEFAULT 0  -- 1 = dealt with (tools/feedback.py --done)
+    )
+""")
+db.execute("""
+    CREATE TABLE IF NOT EXISTS link_previews (
+        message_id  INTEGER PRIMARY KEY REFERENCES messages(id),  -- one preview per message at most
+        url         TEXT NOT NULL,  -- the link it's for (after redirects)
+        site        TEXT,           -- "YouTube", or the address's host name
+        title       TEXT,
+        description TEXT,
+        image       TEXT            -- its picture's file name in uploads/previews; NULL = none
     )
 """)
 
@@ -558,11 +574,14 @@ def recent_messages(channel, before=None):
     #
     # For replies, the messages table is joined with *itself*: "original" is a second copy of it
     # (an alias), holding the message being replied to, and "original_sender" its sender.
+    # And its link preview, if it got one (link_previews).
     rows = db.execute(
         """
         SELECT messages.id, messages.sent_at, messages.edited_at, messages.reply_to, messages.kind,
                messages.user_id, COALESCE(users.username, messages.legacy_name), messages.text,
                attachments.id, attachments.filename, attachments.size, attachments.content_type,
+               link_previews.url, link_previews.site, link_previews.title, link_previews.description,
+               link_previews.image,
                original.id, original.user_id, COALESCE(original_sender.username, original.legacy_name),
                original.text, original.attachment_id
         FROM messages
@@ -570,6 +589,7 @@ def recent_messages(channel, before=None):
         LEFT JOIN attachments ON attachments.id = messages.attachment_id
         LEFT JOIN messages AS original ON original.id = messages.reply_to
         LEFT JOIN users AS original_sender ON original_sender.id = original.user_id
+        LEFT JOIN link_previews ON link_previews.message_id = messages.id
         WHERE messages.channel = ? AND messages.id < ?
         ORDER BY messages.id DESC LIMIT ?
         """,
@@ -588,12 +608,13 @@ def recent_messages(channel, before=None):
             "text": text,
             "file": file_info(file_id, filename, size, content_type) if file_id else None,
             # A reply whose original has been deleted: reply_to is still set, but the JOIN found nothing.
-            "reply": reply_preview(*original) or ({"id": reply_to, "deleted": True} if reply_to else None),
+            "reply": reply_preview(*rest[5:]) or ({"id": reply_to, "deleted": True} if reply_to else None),
             "reactions": reactions[message_id],
             "kind": kind,  # None, or "call" for a call note
+            "preview": preview_info(*rest[:5]) if rest[0] else None,  # rest: the preview, then the original
         }
         for (message_id, sent_at, edited_at, reply_to, kind, user_id, name, text,
-             file_id, filename, size, content_type, *original) in rows
+             file_id, filename, size, content_type, *rest) in rows
     ]
 
 
@@ -2095,6 +2116,279 @@ async def voice_token(room: str, request: Request):
     return {"url": LIVEKIT_URL, "token": make_voice_token(user_id, username, room)}
 
 
+# ---------- Link previews ----------
+#
+# For the first link in a new message, the server fetches the page, reads its Open Graph tags
+# (<meta property="og:title" content="...">: what sites put there for exactly this), and saves a
+# card: site, title, description and a shrunk copy of the picture. Friends' browsers only ever
+# talk to us, never to the linked site.
+#
+# The danger is SSRF ("server-side request forgery"): this server sits inside the home network,
+# so a link to http://192.168.10.1 (the router) or http://localhost:7880 (LiveKit) would make it
+# visit those, and show what's there. So: only http/https on the normal ports, only addresses
+# on the public internet (looked up by us, then connected to directly, so a host name can't
+# answer "public" when we check and "192.168..." when we connect), redirects checked the same
+# way, and limits on time and size everywhere.
+
+PREVIEW_DIR = UPLOAD_DIR / "previews"
+PREVIEW_DIR.mkdir(exist_ok=True)
+PREVIEW_TIMEOUT = 5               # seconds for each network step (connecting, each read)
+PREVIEW_TOTAL_TIMEOUT = 15        # seconds for the whole preview, picture included
+MAX_PREVIEW_HTML = 1024 * 1024    # 1 MB: the tags are at the top, so more is never needed
+MAX_PREVIEW_IMAGE = 5 * 1024 * 1024  # 5 MB
+MAX_PREVIEW_REDIRECTS = 3
+PREVIEW_IMAGE_SIZE = (480, 480)   # at most this big, keeping its shape
+PREVIEW_LIMIT = 10                # previews per person...
+PREVIEW_WINDOW = 60               # ...within this many seconds
+PREVIEW_USER_AGENT = "Mozilla/5.0 (compatible; ChatAppBot/1.0; +https://chat.datslok.no)"
+preview_times = {}                # user id -> times of their recent previews (for the limit)
+background_tasks = set()          # running previews (asyncio only keeps a weak reference to tasks)
+
+
+def first_link(text):
+    """The first web address in a message, as the page shows it (static/js/messages.js), or None.
+    Not one inside `code` or a code block: those are shown as typed, not as links."""
+    text = re.sub(r"```[\s\S]*?```|`[^`\n]*`", " ", text)
+    match = re.search(r"https?://[^\s<]+", text)
+    if not match:
+        return None
+    url = match.group()
+    # Punctuation at the end belongs to the sentence ("see https://x.com."); a ")" stays if the
+    # address has a "(" of its own (like the page's trimUrl).
+    while url and (url[-1] in ".,!?:;'\"*~|" or (url[-1] == ")" and url.count(")") > url.count("("))):
+        url = url[:-1]
+    return url
+
+
+def public_address(host, port):
+    """The IP address to connect to for `host`, or None if it isn't safely on the public internet.
+    Every address the name has must be public: a name that also points inside is refused."""
+    try:
+        infos = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+    except (socket.gaierror, UnicodeError):
+        return None
+    addresses = [info[4][0] for info in infos]
+    for address in addresses:
+        ip = ipaddress.ip_address(address.split("%")[0])  # (an IPv6 "%" zone, as in fe80::1%3)
+        # is_global: not private (192.168.x, 10.x), loopback (127.x), link-local, reserved, ...
+        if not ip.is_global:
+            return None
+    return addresses[0] if addresses else None
+
+
+def fetch_url(url, max_bytes, accept):
+    """GET a web address safely (see above). Returns (final address, content type, body), or None.
+    Blocking: run it in a thread (asyncio.to_thread), not in the server's event loop."""
+    for _ in range(MAX_PREVIEW_REDIRECTS + 1):
+        parts = urlsplit(url)
+        if parts.scheme not in ("http", "https") or not parts.hostname:
+            return None
+        default_port = 443 if parts.scheme == "https" else 80
+        if (parts.port or default_port) != default_port:
+            return None  # only the normal ports: nobody's admin page on :8080
+        address = public_address(parts.hostname, default_port)
+        if address is None:
+            return None
+        # Connect to the address we just checked, ourselves...
+        sock = socket.create_connection((address, default_port), timeout=PREVIEW_TIMEOUT)
+        try:
+            if parts.scheme == "https":
+                # ...with HTTPS checked against the host *name*, as a browser would.
+                sock = ssl.create_default_context().wrap_socket(sock, server_hostname=parts.hostname)
+            # (HTTPSConnection for https, so the Host header is "example.com", not "example.com:443".)
+            kind = http.client.HTTPSConnection if parts.scheme == "https" else http.client.HTTPConnection
+            connection = kind(parts.hostname, default_port, timeout=PREVIEW_TIMEOUT)
+            connection.sock = sock  # http.client uses this one instead of connecting by itself
+            path = (parts.path or "/") + (f"?{parts.query}" if parts.query else "")
+            connection.request("GET", path, headers={
+                "User-Agent": PREVIEW_USER_AGENT, "Accept": accept, "Accept-Language": "en",
+            })
+            response = connection.getresponse()
+            if response.status in (301, 302, 303, 307, 308):
+                location = response.getheader("Location")
+                if not location:
+                    return None
+                url = urljoin(url, location)  # (it may be relative: "/new-page")
+                continue  # the next round checks the new address like the first
+            if response.status != 200:
+                return None
+            body = response.read(max_bytes + 1)
+            content_type = (response.getheader("Content-Type") or "").lower()
+            return url, content_type, body
+        except (OSError, http.client.HTTPException, ValueError):
+            return None  # (ssl and socket errors are OSErrors)
+        finally:
+            sock.close()
+    return None  # too many redirects
+
+
+class MetaReader(HTMLParser):
+    """Collects a page's <meta> tags and its <title>. Python's HTMLParser calls handle_starttag
+    for each opening tag, handle_data for the text between them; attribute values arrive with
+    &amp; and the like already turned back into characters."""
+
+    def __init__(self):
+        super().__init__()
+        self.meta = {}       # "og:title" -> "Cat plays piano" (the first one of each)
+        self.title = ""
+        self.in_title = False
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        if tag == "meta":
+            key = (attrs.get("property") or attrs.get("name") or "").lower()
+            if key and attrs.get("content") and key not in self.meta:
+                self.meta[key] = attrs["content"]
+        elif tag == "title":
+            self.in_title = True
+
+    def handle_endtag(self, tag):
+        if tag == "title":
+            self.in_title = False
+
+    def handle_data(self, data):
+        if self.in_title:
+            self.title += data
+
+
+def clean(text, limit):
+    """Squash whitespace and cut to `limit` characters (with "…"), or None if empty."""
+    text = " ".join((text or "").split())
+    if len(text) > limit:
+        text = text[: limit - 1].rstrip() + "…"
+    return text or None
+
+
+def fetch_preview(url):
+    """Everything for one preview (blocking): {url, site, title, description, image} or None."""
+    page = fetch_url(url, MAX_PREVIEW_HTML, "text/html,application/xhtml+xml")
+    if page is None:
+        return None
+    final_url, content_type, body = page
+    if "html" not in content_type:
+        return None  # a PDF, a picture, a download, ...
+    # The page's own character set if it says so ("text/html; charset=iso-8859-1"), else UTF-8.
+    charset = re.search(r"charset=([\w-]+)", content_type)
+    try:
+        html = body[:MAX_PREVIEW_HTML].decode(charset.group(1) if charset else "utf-8", errors="replace")
+    except LookupError:
+        html = body[:MAX_PREVIEW_HTML].decode("utf-8", errors="replace")  # an unknown charset name
+    reader = MetaReader()
+    try:
+        reader.feed(html)
+    except Exception:
+        pass  # broken HTML: keep whatever was read before it
+    meta = reader.meta
+
+    title = clean(meta.get("og:title") or meta.get("twitter:title") or reader.title, 200)
+    description = clean(meta.get("og:description") or meta.get("twitter:description")
+                        or meta.get("description"), 300)
+    site = clean(meta.get("og:site_name"), 100) or urlsplit(final_url).hostname
+    image_url = meta.get("og:image:secure_url") or meta.get("og:image") or meta.get("twitter:image")
+    image = save_preview_image(urljoin(final_url, image_url)) if image_url else None
+    if not title and not image:
+        return None  # nothing worth a card
+    return {"url": final_url, "site": site, "title": title, "description": description, "image": image}
+
+
+def save_preview_image(url):
+    """Download a preview picture, shrink it and save it as WebP in uploads/previews.
+    Returns the file name, or None. Pillow redraws it from scratch, so only the pixels survive
+    (no tricks hidden in the file), and its pixel limit stops "decompression bombs"."""
+    fetched = fetch_url(url, MAX_PREVIEW_IMAGE, "image/*")
+    if fetched is None or len(fetched[2]) > MAX_PREVIEW_IMAGE:
+        return None
+    try:
+        with Image.open(BytesIO(fetched[2]), formats=["PNG", "JPEG", "GIF", "WEBP"]) as picture:
+            picture = picture.convert("RGBA" if picture.mode in ("RGBA", "LA", "P") else "RGB")
+            picture.thumbnail(PREVIEW_IMAGE_SIZE)  # shrinks (never enlarges), keeping its shape
+            name = secrets.token_urlsafe(16) + ".webp"
+            picture.save(PREVIEW_DIR / name, "WEBP", quality=85)
+            return name
+    except (OSError, ValueError, Image.DecompressionBombError, Image.DecompressionBombWarning):
+        return None
+
+
+def preview_info(url, site, title, description, image):
+    """A preview as the page gets it (live and in the history)."""
+    return {
+        "url": url, "site": site, "title": title, "description": description,
+        "image": f"/previews/{image}" if image else None,
+    }
+
+
+def preview_allowed(user_id):
+    """At most PREVIEW_LIMIT previews per person per PREVIEW_WINDOW seconds."""
+    now = time.time()
+    recent = [t for t in preview_times.get(user_id, []) if t > now - PREVIEW_WINDOW]
+    if len(recent) >= PREVIEW_LIMIT:
+        preview_times[user_id] = recent
+        return False
+    preview_times[user_id] = recent + [now]
+    return True
+
+
+async def make_preview(message_id, channel, url):
+    """In the background, after the message went out: fetch, save, and tell the channel."""
+    try:
+        preview = await asyncio.wait_for(asyncio.to_thread(fetch_preview, url), PREVIEW_TOTAL_TIMEOUT)
+    except Exception:
+        return  # (timeouts too: then no preview)
+    if preview is None:
+        return
+    # Deleted while we were fetching? Then forget it (and its picture).
+    if db.execute("SELECT 1 FROM messages WHERE id = ?", (message_id,)).fetchone() is None:
+        if preview["image"]:
+            (PREVIEW_DIR / preview["image"]).unlink(missing_ok=True)
+        return
+    with db:
+        db.execute(
+            "INSERT OR IGNORE INTO link_previews (message_id, url, site, title, description, image)"
+            " VALUES (?, ?, ?, ?, ?, ?)",
+            (message_id, preview["url"], preview["site"], preview["title"], preview["description"], preview["image"]),
+        )
+    await send_to_channel(channel, {
+        "type": "preview", "channel": channel, "message_id": message_id,
+        "preview": preview_info(**preview),
+    })
+
+
+def start_preview(message_id, channel, user_id, text):
+    """Start a preview for a new message's first link, if it has one (and the person isn't over the limit)."""
+    url = first_link(text)
+    if url is None or not preview_allowed(user_id):
+        return
+    task = asyncio.create_task(make_preview(message_id, channel, url))
+    background_tasks.add(task)
+    task.add_done_callback(background_tasks.discard)  # forget it once it's finished
+
+
+def delete_preview(message_id):
+    """When a message is deleted: its preview row (inside the caller's transaction). Returns the
+    picture's file name, for the caller to delete once the change is saved."""
+    row = db.execute("SELECT image FROM link_previews WHERE message_id = ?", (message_id,)).fetchone()
+    db.execute("DELETE FROM link_previews WHERE message_id = ?", (message_id,))
+    return row[0] if row else None
+
+
+@app.get("/previews/{name}")
+async def get_preview_image(request: Request, name: str):
+    """A preview's picture, for people who may see the message it belongs to."""
+    user_id = current_user(request)
+    row = db.execute(
+        "SELECT messages.channel FROM link_previews JOIN messages ON messages.id = link_previews.message_id"
+        " WHERE link_previews.image = ?",
+        (name,),
+    ).fetchone()
+    if user_id is None or row is None or not can_join(row[0], user_id):
+        raise HTTPException(404, "Not found.")
+    return FileResponse(
+        PREVIEW_DIR / name,  # safe: the name was found in our own table above
+        media_type="image/webp",
+        headers={"X-Content-Type-Options": "nosniff", "Cache-Control": "private, max-age=31536000, immutable"},
+    )
+
+
 # ---------- Unread ----------
 
 def mark_read(user_id, channel):
@@ -2296,9 +2590,11 @@ async def chat(websocket: WebSocket):
                     "reactions": [],  # a brand new message has none yet
                     "edited_at": None,
                     "kind": None,
+                    "preview": None,  # a link's preview comes a moment later, as its own "preview"
                 }
                 await send_to_channel(channel, message)  # everyone in the channel, including us
                 await announce_new_message(channel, mentioned_people, message)  # read/unread, mentions, notifications
+                start_preview(message_id, channel, user_id, text)  # in the background, if it has a link
 
             elif kind == "react":
                 # {"type": "react", "message_id": 57, "emoji": "👍"}: add our reaction, or remove it
@@ -2374,11 +2670,14 @@ async def chat(websocket: WebSocket):
                     with db:
                         db.execute("DELETE FROM reactions WHERE message_id = ?", (message_id,))
                         db.execute("DELETE FROM mentions WHERE message_id = ?", (message_id,))
+                        preview_image = delete_preview(message_id)
                         db.execute("DELETE FROM messages WHERE id = ?", (message_id,))
                         if attachment_id:
                             db.execute("DELETE FROM attachments WHERE id = ?", (attachment_id,))
                     if file:  # the file on disk, only once the database change has been saved
                         (UPLOAD_DIR / attachment_id).unlink(missing_ok=True)
+                    if preview_image:
+                        (PREVIEW_DIR / preview_image).unlink(missing_ok=True)
                     # (Replies to it keep their reply_to; their quote now says "deleted".)
                     await send_to_channel(message_channel, {
                         "type": "deleted", "channel": message_channel, "message_id": message_id,
