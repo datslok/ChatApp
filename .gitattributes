@@ -1,3 +1,3 @@
-# .bat files need Windows line endings (CRLF), also in copies downloaded from GitHub: cmd can
-# misread them otherwise.
-*.bat text eol=crlf
+# .bat files keep their Windows line endings (CRLF) exactly as they are, also in the copy GitHub
+# serves for downloading: cmd can misread them otherwise.
+*.bat -text
