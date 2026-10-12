@@ -305,6 +305,16 @@ body {
 :fullscreen .tile-strip.corner-top-right { top: 8px; right: 8px; }
 :fullscreen .tile-strip.corner-bottom-left { bottom: 8px; left: 8px; }
 :fullscreen .tile-strip.corner-bottom-right { bottom: 8px; right: 8px; }
+/* 👥 hides it (rooms.js, showMiniWindow). The button itself only shows in fullscreen. */
+body.mini-hidden :fullscreen .tile-strip {
+  display: none;
+}
+.mini-button {
+  display: none;
+}
+:fullscreen .mini-button {
+  display: inline-block;
+}
 /* Gliding into a corner after a drag (snapStrip). */
 .tile-strip.snapping {
   transition: transform 0.2s ease-out;

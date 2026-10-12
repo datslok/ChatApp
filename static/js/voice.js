@@ -55,6 +55,7 @@ const voiceSettings = {
   noiseSuppression: "on",
   shareHeight: 1080, shareFps: 30,  // screen sharing quality: the last choice in the 🖥️ menu
   miniCorner: "bottom-right",  // where the others float in fullscreen (rooms.js, the mini window)
+  miniHidden: false,           // ...or hidden with 👥
 };
 try {
   Object.assign(voiceSettings, JSON.parse(localStorage.getItem("voiceSettings")) || {});

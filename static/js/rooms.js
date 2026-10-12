@@ -750,6 +750,27 @@ function makeStripMovable(strip) {
   }, true);
 }
 
+// 👥 (shown only in fullscreen, by the CSS): hide or show the mini window. A class on <body>
+// does it ("mini-hidden", see chat.css), so the strips made by later redraws follow it too.
+const miniButtons = document.querySelectorAll(".mini-button");
+
+function showMiniWindow() {
+  document.body.classList.toggle("mini-hidden", voiceSettings.miniHidden);
+  for (const button of miniButtons) {
+    button.classList.toggle("on", !voiceSettings.miniHidden);  // highlighted while it's shown
+    button.title = voiceSettings.miniHidden ? "Show participants" : "Hide participants";
+    button.setAttribute("aria-label", button.title);
+  }
+}
+for (const button of miniButtons) {
+  button.addEventListener("click", () => {
+    voiceSettings.miniHidden = !voiceSettings.miniHidden;
+    saveVoiceSettings();
+    showMiniWindow();
+  });
+}
+showMiniWindow();
+
 // Let go: which half of the area is the strip's middle in, across and down? That's its corner.
 // Then glide there ("FLIP"): move it to the new corner, shift it back to where it was let go,
 // and let a CSS transition take the shift away.
