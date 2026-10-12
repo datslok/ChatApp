@@ -588,7 +588,8 @@ after adding a package with native code. Add packages with `npx expo install <na
 
 Optional: everything works in the browser. The Windows app (`desktop\`, made with
 [Tauri](https://tauri.app/)) is a small window around your site, with real Windows notifications,
-links opening in the default browser, and automatic updates. Changes to the chat reach it through the
+links opening in the default browser, automatic updates, and (Settings → App behaviour, off by default)
+starting when Windows starts. Changes to the chat reach it through the
 site; a new app version is only needed when the app itself changes (its Rust code, plugins, the icon).
 People download it from `https://chat.example.com/download`.
 

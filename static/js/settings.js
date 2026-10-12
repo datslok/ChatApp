@@ -20,6 +20,7 @@ settingsButton.addEventListener("click", async () => {
   loadInbox();  // (admins only: the bug reports and ideas, fetched fresh)
   showNotificationSettings();  // (the browser's permission may have changed since)
   showPushSetting();  // (and whether this device gets push notifications)
+  showAppSettings();  // (and, in the app, whether it starts with Windows)
   settingsDialog.showModal();
   showSettingsPage(settingsPage);  // the tab from last time, in sight (on a phone) and from the top
 
@@ -64,6 +65,38 @@ for (const tab of settingsTabs) {
   tab.addEventListener("click", () => showSettingsPage(tab.dataset.tab));
 }
 showSettingsPage(settingsPage);  // at the start: hide every page but the first
+
+// ---------- Settings: App behaviour (only in the Windows app) ----------
+//
+// Whether Windows starts the app when you log in. The app does that itself (main.rs: get_autostart and
+// set_autostart, with Tauri's autostart plugin); the page only asks it. A browser has no
+// __TAURI_INTERNALS__ (inDesktopApp, notifications.js), and an app from before 0.1.16 doesn't know
+// these commands (invoke fails): in both, the tab stays hidden.
+
+const appTab = document.getElementById("app-tab");
+const autostartBox = document.getElementById("app-autostart");
+const autostartHelp = document.getElementById("app-autostart-help");
+
+// Asked again every time Settings opens: it may have been switched off in Task Manager meanwhile.
+async function showAppSettings() {
+  if (!inDesktopApp) return;
+  try {
+    autostartBox.checked = await window.__TAURI_INTERNALS__.invoke("get_autostart");
+    appTab.hidden = false;
+  } catch {
+    appTab.hidden = true;  // an older app version
+  }
+}
+
+autostartBox.addEventListener("change", async () => {
+  try {
+    await window.__TAURI_INTERNALS__.invoke("set_autostart", { on: autostartBox.checked });
+  } catch (error) {
+    autostartBox.checked = !autostartBox.checked;  // it didn't change: show how it really is
+    autostartHelp.textContent = `Couldn't change it (${error}).`;
+  }
+});
+showAppSettings();
 
 // ---------- Settings: Appearance ----------
 //

@@ -70,7 +70,7 @@
     - [ ] Group DMs (private chats with 3-10 people)
     - [ ] Pinned messages per channel
     - [x] LaTeX support (maths in messages, drawn by KaTeX)
-    - [ ] open on startup
+    - [x] Open on startup: the Windows app can start with Windows (Settings → App behaviour; app 0.1.16)
     - [ ] Search messages (by text, person or channel; SQLite's FTS5)
 - [ ] **17.** Social and presence
     - [ ] Statuses: Online, Idle (automatic when away), Do Not Disturb (no notifications), Invisible

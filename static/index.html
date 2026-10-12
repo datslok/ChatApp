@@ -254,6 +254,8 @@
       <button type="button" class="settings-tab" role="tab" data-tab="notifications">Notifications</button>
       <button type="button" class="settings-tab" role="tab" data-tab="voice">Voice &amp; audio</button>
       <button type="button" class="settings-tab" role="tab" data-tab="video">Video</button>
+      <!-- Only in the Windows app, from the version that can do it (settings.js shows it). -->
+      <button type="button" class="settings-tab" role="tab" data-tab="app" id="app-tab" hidden>App behaviour</button>
       <h3>Help</h3>
       <button type="button" class="settings-tab" role="tab" data-tab="changelog">
         What's new <span id="changelog-new-dot" class="new-dot" hidden></span>
@@ -521,6 +523,19 @@
           <video id="camera-preview" autoplay muted playsinline hidden></video>
           <button type="button" id="camera-test">Test camera</button>
           <p id="camera-test-status" class="status error"></p>
+        </div>
+      </section>
+
+      <section class="settings-page" data-page="app" role="tabpanel" aria-label="App behaviour">
+        <h2>App behaviour</h2>
+        <div class="settings-group">
+          <label class="checkbox">
+            <input type="checkbox" id="app-autostart">
+            Start ChatApp when Windows starts
+          </label>
+          <p id="app-autostart-help" class="settings-help">
+            It opens by itself when you log in to Windows. You can also turn this off in Task Manager → Startup apps.
+          </p>
         </div>
       </section>
 

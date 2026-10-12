@@ -4,7 +4,9 @@ fn main() {
     // allowed to every page; with it, only what a capability names.
     tauri_build::try_build(
         tauri_build::Attributes::new()
-            .app_manifest(tauri_build::AppManifest::new().commands(&["check_for_update", "set_zoom"])),
+            .app_manifest(tauri_build::AppManifest::new().commands(&[
+                "check_for_update", "set_zoom", "get_autostart", "set_autostart",
+            ])),
     )
     .expect("failed to run tauri-build");
 }

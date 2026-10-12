@@ -144,7 +144,9 @@ the point is for me to understand how it works, not just to have it done.
 - `.env.example`: template for `.env` (INVITE_CODE, SECURE_COOKIES). `.env` itself is never committed.
 - `desktop/`: the Windows app (Tauri). A window around https://chat.datslok.no, with real Windows
   notifications (notification plugin, allowed for the site in `src-tauri/capabilities/default.json`)
-  automatic updates at startup and when the page asks (updater plugin; `check_for_update` in main.rs, called by core.js after a reconnect and after leaving a call), the zoom of Settings → Appearance's scale (`set_zoom` in main.rs, called by appearance.js; since 0.1.15), and links opening in the default browser (opener plugin,
+  automatic updates at startup and when the page asks (updater plugin; `check_for_update` in main.rs, called by core.js after a reconnect and after leaving a call), the zoom of Settings → Appearance's scale (`set_zoom` in main.rs, called by appearance.js; since 0.1.15),
+  starting with Windows (Settings → App behaviour, a tab only the app shows, off by default: `get_autostart` /
+  `set_autostart` in main.rs with `tauri-plugin-autostart`, an entry in HKCU's ...\CurrentVersion\Run; since 0.1.16), and links opening in the default browser (opener plugin,
   used only by main.rs's new-window handler, not by the page). Downloads: the page fetches a file itself
   with a progress bar (messages.js, only in the app) and main.rs's download handler then runs
   `explorer.exe /select,` on it (the opener plugin's reveal_item_in_dir silently did nothing).

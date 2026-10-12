@@ -6,6 +6,7 @@ use std::process::Command;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::webview::{DownloadEvent, NewWindowResponse};
 use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri_plugin_autostart::ManagerExt as AutostartExt;  // app.autolaunch()
 use tauri_plugin_notification::NotificationExt;
 use tauri_plugin_opener::OpenerExt;
 use tauri_plugin_updater::UpdaterExt;
@@ -26,9 +27,13 @@ fn main() {
         // open_js_links_on_click(false) the plugin adds a script to the page that catches left
         // clicks on links and asks for that from the page instead, which is refused: nothing happened.
         .plugin(tauri_plugin_opener::Builder::new().open_js_links_on_click(false).build())
+        // Starting with Windows (Settings → App behaviour): an entry in the user's list of programs
+        // Windows starts at login (the registry's ...\CurrentVersion\Run, also in Task Manager →
+        // Startup apps). The page only reaches it through get_autostart and set_autostart below.
+        .plugin(tauri_plugin_autostart::Builder::new().build())
         // The commands the page may call (window.__TAURI_INTERNALS__.invoke("check_for_update")).
         // Made permissions in build.rs, allowed for the chat page in capabilities/default.json.
-        .invoke_handler(tauri::generate_handler![check_for_update, set_zoom])
+        .invoke_handler(tauri::generate_handler![check_for_update, set_zoom, get_autostart, set_autostart])
         .setup(|app| {
             // The chat window, from its settings in tauri.conf.json ("create": false there, so that
             // we make it here, with a handler added): it shows https://chat.datslok.no.
@@ -112,6 +117,21 @@ fn check_for_update(app: tauri::AppHandle) {
 #[tauri::command]
 fn set_zoom(window: tauri::WebviewWindow, scale: f64) -> Result<(), String> {
     window.set_zoom(scale.clamp(0.8, 1.5)).map_err(|error| error.to_string())
+}
+
+// Settings → App behaviour: does Windows start the app at login? (Asked from Windows itself, so
+// it's right even after it was switched off in Task Manager.)
+#[tauri::command]
+fn get_autostart(app: tauri::AppHandle) -> Result<bool, String> {
+    app.autolaunch().is_enabled().map_err(|error| error.to_string())
+}
+
+// ... and switching it on or off. Off by default: only the switch turns it on.
+#[tauri::command]
+fn set_autostart(app: tauri::AppHandle, on: bool) -> Result<(), String> {
+    let autostart = app.autolaunch();
+    let result = if on { autostart.enable() } else { autostart.disable() };
+    result.map_err(|error| error.to_string())
 }
 
 // Look for an update in the background (so the window stays usable), unless one is already running.

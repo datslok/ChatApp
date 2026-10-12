@@ -50,7 +50,8 @@
     {
       "topic": "💻 The Windows app",
       "items": [
-        "Real Windows notifications, and it updates itself. Get it in Settings or at chat.datslok.no/download"
+        "Real Windows notifications, and it updates itself. Get it in Settings or at chat.datslok.no/download",
+        "Settings → App behaviour: start ChatApp when Windows starts (off until you turn it on)"
       ]
     },
     {
@@ -85,6 +86,7 @@
     {
       "date": "2026-10-12",
       "items": [
+        "Windows app 0.1.16: Settings → App behaviour can start ChatApp when Windows starts (it updates by itself)",
         "Meet Chattus 🐱, an AI cat: talk to him in the new #chattus channel, @Chattus anywhere, or DM him (add him as a friend first)",
         "Chattus in DMs with friends: write @Chattus in a DM and he answers there, only when mentioned. A mention lets him read that DM's latest messages for an hour (on our own server)",
         "Chattus reacts: sometimes an emoji under your message instead of (or as well as) an answer, and he can use our own emoji",
