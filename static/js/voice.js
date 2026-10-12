@@ -578,7 +578,9 @@ function screenBlock(title, stats, sending) {
   } else {
     line("Packet loss", stats.loss === null ? "–" : stats.loss.toFixed(1) + "%");
     line("Dropped frames", stats.dropped === null ? "–" : String(stats.dropped));
-    line("Freezes", stats.freezes === null ? "–" : String(stats.freezes));
+    // The browser counts a "freeze" when a frame comes much later than usual. A screen share only
+    // sends frames when something changes, so a still screen counts too: hence "pauses".
+    line("Pauses", stats.freezes === null ? "–" : String(stats.freezes));
   }
   return block;
 }
