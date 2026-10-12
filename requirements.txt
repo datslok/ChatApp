@@ -2,3 +2,4 @@ fastapi
 uvicorn[standard]
 argon2-cffi
 pillow
+pywebpush

@@ -417,6 +417,12 @@
             Desktop notifications for DMs and mentions
           </label>
           <p id="notify-help" class="settings-help"></p>
+          <!-- Push (notifications.js): only where the browser can, and not in the Windows app. -->
+          <label class="checkbox" id="push-row" hidden>
+            <input type="checkbox" id="notify-push">
+            Notifications on this device when the chat is closed
+          </label>
+          <p id="push-help" class="settings-help"></p>
           <label class="checkbox">
             <input type="checkbox" id="notify-sound">
             Sound

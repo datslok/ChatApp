@@ -19,6 +19,7 @@ settingsButton.addEventListener("click", async () => {
   renderMyEmoji();
   loadInbox();  // (admins only: the bug reports and ideas, fetched fresh)
   showNotificationSettings();  // (the browser's permission may have changed since)
+  showPushSetting();  // (and whether this device gets push notifications)
   settingsDialog.showModal();
   showSettingsPage(settingsPage);  // the tab from last time, in sight (on a phone) and from the top
 

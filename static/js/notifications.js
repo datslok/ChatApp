@@ -146,6 +146,87 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 const inDesktopApp = "__TAURI_INTERNALS__" in window;
 if (inDesktopApp) document.getElementById("desktop-app").hidden = true;
 
+// ----- Push notifications (the phone app): notifications on this device while the chat is closed.
+// Turning them on asks the browser for a "subscription": this device's address at its push
+// service, and keys to encrypt pushes for it. The server keeps it (server.py, "Push notifications")
+// and sends pushes there; the service worker (sw.js) shows them. Not in the Windows app, which
+// has its own notifications.
+
+const pushRow = document.getElementById("push-row");
+const pushBox = document.getElementById("notify-push");
+const pushHelp = document.getElementById("push-help");
+const canPush = "serviceWorker" in navigator && "PushManager" in window && !inDesktopApp;
+let vapidPublicKey = null;  // the server's public key, from "welcome" (core.js); null: not set up
+
+// The browser wants the key as bytes; the server sends it as base64url text (- and _ instead of
+// + and /). atob turns ordinary base64 into a "binary string", one character per byte.
+function keyBytes(base64url) {
+  const base64 = base64url.replace(/-/g, "+").replace(/_/g, "/");
+  return Uint8Array.from(atob(base64), (character) => character.charCodeAt(0));
+}
+
+// This device's subscription, or null. (serviceWorker.ready: once sw.js is running.)
+async function currentSubscription() {
+  const registration = await navigator.serviceWorker.ready;
+  return registration.pushManager.getSubscription();
+}
+
+// The switch, as it is now (Settings calls this when it opens).
+async function showPushSetting() {
+  pushRow.hidden = !(canPush && vapidPublicKey);
+  if (pushRow.hidden) return;
+  pushBox.checked = Boolean(await currentSubscription());
+  if (Notification.permission === "denied") {
+    pushHelp.textContent = "Notifications are blocked for this site. " +
+      "Allow them in the site's settings, and on a phone also in its own settings for the browser or the app.";
+  }
+}
+
+async function turnOnPush() {
+  // Browsers only ask right after a click, which is why it happens here.
+  if (await Notification.requestPermission() !== "granted") throw new Error("Notifications aren't allowed.");
+  const registration = await navigator.serviceWorker.ready;
+  // userVisibleOnly: we promise every push shows a notification (browsers insist on it).
+  const subscription = await registration.pushManager.subscribe({
+    userVisibleOnly: true,
+    applicationServerKey: keyBytes(vapidPublicKey),
+  });
+  const { endpoint, keys } = subscription.toJSON();  // keys: {p256dh, auth}, already as base64url text
+  const response = await fetch("/push/subscribe", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ endpoint, p256dh: keys.p256dh, auth: keys.auth }),
+  });
+  if (!response.ok) {
+    await subscription.unsubscribe();  // the server didn't take it: don't keep half of it
+    throw new Error((await response.json()).detail || "The server didn't accept it.");
+  }
+}
+
+async function turnOffPush() {
+  const subscription = await currentSubscription();
+  if (!subscription) return;
+  await fetch("/push/unsubscribe", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ endpoint: subscription.endpoint }),
+  });
+  await subscription.unsubscribe();
+}
+
+pushBox.addEventListener("change", async () => {
+  pushBox.disabled = true;  // (until it's done: subscribing takes a moment)
+  pushHelp.textContent = "";
+  try {
+    if (pushBox.checked) await turnOnPush();
+    else await turnOffPush();
+  } catch (error) {
+    pushHelp.textContent = "Couldn't change it: " + error.message;
+  }
+  pushBox.disabled = false;
+  showPushSetting();
+});
+
 // The "get the app" banner above the chat: only in a browser on Windows (the app is Windows-only;
 // every browser's userAgent, the description it gives of itself, names the system it runs on),
 // and only until they close it. Closing it is remembered in this browser, like the settings above.

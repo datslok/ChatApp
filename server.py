@@ -73,6 +73,10 @@ MAIL_FROM = os.environ.get("MAIL_FROM", f"ChatApp <noreply@{urlsplit(PUBLIC_URL)
 LIVEKIT_URL = os.environ.get("LIVEKIT_URL", "")
 LIVEKIT_API_KEY = os.environ.get("LIVEKIT_API_KEY", "")
 LIVEKIT_API_SECRET = os.environ.get("LIVEKIT_API_SECRET", "")
+# Push notifications (the phone app): our key pair, made once by tools/make_vapid_keys.py. The push
+# services only deliver pushes signed with the private key. Without them: no push notifications.
+VAPID_PUBLIC_KEY = os.environ.get("VAPID_PUBLIC_KEY", "")
+VAPID_PRIVATE_KEY = os.environ.get("VAPID_PRIVATE_KEY", "")
 print(f"Using database {DATABASE_FILE} and upload folder {UPLOAD_DIR}/")
 if not INVITE_CODE:
     print("WARNING: no INVITE_CODE set, so anyone who can reach this server can create an account.")
@@ -261,6 +265,16 @@ db.execute("""
         user_agent TEXT,  -- which browser (or the app) it was sent from, handy for bugs
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         done       INTEGER NOT NULL DEFAULT 0  -- 1 = dealt with (tools/feedback.py --done)
+    )
+""")
+db.execute("""
+    CREATE TABLE IF NOT EXISTS push_subscriptions (
+        endpoint    TEXT PRIMARY KEY,  -- the push service's address for one browser on one device
+        user_id     INTEGER NOT NULL REFERENCES users(id),
+        p256dh      TEXT NOT NULL,     -- that browser's public key: each push is encrypted for it
+        auth        TEXT NOT NULL,     -- a secret shared with that browser, also for the encryption
+        muted_until REAL,              -- "Mute notifications" on that device, as a Unix time; NULL = not muted
+        created_at  TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     )
 """)
 db.execute("""
@@ -1424,6 +1438,65 @@ async def change_appearance(data: Appearance, request: Request):
         db.execute("UPDATE users SET appearance = ? WHERE id = ?", (json.dumps(appearance), user_id))
     # Every open page of theirs (this one too, which already shows it): the app, their phone.
     await send_to_user(user_id, {"type": "appearance", "appearance": appearance})
+    return {"ok": True}
+
+
+# ---------- Push notifications (the phone app) ----------
+#
+# A device that turns them on (Settings → Notifications) gives us a "subscription": an address at
+# its push service (the endpoint) and two keys to encrypt pushes for it. We keep one row per device.
+#
+# In 2b we'll send requests to those endpoints, so only the real push services are accepted:
+# otherwise anyone could make our server visit any address, even inside our own network ("SSRF").
+
+PUSH_SERVICE_HOSTS = (
+    "fcm.googleapis.com",          # Chrome, Edge and other Chromium browsers on Android and PCs
+    ".push.apple.com",             # Safari (iPhones, Macs)
+    ".push.services.mozilla.com",  # Firefox
+    ".notify.windows.com",         # Edge on Windows
+)
+
+
+def is_push_service(endpoint):
+    """True for an https address at one of the push services above (".x" means x and anything under it)."""
+    parts = urlsplit(endpoint)
+    host = (parts.hostname or "").lower()
+    known = False
+    for name in PUSH_SERVICE_HOSTS:
+        if host == name or (name.startswith(".") and host.endswith(name)):
+            known = True
+    return parts.scheme == "https" and known and len(endpoint) <= 1000
+
+
+class PushSubscription(BaseModel):
+    endpoint: str
+    p256dh: str = ""  # (not needed to unsubscribe)
+    auth: str = ""
+
+
+@app.post("/push/subscribe")
+async def push_subscribe(data: PushSubscription, request: Request):
+    user_id, username, password_hash, email = logged_in_user(request)
+    if not VAPID_PUBLIC_KEY:
+        raise HTTPException(400, "Push notifications aren't set up on this server.")
+    if not is_push_service(data.endpoint):
+        raise HTTPException(400, "That isn't a push service we know.")
+    if not (0 < len(data.p256dh) <= 200 and 0 < len(data.auth) <= 100):
+        raise HTTPException(400, "Those keys don't look right.")
+    with db:
+        # "OR REPLACE": the same device again (or someone else logged in on it): this row replaces it.
+        db.execute(
+            "INSERT OR REPLACE INTO push_subscriptions (endpoint, user_id, p256dh, auth) VALUES (?, ?, ?, ?)",
+            (data.endpoint, user_id, data.p256dh, data.auth),
+        )
+    return {"ok": True}
+
+
+@app.post("/push/unsubscribe")
+async def push_unsubscribe(data: PushSubscription, request: Request):
+    user_id, username, password_hash, email = logged_in_user(request)
+    with db:
+        db.execute("DELETE FROM push_subscriptions WHERE endpoint = ? AND user_id = ?", (data.endpoint, user_id))
     return {"ok": True}
 
 
@@ -2622,6 +2695,7 @@ async def chat(websocket: WebSocket):
             "max_text_length": MAX_TEXT_LENGTH,  # so the page's text box uses the same limit
             "page_version": PAGE_VERSION,  # a different one than it was loaded with: it reloads
             "appearance": appearance_of(user_id),  # Settings → Appearance (None: the defaults)
+            "vapid_public_key": VAPID_PUBLIC_KEY or None,  # for subscribing to push (None: not set up)
         })
         await send(websocket, friends_message(user_id))
         await send(websocket, custom_emoji_message())
