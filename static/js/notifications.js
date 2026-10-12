@@ -368,6 +368,7 @@ document.getElementById("app-banner-close").addEventListener("click", () => {
 // Our sounds (the ping, the ringtone, the calling sound, the join and leave cues) are generated
 // by the browser (Web Audio): no sound files needed. They all share this one AudioContext.
 let audio = null;
+let audioSleepTimer = null;  // pauses it a moment after the last sound (playTone)
 
 // One soft note. It fades in along a straight line from silence: an exponential fade-in stays
 // near silent and then jumps up at the very end, which the ear hears as a click. It fades out
@@ -395,6 +396,11 @@ function playTone(pitch, start, length, peak) {
   tone.connect(volume).connect(audio.destination);  // tone -> volume -> speakers
   tone.start(at);
   tone.stop(at + length + 0.05);  // a moment after it's silent
+  // Pause the engine a second after the last note: running, it keeps playing silence, which keeps
+  // a phone's sound hardware awake (battery). Each new note moves this further away; the next
+  // sound wakes it again (above).
+  clearTimeout(audioSleepTimer);
+  audioSleepTimer = setTimeout(() => audio.suspend(), (SOUND_LEAD + start + length + 1) * 1000);
 }
 
 function playPing() {

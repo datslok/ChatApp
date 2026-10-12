@@ -177,6 +177,12 @@ function closeMic() {
 // Close the microphone if nothing needs it any more (not in voice, not testing it).
 function closeMicIfUnused() {
   if (!micTesting && !micPublication) closeMic();
+  // Nothing needs the audio engine now (no test, no call): pause it. Running, RNNoise and the gate
+  // would go on working on silence, about 100 times a second, which warms a phone and slows the
+  // page. Paused, it costs nothing; openMic and joining a call wake it again (resume).
+  if (!micTesting && !voiceRoom && voiceEngine) {
+    voiceEngine.then(({ context }) => context.suspend()).catch(() => {});
+  }
 }
 
 // The level meter in Settings: how loud the microphone is, green while the gate lets it through.

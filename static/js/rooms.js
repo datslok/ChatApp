@@ -63,6 +63,9 @@ async function joinVoice(roomName, label) {
   try {
     await loadLiveKit();
     const { context } = await getAudio();
+    // Paused since the last call or test (voice.js, closeMicIfUnused). Not waited for: without a
+    // tap on the page yet, the browser only starts it later ("Tap here to turn on sound").
+    context.resume().catch(() => {});
     if (voiceRoomName !== roomName) return;  // left (or went elsewhere) while waiting
     room = new LivekitClient.Room({
       // Play the others through our AudioContext, so their volume can go above 100% and the
