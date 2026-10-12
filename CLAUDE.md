@@ -159,9 +159,11 @@ the point is for me to understand how it works, not just to have it done.
 The live site is https://chat.datslok.no, served from the separate server PC (`ssh chatserver`; set
 up with `scripts\server\install.ps1`) through a Cloudflare Tunnel (`cloudflared` runs there as a
 Windows service and forwards to http://localhost:8000). The domain is
-registered at domene.shop with its DNS on Cloudflare. `datslok.no` and `www.datslok.no` redirect (302) to
-the chat through a Cloudflare Redirect Rule (their DNS records are proxied placeholders, 192.0.2.1).
-`app.datslok.no` redirects (302) the same way, to https://chat.datslok.no/download.
+registered at domene.shop with its DNS on Cloudflare. `datslok.no` and `datslok.no` itself is the landing page: a third
+route on the tunnel (`datslok.no` → http://localhost:8000) and `LANDING_HOST=datslok.no` in the server's
+`.env`. Two Cloudflare Redirect Rules (302): "www to datslok.no" (`www.datslok.no` → https://datslok.no)
+and "app to download" (`app.datslok.no` → https://chat.datslok.no/download); their DNS records are
+proxied placeholders (A, 192.0.2.1), which must stay for the rules to work.
 
 Voice: the tunnel also carries `voice.datslok.no` → http://localhost:7880 (LiveKit's signalling; a
 "published application route" in Cloudflare's Zero Trust dashboard, Networks → Tunnels → chatapp).
