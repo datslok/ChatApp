@@ -1895,6 +1895,10 @@ body.mini-hidden :fullscreen .tile-strip {
   align-items: center;
   gap: 12px;
 }
+/* "display: grid" above would otherwise beat the hidden attribute (the Scale row in a browser). */
+#settings label.slider-row[hidden] {
+  display: none;
+}
 
 #settings label.slider-row input {
   padding: 0;

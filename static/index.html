@@ -485,6 +485,8 @@
             green when your voice gets through. All the way left: always on.
           </p>
           <button type="button" id="voice-test">Test microphone</button>
+          <!-- Why the test didn't start (voice-settings.js), right where you look after pressing it. -->
+          <p id="voice-test-status" class="status error"></p>
         </div>
       </section>
 
@@ -498,6 +500,7 @@
           <!-- What the camera sees (mirrored, like a mirror), while "Test camera" is on. -->
           <video id="camera-preview" autoplay muted playsinline hidden></video>
           <button type="button" id="camera-test">Test camera</button>
+          <p id="camera-test-status" class="status error"></p>
         </div>
       </section>
 

@@ -103,9 +103,16 @@ function showTestButton() {
   voiceTestButton.textContent = micTesting ? "Stop test" : "Test microphone";
 }
 
+// Where to allow the microphone or camera: the browser's site settings, also in the phone app.
+const ALLOW_HOW = "Allow it in the site's settings (the icon left of the address; in the phone app: " +
+  "long-press its icon, App info, Permissions), then try again.";
+
+const voiceTestStatus = document.getElementById("voice-test-status");
+
 voiceTestButton.addEventListener("click", async () => {
   micTesting = !micTesting;
   showTestButton();
+  voiceTestStatus.textContent = "";
   if (!micTesting) {
     closeMicIfUnused();
     return;
@@ -115,7 +122,7 @@ voiceTestButton.addEventListener("click", async () => {
   } catch {
     micTesting = false;
     showTestButton();
-    voiceDevicesHelp.textContent = "The browser didn't allow the microphone. Allow it (the icon in the address bar) and try again.";
+    voiceTestStatus.textContent = "The microphone isn't allowed. " + ALLOW_HOW;
   }
 });
 
@@ -147,7 +154,10 @@ function stopCameraPreview() {
   cameraTestButton.textContent = "Test camera";
 }
 
+const cameraTestStatus = document.getElementById("camera-test-status");
+
 cameraTestButton.addEventListener("click", async () => {
+  cameraTestStatus.textContent = "";
   if (previewStream) {
     stopCameraPreview();
     return;
@@ -156,7 +166,8 @@ cameraTestButton.addEventListener("click", async () => {
     await startCameraPreview();
   } catch {
     stopCameraPreview();
-    voiceDevicesHelp.textContent = "The browser didn't allow the camera, or another program is using it.";
+    // (Before, this went to a line on the Voice & audio page, out of sight.)
+    cameraTestStatus.textContent = "The camera isn't allowed, or another program is using it. " + ALLOW_HOW;
   }
 });
 
