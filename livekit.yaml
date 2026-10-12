@@ -19,12 +19,16 @@ room:
   # H.264 profile 42e01f ("Constrained Baseline"), for which Chromium on Windows encodes on the
   # CPU (OpenH264). For 42001f ("Baseline") it can use the graphics card instead (Windows' Media
   # Foundation). Every browser decodes both. The line must match LiveKit's own exactly.
+  # Plain video/h264 must stay too: LiveKit first checks "is H.264 allowed?" by name alone, and
+  # with only the 42001f line that check fails and it falls back to VP8. With both, the server
+  # accepts either profile, and Chromium offers 42001f first.
   enabled_codecs:
     - mime: audio/opus
     - mime: audio/red
     - mime: audio/pcmu
     - mime: audio/pcma
     - mime: video/vp8
+    - mime: video/h264
     - mime: video/h264
       fmtp_line: "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42001f"
     - mime: video/vp9
