@@ -74,6 +74,7 @@
         "He writes maths as real formulas, like $E = mc^2$",
         "He reads links: post one and ask what it says, or for a summary. Some big sites (like recipe sites) don't let him in",
         "He reads files: PDFs (up to 5 MB, scans too) and text files like notes, code or a .csv. Ask about the file you send, or one just above",
+        "He shows pictures: ask him for photos of a place, an animal or a thing (\"show us Halden prison\"). He finds real photos on Wikimedia Commons, picks the best few and posts them, each with its photographer. He can't make pictures, or find private ones",
         "He rolls dice: ask him (\"roll a d20\"), or write \"roll: 2d6\" (up to 20 dice, and a bonus like \"1d20+3\")",
         "He makes polls: ask him, or write \"poll: Friday dinner? pizza, sushi, tacos\". Vote by clicking a number under it (up to 10 options)",
         "He reminds you: \"remind me tomorrow at 9 to call mum\", \"in 20 minutes\", \"on friday at 18\" (or \"remind: ...\"). He says when he understood, and pings you then, up to a year ahead. Asked in a DM between friends, the reminder comes in your DM with him",
@@ -97,7 +98,8 @@
       "date": "2026-10-14",
       "items": [
         "New channels and headings can show up in the sidebar: admins now manage them from the app (Settings → Channels)",
-        "Group DMs 👥: click the + next to \"Direct messages\" to start a private chat with up to 9 friends, with group calls 📞. Chattus is in every group: @Chattus to ask him something"
+        "Group DMs 👥: click the + next to \"Direct messages\" to start a private chat with up to 9 friends, with group calls 📞. Chattus is in every group: @Chattus to ask him something",
+        "Chattus shows pictures 📷: ask him for photos of a place, an animal or a thing, and he posts a few real ones from Wikimedia Commons"
       ]
     },
     {

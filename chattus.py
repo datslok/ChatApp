@@ -18,6 +18,7 @@ it, like clicking on it, and gets its history: exactly the context he needs.
 import argparse
 import asyncio
 import base64
+import html
 import io
 import json
 import random
@@ -55,7 +56,7 @@ If you don't know something or aren't sure, look it up with "search" (below) ins
 know. Only say you don't know when a search can't help, like things about this chat that you can't see.
 The chat draws maths written in LaTeX: $...$ inside a sentence, $$...$$ on a line of its own (no space just inside
 the dollar signs). Use it whenever you write a formula, an equation or a symbol, like $E = mc^2$.
-You can see pictures people send. A picture comes from the person whose message it's in; you never send pictures.
+You can see pictures people send. A picture comes from the person whose message it's in. You can't draw or make pictures.
 This is what you look like (your profile picture and the app's icon): a simple black line drawing of a cat face
 with pointy ears, two round black dot eyes, a "w"-shaped mouth with a little pink tongue sticking out, and three
 whiskers on each side, on a bright blue rounded square. Only a picture of that drawing is you. Any other cat (a photo,
@@ -95,7 +96,13 @@ CLAUDE_TOOLS_PROMPT = """
   like "tomorrow at 9": "day" is "today", "tomorrow", a weekday like "friday", or a date as "MM-DD" like "12-24"
   (or "" if they named none), and "time" is like "09:00" (or "" if they named none); or "in" for a time from now,
   like "in 20 minutes" or "in 2 days" (the number and the unit). Leave everything else empty: the reminder is saved,
-  and they get a message then. Otherwise leave "what", "day" and "time" "", and "in" {"amount": 0, "unit": ""}."""
+  and they get a message then. Otherwise leave "what", "day" and "time" "", and "in" {"amount": 0, "unit": ""}.
+- "pictures": when someone asks you to show, find or send pictures or photos of something real (a place, a building,
+  an animal, a plant, a thing, a famous person, an event), write a short search for them here and leave everything
+  else empty: real photos are looked up on Wikimedia Commons (Wikipedia's free photo library), you see what was found
+  and pick the best, and they're posted with your reply. Use the name it has where it is when that finds more (a
+  Norwegian place by its Norwegian name, like "Halden fengsel"), otherwise English. Commons has no memes or
+  screenshots. Otherwise leave it ""."""
 # (Single braces: this text is put into SYSTEM_PROMPT as a value, so format() leaves it as it is.)
 
 # The shape every answer must have. llama-server turns it into grammar rules, so the model can't write
@@ -138,8 +145,9 @@ REMIND_SCHEMA = {
 # With Claude, his first answer may also be a page to read or a reminder; "remind: ..." is only that.
 CLAUDE_ANSWER_SCHEMA = {
     "type": "object",
-    "properties": {**ANSWER_OR_SEARCH_SCHEMA["properties"], "read": {"type": "string"}, "remind": REMIND_SCHEMA},
-    "required": ANSWER_OR_SEARCH_SCHEMA["required"] + ["read", "remind"],
+    "properties": {**ANSWER_OR_SEARCH_SCHEMA["properties"], "read": {"type": "string"}, "remind": REMIND_SCHEMA,
+                   "pictures": {"type": "string"}},
+    "required": ANSWER_OR_SEARCH_SCHEMA["required"] + ["read", "remind", "pictures"],
 }
 READ_PAGE_TOKENS = 10_000  # at most this much of a page is read (a long article), so a huge one can't cost much
 ONLY_REMIND_SCHEMA = {"type": "object", "properties": {"remind": REMIND_SCHEMA}, "required": ["remind"]}
@@ -172,6 +180,25 @@ SEARCH_RESULTS = 3          # results per search
 SEARCH_TEXT = 1500          # characters per result the model reads (3 x 1500 ~ 1100 tokens)
 MAX_SEARCHES_PER_DAY = 100  # so nobody can use up the free searches by spamming him
 searches_today = {"day": None, "count": 0}  # (outside the Chattus object: kept when he reconnects)
+
+# Pictures he posts (only with Claude): real photos from Wikimedia Commons, the free photo library behind
+# Wikipedia. Free to share with credit (each one's author and licence go with it), no account needed, and the
+# files only ever come from Wikimedia's own two addresses, so he never fetches from just any site (he runs
+# inside the home network: see the server's link previews for why that matters).
+COMMONS_API = "https://commons.wikimedia.org/w/api.php"
+COMMONS_FILE_HOSTS = {"upload.wikimedia.org", "thumb.wikimedia.org"}
+PICTURE_CANDIDATES = 8        # found per search: he looks at them all and picks
+MAX_POSTED_PICTURES = 3
+POSTED_PICTURE_WIDTH = 1280   # pixels: Commons makes a copy this wide (~200 KB) for us
+CANDIDATE_SIZE = 384          # how big he sees the candidates (small: ~200 tokens each)
+MAX_PICTURE_BYTES = 5 * 1024 * 1024
+# After a picture search: which to post (their numbers), and the reply that goes with them.
+PICK_SCHEMA = {
+    "type": "object",
+    "properties": {"pick": {"type": "array", "items": {"type": "integer"}},
+                   "reaction": {"type": "string"}, "reply": {"type": "string"}},
+    "required": ["pick", "reaction", "reply"],
+}
 
 # Dice: the model only says what to roll; Python rolls (models are bad at random numbers).
 MAX_DICE = 20
@@ -228,6 +255,52 @@ def picture_data_url(raw, size=PICTURE_SIZE):
         buffer = io.BytesIO()
         flat.save(buffer, "JPEG", quality=85)
     return "data:image/jpeg;base64," + base64.b64encode(buffer.getvalue()).decode()
+
+
+def plain_text(value):
+    """Commons' text fields as plain text: they're HTML ('<a href="...">Kari</a>' -> "Kari", "&amp;" -> "&")."""
+    return " ".join(html.unescape(re.sub(r"<[^>]+>", " ", value)).split())
+
+
+def commons_pictures(query):
+    """Photos on Wikimedia Commons for a search, best match first, at most PICTURE_CANDIDATES:
+    [{"raw": the JPEG or PNG bytes, "type": "image/jpeg", "name": "Halden fengsel.jpg", "title", "credit"}].
+    Each is a copy POSTED_PICTURE_WIDTH wide (smaller ones as they are). Blocking."""
+    # One request finds the files (generator=search, in the File: namespace, 6) and gives each one's
+    # address, type, author and licence (prop=imageinfo). "filetype:bitmap": photos and drawings, no PDFs or videos.
+    params = urllib.parse.urlencode({
+        "action": "query", "format": "json", "generator": "search", "gsrnamespace": 6,
+        "gsrsearch": f"{query} filetype:bitmap", "gsrlimit": PICTURE_CANDIDATES,
+        "prop": "imageinfo", "iiprop": "url|mime|extmetadata", "iiurlwidth": POSTED_PICTURE_WIDTH,
+        "iiextmetadatafilter": "Artist|LicenseShortName|ObjectName",
+    })
+    request = urllib.request.Request(f"{COMMONS_API}?{params}", headers={"User-Agent": USER_AGENT})
+    with urllib.request.urlopen(request, timeout=20) as response:
+        pages = json.loads(response.read()).get("query", {}).get("pages", {})
+    found = []
+    for page in sorted(pages.values(), key=lambda page: page.get("index", 0)):  # (the search's own order)
+        info = (page.get("imageinfo") or [{}])[0]
+        url = info.get("thumburl") or info.get("url") or ""
+        # Only photos and drawings we can post, and only from Wikimedia's own file addresses.
+        if info.get("mime") not in ("image/jpeg", "image/png") or urllib.parse.urlsplit(url).hostname not in COMMONS_FILE_HOSTS:
+            continue
+        try:
+            with urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": USER_AGENT}), timeout=20) as response:
+                raw = response.read(MAX_PICTURE_BYTES + 1)
+                kind = response.headers.get_content_type()
+        except OSError as error:
+            log(f"Couldn't fetch {url}: {error!r}")
+            continue
+        if len(raw) > MAX_PICTURE_BYTES or kind not in ("image/jpeg", "image/png"):
+            continue
+        meta = info.get("extmetadata") or {}
+        name = page["title"].removeprefix("File:")
+        title = plain_text(meta.get("ObjectName", {}).get("value", "")) or name.rsplit(".", 1)[0]
+        author = plain_text(meta.get("Artist", {}).get("value", ""))[:80]
+        licence = plain_text(meta.get("LicenseShortName", {}).get("value", ""))
+        found.append({"raw": raw, "type": kind, "name": name, "title": title[:100],
+                      "credit": " · ".join(part for part in (author, licence, "Wikimedia Commons") if part)})
+    return found
 
 
 # ---------- Web search ----------
@@ -683,22 +756,39 @@ class Chattus:
         if result.get("remind") is not None:
             text = self.save_reminder(result["remind"], target, channel)
         text = self.clean_answer(text)
-        if not text:
+        pictures = result.get("pictures") or []
+        if not text and not pictures:
             return  # just a reaction (or nothing at all)
 
-        reply = {"type": "message", "text": text}
         # Shown as a reply when it isn't obvious what he's answering: always where he only answers
         # mentions, and in #chattus and his DMs when someone else wrote after that message.
-        if not self.answers_everything(channel) or messages[-1] is not target:
-            reply["reply_to"] = target["id"]
-        # A poll: wait for the server to send our message back (only then does it have an id), and
-        # put a number under it for each option, so voting is one click.
-        self.my_message = asyncio.get_running_loop().create_future()
-        await self.send(reply)
-        if options:
-            sent = await asyncio.wait_for(self.my_message, timeout=10)
-            for number in POLL_NUMBERS[:options]:
-                await self.send({"type": "react", "message_id": sent["id"], "emoji": number})
+        reply_to = target["id"] if not self.answers_everything(channel) or messages[-1] is not target else None
+        if text:
+            reply = {"type": "message", "text": text}
+            if reply_to:
+                reply["reply_to"] = reply_to
+                reply_to = None  # (only the first message he sends is the reply)
+            # A poll: wait for the server to send our message back (only then does it have an id), and
+            # put a number under it for each option, so voting is one click.
+            self.my_message = asyncio.get_running_loop().create_future()
+            await self.send(reply)
+            if options:
+                sent = await asyncio.wait_for(self.my_message, timeout=10)
+                for number in POLL_NUMBERS[:options]:
+                    await self.send({"type": "react", "message_id": sent["id"], "emoji": number})
+        # Pictures he found: each uploaded like a file from the + button, and sent as a message of its own
+        # with what it is and its credit (their licences ask for the photographer and the licence).
+        for picture in pictures:
+            try:
+                file_id = await asyncio.to_thread(self.upload, picture)
+            except Exception as error:
+                log(f"Couldn't upload {picture['name']}: {error!r}")
+                continue
+            message = {"type": "message", "text": f"📷 {picture['title']} · {picture['credit']}", "file": file_id}
+            if reply_to:
+                message["reply_to"] = reply_to
+                reply_to = None
+            await self.send(message)
         # (Messages that came while he was thinking queued this channel again: handle() did that.)
 
     async def keep_typing(self):
@@ -953,6 +1043,9 @@ class Chattus:
                 )})
                 answer = self.complete(conversation, ANSWER_SCHEMA)
                 return {"reaction": answer.get("reaction", ""), "reply": answer.get("reply", "")}
+            pictures = answer.get("pictures", "").strip() if self.claude else ""
+            if pictures:
+                return self.find_pictures(conversation, pictures)
             query = answer.get("search", "").strip()
             if not query:
                 return {"reaction": reaction, "reply": answer.get("reply", "")}
@@ -975,6 +1068,62 @@ class Chattus:
         )})
         answer = self.complete(conversation, ANSWER_SCHEMA)
         return {"reaction": answer.get("reaction", ""), "reply": answer.get("reply", "")}
+
+    def find_pictures(self, conversation, query):
+        """He asked for "pictures": search Commons, show him what was found (small, numbered), and let
+        him pick the ones to post and write the reply that goes with them. Returns the answer as a dict
+        with "pictures", the picked ones (commons_pictures' dicts). Counts as a search. Blocking."""
+        today = date.today()
+        if searches_today["day"] != today:
+            searches_today.update(day=today, count=0)
+        found = []
+        if searches_today["count"] < MAX_SEARCHES_PER_DAY:
+            searches_today["count"] += 1
+            try:
+                found = commons_pictures(query)
+            except Exception as error:  # Commons down, say: he says he couldn't find any
+                log(f"Couldn't search Commons for {query!r}: {error!r}")
+        log(f"Found {len(found)} pictures on Commons for {query!r}.")
+        if not found:
+            conversation.append({"role": "user", "content": (
+                f"[Picture search for \"{query}\" on Wikimedia Commons: nothing found (or searching is used up for "
+                "today). Say so briefly; a link to where they could look is fine.]")})
+            answer = self.complete(conversation, ANSWER_SCHEMA)
+            return {"reaction": answer.get("reaction", ""), "reply": answer.get("reply", "")}
+
+        # The candidates go in as one message: a line saying what to do, then each one's number and title
+        # with the picture itself (for_claude turns the data URLs into image blocks).
+        parts = [{"type": "text", "text": (
+            f"[Picture search for \"{query}\" on Wikimedia Commons: {len(found)} found, below. Put the numbers of the "
+            f"ones that really show what was asked for in \"pick\", best first, at most {MAX_POSTED_PICTURES}. Skip any "
+            "that don't fit (maps, logos, something else) or aren't right for a friendly chat; if none fit, pick none "
+            "and say so. Pictures of something private (someone's own party, pet or home) can't be there: pick none "
+            "and say you can only find public photos. Then write your reply: it's posted first, the pictures right "
+            "after it in the order you picked them (so if you say which is which, follow that order), each with its "
+            "photographer and licence, so don't list those.]")}]
+        for number, picture in enumerate(found, start=1):
+            parts.append({"type": "text", "text": f"{number}. {picture['title']}"})
+            parts.append({"type": "image_url", "image_url": {"url": picture_data_url(picture["raw"], CANDIDATE_SIZE)}})
+        conversation.append({"role": "user", "content": parts})
+        answer = self.complete(conversation, PICK_SCHEMA)
+
+        picked = []
+        for number in answer.get("pick") or []:
+            # Only numbers that were shown, each once (the model writes the list; Python checks it).
+            if isinstance(number, int) and 1 <= number <= len(found) and found[number - 1] not in picked:
+                picked.append(found[number - 1])
+        log(f"Picked {len(picked[:MAX_POSTED_PICTURES])}: {[picture['name'] for picture in picked]}")
+        return {"reaction": answer.get("reaction", ""), "reply": answer.get("reply", ""),
+                "pictures": picked[:MAX_POSTED_PICTURES]}
+
+    def upload(self, picture):
+        """Put a picture on the chat, like the page's + button does (POST /upload, the bytes as the body),
+        and return its id for a message. Blocking."""
+        url = f"{self.chat_url}/upload?" + urllib.parse.urlencode({"filename": picture["name"]})
+        request = urllib.request.Request(url, data=picture["raw"], method="POST",
+                                         headers={"Cookie": self.cookie, "Content-Type": picture["type"]})
+        with urllib.request.urlopen(request, timeout=60) as response:
+            return json.loads(response.read())["id"]
 
     def ask(self, conversation, schema=None, max_tokens=MAX_ANSWER_TOKENS, temperature=0.7):
         """The model's answer (text) to a conversation in the OpenAI shape llama-server uses: Claude's
@@ -1003,8 +1152,8 @@ class Chattus:
         content = self.ask(conversation, schema)
         try:
             parsed = json.loads(content)
-            # Texts as texts (the poll stays an object, {"question", "options"})
-            return {key: value if isinstance(value, dict) else str(value) for key, value in parsed.items()}
+            # Texts as texts (a poll stays an object, {"question", "options"}, and "pick" a list of numbers)
+            return {key: value if isinstance(value, (dict, list)) else str(value) for key, value in parsed.items()}
         except (ValueError, AttributeError):  # cut off by max_tokens, say: use what's there as text
             return {"reply": content}
 

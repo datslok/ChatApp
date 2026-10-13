@@ -327,6 +327,14 @@ the point is for me to understand how it works, not just to have it done.
   the message's text between "[sent the file x:]" and "[end of the file]". Too-big PDFs are named as such.
   Pictures with Claude: the target's and up to `CLAUDE_EARLIER_PICTURES` 3 in the `CLAUDE_PICTURE_LOOKBACK` 10
   messages before, shrunk to `CLAUDE_PICTURE_SIZE` 1568 px (Claude's best size; ~2,500 tokens each) instead of 1 at 768.
+  Posting pictures, only with Claude: a `pictures` field (a search) in `CLAUDE_ANSWER_SCHEMA`; `commons_pictures`
+  searches Wikimedia Commons (api.php, generator=search in File:, `filetype:bitmap`, imageinfo with a 1280 px
+  `thumburl`, Artist/LicenseShortName/ObjectName) and downloads up to 8 JPEG/PNG, only from `COMMONS_FILE_HOSTS`
+  (upload./thumb.wikimedia.org: no SSRF). `find_pictures` shows them to Claude at 384 px, numbered, and
+  `PICK_SCHEMA` gets "pick" (numbers, checked by Python; at most 3) and the reply; private things ("my cousin's
+  party") get none. Counts toward `MAX_SEARCHES_PER_DAY`. `answer()` sends the reply, then each picture
+  (`upload`: POST /upload with his cookie) as its own message, "📷 title · author · licence · Wikimedia Commons"
+  (no link in it: that would make a preview card). Commons has no memes; a paid image search could replace it.
   The chat's manual, with Claude: `load_manual` fetches `/changelog.json` at every start and puts its `features`
   ("## topic" / "- item") into `{manual}` (`MANUAL_PROMPT`: answer how-to and where-is questions from it, with the
   way there, and don't make up settings). ~2,000 tokens; the whole prompt ~2,800.
