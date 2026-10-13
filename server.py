@@ -99,7 +99,7 @@ RESERVED_NAMES = {"everyone", "here"}  # would be confused with @everyone
 MIN_PASSWORD_LENGTH = 8
 MAX_PASSWORD_LENGTH = 200
 SESSION_COOKIE = "session"
-SESSION_DAYS = 30
+SESSION_DAYS = 30        # how long a login lasts before the page asks for the password again
 MAX_FAILURES = 5          # wrong passwords (or invite codes) allowed...
 FAILURE_WINDOW = 15 * 60  # ...within this many seconds, before we refuse to check more
 # Good enough to catch typos: something@something.something, no spaces.
