@@ -1756,17 +1756,18 @@ button.download-button {
   font-family: var(--font);
 }
 
-/* The editor (the edit box and its hint): "relative", so the suggestion list can sit under the box. */
-.editor {
+/* The edit box's wrapper (messages.js, makeEditor): "relative", so the suggestion list in it can
+   sit right under the box. */
+.editor-field {
   position: relative;
 }
 
-/* The suggestion list in the editor: below the box (above it, it'd be cut off when editing a
-   message at the top of the chat). */
+/* The suggestion list in the editor: right under the box, over the "Enter to save" hint (above
+   the box, it'd be cut off when editing a message at the top of the chat). */
 .editor #autocomplete {
   left: 0;
   right: 0;
-  top: 100%;
+  top: calc(100% + 4px);
   bottom: auto;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
 }

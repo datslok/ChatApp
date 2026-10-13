@@ -1177,7 +1177,12 @@ function makeEditor(message) {
       stopEditing();
     }
   });
-  box.appendChild(area);
+  // The box in a wrapper of its own: the suggestion list goes in there too (ui.js puts it in the
+  // edit box's parent), so it can sit right under the box rather than under the hint.
+  const field = document.createElement("div");
+  field.className = "editor-field";
+  field.appendChild(area);
+  box.appendChild(field);
 
   const hint = document.createElement("div");
   hint.className = "editor-hint";
