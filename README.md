@@ -359,6 +359,10 @@ dollar a month. **But then the chat's messages leave your server:** to answer, h
 channel's last 200 messages and the pictures he looks at, so tell your friends. Without `CHATTUS_MODEL`
 (or with the line empty), he uses the local model again.
 
+With Claude he also **reads links** someone asks about ("what does this page say?"): Claude's own web fetch
+tool reads the page (Anthropic's servers fetch it, not yours; at most about a long article's worth), and he answers
+from it. Some big sites block AI readers; then he says he couldn't open it.
+
 With Claude he also keeps **reminders** ("remind me tomorrow at 9 to call mum", "in 20 minutes", or
 "remind: ..."): the model copies the words into fields (a day, a time, or an amount and a unit) and Python
 works out the moment; he confirms the time he saved, and then mentions the person where they asked (a DM

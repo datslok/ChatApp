@@ -277,8 +277,13 @@ the point is for me to understand how it works, not just to have it done.
   (Haiku's version; `_20260209` is Opus/Sonnet only; `max_uses` 3), asking for a summary with links, plus the
   result pages' titles and URLs (separate, so search citations can't clash with the answer's JSON shape); Wikipedia
   when it fails; "wiki:" stays Wikipedia. Exa is only for llama-server.
-  Reminders, only with Claude (Qwen 9B got times wrong; tried and removed on 2026-10-13): `REMIND_PROMPT` (put into
-  `{remind}` only with Claude; single braces, as a format value) and `remind` in `ANSWER_OR_SEARCH_OR_REMIND_SCHEMA`
+  Reading links, only with Claude: a `read` field (a link from the chat) in `CLAUDE_ANSWER_SCHEMA`; `claude_read` is a
+  separate request with Claude's `web_fetch_20250910` (Haiku's version; `max_uses` 1, `max_content_tokens`
+  `READ_PAGE_TOKENS` 10,000), asking for what matters for the question; the result goes in as a note and he answers
+  with `ANSWER_SCHEMA` (one page per question). Anthropic fetches it, not the server (no SSRF here). Big sites that
+  block AI fetchers (BBC Good Food, Allrecipes, NRK) answer "no permission": he says he couldn't read it.
+  Reminders, only with Claude (Qwen 9B got times wrong; tried and removed on 2026-10-13): `CLAUDE_TOOLS_PROMPT` (put into
+  `{claude_tools}` only with Claude; single braces, as a format value) and `remind` in `CLAUDE_ANSWER_SCHEMA`
   ("remind:" -> `ONLY_REMIND_SCHEMA`): what, day (today/tomorrow/weekday/MM-DD), time (HH:MM), in (amount + unit),
   in that order because the model writes fields in order. `reminder_moment` / timedelta work out the moment (no
   model arithmetic). `save_reminder` checks it (future, a year, 20 each; up to 5 min past = next minute) and

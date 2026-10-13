@@ -72,10 +72,13 @@ You answer with JSON: "reply" is your message, and "reaction" is one emoji to pu
   leave everything else empty: the dice are rolled for you and the result is shown. Otherwise leave it "".
 - "poll": when someone asks you to make a poll (a vote), put its question and its 2 to 10 options here, each short,
   and leave everything else empty: the poll is posted for you. Someone asking what you prefer is not a poll.
-  Otherwise leave the question "" and the options [].{remind}{custom}"""
-# Reminders, only with Claude (the local model too often got the times wrong). The model only copies the
-# words into the fields; Python works out the moment.
-REMIND_PROMPT = """
+  Otherwise leave the question "" and the options [].{claude_tools}{custom}"""
+# What he can only do with Claude: read a page someone linked, and reminders (the local model too often got
+# the times wrong; the model only copies the words into the fields, and Python works out the moment).
+CLAUDE_TOOLS_PROMPT = """
+- "read": when someone asks about a link in the chat (what a page says, a summary, a question about it), put that
+  link here, exactly as it was written, and leave everything else empty: you'll get what the page says and answer
+  then. Otherwise leave it "".
 - "remind": when someone asks you to remind them of something, put what in "what" (short, like "call mum"), and
   when, copied from their words without calculating anything: either "day" and "time" for a day and a clock time,
   like "tomorrow at 9": "day" is "today", "tomorrow", a weekday like "friday", or a date as "MM-DD" like "12-24"
@@ -121,12 +124,13 @@ REMIND_SCHEMA = {
                           "required": ["amount", "unit"]}},
     "required": ["what", "day", "time", "in"],
 }
-# With Claude, his first answer may also be a reminder; "remind: ..." is only that.
-ANSWER_OR_SEARCH_OR_REMIND_SCHEMA = {
+# With Claude, his first answer may also be a page to read or a reminder; "remind: ..." is only that.
+CLAUDE_ANSWER_SCHEMA = {
     "type": "object",
-    "properties": {**ANSWER_OR_SEARCH_SCHEMA["properties"], "remind": REMIND_SCHEMA},
-    "required": ANSWER_OR_SEARCH_SCHEMA["required"] + ["remind"],
+    "properties": {**ANSWER_OR_SEARCH_SCHEMA["properties"], "read": {"type": "string"}, "remind": REMIND_SCHEMA},
+    "required": ANSWER_OR_SEARCH_SCHEMA["required"] + ["read", "remind"],
 }
+READ_PAGE_TOKENS = 10_000  # at most this much of a page is read (a long article), so a huge one can't cost much
 ONLY_REMIND_SCHEMA = {"type": "object", "properties": {"remind": REMIND_SCHEMA}, "required": ["remind"]}
 MAX_CUSTOM_EMOJI = 50  # how many of the chat's own emoji the prompt lists by name
 
@@ -779,7 +783,7 @@ class Chattus:
         conversation = [{
             "role": "system",
             "content": SYSTEM_PROMPT.format(where=self.where(channel), now=f"{datetime.now():%A %d %B %Y, %H:%M}",
-                                            custom=custom, remind=REMIND_PROMPT if self.claude else "",
+                                            custom=custom, claude_tools=CLAUDE_TOOLS_PROMPT if self.claude else "",
                                             count=self.context_messages),
         }]
         show = self.pictures_to_show(messages, target)
@@ -830,7 +834,7 @@ class Chattus:
         if forced:
             query = forced[2].strip()
         else:
-            answer = self.complete(conversation, ANSWER_OR_SEARCH_OR_REMIND_SCHEMA if self.claude else ANSWER_OR_SEARCH_SCHEMA)
+            answer = self.complete(conversation, CLAUDE_ANSWER_SCHEMA if self.claude else ANSWER_OR_SEARCH_SCHEMA)
             reaction = answer.get("reaction", "")
             if answer.get("roll", "").strip():
                 return {"reaction": reaction, "reply": roll_dice(answer["roll"])}
@@ -839,6 +843,16 @@ class Chattus:
             poll = answer.get("poll")
             if isinstance(poll, dict) and poll.get("options"):
                 return {"reaction": reaction, "poll": poll}
+            url = answer.get("read", "").strip() if self.claude else ""
+            if url:
+                # What the page says goes into the conversation as a note, and he's asked again (like
+                # search results; ANSWER_SCHEMA has no "read", so one page per question).
+                conversation.append({"role": "user", "content": (
+                    f"[What the page {url} says]\n{self.claude_read(url, self.readable(target['text']))}\n\n"
+                    "[Now answer the conversation above with this.]"
+                )})
+                answer = self.complete(conversation, ANSWER_SCHEMA)
+                return {"reaction": answer.get("reaction", ""), "reply": answer.get("reply", "")}
             query = answer.get("search", "").strip()
             if not query:
                 return {"reaction": reaction, "reply": answer.get("reply", "")}
@@ -948,6 +962,28 @@ class Chattus:
         if not found and not pages:
             return "(The search found nothing. Say you couldn't find it.)"
         return found + ("\n\nPages:\n" + "\n".join(pages) if pages else "")
+
+    def claude_read(self, url, question):
+        """What a page says that matters for the question, read with Claude's own web fetch tool
+        (Anthropic's servers fetch it, not this PC, and only addresses that are in the request).
+        A separate, small request, like claude_search. Blocking."""
+        try:
+            response = self.claude.messages.create(
+                model=self.claude_model, max_tokens=CLAUDE_MAX_TOKENS, output_config={"effort": "low"},
+                tools=[{"type": "web_fetch_20250910", "name": "web_fetch", "max_uses": 1,
+                        "max_content_tokens": READ_PAGE_TOKENS}],  # (Haiku's version)
+                messages=[{"role": "user", "content": (
+                    f"Read this page: {url}\n\nThen write down what it says that matters for this question from a "
+                    f"chat: \"{question}\". Keep the important details (names, numbers, steps). If the page can't "
+                    "be read, say so."
+                )}],
+            )
+            text = "\n".join(block.text for block in response.content if block.type == "text").strip()
+            log(f"Read {url} with Claude.")
+            return text or "(The page couldn't be read. Say so.)"
+        except Exception as error:
+            log(f"Couldn't read {url}: {error!r:.200}")
+            return "(The page couldn't be read right now. Say so.)"
 
     def reaction_code(self, reaction):
         """The model's reaction as the server wants it, or None if the server wouldn't accept it:
