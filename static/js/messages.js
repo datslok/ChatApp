@@ -1162,20 +1162,16 @@ const searchDialog = document.getElementById("search-dialog");
 const searchInput = document.getElementById("search-input");
 const searchWhere = document.getElementById("search-where");
 const searchFrom = document.getElementById("search-from");
+const searchFromClear = document.getElementById("search-from-clear");
+const searchFromList = document.getElementById("search-from-list");
 const searchStatus = document.getElementById("search-status");
 const searchList = document.getElementById("search-list");
 let searchAsk = 0;        // numbers our searches: the answer to an older one (typing fast) is ignored
 let searchTimer = null;   // the wait after the last key
+let searchFromId = null;  // the person picked in "From" (null: anyone)
 
 function openSearch() {
-  // From: anyone, or one person (everyone, by name, as the server sorted them). new Option(text,
-  // value) sets the text as plain text. What was picked last time stays picked, if they're still there.
-  const from = searchFrom.value;
-  searchFrom.replaceChildren(
-    new Option("From anyone", ""),
-    ...[...people.values()].map((person) => new Option("From " + person.name, person.id)),
-  );
-  searchFrom.value = [...searchFrom.options].some((option) => option.value === from) ? from : "";
+  if (searchFromId !== null && !people.has(searchFromId)) setSearchFrom(null);  // (an account that's gone)
   searchDialog.showModal();
   searchInput.focus();
   searchInput.select();  // (the words from last time, selected: typing replaces them)
@@ -1185,7 +1181,7 @@ function openSearch() {
 function runSearch() {
   clearTimeout(searchTimer);
   const query = searchInput.value.trim();
-  const from = searchFrom.value ? Number(searchFrom.value) : null;
+  const from = searchFromId;
   searchAsk += 1;  // (also makes any answer still on its way an old one)
   if (!query && from === null) {
     searchList.replaceChildren();
@@ -1225,7 +1221,91 @@ searchInput.addEventListener("input", () => {
   searchTimer = setTimeout(runSearch, 300);  // 300 ms after the last key
 });
 searchWhere.addEventListener("change", runSearch);
-searchFrom.addEventListener("change", runSearch);
+
+// ----- "From": a text box with suggestions (a "combobox"). Typing shows the people whose names
+// match, with their pictures; ↑ ↓ move, Enter or a click picks, Esc closes the list, × is anyone again.
+
+let fromMatches = [];  // the people in the list right now
+let fromIndex = 0;     // which of them is highlighted
+
+// Pick a person (or null: anyone), show it in the box, and search again.
+function setSearchFrom(id) {
+  searchFromId = id;
+  searchFrom.value = id === null ? "" : people.get(id)?.name ?? "";
+  searchFromClear.hidden = id === null;
+  closeFromList();
+}
+
+// Names starting with what's typed first, then names containing it (like @ suggestions), at most 8.
+function matchPeople(typed) {
+  const query = typed.trim().toLowerCase();
+  const everyone = [...people.values()];
+  const name = (person) => person.name.toLowerCase();
+  return [
+    ...everyone.filter((person) => name(person).startsWith(query)),
+    ...everyone.filter((person) => !name(person).startsWith(query) && name(person).includes(query)),
+  ].slice(0, 8);
+}
+
+function renderFromList() {
+  searchFromList.replaceChildren(...fromMatches.map((person, index) => {
+    const row = document.createElement("button");
+    row.type = "button";
+    row.setAttribute("role", "option");
+    row.setAttribute("aria-selected", index === fromIndex ? "true" : "false");
+    row.append(makeAvatar(person.id, person.name, "tiny"), person.name);  // (append: the name as text)
+    // mousedown + preventDefault: clicking doesn't take the focus from the box (which would close the list).
+    row.addEventListener("mousedown", (event) => event.preventDefault());
+    row.addEventListener("click", () => {
+      setSearchFrom(person.id);
+      runSearch();
+    });
+    return row;
+  }));
+  searchFromList.hidden = fromMatches.length === 0;
+  searchFrom.setAttribute("aria-expanded", searchFromList.hidden ? "false" : "true");
+}
+
+function closeFromList() {
+  fromMatches = [];
+  renderFromList();
+}
+
+searchFrom.addEventListener("input", () => {
+  // Typing changes who it is: anyone again, unless the text is exactly someone's name.
+  const typed = searchFrom.value.trim().toLowerCase();
+  const exact = [...people.values()].find((person) => person.name.toLowerCase() === typed);
+  const before = searchFromId;
+  searchFromId = exact ? exact.id : null;
+  searchFromClear.hidden = searchFromId === null && !typed;
+  fromMatches = typed ? matchPeople(typed) : [];
+  fromIndex = 0;
+  renderFromList();
+  if (searchFromId !== before) runSearch();
+});
+
+searchFrom.addEventListener("keydown", (event) => {
+  if (searchFromList.hidden) return;
+  if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+    event.preventDefault();  // (don't move the cursor)
+    const step = event.key === "ArrowDown" ? 1 : -1;
+    fromIndex = (fromIndex + step + fromMatches.length) % fromMatches.length;  // % wraps around
+    renderFromList();
+  } else if (event.key === "Enter") {
+    event.preventDefault();  // (not the form's Enter: that searches with what's picked)
+    setSearchFrom(fromMatches[fromIndex].id);
+    runSearch();
+  } else if (event.key === "Escape") {
+    event.preventDefault();  // close just the list, not the whole popup
+    closeFromList();
+  }
+});
+
+searchFrom.addEventListener("blur", closeFromList);  // (clicked elsewhere)
+searchFromClear.addEventListener("click", () => {
+  setSearchFrom(null);
+  runSearch();
+});
 document.getElementById("search-form").addEventListener("submit", (event) => {
   event.preventDefault();  // Enter: search now (and no page load)
   runSearch();

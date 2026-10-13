@@ -234,7 +234,13 @@
           <option value="here">In this chat</option>
           <option value="all">Everywhere</option>
         </select>
-        <select id="search-from" aria-label="From"></select>
+        <!-- From: type a name, pick from the suggestions (messages.js, "Search"). Empty: anyone. -->
+        <div class="person-picker">
+          <input id="search-from" placeholder="From anyone" autocomplete="off" aria-label="From"
+                 role="combobox" aria-autocomplete="list" aria-controls="search-from-list" aria-expanded="false">
+          <button type="button" id="search-from-clear" title="From anyone" aria-label="From anyone" hidden>×</button>
+          <div id="search-from-list" class="person-suggestions" role="listbox" hidden></div>
+        </div>
       </div>
     </form>
     <p id="search-status" class="pins-empty"></p>

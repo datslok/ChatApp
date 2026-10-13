@@ -527,6 +527,7 @@ body {
   margin-bottom: 10px;
 }
 #search-input,
+#search-from,
 .search-filters select {
   padding: 8px 10px;
   border: none;
@@ -539,9 +540,74 @@ body {
   display: flex;
   gap: 8px;
 }
-.search-filters select {
+.search-filters select,
+.person-picker {
   flex: 1;
   min-width: 0;  /* (so a long name can't push the other one off a phone screen) */
+}
+
+/* "From": the box, a × at its right end, and the suggestions just under it, over the results. */
+.person-picker {
+  position: relative;  /* (the × and the list are placed against it) */
+  display: flex;
+}
+#search-from {
+  flex: 1;
+  min-width: 0;
+  padding-right: 28px;  /* room for the × */
+}
+#search-from-clear {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);  /* (exactly in the middle, up and down) */
+  padding: 0 4px;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+#search-from-clear:hover {
+  color: var(--text);
+}
+#search-from-clear[hidden] {
+  display: none;
+}
+.person-suggestions {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-panel);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+.person-suggestions[hidden] {
+  display: none;
+}
+.person-suggestions button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: var(--text);
+  font-size: 0.95rem;
+  text-align: left;
+  cursor: pointer;
+}
+.person-suggestions button:hover,
+.person-suggestions button[aria-selected="true"] {
+  background: var(--bg-active);  /* the highlighted one: Enter picks it */
 }
 #search-status:empty {
   display: none;
