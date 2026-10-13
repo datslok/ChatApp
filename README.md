@@ -303,7 +303,11 @@ what it shows in `chattus-emoji.json` (git-ignored; delete it to make him look a
 He writes maths as LaTeX ($...$), which the chat draws. He rolls dice ("roll a d20", or "roll: 2d6" without
 the model; up to 20 dice and a modifier like `1d20+3`): the model only reads which dice, and Python rolls them. He
 makes polls ("poll: Friday dinner? pizza, sushi, tacos", or in his own words): a message with up to 10 numbered
-options, and the numbers as reactions under it, so voting is a click and the counts are the result. He searches the web when he needs fresh facts
+options, and the numbers as reactions under it, so voting is a click and the counts are the result. He keeps
+reminders ("remind me tomorrow at 9 to call mum", or "remind: ..."): the model reads the time, he confirms the
+time he saved, and then mentions the person where they asked (a DM between friends: in their DM with him). They're
+kept in `chattus-reminders.json` (git-ignored), so restarts don't lose them; times are the server's clock, up to a
+year ahead, at most 20 waiting per person. He searches the web when he needs fresh facts
 ("search: ..." makes him; "wiki: ..." searches only Wikipedia), at most 100 times a day:
 with [Exa](https://exa.ai) through its MCP server, which works without an account but only allows a
 few searches now and then from one internet address. When it says no, he searches Wikipedia instead.

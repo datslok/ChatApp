@@ -257,6 +257,14 @@ the point is for me to understand how it works, not just to have it done.
   `poll_text` writes "📊 **question**" + 1️⃣..🔟 lines (fewer than 2 options: how to make one); `answer()` sends it,
   waits for the server's copy (`my_message`, a Future `handle()` completes) for its id and reacts with each number.
   No end and no server changes: the reactions' counts are the result (his own counts one, said in the poll).
+  `ask_model` returns a dict: "reaction", "reply", or a "poll" / "remind" to make.
+  Reminders: a `remind` object (`REMIND_SCHEMA`: "at" with a pattern, so only "YYYY-MM-DD HH:MM" or "", and
+  "what"), or "remind:" (`ONLY_REMIND_SCHEMA`). `save_reminder` checks it (future, at most a year, 20 per person; up
+  to 5 minutes in the past means the next minute, as the prompt's time is only to the minute) and confirms the
+  saved time; from a DM between friends it goes to his own DM with them (no reply_to; "add me as a friend" if
+  needed). `chattus-reminders.json` (git-ignored, this PC's local time). `watch_reminders` checks every 30 s and
+  queues `DELIVER_REMINDERS` (a connection is in one channel at a time, so through the queue); `deliver_reminders`
+  joins, sends "@name ⏰ what" as a reply to the request ("(sorry, a bit late)" after 10 min), removing each first.
   Context lines are "[09:43] name: text" (local time; with the date when not today; `when()`), and the prompt
   says he only sees those (up to 20) and should say when something is further back; `clean_answer` strips a
   copied "[time]"/"Chattus:". A search he chooses himself that names a chat member isn't sent (the web

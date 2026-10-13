@@ -72,6 +72,7 @@
         "He writes maths as real formulas, like $E = mc^2$",
         "He rolls dice: ask him (\"roll a d20\"), or write \"roll: 2d6\" (up to 20 dice, and a bonus like \"1d20+3\")",
         "He makes polls: ask him, or write \"poll: Friday dinner? pizza, sushi, tacos\". Vote by clicking a number under it (up to 10 options)",
+        "He reminds you: \"remind me tomorrow at 9 to call mum\" (or \"remind: ...\"). He says when he understood, and pings you then, up to a year ahead. Asked in a DM between friends, the reminder comes in your DM with him",
         "He runs on our own server, so nothing goes to an AI company. He can be wrong, and only knows the last messages of a channel"
       ]
     },
@@ -89,7 +90,8 @@
       "date": "2026-10-13",
       "items": [
         "Chattus rolls dice 🎲: ask him to roll a d20, or write \"roll: 2d6\"",
-        "Chattus makes polls 📊: ask him, or write \"poll: Friday dinner? pizza, sushi, tacos\", then vote with the numbers under it"
+        "Chattus makes polls 📊: ask him, or write \"poll: Friday dinner? pizza, sushi, tacos\", then vote with the numbers under it",
+        "Chattus reminds you ⏰: \"remind me tomorrow at 9 to call mum\", and he pings you then"
       ]
     },
     {
