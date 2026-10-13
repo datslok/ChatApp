@@ -65,10 +65,7 @@ You answer with JSON: "reply" is your message, and "reaction" is one emoji to pu
   leave everything else empty: the dice are rolled for you and the result is shown. Otherwise leave it "".
 - "poll": when someone asks you to make a poll (a vote), put its question and its 2 to 10 options here, each short,
   and leave everything else empty: the poll is posted for you. Someone asking what you prefer is not a poll.
-  Otherwise leave the question "" and the options [].
-- "remind": when someone asks you to remind them of something, put when in "at" (as "YYYY-MM-DD HH:MM", worked out
-  from the time right now) and what in "what" (short, like "call mum"), and leave everything else empty: the
-  reminder is saved and they get a message then. Otherwise leave both "".{custom}"""
+  Otherwise leave the question "" and the options [].{custom}"""
 
 # The shape every answer must have. llama-server turns it into grammar rules, so the model can't write
 # anything else: always valid JSON with exactly these texts (any of them can be empty).
@@ -84,24 +81,15 @@ POLL_SCHEMA = {
                    "options": {"type": "array", "items": {"type": "string"}, "maxItems": 10}},
     "required": ["question", "options"],
 }
-# A reminder: when (the pattern makes the grammar allow only "2026-10-14 09:00", or nothing) and what.
-REMIND_SCHEMA = {
-    "type": "object",
-    "properties": {"at": {"type": "string", "pattern": "^(\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2})?$"},
-                   "what": {"type": "string"}},
-    "required": ["at", "what"],
-}
-# The first time he's asked, he may also ask for a search, a dice roll, a poll or a reminder; after
-# search results, he has to answer.
+# The first time he's asked, he may also ask for a search, a dice roll or a poll; after search results, he has to answer.
 ANSWER_OR_SEARCH_SCHEMA = {
     "type": "object",
     "properties": {"search": {"type": "string"}, "roll": {"type": "string"}, "poll": POLL_SCHEMA,
-                   "remind": REMIND_SCHEMA, "reaction": {"type": "string"}, "reply": {"type": "string"}},
-    "required": ["search", "roll", "poll", "remind", "reaction", "reply"],
+                   "reaction": {"type": "string"}, "reply": {"type": "string"}},
+    "required": ["search", "roll", "poll", "reaction", "reply"],
 }
-# "poll: ..." and "remind: ...": only that.
+# "poll: ...": only a poll.
 ONLY_POLL_SCHEMA = {"type": "object", "properties": {"poll": POLL_SCHEMA}, "required": ["poll"]}
-ONLY_REMIND_SCHEMA = {"type": "object", "properties": {"remind": REMIND_SCHEMA}, "required": ["remind"]}
 POLL_NUMBERS = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"]  # one reaction per option
 MAX_CUSTOM_EMOJI = 50  # how many of the chat's own emoji the prompt lists by name
 
@@ -123,14 +111,6 @@ searches_today = {"day": None, "count": 0}  # (outside the Chattus object: kept 
 # Dice: the model only says what to roll; Python rolls (models are bad at random numbers).
 MAX_DICE = 20
 MAX_SIDES = 1000
-
-# Reminders: kept in a file, so restarts and deploys don't lose them. Times are this PC's clock.
-REMINDERS = Path("chattus-reminders.json")  # (git-ignored)
-REMINDER_TIME = "%Y-%m-%d %H:%M"         # how "at" is written, by the model and in the file
-REMINDER_CHECK = 30                      # seconds between looking for due reminders
-MAX_REMINDERS_PER_PERSON = 20
-MAX_REMINDER_AHEAD = timedelta(days=365)
-DELIVER_REMINDERS = "(deliver reminders)"  # a job in the queue that isn't a channel, like LOOK_AT_EMOJI
 
 
 class SearchRefused(Exception):
@@ -291,9 +271,6 @@ class Chattus:
         self.queue = asyncio.Queue()  # channels to look at, one after the other
         self.queued = set()     # ... the same, to never queue one twice
         self.answered = set()   # ids of messages we've answered (so never twice, whatever the timing)
-        self.friends = set()    # user ids of his friends (a DM needs a friendship)
-        # Waiting reminders: [{"user_id", "name", "channel", "reply_to", "at", "what"}, ...], oldest first
-        self.reminders = json.loads(REMINDERS.read_text(encoding="utf-8")) if REMINDERS.exists() else []
 
     # ---------- Connecting ----------
 
@@ -331,13 +308,11 @@ class Chattus:
             log("Connected.")
             self.enqueue(HOME)  # catch up on our own channel first
             worker = asyncio.create_task(self.work())
-            timer = asyncio.create_task(self.watch_reminders())
             try:
                 async for raw in websocket:  # each message from the server, until it closes
                     await self.handle(json.loads(raw))
             finally:
                 worker.cancel()
-                timer.cancel()
 
     async def send(self, data):
         await self.websocket.send(json.dumps(data))
@@ -356,12 +331,10 @@ class Chattus:
             if any(file not in self.emoji_notes for file in self.emoji_files.values()):
                 self.enqueue(LOOK_AT_EMOJI)  # new ones to look at (in the queue: one model job at a time)
         elif kind == "friends":
-            self.friends = set(data["friends"])
             # Anyone may DM him: accept every friend request (DMs need a friendship).
             for user_id in data["incoming"]:
                 await asyncio.to_thread(post_json, f"{self.chat_url}/friends/accept", {"user_id": user_id},
                                         {"Cookie": self.cookie})
-                self.friends.add(user_id)
                 log(f"Accepted a friend request from {self.names.get(user_id, user_id)}.")
         elif kind == "history":
             self.messages[data["channel"]] = data["messages"]
@@ -415,8 +388,6 @@ class Chattus:
             try:
                 if channel == LOOK_AT_EMOJI:
                     await asyncio.to_thread(self.look_at_emoji)
-                elif channel == DELIVER_REMINDERS:
-                    await self.deliver_reminders()
                 else:
                     await self.answer(channel)
             except Exception as error:  # a broken answer must not stop the bot
@@ -481,20 +452,17 @@ class Chattus:
         log(f"Answering {target['name']} in {channel}: {target['text'][:80]!r}")
         typing = asyncio.create_task(self.keep_typing())
         try:
-            result = await asyncio.to_thread(self.ask_model, channel, messages, target)
+            reaction, text, poll = await asyncio.to_thread(self.ask_model, channel, messages, target)
         finally:
             typing.cancel()
 
-        reaction = self.reaction_code(result.get("reaction", ""))
+        reaction = self.reaction_code(reaction)
         mine = any(r["emoji"] == reaction and self.my_id in r["user_ids"] for r in target.get("reactions") or [])
         if reaction and not mine:  # (reacting again would take it away: reactions are a toggle)
             await self.send({"type": "react", "message_id": target["id"], "emoji": reaction})
-        text = result.get("reply", "")
         options = 0
-        if result.get("poll") is not None:
-            text, options = self.poll_text(result["poll"])
-        if result.get("remind") is not None:
-            text = self.save_reminder(result["remind"], target, channel)
+        if poll is not None:
+            text, options = self.poll_text(poll)
         text = self.clean_answer(text)
         if not text:
             return  # just a reaction (or nothing at all)
@@ -519,80 +487,6 @@ class Chattus:
         while True:
             await self.send({"type": "typing"})
             await asyncio.sleep(2)
-
-    # ---------- Reminders ----------
-
-    def save_reminder(self, remind, target, channel):
-        """Save a reminder the model read from a message ({"at": "2026-10-14 09:00", "what": "call mum"})
-        and say so, or say what's wrong with it. The time in the answer is the one saved, so a
-        misunderstanding shows at once."""
-        what = self.clean_answer(str(remind.get("what", "")))[:500]
-        try:
-            at = datetime.strptime(str(remind.get("at", "")).strip(), REMINDER_TIME)
-        except ValueError:
-            return "⏰ I couldn't tell when. Try something like \"remind me tomorrow at 9 to call mum\"."
-        now = datetime.now()
-        if not what:
-            return "⏰ What should I remind you of? Try something like \"remind me tomorrow at 9 to call mum\"."
-        if now - timedelta(minutes=5) < at <= now:
-            # "In 1 minute" from the prompt's time (only to the minute, and the model took a while):
-            # a moment ago means right away, so the next minute.
-            at = now.replace(second=0, microsecond=0) + timedelta(minutes=1)
-        when = f"{at:%a %d %b}" + (f" {at.year}" if at.year != now.year else "") + f" at {at:%H:%M}"
-        if at <= now:
-            return f"⏰ {when} has already been. Pick a time that's still to come!"
-        if at - now > MAX_REMINDER_AHEAD:
-            return "⏰ I can only remember things up to a year ahead."
-        user_id = target["user_id"]
-        if sum(1 for reminder in self.reminders if reminder["user_id"] == user_id) >= MAX_REMINDERS_PER_PERSON:
-            return f"⏰ You already have {MAX_REMINDERS_PER_PERSON} reminders waiting, that's all I can keep for you."
-
-        # In a DM between two friends he may only be for an hour: the reminder comes in his own DM with them.
-        where, reply_to, note = channel, target["id"], ""
-        if channel.startswith("dm:") and not self.answers_everything(channel):
-            where = "dm:{}:{}".format(*sorted((self.my_id, user_id)))
-            reply_to = None  # (that message is in another chat)
-            note = " in our DM" if user_id in self.friends else " in our DM, so add me as a friend first"
-        self.reminders.append({"user_id": user_id, "name": target["name"], "channel": where, "reply_to": reply_to,
-                               "at": at.strftime(REMINDER_TIME), "what": what})
-        self.reminders.sort(key=lambda reminder: reminder["at"])  # ("2026-10-14 09:00" sorts like a time)
-        self.save_reminders()
-        log(f"Reminder for {target['name']} at {at:{REMINDER_TIME}} in {where}: {what!r}")
-        return f"⏰ Okay! I'll remind you on {when}{note}: {what}"
-
-    def save_reminders(self):
-        REMINDERS.write_text(json.dumps(self.reminders, indent=1, ensure_ascii=False), encoding="utf-8")
-
-    async def watch_reminders(self):
-        """Every REMINDER_CHECK seconds: is a reminder due? Then deliver them through the queue (a
-        connection is in one channel at a time, so never in the middle of an answer)."""
-        while True:
-            now = datetime.now().strftime(REMINDER_TIME)
-            if any(reminder["at"] <= now for reminder in self.reminders):
-                self.enqueue(DELIVER_REMINDERS)
-            await asyncio.sleep(REMINDER_CHECK)
-
-    async def deliver_reminders(self):
-        """Post every due reminder where it was asked for: "@kari ⏰ call mum", as a reply to that message."""
-        now = datetime.now()
-        for reminder in [r for r in self.reminders if r["at"] <= now.strftime(REMINDER_TIME)]:
-            # Gone from the list first: one that can't be delivered (no longer friends, say) mustn't
-            # be tried again every 30 seconds forever.
-            self.reminders.remove(reminder)
-            self.save_reminders()
-            name = self.names.get(reminder["user_id"], reminder["name"])  # (in case they've renamed)
-            late = now - datetime.strptime(reminder["at"], REMINDER_TIME) > timedelta(minutes=10)
-            text = f"@{name} ⏰ {reminder['what']}" + (" (sorry, a bit late: I was away)" if late else "")
-            try:
-                if reminder["channel"] != self.channel:
-                    await self.join(reminder["channel"])
-                message = {"type": "message", "text": text}
-                if reminder["reply_to"]:
-                    message["reply_to"] = reminder["reply_to"]
-                await self.send(message)
-                log(f"Reminded {name} in {reminder['channel']}: {reminder['what']!r}")
-            except Exception as error:
-                log(f"Couldn't remind {name} in {reminder['channel']}: {error!r}")
 
     # ---------- The model ----------
 
@@ -634,12 +528,11 @@ class Chattus:
         return shown
 
     def ask_model(self, channel, messages, target):
-        """The latest messages as a conversation for the model, and its answer as a dict: "reaction" and
-        "reply" (texts), or a "poll" ({"question", "options"}) or a "remind" ({"at", "what"}) to make.
-        Blocking (run it in a thread)."""
+        """The latest messages as a conversation for the model, and its answer: (reaction, reply, poll),
+        where poll is None or {"question", "options"}. Blocking (run it in a thread)."""
         forced_roll = re.match(r"^\s*(?:@\S+\s+)?roll:\s*(.+)", self.readable(target["text"]), re.IGNORECASE | re.DOTALL)
         if forced_roll:
-            return {"reply": roll_dice(forced_roll[1])}  # "roll: 2d6": no model needed
+            return "", roll_dice(forced_roll[1]), None  # "roll: 2d6": no model needed
 
         custom_emoji = sorted(self.emoji.items(), key=lambda item: item[1].lower())[:MAX_CUSTOM_EMOJI]
         listed = []
@@ -682,15 +575,11 @@ class Chattus:
             else:
                 conversation.append({"role": "user", "content": line})
 
-        # "poll: ..." always makes a poll, "remind: ..." a reminder: the model only picks out the parts.
+        # "poll: ..." always makes a poll: the model only picks out its question and options.
         if re.match(r"^\s*(?:@\S+\s+)?poll:", self.readable(target["text"]), re.IGNORECASE):
             conversation.append({"role": "user", "content": "[Make a poll of the last message: its question and options.]"})
             poll = self.complete(conversation, ONLY_POLL_SCHEMA).get("poll")
-            return {"poll": poll if isinstance(poll, dict) else {}}  # ({}: poll_text says what's missing)
-        if re.match(r"^\s*(?:@\S+\s+)?remind:", self.readable(target["text"]), re.IGNORECASE):
-            conversation.append({"role": "user", "content": "[Make a reminder of the last message: when and what.]"})
-            remind = self.complete(conversation, ONLY_REMIND_SCHEMA).get("remind")
-            return {"remind": remind if isinstance(remind, dict) else {}}  # ({}: save_reminder says what's missing)
+            return "", "", poll if isinstance(poll, dict) else {}  # ({}: poll_text says what's missing)
 
         # "search: ..." always searches the web, "wiki: ..." always searches Wikipedia (also after
         # "@Chattus"). Otherwise he decides: his first answer may be a search, a dice roll or a poll.
@@ -702,16 +591,13 @@ class Chattus:
         else:
             answer = self.complete(conversation, ANSWER_OR_SEARCH_SCHEMA)
             if answer.get("roll", "").strip():
-                return {"reaction": answer.get("reaction", ""), "reply": roll_dice(answer["roll"])}
+                return answer.get("reaction", ""), roll_dice(answer["roll"]), None
             poll = answer.get("poll")
             if isinstance(poll, dict) and poll.get("options"):
-                return {"reaction": answer.get("reaction", ""), "poll": poll}
-            remind = answer.get("remind")
-            if isinstance(remind, dict) and (remind.get("at") or remind.get("what")):
-                return {"reaction": answer.get("reaction", ""), "remind": remind}
+                return answer.get("reaction", ""), "", poll
             query = answer.get("search", "").strip()
             if not query:
-                return {"reaction": answer.get("reaction", ""), "reply": answer.get("reply", "")}
+                return answer.get("reaction", ""), answer.get("reply", ""), None
 
         # A search he chose himself about someone in the chat ("what did kari say last week?") would
         # find nothing on the web, however the prompt asks him not to: don't send it. (A search someone
@@ -730,7 +616,7 @@ class Chattus:
             "[Now answer the conversation above with this. If a source helps, put its link in your reply.]"
         )})
         answer = self.complete(conversation, ANSWER_SCHEMA)
-        return {"reaction": answer.get("reaction", ""), "reply": answer.get("reply", "")}
+        return answer.get("reaction", ""), answer.get("reply", ""), None
 
     def complete(self, conversation, schema):
         """Ask the model, in the JSON shape `schema`. Blocking."""

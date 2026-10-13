@@ -8,8 +8,6 @@ dev-chattus.env
 
 # The AI bot's notes on what each custom emoji shows (remade by itself when missing)
 chattus-emoji.json
-# ... and the reminders people asked him for
-chattus-reminders.json
 
 # The SQLite database (holds everyone's messages and accounts)
 *.db

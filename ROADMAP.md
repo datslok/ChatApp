@@ -115,5 +115,5 @@
     - [x] Reactions, emoji in his answers, the custom emoji by name
     - [x] Looking at pictures (and what the custom emoji show)
     - [x] Web search: Exa through its MCP server (no account; EXA_API_KEY optional), Wikipedia when Exa says no (a daily limit; "@Chattus search: ..." forces one)
-    - [x] Reminders, dice and polls (the model reads what's asked; Python rolls, saves and posts)
-    - [ ] Maybe: searching the chat, a "bot" badge
+    - [x] Dice and polls (the model reads what's asked; Python rolls, and posts the poll with numbers to vote with)
+    - [ ] Maybe: reminders (tried and taken out: the 9B model too often got the time wrong), searching the chat, a "bot" badge
