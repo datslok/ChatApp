@@ -91,7 +91,8 @@
         "Chattus rolls dice 🎲: ask him to roll a d20, or write \"roll: 2d6\"",
         "Chattus makes polls 📊: ask him, or write \"poll: Friday dinner? pizza, sushi, tacos\", then vote with the numbers under it",
         "Chattus got a new brain 🧠: he now thinks with Claude Haiku, an AI from Anthropic, instead of the one on our server. He's smarter and quicker, and looks things up when he isn't sure. This does mean what he reads to answer (a chat's last 20 messages, pictures he looks at) now goes to Anthropic",
-        "Chattus is more catlike, nya~ :3"
+        "Chattus is more catlike, nya~ :3",
+        "Chattus searches the web better: he finds fresh news and results that he often couldn't before"
       ]
     },
     {

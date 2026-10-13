@@ -270,7 +270,11 @@ the point is for me to understand how it works, not just to have it done.
   `output_config` effort `low` + `format` json_schema, `CLAUDE_MAX_TOKENS` 2000 (its thinking counts), no
   temperature. My API key (platform.claude.com) expires 2026-11-12: replace it in `.env` before then. The friends
   were told in What's new that what he reads goes to Anthropic. The prompt makes him catlike (puns, nyan, ^-^,
-  :3) and says to search when unsure instead of saying he doesn't know.
+  :3) and says to search when unsure instead of saying he doesn't know. With Claude, `search()` uses
+  `claude_search` instead of Exa: a separate small request with Claude's server-side `web_search_20250305` tool
+  (Haiku's version; `_20260209` is Opus/Sonnet only; `max_uses` 3), asking for a summary with links, plus the
+  result pages' titles and URLs (separate, so search citations can't clash with the answer's JSON shape); Wikipedia
+  when it fails; "wiki:" stays Wikipedia. Exa is only for llama-server.
 
 ## Hosting
 

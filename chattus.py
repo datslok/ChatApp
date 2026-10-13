@@ -698,9 +698,9 @@ class Chattus:
             return {"reply": content}
 
     def search(self, query, wiki_only=False):
-        """Search results as text for the model (or a note saying why there are none). Exa first;
-        Wikipedia when Exa says no, or straight away with wiki_only ("wiki: ..."). At most
-        MAX_SEARCHES_PER_DAY a day. Blocking."""
+        """Search results as text for the model (or a note saying why there are none). With Claude,
+        Claude's own web search; with the local model, Exa. Wikipedia when those fail, or straight
+        away with wiki_only ("wiki: ..."). At most MAX_SEARCHES_PER_DAY a day. Blocking."""
         today = date.today()
         if searches_today["day"] != today:
             searches_today.update(day=today, count=0)
@@ -709,7 +709,14 @@ class Chattus:
             return "(No results: searching is used up for today. Say you can't look it up until tomorrow.)"
         searches_today["count"] += 1
 
-        if not wiki_only:
+        if not wiki_only and self.claude:
+            try:
+                results = self.claude_search(query)
+                log(f"Searched the web with Claude for {query!r}.")
+                return results
+            except Exception as error:  # (its search down, say: try Wikipedia)
+                log(f"Claude didn't search {query!r} ({error!r:.200}); trying Wikipedia.")
+        elif not wiki_only:
             try:
                 results = exa_search(query, self.exa_key)
                 log(f"Searched Exa for {query!r}.")
@@ -723,6 +730,27 @@ class Chattus:
         except Exception as error:
             log(f"Wikipedia didn't search {query!r} either: {error!r}")
             return "(The search didn't work. Say you couldn't look it up right now.)"
+
+    def claude_search(self, query):
+        """Search the web with Claude's own search tool (Anthropic runs the searches): a separate,
+        small request, so the search's sources can't clash with the JSON shape of his answers.
+        What it found, as text with links, for the model to answer from. Blocking."""
+        response = self.claude.messages.create(
+            model=self.claude_model, max_tokens=CLAUDE_MAX_TOKENS, output_config={"effort": "low"},
+            tools=[{"type": "web_search_20250305", "name": "web_search", "max_uses": 3}],  # (Haiku's version)
+            messages=[{"role": "user", "content": (
+                f"Search the web for: {query}\n\nThen write down, in a few sentences, what you found that "
+                "answers it. Only facts from the results, with the link of the page each one came from."
+            )}],
+        )
+        found = "\n".join(block.text for block in response.content if block.type == "text").strip()
+        # The pages it searched, in case the summary has no links of its own
+        pages = [f"{result.title}: {result.url}" for block in response.content
+                 if block.type == "web_search_tool_result" and isinstance(block.content, list)
+                 for result in block.content][:SEARCH_RESULTS]
+        if not found and not pages:
+            return "(The search found nothing. Say you couldn't find it.)"
+        return found + ("\n\nPages:\n" + "\n".join(pages) if pages else "")
 
     def reaction_code(self, reaction):
         """The model's reaction as the server wants it, or None if the server wouldn't accept it:

@@ -308,7 +308,8 @@ options, and the numbers as reactions under it, so voting is a click and the cou
 with [Exa](https://exa.ai) through its MCP server, which works without an account but only allows a
 few searches now and then from one internet address. When it says no, he searches Wikipedia instead.
 For your own, bigger allowance, make a free account at exa.ai and put its key in `.env` as
-`EXA_API_KEY`. Only the search words leave the server, never the chat's messages.
+`EXA_API_KEY`. Only the search words leave the server, never the chat's messages. (With Claude instead of the
+local model, see below, he searches with Claude's own web search tool instead of Exa, paid per search.)
 
 His language model runs on the server's own graphics card, with
 [llama.cpp](https://github.com/ggml-org/llama.cpp) (`llama-server`): Qwen 3.5 9B, shrunk to 4 bits
