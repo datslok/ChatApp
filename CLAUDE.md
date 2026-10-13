@@ -239,7 +239,7 @@ the point is for me to understand how it works, not just to have it done.
   in an `image_url` content part (~600 tokens, ~6 s). Custom emoji: a `LOOK_AT_EMOJI` job in the same queue
   describes each new picture once (256 px, 8 words) into `chattus-emoji.json` (git-ignored, keyed by file
   name); the prompt lists ":name: (note)". A message he reacted to counts as answered (after restarts too).
-  Known quirks: he sometimes thinks a cat picture is him; small-model limits.
+  Known quirks: he used to think any cat picture was him; since 2026-10-13 `SYSTEM_PROMPT` describes his own icon (black line-drawn cat face, pink tongue, blue rounded square), and Haiku tells it from other cats, blue ones too.
   Web search: the first model call uses `ANSWER_OR_SEARCH_SCHEMA` (a `search` field); if he fills it (or the
   message starts with "search:"; "wiki:" = Wikipedia only, no Exa), `search()` runs it and the results go in as a user note, then a second call
   with `ANSWER_SCHEMA` (no more searching). `exa_search` is a hand-written MCP client (JSON-RPC over HTTP
