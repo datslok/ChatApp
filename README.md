@@ -301,7 +301,9 @@ what it shows in `chattus-emoji.json` (git-ignored; delete it to make him look a
 `tools\make_bot.py` sets, so nobody can get this by naming themselves Chattus.
 
 He writes maths as LaTeX ($...$), which the chat draws. He rolls dice ("roll a d20", or "roll: 2d6" without
-the model; up to 20 dice and a modifier like `1d20+3`): the model only reads which dice, and Python rolls them. He searches the web when he needs fresh facts
+the model; up to 20 dice and a modifier like `1d20+3`): the model only reads which dice, and Python rolls them. He
+makes polls ("poll: Friday dinner? pizza, sushi, tacos", or in his own words): a message with up to 10 numbered
+options, and the numbers as reactions under it, so voting is a click and the counts are the result. He searches the web when he needs fresh facts
 ("search: ..." makes him; "wiki: ..." searches only Wikipedia), at most 100 times a day:
 with [Exa](https://exa.ai) through its MCP server, which works without an account but only allows a
 few searches now and then from one internet address. When it says no, he searches Wikipedia instead.

@@ -252,6 +252,11 @@ the point is for me to understand how it works, not just to have it done.
   Dice: a `roll` field in `ANSWER_OR_SEARCH_SCHEMA` (dice notation like "2d6", "1d20+3"), or a message starting
   with "roll:" (checked first in `ask_model`, no model call); `roll_dice` reads the notation anywhere in the text,
   rolls with `random` (1–20 dice, 2–1000 sides) and its text ("🎲 2d6: 4 + 2 = **6**") is the reply.
+  Polls: a `poll` object (`POLL_SCHEMA`: question, options with maxItems 10) in the same schema, or "poll:"
+  (`ONLY_POLL_SCHEMA`: the model only picks out question and options); `ask_model` returns (reaction, reply, poll);
+  `poll_text` writes "📊 **question**" + 1️⃣..🔟 lines (fewer than 2 options: how to make one); `answer()` sends it,
+  waits for the server's copy (`my_message`, a Future `handle()` completes) for its id and reacts with each number.
+  No end and no server changes: the reactions' counts are the result (his own counts one, said in the poll).
   Context lines are "[09:43] name: text" (local time; with the date when not today; `when()`), and the prompt
   says he only sees those (up to 20) and should say when something is further back; `clean_answer` strips a
   copied "[time]"/"Chattus:". A search he chooses himself that names a chat member isn't sent (the web

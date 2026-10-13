@@ -62,7 +62,10 @@ You answer with JSON: "reply" is your message, and "reaction" is one emoji to pu
   get the results and answer then. For everything else (chatting, opinions, things you know well) leave it "".
   Never search for things about this chat or the people in it: the web knows nothing about them.
 - "roll": when someone asks you to roll dice, write them here in dice notation, like "1d20", "2d6" or "1d20+3", and
-  leave everything else empty: the dice are rolled for you and the result is shown. Otherwise leave it "".{custom}"""
+  leave everything else empty: the dice are rolled for you and the result is shown. Otherwise leave it "".
+- "poll": when someone asks you to make a poll (a vote), put its question and its 2 to 10 options here, each short,
+  and leave everything else empty: the poll is posted for you. Someone asking what you prefer is not a poll.
+  Otherwise leave the question "" and the options [].{custom}"""
 
 # The shape every answer must have. llama-server turns it into grammar rules, so the model can't write
 # anything else: always valid JSON with exactly these texts (any of them can be empty).
@@ -71,13 +74,23 @@ ANSWER_SCHEMA = {
     "properties": {"reaction": {"type": "string"}, "reply": {"type": "string"}},
     "required": ["reaction", "reply"],
 }
-# The first time he's asked, he may also ask for a search or a dice roll; after search results, he has to answer.
+# A poll: its question and options (an object inside the answer; maxItems: the grammar stops at 10).
+POLL_SCHEMA = {
+    "type": "object",
+    "properties": {"question": {"type": "string"},
+                   "options": {"type": "array", "items": {"type": "string"}, "maxItems": 10}},
+    "required": ["question", "options"],
+}
+# The first time he's asked, he may also ask for a search, a dice roll or a poll; after search results, he has to answer.
 ANSWER_OR_SEARCH_SCHEMA = {
     "type": "object",
-    "properties": {"search": {"type": "string"}, "roll": {"type": "string"},
+    "properties": {"search": {"type": "string"}, "roll": {"type": "string"}, "poll": POLL_SCHEMA,
                    "reaction": {"type": "string"}, "reply": {"type": "string"}},
-    "required": ["search", "roll", "reaction", "reply"],
+    "required": ["search", "roll", "poll", "reaction", "reply"],
 }
+# "poll: ...": only a poll.
+ONLY_POLL_SCHEMA = {"type": "object", "properties": {"poll": POLL_SCHEMA}, "required": ["poll"]}
+POLL_NUMBERS = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"]  # one reaction per option
 MAX_CUSTOM_EMOJI = 50  # how many of the chat's own emoji the prompt lists by name
 
 # Pictures: each costs the model ~600 tokens (of its 8192) and a few seconds, so only a couple.
@@ -254,6 +267,7 @@ class Chattus:
         self.channel = None     # the channel we've joined
         self.messages = {}      # channel -> its latest messages (from "history", then live ones)
         self.history_arrived = None  # a Future the reader completes when a joined channel's history comes
+        self.my_message = None  # ... and one it completes when the server sends back a message we wrote
         self.queue = asyncio.Queue()  # channels to look at, one after the other
         self.queued = set()     # ... the same, to never queue one twice
         self.answered = set()   # ids of messages we've answered (so never twice, whatever the timing)
@@ -330,6 +344,8 @@ class Chattus:
             channel = data["channel"]
             self.messages.setdefault(channel, []).append(data)
             del self.messages[channel][:-50]  # keep the latest 50
+            if data["user_id"] == self.my_id and self.my_message and not self.my_message.done():
+                self.my_message.set_result(data)  # answer() is waiting for its id (a poll)
             if self.should_answer(data, channel):
                 self.enqueue(channel)
         elif kind == "unread":
@@ -436,7 +452,7 @@ class Chattus:
         log(f"Answering {target['name']} in {channel}: {target['text'][:80]!r}")
         typing = asyncio.create_task(self.keep_typing())
         try:
-            reaction, text = await asyncio.to_thread(self.ask_model, channel, messages, target)
+            reaction, text, poll = await asyncio.to_thread(self.ask_model, channel, messages, target)
         finally:
             typing.cancel()
 
@@ -444,6 +460,9 @@ class Chattus:
         mine = any(r["emoji"] == reaction and self.my_id in r["user_ids"] for r in target.get("reactions") or [])
         if reaction and not mine:  # (reacting again would take it away: reactions are a toggle)
             await self.send({"type": "react", "message_id": target["id"], "emoji": reaction})
+        options = 0
+        if poll is not None:
+            text, options = self.poll_text(poll)
         text = self.clean_answer(text)
         if not text:
             return  # just a reaction (or nothing at all)
@@ -453,7 +472,14 @@ class Chattus:
         # mentions, and in #chattus and his DMs when someone else wrote after that message.
         if not self.answers_everything(channel) or messages[-1] is not target:
             reply["reply_to"] = target["id"]
+        # A poll: wait for the server to send our message back (only then does it have an id), and
+        # put a number under it for each option, so voting is one click.
+        self.my_message = asyncio.get_running_loop().create_future()
         await self.send(reply)
+        if options:
+            sent = await asyncio.wait_for(self.my_message, timeout=10)
+            for number in POLL_NUMBERS[:options]:
+                await self.send({"type": "react", "message_id": sent["id"], "emoji": number})
         # (Messages that came while he was thinking queued this channel again: handle() did that.)
 
     async def keep_typing(self):
@@ -502,11 +528,11 @@ class Chattus:
         return shown
 
     def ask_model(self, channel, messages, target):
-        """The latest messages as a conversation for the model, and its answer: (reaction, reply).
-        Blocking (run it in a thread)."""
+        """The latest messages as a conversation for the model, and its answer: (reaction, reply, poll),
+        where poll is None or {"question", "options"}. Blocking (run it in a thread)."""
         forced_roll = re.match(r"^\s*(?:@\S+\s+)?roll:\s*(.+)", self.readable(target["text"]), re.IGNORECASE | re.DOTALL)
         if forced_roll:
-            return "", roll_dice(forced_roll[1])  # "roll: 2d6": no model needed
+            return "", roll_dice(forced_roll[1]), None  # "roll: 2d6": no model needed
 
         custom_emoji = sorted(self.emoji.items(), key=lambda item: item[1].lower())[:MAX_CUSTOM_EMOJI]
         listed = []
@@ -549,8 +575,14 @@ class Chattus:
             else:
                 conversation.append({"role": "user", "content": line})
 
+        # "poll: ..." always makes a poll: the model only picks out its question and options.
+        if re.match(r"^\s*(?:@\S+\s+)?poll:", self.readable(target["text"]), re.IGNORECASE):
+            conversation.append({"role": "user", "content": "[Make a poll of the last message: its question and options.]"})
+            poll = self.complete(conversation, ONLY_POLL_SCHEMA).get("poll")
+            return "", "", poll if isinstance(poll, dict) else {}  # ({}: poll_text says what's missing)
+
         # "search: ..." always searches the web, "wiki: ..." always searches Wikipedia (also after
-        # "@Chattus"). Otherwise he decides: his first answer may be a search or a dice roll.
+        # "@Chattus"). Otherwise he decides: his first answer may be a search, a dice roll or a poll.
         forced = re.match(r"^\s*(?:@\S+\s+)?(search|wiki):\s*(.+)", self.readable(target["text"]),
                           re.IGNORECASE | re.DOTALL)
         wiki_only = bool(forced) and forced[1].lower() == "wiki"
@@ -559,10 +591,13 @@ class Chattus:
         else:
             answer = self.complete(conversation, ANSWER_OR_SEARCH_SCHEMA)
             if answer.get("roll", "").strip():
-                return answer.get("reaction", ""), roll_dice(answer["roll"])
+                return answer.get("reaction", ""), roll_dice(answer["roll"]), None
+            poll = answer.get("poll")
+            if isinstance(poll, dict) and poll.get("options"):
+                return answer.get("reaction", ""), "", poll
             query = answer.get("search", "").strip()
             if not query:
-                return answer.get("reaction", ""), answer.get("reply", "")
+                return answer.get("reaction", ""), answer.get("reply", ""), None
 
         # A search he chose himself about someone in the chat ("what did kari say last week?") would
         # find nothing on the web, however the prompt asks him not to: don't send it. (A search someone
@@ -581,7 +616,7 @@ class Chattus:
             "[Now answer the conversation above with this. If a source helps, put its link in your reply.]"
         )})
         answer = self.complete(conversation, ANSWER_SCHEMA)
-        return answer.get("reaction", ""), answer.get("reply", "")
+        return answer.get("reaction", ""), answer.get("reply", ""), None
 
     def complete(self, conversation, schema):
         """Ask the model, in the JSON shape `schema`. Blocking."""
@@ -596,7 +631,8 @@ class Chattus:
         content = answer["choices"][0]["message"]["content"] or ""
         try:
             parsed = json.loads(content)
-            return {key: str(value) for key, value in parsed.items()}
+            # Texts as texts (the poll stays an object, {"question", "options"})
+            return {key: value if isinstance(value, dict) else str(value) for key, value in parsed.items()}
         except (ValueError, AttributeError):  # cut off by max_tokens, say: use what's there as text
             return {"reply": content}
 
@@ -646,6 +682,18 @@ class Chattus:
                 if name.lower() == match[1].lower():
                     return f"custom:{emoji_id}"
         return None  # something else: no reaction
+
+    def poll_text(self, poll):
+        """The poll's message and how many options it has, like "📊 **Friday dinner?**\\n1️⃣ Pizza\\n2️⃣ Sushi".
+        With fewer than two options, a message saying how to make one (and 0 options)."""
+        question = str(poll.get("question", "")).strip() or "Poll"
+        options = [str(option).strip() for option in poll.get("options", []) if str(option).strip()]
+        options = options[:len(POLL_NUMBERS)]
+        if len(options) < 2:
+            return "📊 A poll needs at least two options, like \"poll: Friday dinner? pizza, sushi, tacos\".", 0
+        lines = [f"📊 **{question}**"] + [f"{number} {option}" for number, option in zip(POLL_NUMBERS, options)]
+        lines.append("*Vote with the numbers below (my own votes don't count).*")
+        return "\n".join(lines), len(options)
 
     def clean_answer(self, text):
         text = text.strip()
