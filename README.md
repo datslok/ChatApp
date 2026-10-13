@@ -357,7 +357,14 @@ ANTHROPIC_API_KEY=sk-ant-...
 Claude Haiku 5.5 is small, quick and cheap: a group of friends chatting with him costs well under a
 dollar a month. **But then the chat's messages leave your server:** to answer, he sends Anthropic the
 channel's last 20 messages and the pictures he looks at, so tell your friends. Without `CHATTUS_MODEL`
-(or with the line empty), he uses the local model again. With Claude, the ChatApp AI task (the local
+(or with the line empty), he uses the local model again.
+
+With Claude he also keeps **reminders** ("remind me tomorrow at 9 to call mum", "in 20 minutes", or
+"remind: ..."): the model copies the words into fields (a day, a time, or an amount and a unit) and Python
+works out the moment; he confirms the time he saved, and then mentions the person where they asked (a DM
+between friends: in their DM with him). They're kept in `chattus-reminders.json` (git-ignored), so restarts
+don't lose them; times are the server's clock, up to a year ahead, at most 20 waiting per person. (The local
+model got the times wrong too often, so it has no reminders.) With Claude, the ChatApp AI task (the local
 model) isn't needed; disable it to free the graphics card (`Disable-ScheduledTask "ChatApp AI";
 Stop-ScheduledTask "ChatApp AI"`).
 

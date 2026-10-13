@@ -275,6 +275,14 @@ the point is for me to understand how it works, not just to have it done.
   (Haiku's version; `_20260209` is Opus/Sonnet only; `max_uses` 3), asking for a summary with links, plus the
   result pages' titles and URLs (separate, so search citations can't clash with the answer's JSON shape); Wikipedia
   when it fails; "wiki:" stays Wikipedia. Exa is only for llama-server.
+  Reminders, only with Claude (Qwen 9B got times wrong; tried and removed on 2026-10-13): `REMIND_PROMPT` (put into
+  `{remind}` only with Claude; single braces, as a format value) and `remind` in `ANSWER_OR_SEARCH_OR_REMIND_SCHEMA`
+  ("remind:" -> `ONLY_REMIND_SCHEMA`): what, day (today/tomorrow/weekday/MM-DD), time (HH:MM), in (amount + unit),
+  in that order because the model writes fields in order. `reminder_moment` / timedelta work out the moment (no
+  model arithmetic). `save_reminder` checks it (future, a year, 20 each; up to 5 min past = next minute) and
+  confirms the saved time; from a DM between friends to his own DM (no reply_to). `chattus-reminders.json`
+  (git-ignored, loaded only with Claude); `watch_reminders` (30 s) queues `DELIVER_REMINDERS`, `deliver_reminders`
+  joins and sends "@name ⏰ what" as a reply ("(sorry, a bit late)" after 10 min). `ask_model` returns a dict.
 
 ## Hosting
 
