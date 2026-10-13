@@ -292,7 +292,7 @@ name and **Log out** at the top (the page asks the chat's `/whoami`, which only 
 
 **Chattus** is a friendly AI cat in the chat: an account like everyone's, which answers every message
 in **#chattus**, anything that mentions **@Chattus** elsewhere (as a reply), and DMs to him (he
-accepts friend requests by himself). He reads the channel's last 20 messages. In a DM between two
+accepts friend requests by himself). He reads the channel's last 20 messages (200 with Claude, see below). In a DM between two
 people, a mention invites him in: he may then read and write there for an hour (never join its
 calls), and only answers mentions. He can react instead of (or as well as) answering, and knows the
 chat's custom emoji by name. He sees pictures: the one in the message he answers and the newest one
@@ -356,7 +356,7 @@ ANTHROPIC_API_KEY=sk-ant-...
 
 Claude Haiku 5.5 is small, quick and cheap: a group of friends chatting with him costs well under a
 dollar a month. **But then the chat's messages leave your server:** to answer, he sends Anthropic the
-channel's last 20 messages and the pictures he looks at, so tell your friends. Without `CHATTUS_MODEL`
+channel's last 200 messages and the pictures he looks at, so tell your friends. Without `CHATTUS_MODEL`
 (or with the line empty), he uses the local model again.
 
 With Claude he also keeps **reminders** ("remind me tomorrow at 9 to call mum", "in 20 minutes", or

@@ -35,6 +35,7 @@ Image.MAX_IMAGE_PIXELS = 25_000_000  # like server.py: refuse "decompression bom
 
 HOME = "chattus"           # his own channel: he answers every message there
 CONTEXT_MESSAGES = 20      # how many of the latest messages the model reads
+CLAUDE_CONTEXT_MESSAGES = 200  # ... with Claude (fetched like scrolling up: 50 at a time)
 MAX_ANSWER_TOKENS = 400    # an emergency brake on length (the prompt asks for short answers)
 CLAUDE_MAX_TOKENS = 2000   # ... with Claude more, as its (short) thinking counts too
 MAX_TEXT_LENGTH = 2000     # the chat's own limit for a message (server.py)
@@ -46,7 +47,7 @@ and now and then you say "nyan" or "nya~", or put a ^-^ or :3 at the end of a se
 but lightly: one or two of these is plenty, and a real question still gets a clear, real answer.
 Write like a person in a chat: usually one to three short sentences, no headings or bullet lists.
 Only write more when someone asks you to explain something in detail. Use at most one emoji in a message, often none.
-The messages you're given are the latest ones in this chat (up to 20), oldest first. Each one from the others starts
+The messages you're given are the latest ones in this chat (up to {count}), oldest first. Each one from the others starts
 with when it was sent and who sent it, like "[14:05] kari: hi" (with the date when it wasn't today). Don't start
 yours with a time or your name. You can't see anything older than these: if someone asks about something further
 back, say it's too far back for you to see.
@@ -386,6 +387,8 @@ class Chattus:
         # With a Claude model (CHATTUS_MODEL), the answers come from Anthropic's API instead of llama-server.
         self.claude_model = claude_model
         self.claude = anthropic.Anthropic(api_key=anthropic_key) if claude_model else None
+        # How many of a chat's latest messages the model reads (Claude's memory is far bigger)
+        self.context_messages = CLAUDE_CONTEXT_MESSAGES if claude_model else CONTEXT_MESSAGES
         self.cookie = None      # "session=..." after logging in
         self.websocket = None
         self.my_id = None
@@ -480,11 +483,16 @@ class Chattus:
         elif kind == "history":
             self.messages[data["channel"]] = data["messages"]
             if self.history_arrived and not self.history_arrived.done():
-                self.history_arrived.set_result(None)
+                self.history_arrived.set_result(data.get("more"))  # (are there older ones?)
+        elif kind == "older":
+            # Messages from before the ones we have (we asked, like scrolling up in the page): in front.
+            self.messages[data["channel"]] = data["messages"] + self.messages.get(data["channel"], [])
+            if self.history_arrived and not self.history_arrived.done():
+                self.history_arrived.set_result(data.get("more"))
         elif kind == "message":
             channel = data["channel"]
             self.messages.setdefault(channel, []).append(data)
-            del self.messages[channel][:-50]  # keep the latest 50
+            del self.messages[channel][:-max(50, self.context_messages)]  # keep the latest ones
             if data["user_id"] == self.my_id and self.my_message and not self.my_message.done():
                 self.my_message.set_result(data)  # answer() is waiting for its id (a poll)
             if self.should_answer(data, channel):
@@ -554,15 +562,20 @@ class Chattus:
             log(f"Looked at :{name}: -> {note!r}")
 
     async def join(self, channel):
-        """Open a channel (like clicking on it) and wait for its history."""
+        """Open a channel (like clicking on it) and wait for its history (the latest 50). With Claude,
+        then ask for older ones (like scrolling up), 50 at a time, until he has context_messages."""
         self.history_arrived = asyncio.get_running_loop().create_future()
         self.channel = channel
         await self.send({"type": "join", "channel": channel})
         try:
-            await asyncio.wait_for(self.history_arrived, timeout=10)
+            more = await asyncio.wait_for(self.history_arrived, timeout=10)
         except TimeoutError:  # the server said nothing: not a channel we may join
             self.channel = None
             raise
+        while more and len(self.messages.get(channel, [])) < self.context_messages:
+            self.history_arrived = asyncio.get_running_loop().create_future()
+            await self.send({"type": "older", "before": self.messages[channel][0]["id"]})
+            more = await asyncio.wait_for(self.history_arrived, timeout=10)
 
     async def answer(self, channel):
         if channel != self.channel:
@@ -766,10 +779,11 @@ class Chattus:
         conversation = [{
             "role": "system",
             "content": SYSTEM_PROMPT.format(where=self.where(channel), now=f"{datetime.now():%A %d %B %Y, %H:%M}",
-                                            custom=custom, remind=REMIND_PROMPT if self.claude else ""),
+                                            custom=custom, remind=REMIND_PROMPT if self.claude else "",
+                                            count=self.context_messages),
         }]
         show = self.pictures_to_show(messages, target)
-        for message in messages[-CONTEXT_MESSAGES:]:
+        for message in messages[-self.context_messages:]:
             if message.get("kind"):
                 continue  # call notes ("a call started") aren't conversation
             text = self.readable(message["text"])

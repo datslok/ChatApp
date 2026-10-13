@@ -225,7 +225,7 @@ the point is for me to understand how it works, not just to have it done.
   `save_mentions` saves a bot's DM mention by name, never via @everyone); calls use the strict
   `is_dm_member` (not `can_join`), so a bot never gets into DM calls. "users" has `"bot"`, so the page's @
   suggestions in a DM offer bots. Chattus answers everything only in #chattus and his own DMs
-  (`answers_everything`); in friends' DMs only mentions, as replies. Context: the last 20 messages as "name: text"
+  (`answers_everything`); in friends' DMs only mentions, as replies. Context: the last 20 messages (with Claude 200: `CLAUDE_CONTEXT_MESSAGES`, `join()` asks for "older" 50 at a time like scrolling up) as "name: text"
   (`<@id>` -> @name, `<:id>` -> :name:, files as "[sent a picture]"). Personality: `SYSTEM_PROMPT`.
   Development: `.\chattus.ps1 -Dev` with start.ps1 and `ssh -L 8080:127.0.0.1:8080 chatserver`; its
   `dev-chattus.env` (git-ignored) has a dev.db Chattus password and the server's LLAMA_API_KEY.
