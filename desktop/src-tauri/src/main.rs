@@ -89,6 +89,9 @@ fn main() {
                 }
             })?;
 
+            // Starting with Windows is on by default (the first time only, see below).
+            turn_on_autostart_once(app.handle());
+
             // Look for an update now, at the start (the page asks again later: check_for_update).
             update_in_background(app.handle().clone());
             Ok(())
@@ -126,12 +129,37 @@ fn get_autostart(app: tauri::AppHandle) -> Result<bool, String> {
     app.autolaunch().is_enabled().map_err(|error| error.to_string())
 }
 
-// ... and switching it on or off. Off by default: only the switch turns it on.
+// ... and switching it on or off.
 #[tauri::command]
 fn set_autostart(app: tauri::AppHandle, on: bool) -> Result<(), String> {
     let autostart = app.autolaunch();
     let result = if on { autostart.enable() } else { autostart.disable() };
     result.map_err(|error| error.to_string())
+}
+
+// On by default: the first time the app runs (0.1.17 or newer, so also after updating from an older
+// version), switch starting with Windows on, and leave a marker file in %APPDATA%\no.datslok.chat
+// so it never does that again. Someone who switches it off (in Settings or Task Manager) keeps it off.
+// Not in development (npm run tauri dev): that would put the test build in the Run list.
+fn turn_on_autostart_once(app: &tauri::AppHandle) {
+    if cfg!(debug_assertions) {
+        return;
+    }
+    let Ok(folder) = app.path().app_data_dir() else {
+        return;
+    };
+    let marker = folder.join("autostart-default-done");
+    if marker.exists() {
+        return;  // done before: leave it as the person has it now
+    }
+    if let Err(error) = app.autolaunch().enable() {
+        eprintln!("Couldn't turn on starting with Windows: {error}");
+        return;  // no marker, so it tries again next time
+    }
+    let written = std::fs::create_dir_all(&folder).and_then(|_| std::fs::write(&marker, ""));
+    if let Err(error) = written {
+        eprintln!("Couldn't save {}: {error}", marker.display());
+    }
 }
 
 // Look for an update in the background (so the window stays usable), unless one is already running.

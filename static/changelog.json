@@ -51,7 +51,7 @@
       "topic": "💻 The Windows app",
       "items": [
         "Real Windows notifications, and it updates itself. Get it in Settings or at chat.datslok.no/download",
-        "Settings → App behaviour: start ChatApp when Windows starts (off until you turn it on)"
+        "Settings → App behaviour: start ChatApp when Windows starts (on from the start; turn it off there or in Task Manager → Startup apps)"
       ]
     },
     {
@@ -108,7 +108,8 @@
         "Bots have their own section at the top of the member list, and a BOT tag after their name",
         "Everyone is friends with Chattus now: DM him anytime, no friend request needed",
         "Chattus knows how the chat works: ask him where a setting is or how to do something",
-        "Fixed: @name and :emoji suggestions now also work when you edit a message"
+        "Fixed: @name and :emoji suggestions now also work when you edit a message",
+        "Windows app 0.1.17: ChatApp now starts when Windows starts. Don't want that? Turn it off in Settings → App behaviour (it stays off)"
       ]
     },
     {
