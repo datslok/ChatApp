@@ -145,7 +145,8 @@
           <button type="button" id="group-leave">Leave</button>
         </div>
         <div class="header-buttons">
-          <button type="button" id="pins-button" title="Pinned messages" aria-label="Pinned messages">📌</button>
+          <button type="button" id="search-button" class="header-icon" title="Search" aria-label="Search">🔍</button>
+          <button type="button" id="pins-button" class="header-icon" title="Pinned messages" aria-label="Pinned messages">📌</button>
           <button type="button" id="call-button">📞 Call</button>
         </div>
       </header>
@@ -217,7 +218,27 @@
       <button type="button" id="pins-close" title="Close" aria-label="Close">×</button>
     </header>
     <p id="pins-empty" class="pins-empty" hidden></p>
-    <div id="pins-list"></div>
+    <div id="pins-list" class="card-list"></div>
+  </dialog>
+
+  <!-- Search (messages.js, "Search"): words, where (this chat or everywhere) and from whom. -->
+  <dialog id="search-dialog">
+    <header class="pins-top">
+      <h2>🔍 Search</h2>
+      <button type="button" id="search-close" title="Close" aria-label="Close">×</button>
+    </header>
+    <form id="search-form">
+      <input id="search-input" type="search" maxlength="200" placeholder="Words to find" autocomplete="off">
+      <div class="search-filters">
+        <select id="search-where" aria-label="Where">
+          <option value="here">In this chat</option>
+          <option value="all">Everywhere</option>
+        </select>
+        <select id="search-from" aria-label="From"></select>
+      </div>
+    </form>
+    <p id="search-status" class="pins-empty"></p>
+    <div id="search-list" class="card-list"></div>
   </dialog>
 
   <!-- Starting a group DM, or adding people to one: your friends to tick (people.js, "Group DMs"). -->

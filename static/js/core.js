@@ -311,6 +311,10 @@ function handleServerMessage(event) {
     channelsChanged(data.channels);
     return;
   }
+  if (data.type === "search_results") {
+    showSearchResults(data);  // (messages.js; from every chat, so not filtered by channel below)
+    return;
+  }
   if (data.type === "groups") {
     setGroups(data.groups);  // our group DMs (people.js)
     return;

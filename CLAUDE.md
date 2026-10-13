@@ -137,6 +137,14 @@ the point is for me to understand how it works, not just to have it done.
   the history and that list (every message has "pinned"). Page: 📌 in each message's hover bar, and in the
   top bar (#dm-header, now on every chat; the call button only in DMs and groups), #pins-dialog with Jump and
   Unpin. `jumpToMessage` loads older batches by itself (`jumpLoading`, up to 40 x 50) to reach an old message.
+- Search: `messages_fts`, an FTS5 index of `messages.text` (external content, `content_rowid='id'`, unicode61
+  with remove_diacritics), filled once with 'rebuild' and kept in step by three triggers (insert, delete,
+  update of text). WebSocket `{"type": "search", "query", "channel" (or null: everywhere), "from" (a user id
+  or null), "ask"}` -> "search_results" (`ask` echoed; handled before core.js's channel filter).
+  `search_messages` only looks in `visible_chats` (channels, DMs with current friends, own groups), takes
+  only `\w+` words (max 10) as `"word"*` (no FTS5 syntax gets through), skips notes, newest 50 first, and
+  adds each message's "channel". Page: 🔍 in the top bar, #search-dialog (searches 300 ms after typing
+  stops); its results and the pinned list share `makeMessageCard`; Jump uses `openMessage`.
 - Calls in DMs and groups (server.py, "Calls in DMs and group DMs"): the room is the DM's or group's key;
   `is_call_member` (never bots) gates /voice-token and "voice"; `calls[channel]["ringing"]` is the set still
   being rung (a DM: the other one). Group: everyone else rings, a decline only stops your own ringing

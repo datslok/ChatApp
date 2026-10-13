@@ -65,13 +65,13 @@
     - [x] Loading older messages when scrolling up (past the newest 50)
     - [x] Text formatting: **bold**, *italic*, `code`, code blocks, > quotes, ||spoilers||, ~~strikethrough~~
     - [x] Link previews (title and picture for pasted links, fetched safely by the server)
-- [ ] **16.** Organising the chat
+- [x] **16.** Organising the chat
     - [x] Admins create, rename, delete and reorder channels from the app, with headings to group them (Settings → Channels)
     - [x] Group DMs (private chats with 3-10 people, with group calls)
     - [x] Pinned messages per channel (and in DMs and groups; the 📌 at the top of a chat)
     - [x] LaTeX support (maths in messages, drawn by KaTeX)
     - [x] Open on startup: the Windows app can start with Windows (Settings → App behaviour; app 0.1.16)
-    - [ ] Search messages (by text, person or channel; SQLite's FTS5)
+    - [x] Search messages (by text, person or channel; SQLite's FTS5; the 🔍 at the top of a chat)
 - [ ] **17.** Social and presence
     - [ ] Statuses: Online, Idle (automatic when away), Do Not Disturb (no notifications), Invisible
     - [ ] Muting a channel or DM

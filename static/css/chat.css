@@ -412,7 +412,7 @@ body {
   gap: 6px;
   margin-left: auto;
 }
-#pins-button {
+.header-icon {
   padding: 4px 8px;
   border: none;
   border-radius: 6px;
@@ -420,7 +420,7 @@ body {
   font-size: 1rem;
   cursor: pointer;
 }
-#pins-button:hover {
+.header-icon:hover {
   background: var(--bg-hover);
 }
 
@@ -429,8 +429,9 @@ body {
   background: var(--bg-active);
 }
 
-/* The pinned messages popup: a list that scrolls on its own, each message on a card. */
-#pins-dialog {
+/* The pinned messages and search popups: a list that scrolls on its own, each message on a card. */
+#pins-dialog,
+#search-dialog {
   width: min(520px, 100% - 32px);
   box-sizing: border-box;
   padding: 16px 20px 20px;
@@ -439,7 +440,8 @@ body {
   background: var(--bg-panel);
   color: inherit;
 }
-#pins-dialog::backdrop {
+#pins-dialog::backdrop,
+#search-dialog::backdrop {
   background: rgba(0, 0, 0, 0.6);
 }
 .pins-top {
@@ -452,7 +454,8 @@ body {
   margin: 0;
   font-size: 1.1rem;
 }
-#pins-close {
+#pins-close,
+#search-close {
   padding: 0 6px;
   border: none;
   background: none;
@@ -461,7 +464,8 @@ body {
   line-height: 1;
   cursor: pointer;
 }
-#pins-close:hover {
+#pins-close:hover,
+#search-close:hover {
   color: var(--text);
 }
 .pins-empty {
@@ -469,39 +473,39 @@ body {
   font-size: 0.9rem;
   color: var(--text-muted);
 }
-#pins-list {
+.card-list {
   display: flex;
   flex-direction: column;
   gap: 8px;
   max-height: 60vh;
   overflow-y: auto;
 }
-.pinned-item {
+.message-card {
   padding: 10px 12px;
   border-radius: 8px;
   background: var(--bg-darkest);
 }
-.pinned-head {
+.card-head {
   display: flex;
   align-items: center;
   gap: 8px;
   margin-bottom: 4px;
 }
-.pinned-head time {
+.card-head time {
   font-size: 0.75rem;
   color: var(--text-muted);
 }
-.pinned-file {
+.card-file {
   font-size: 0.85rem;
   color: var(--text-soft);
 }
-.pinned-buttons {
+.card-buttons {
   display: flex;
   justify-content: flex-end;
   gap: 6px;
   margin-top: 8px;
 }
-.pinned-buttons button {
+.card-buttons button {
   padding: 4px 12px;
   border: none;
   border-radius: 6px;
@@ -510,9 +514,37 @@ body {
   font-size: 0.85rem;
   cursor: pointer;
 }
-.pinned-buttons button.secondary {
+.card-buttons button.secondary {
   background: var(--bg-neutral);
   color: inherit;
+}
+
+/* Search: the words on top, "In this chat / Everywhere" and "From ..." side by side below. */
+#search-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+#search-input,
+.search-filters select {
+  padding: 8px 10px;
+  border: none;
+  border-radius: 6px;
+  background: var(--bg-darkest);
+  color: inherit;
+  font-size: 0.95rem;
+}
+.search-filters {
+  display: flex;
+  gap: 8px;
+}
+.search-filters select {
+  flex: 1;
+  min-width: 0;  /* (so a long name can't push the other one off a phone screen) */
+}
+#search-status:empty {
+  display: none;
 }
 
 /* "Direct messages" with the + for a new group at its right end. */

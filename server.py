@@ -516,6 +516,40 @@ if "pinned_at" not in table_columns("messages"):
         db.execute("ALTER TABLE messages ADD COLUMN pinned_at TEXT")  # when it was pinned; NULL = not pinned
         db.execute("ALTER TABLE messages ADD COLUMN pinned_by INTEGER REFERENCES users(id)")  # who pinned it
 
+# Search: a full-text index of every message's text (SQLite's FTS5), like the index at the back of a
+# book: for each word, which messages have it, so finding one is a lookup instead of reading every
+# message. "content='messages'": the index doesn't keep its own copy of the text, it points to the
+# messages table (its id). unicode61 with remove_diacritics: whole words, any case, and "pa" finds
+# "på". The first start fills it from every message there is ('rebuild').
+if not table_exists("messages_fts"):
+    with db:
+        db.execute("""
+            CREATE VIRTUAL TABLE messages_fts USING fts5(
+                text, content='messages', content_rowid='id', tokenize='unicode61 remove_diacritics 2'
+            )
+        """)
+        db.execute("INSERT INTO messages_fts(messages_fts) VALUES ('rebuild')")
+# ...and kept up to date by the database itself: triggers are bits of SQL that SQLite runs after
+# every insert, edit or delete on messages, whichever code did it. ('delete' is how FTS5 is told
+# that a text is gone: it needs the old text to find its words.)
+with db:
+    db.execute("""
+        CREATE TRIGGER IF NOT EXISTS messages_fts_insert AFTER INSERT ON messages BEGIN
+            INSERT INTO messages_fts (rowid, text) VALUES (new.id, new.text);
+        END
+    """)
+    db.execute("""
+        CREATE TRIGGER IF NOT EXISTS messages_fts_delete AFTER DELETE ON messages BEGIN
+            INSERT INTO messages_fts (messages_fts, rowid, text) VALUES ('delete', old.id, old.text);
+        END
+    """)
+    db.execute("""
+        CREATE TRIGGER IF NOT EXISTS messages_fts_update AFTER UPDATE OF text ON messages BEGIN
+            INSERT INTO messages_fts (messages_fts, rowid, text) VALUES ('delete', old.id, old.text);
+            INSERT INTO messages_fts (rowid, text) VALUES (new.id, new.text);
+        END
+    """)
+
 if "is_admin" not in table_columns("users"):
     # From before admins existed: nobody is one, until tools/make_admin.py says so.
     with db:
@@ -753,6 +787,52 @@ def pinned_messages(channel):
         (channel,),
     ).fetchall()
     return message_dicts(rows)
+
+
+MAX_SEARCH_RESULTS = 50
+MAX_SEARCH_WORDS = 10
+
+
+def visible_chats(user_id):
+    """Every chat this person may read (see can_join): the channels, their DMs with friends, their groups."""
+    chats = [key for (key,) in db.execute("SELECT key FROM channels WHERE heading = 0")]
+    chats += [f"dm:{min(user_id, friend)}:{max(user_id, friend)}" for friend in friends_message(user_id)["friends"]]
+    chats += [key for (key,) in db.execute("SELECT group_key FROM group_members WHERE user_id = ?", (user_id,))]
+    return chats
+
+
+def search_messages(user_id, text, chat=None, author=None):
+    """The newest messages (at most MAX_SEARCH_RESULTS) this person can see with every word of `text`,
+    each also as the start of a longer word ("hunt" finds "hunter2"); in one chat or in all of them,
+    from anyone or from one person. Like the history, plus each message's "channel". Text or author
+    may be left out, not both."""
+    words = re.findall(r"\w+", text)[:MAX_SEARCH_WORDS]  # letters and digits only: no FTS5 syntax gets in
+    chats = visible_chats(user_id)  # never anything else: someone else's DM stays out of reach
+    if chat is not None:
+        chats = [chat] if chat in chats else []
+    if not chats or (not words and author is None):
+        return []
+    conditions = [f"messages.channel IN ({','.join('?' * len(chats))})", "messages.kind IS NULL"]  # (no notes)
+    params = list(chats)
+    if words:
+        # '"pizza"* "fred"*': every word must be there ("..." keeps it a plain word, * = or longer).
+        conditions.append("messages.id IN (SELECT rowid FROM messages_fts WHERE messages_fts MATCH ?)")
+        params.append(" ".join(f'"{word}"*' for word in words))
+    if author is not None:
+        conditions.append("messages.user_id = ?")
+        params.append(author)
+    rows = db.execute(
+        MESSAGES_QUERY + " WHERE " + " AND ".join(conditions) + " ORDER BY messages.id DESC LIMIT ?",
+        (*params, MAX_SEARCH_RESULTS),
+    ).fetchall()
+    found = message_dicts(rows)
+    if found:
+        # Which chat each one is in (the page shows it, and Jump goes there).
+        ids = [message["id"] for message in found]
+        chat_of = dict(db.execute(f"SELECT id, channel FROM messages WHERE id IN ({','.join('?' * len(ids))})", ids))
+        for message in found:
+            message["channel"] = chat_of[message["id"]]
+    return found
 
 
 def parse_json(raw):
@@ -3553,6 +3633,19 @@ async def chat(websocket: WebSocket):
                         "edited_at": None, "kind": "pin", "pinned": False, "preview": None,
                     })
                     await announce_new_message(message_channel)
+
+            elif kind == "search":
+                # {"type": "search", "query": "pizza", "channel": "general" (or null: everywhere),
+                # "from": 3 (or null: anyone), "ask": 7}. "ask" comes back, so the page can ignore the
+                # answer to an older search (typing fast sends several).
+                query = data.get("query") if isinstance(data.get("query"), str) else ""
+                chat = data.get("channel") if isinstance(data.get("channel"), str) else None
+                author = data.get("from")
+                if not isinstance(author, int) or isinstance(author, bool):
+                    author = None
+                ask = data.get("ask") if isinstance(data.get("ask"), int) else None
+                await send(websocket, {"type": "search_results", "ask": ask,
+                                       "results": search_messages(user_id, query[:200], chat, author)})
 
             elif kind == "pins" and channel is not None:
                 # {"type": "pins"}: the pinned messages of the channel we're in (the 📌 list).

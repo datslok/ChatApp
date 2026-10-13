@@ -1088,19 +1088,21 @@ function showPins(list) {
   pinsEmpty.textContent = "Nothing pinned here yet. Hover over a message and click 📌 to pin it.";
 }
 
-// One pinned message: who and when, its text (formatted like in the chat), its file's name, and buttons.
-function makePinnedItem(message) {
+// A message on a card, for the pinned list and the search results: who and when (and where, if
+// `where` is given, like "#memes"), its text formatted like in the chat, its file's name, and a row
+// for the buttons, which the caller adds: { item, buttons }.
+function makeMessageCard(message, where = "") {
   const item = document.createElement("article");
-  item.className = "pinned-item";
+  item.className = "message-card";
 
   const head = document.createElement("div");
-  head.className = "pinned-head";
+  head.className = "card-head";
   head.appendChild(makeAvatar(message.user_id, message.name, "small"));
   const name = document.createElement("strong");
   name.textContent = message.name;  // (textContent: never as HTML)
   const time = document.createElement("time");
   const sent = new Date(message.sent_at);
-  time.textContent = dayName(sent) + " at " + formatClock(sent);  // "Yesterday at 14:03"
+  time.textContent = (where ? where + " · " : "") + dayName(sent) + " at " + formatClock(sent);  // "#memes · Yesterday at 14:03"
   head.append(name, time);
   item.appendChild(head);
 
@@ -1112,32 +1114,124 @@ function makePinnedItem(message) {
   }
   if (message.file) {
     const file = document.createElement("div");
-    file.className = "pinned-file";
+    file.className = "card-file";
     file.textContent = (message.file.image ? "🖼️ " : "📎 ") + message.file.filename;
     item.appendChild(file);
   }
 
   const buttons = document.createElement("div");
-  buttons.className = "pinned-buttons";
-  const jump = document.createElement("button");
-  jump.type = "button";
-  jump.textContent = "Jump";
-  jump.addEventListener("click", () => {
-    pinsDialog.close();
-    jumpToMessage(message.id);  // (loads older messages until it's there)
-  });
-  const unpin = document.createElement("button");
-  unpin.type = "button";
-  unpin.className = "secondary";
-  unpin.textContent = "Unpin";
-  unpin.addEventListener("click", () => sendToServer({ type: "pin", message_id: message.id, pinned: false }));
-  buttons.append(jump, unpin);
+  buttons.className = "card-buttons";
   item.appendChild(buttons);
+  return { item, buttons };  // (an object with the two: the caller takes them apart again)
+}
+
+// A small button for a card. `secondary`: grey instead of the accent colour.
+function makeCardButton(text, onClick, secondary = false) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.textContent = text;
+  if (secondary) button.className = "secondary";
+  button.addEventListener("click", onClick);
+  return button;
+}
+
+// One pinned message: Jump (loads older messages until it's there) and Unpin.
+function makePinnedItem(message) {
+  const { item, buttons } = makeMessageCard(message);  // ("destructuring": both parts by name)
+  buttons.append(
+    makeCardButton("Jump", () => {
+      pinsDialog.close();
+      jumpToMessage(message.id);
+    }),
+    makeCardButton("Unpin", () => sendToServer({ type: "pin", message_id: message.id, pinned: false }), true),
+  );
   return item;
 }
 
 document.getElementById("pins-button").addEventListener("click", openPins);
 document.getElementById("pins-close").addEventListener("click", () => pinsDialog.close());
+
+// ---------- Search ----------
+//
+// 🔍 at the top of a chat: words to find, where (this chat or everywhere) and from whom (anyone or
+// one person). The server searches its full-text index, only in chats we can see, and answers with
+// the 50 newest matches (server.py, search_messages). It searches as you type, a moment after the
+// last key, so not every letter sends a search.
+
+const searchDialog = document.getElementById("search-dialog");
+const searchInput = document.getElementById("search-input");
+const searchWhere = document.getElementById("search-where");
+const searchFrom = document.getElementById("search-from");
+const searchStatus = document.getElementById("search-status");
+const searchList = document.getElementById("search-list");
+let searchAsk = 0;        // numbers our searches: the answer to an older one (typing fast) is ignored
+let searchTimer = null;   // the wait after the last key
+
+function openSearch() {
+  // From: anyone, or one person (everyone, by name, as the server sorted them). new Option(text,
+  // value) sets the text as plain text. What was picked last time stays picked, if they're still there.
+  const from = searchFrom.value;
+  searchFrom.replaceChildren(
+    new Option("From anyone", ""),
+    ...[...people.values()].map((person) => new Option("From " + person.name, person.id)),
+  );
+  searchFrom.value = [...searchFrom.options].some((option) => option.value === from) ? from : "";
+  searchDialog.showModal();
+  searchInput.focus();
+  searchInput.select();  // (the words from last time, selected: typing replaces them)
+  runSearch();
+}
+
+function runSearch() {
+  clearTimeout(searchTimer);
+  const query = searchInput.value.trim();
+  const from = searchFrom.value ? Number(searchFrom.value) : null;
+  searchAsk += 1;  // (also makes any answer still on its way an old one)
+  if (!query && from === null) {
+    searchList.replaceChildren();
+    searchStatus.textContent = "Type the words to find, or pick a person.";
+    return;
+  }
+  searchStatus.textContent = "Searching…";
+  sendToServer({
+    type: "search", query, from, ask: searchAsk,
+    channel: searchWhere.value === "here" ? currentChannel : null,  // null: everywhere we can see
+  });
+}
+
+// The server's answer (core.js, "search_results").
+function showSearchResults(data) {
+  if (!searchDialog.open || data.ask !== searchAsk) return;  // closed, or an older search
+  const everywhere = searchWhere.value === "all";
+  searchList.replaceChildren(...data.results.map((message) => makeSearchItem(message, everywhere)));
+  if (data.results.length === 0) searchStatus.textContent = "Nothing found.";
+  else if (data.results.length >= 50) searchStatus.textContent = "The 50 newest matches:";
+  else searchStatus.textContent = "";
+}
+
+// One result: where it is (when searching everywhere), and Jump, which opens that chat if needed
+// and goes to the message (notifications.js, openMessage: also used by notifications).
+function makeSearchItem(message, everywhere) {
+  const { item, buttons } = makeMessageCard(message, everywhere ? channelLabel(message.channel) : "");
+  buttons.append(makeCardButton("Jump", () => {
+    searchDialog.close();
+    openMessage(message.channel, message.id);
+  }));
+  return item;
+}
+
+searchInput.addEventListener("input", () => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(runSearch, 300);  // 300 ms after the last key
+});
+searchWhere.addEventListener("change", runSearch);
+searchFrom.addEventListener("change", runSearch);
+document.getElementById("search-form").addEventListener("submit", (event) => {
+  event.preventDefault();  // Enter: search now (and no page load)
+  runSearch();
+});
+document.getElementById("search-button").addEventListener("click", openSearch);
+document.getElementById("search-close").addEventListener("click", () => searchDialog.close());
 
 // ---------- Editing and deleting ----------
 
