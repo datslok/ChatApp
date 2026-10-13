@@ -131,7 +131,7 @@ the point is for me to understand how it works, not just to have it done.
   #dm-header shows members and Add people / Rename (prompt()) / Leave (confirm()) / 📞 Call.
 - Pinned messages: `messages.pinned_at` / `pinned_by` (NULL = not pinned); anyone who can see a message
   (`can_join`) may pin or unpin it over the WebSocket (`{"type": "pin", "message_id", "pinned"}`), never a
-  note (`kind` set); `MAX_PINS` 50 per chat (else "pins_full"). Everyone in the chat gets "pinned"; a pin also
+  note (`kind` set); `MAX_PINS` 100 per chat (else "pins_full"). Everyone in the chat gets "pinned"; a pin also
   saves a note (`kind` "pin", "📌 pinned a message.", `reply_to` the message: drawn like call notes).
   `{"type": "pins"}` answers with `pinned_messages(channel)`. `MESSAGES_QUERY` + `message_dicts` build both
   the history and that list (every message has "pinned"). Page: 📌 in each message's hover bar, and in the

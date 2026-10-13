@@ -742,7 +742,7 @@ def recent_messages(channel, before=None):
     return message_dicts(rows)
 
 
-MAX_PINS = 50  # pinned messages per channel, DM or group (like Discord)
+MAX_PINS = 100  # pinned messages per channel, DM or group (Discord allows 50)
 
 
 def pinned_messages(channel):

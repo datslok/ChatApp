@@ -9,7 +9,7 @@
         "Hover a message to react 😀, reply ↩, edit ✏️ or delete 🗑️ (hold Shift to skip the question). Esc cancels a reply or an edit",
         "↑ in an empty text box edits your last message",
         "Click a reply's quote to jump to the original message (older ones load by themselves)",
-        "Pin a message: hover over it and click 📌. The 📌 at the top of a channel, DM or group lists its pinned messages (up to 50), with Jump and Unpin. Anyone can pin and unpin",
+        "Pin a message: hover over it and click 📌. The 📌 at the top of a channel, DM or group lists its pinned messages (up to 100), with Jump and Unpin. Anyone can pin and unpin",
         "@name mentions someone, @everyone mentions everybody: they get a notification and a red count",
         "Type :name for emoji suggestions (↑↓ to choose, Enter or Tab to pick), or use the 😀 button. Messages with only emoji show them big",
         "Pictures and files up to 10 MB: the + button, drag and drop, or paste. Up to 10 at once, click a picture to see it big",
