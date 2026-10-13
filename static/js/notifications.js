@@ -431,7 +431,7 @@ function channelLabel(channel) {
   if (channel === FRIENDS) return "Friends";
   if (channel === LOUNGE) return "Lounge";
   const partner = dmPartner(channel);
-  return partner === null ? "#" + channel : "@" + (people.get(partner)?.name ?? "someone");
+  return partner === null ? "#" + channelName(channel) : "@" + (people.get(partner)?.name ?? "someone");
 }
 
 // Notify: sound and/or a desktop notification. Clicking it opens that message.

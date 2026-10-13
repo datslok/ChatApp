@@ -263,7 +263,8 @@
         What's new <span id="changelog-new-dot" class="new-dot" hidden></span>
       </button>
       <button type="button" class="settings-tab" role="tab" data-tab="feedback">Bugs &amp; ideas</button>
-      <!-- Only for admins (settings.js shows it); the server checks too. -->
+      <!-- Only for admins (settings.js shows them); the server checks too. -->
+      <button type="button" class="settings-tab" role="tab" data-tab="channels" id="channels-tab" hidden>Channels</button>
       <button type="button" class="settings-tab" role="tab" data-tab="inbox" id="inbox-tab" hidden>
         Inbox <span id="inbox-count"></span>
       </button>
@@ -579,6 +580,28 @@
           <div id="feedback-status" class="status"></div>
           <button>Send</button>
         </form>
+      </section>
+
+      <!-- The sidebar's channels and headings, for admins (settings.js, "Channels"). -->
+      <section class="settings-page" data-page="channels" role="tabpanel" aria-label="Channels">
+        <h2>Channels</h2>
+        <p class="settings-help">
+          The sidebar, top to bottom. A heading groups the channels under it. Everyone sees changes straight away.
+        </p>
+        <div id="channel-admin-list"></div>
+        <h3>Add</h3>
+        <!-- Two submit buttons: the one clicked (event.submitter) says which kind to make. -->
+        <form id="new-channel-form">
+          <label>
+            Name
+            <input id="new-channel-name" maxlength="30" placeholder="e.g. games" autocomplete="off" required>
+          </label>
+          <div class="button-row">
+            <button type="submit" value="channel">Add channel</button>
+            <button type="submit" value="heading">Add heading</button>
+          </div>
+        </form>
+        <div id="channel-admin-status" class="status"></div>
       </section>
 
       <section class="settings-page" data-page="inbox" role="tabpanel" aria-label="Inbox">

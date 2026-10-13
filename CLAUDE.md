@@ -104,7 +104,17 @@ the point is for me to understand how it works, not just to have it done.
   npm's tarball, checked against npm's integrity hash; served at `/katex-0.18.9/` with a week's caching,
   `LastingStaticFiles`). Its defaults stay (trust off: no `\href`; maxExpand), plus `maxSize: 20`.
 - `tools/make_admin.py`: make someone an admin (or `--remove`, or `--list`); `--db dev.db` for development.
-  Admins can edit and delete anyone's messages and custom emoji.
+  Admins can edit and delete anyone's messages and custom emoji, and manage the channels.
+- Channels (server.py, "Channels"): the `channels` table, one ordered list (`position`) of channels and
+  headings (`heading` 1; a heading groups the channels below it until the next one). Messages and the rest
+  store a channel's `key`, which never changes; renaming changes `name` only. The first three keep their old
+  names as keys (general, memes, chattus, seeded when the table is empty); new ones get `c:` + 8 random hex
+  (`h:` for headings). Admin-only: `POST /channels` (create, at the bottom), `/channels/{key}/rename`,
+  `/channels/order` (the whole list of keys), `/channels/{key}/delete` (a channel with all its messages,
+  files and previews; never the last channel). Every change sends `{"type": "channels"}` to every page
+  (also sent at each connect); core.js `showChannels` redraws the sidebar, a page in a deleted channel goes
+  to the first one. Settings → Channels (settings.js, admins only): each row a small form (Enter/Save
+  renames), ↑ ↓, 🗑 with confirm(). `can_join` uses `is_channel`; push titles use `channel_name`.
 - Settings → "Bugs & ideas": `/feedback` saves a report in the `feedback` table and emails it to every
   admin with an email. Admins read them in Settings → "Inbox" (settings.js; `GET /feedback` and
   `POST /feedback/{id}/done`, both admin-only on the server), or with `tools/feedback.py`
@@ -218,7 +228,7 @@ the point is for me to understand how it works, not just to have it done.
   The bot is `chattus.py` (task "ChatApp bot" via `chattus.ps1`, logs\bot.log; `update.ps1` restarts it on
   every deploy): the account Chattus (`tools/make_bot.py`: no email, random password in `.env` as
   `CHATTUS_PASSWORD`, `icon/chattuschattus_square.png` as picture) logs in with `/login` and uses the normal
-  WebSocket at 127.0.0.1:8000, no server changes but `"chattus"` in `CHANNELS`. A connection is in one
+  WebSocket at 127.0.0.1:8000, no server changes but the channel with key `"chattus"` (`HOME`; names come from "channels" messages). A connection is in one
   channel at a time, so on an "unread" for #chattus, a DM or with "notify"/"mentions" (a mention) he
   "join"s it and uses its "history". Answers the newest message after his own last one (`answered` ids
   against double answers), never messages over 1 h old, one at a time (a queue), "typing" every 2 s,

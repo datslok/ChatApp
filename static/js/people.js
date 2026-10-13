@@ -199,7 +199,7 @@ function friendsChanged() {
   // Looking at a DM with someone who's no longer a friend? Then it's gone: go to the first channel.
   const other = dmPartner(currentChannel);
   if (other !== null && !friendIds.has(other)) {
-    switchChannel(firstChannel, "#" + firstChannel);
+    switchChannel(firstChannel, channelLabel(firstChannel));
   }
 }
 

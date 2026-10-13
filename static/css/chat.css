@@ -1978,6 +1978,72 @@ button.download-button {
   color: var(--text-muted);
 }
 
+/* Settings → Channels: one row per channel or heading, with its name in a text box (edit it and
+   press Enter or Save to rename), ↑ ↓ to move it and 🗑 to delete it. Each row is a small form of
+   its own, laid out as a row instead of the usual column. */
+#channel-admin-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 12px 0 8px;
+}
+
+#settings form.channel-admin-item {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+}
+
+#settings form.channel-admin-item.heading {
+  margin-top: 10px;  /* a little room above each heading, like in the sidebar */
+}
+
+.channel-admin-mark {
+  width: 1.2em;
+  flex-shrink: 0;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+/* flex: 1 takes the room the buttons leave; min-width: 0 lets it shrink on a phone. */
+#settings .channel-admin-item input {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 10px;
+}
+
+#settings .channel-admin-item.heading input {
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;  /* (only how it looks: the name is saved as typed) */
+}
+
+#settings .channel-admin-item button {
+  flex-shrink: 0;
+  padding: 6px 10px;
+  font-size: 0.85rem;
+  background: var(--bg-neutral);
+}
+
+#settings .channel-admin-item button.save {
+  background: var(--accent);
+}
+
+#settings .channel-admin-item button.delete:hover:not(:disabled) {
+  background: var(--red);
+}
+
+/* Add channel and Add heading, side by side, each as wide as its text. */
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+#settings .button-row button {
+  padding: 10px 24px;
+}
+
 /* "Volume [——o——] 80%" on one line. */
 /* Three columns, the same in every row: the name (wide enough for "Others' volume"), the slider
    (the rest), the value. So the sliders line up and are all the same length. The name is loose

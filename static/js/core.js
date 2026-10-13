@@ -109,7 +109,10 @@ const viewerClose = document.getElementById("viewer-close");
 let socket = null;         // our WebSocket (replaced with a new one if it drops)
 let currentChannel = null;  // the channel (or DM) we're looking at
 let firstChannel = null;    // where to start: the first channel in the list
-let channelNames = [];      // every channel, from the server: ["general", "memes"]
+// The sidebar's channels and headings, top to bottom, from the server:
+// [{key: "general", name: "general", heading: false}, {key: "h:9c1e...", name: "Games", heading: true}, ...]
+// A channel's key never changes (messages point to it); its name is what we show.
+let channels = [];
 // The Friends page counts as a "channel" of its own here: it's highlighted in the sidebar
 // and is a step for the back button like any channel. (The server never hears this name.)
 const FRIENDS = "friends";
@@ -155,25 +158,60 @@ function restoreDraft() {
   } catch {}
 }
 
-// Ask the server which channels exist, make a sidebar button for each, then connect.
+// Ask the server which channels exist, show them in the sidebar, then connect.
 async function start() {
   restoreDraft();
   const response = await fetch("/channels");
-  const channels = await response.json();  // e.g. ["general", "memes"]
-
-  for (const channel of channels) {
-    const button = document.createElement("button");
-    button.className = "channel";
-    button.textContent = "# " + channel;
-    button.dataset.channel = channel;  // remember which channel this button is for
-    button.addEventListener("click", () => switchChannel(channel, "#" + channel));
-    channelList.appendChild(button);
-  }
-
-  firstChannel = channels[0];
-  channelNames = channels;
+  showChannels(await response.json());
   connect();
   ensureEmojiData();  // in the background (no await): the autocomplete needs the emoji names
+}
+
+// Is this the key of a channel that exists? (Not a heading, a DM, Friends or the Lounge.)
+function isChannel(key) {
+  return channels.some((item) => item.key === key && !item.heading);
+}
+
+// A channel's name, from its key (the key itself if it's gone).
+function channelName(key) {
+  return channels.find((item) => item.key === key)?.name ?? key;
+}
+
+// (Re)draw the sidebar's channels: at the start, and whenever an admin changes them (a "channels"
+// message, to every page). A heading is a small title over the channels below it.
+function showChannels(list) {
+  channels = list;
+  firstChannel = channels.find((item) => !item.heading)?.key ?? null;
+  channelList.replaceChildren();  // the old buttons and headings out
+  for (const item of channels) {
+    if (item.heading) {
+      const heading = document.createElement("h2");
+      heading.className = "section-heading";
+      heading.textContent = item.name;  // textContent: an admin typed it, so never as HTML
+      channelList.appendChild(heading);
+      continue;
+    }
+    const button = document.createElement("button");
+    button.className = "channel";
+    button.textContent = "# " + item.name;
+    button.dataset.channel = item.key;  // remember which channel this button is for
+    button.addEventListener("click", () => switchChannel(item.key, channelLabel(item.key)));
+    channelList.appendChild(button);
+  }
+  updateSidebar();  // new buttons: mark where we are and what's unread again
+}
+
+// The server's "channels": an admin changed them (or we just connected).
+function channelsChanged(list) {
+  showChannels(list);
+  renderChannelAdmin();  // Settings → Channels, in case an admin has it open (settings.js)
+  if (currentChannel === null) return;  // not started yet: connect's "open" picks one
+  const special = currentChannel === FRIENDS || currentChannel === LOUNGE || currentChannel.startsWith("dm:");
+  if (!special && !isChannel(currentChannel)) {
+    switchChannel(firstChannel, channelLabel(firstChannel));  // ours was deleted
+  } else {
+    setLabel(channelLabel(currentChannel));  // (it may have been renamed)
+  }
 }
 
 // Open the WebSocket. Called once at the start, and again each time the connection drops.
@@ -235,7 +273,7 @@ function checkForAppUpdate() {
 function channelBeforeReload() {
   const channel = history.state?.channel;
   if (typeof channel !== "string") return null;
-  if (channelNames.includes(channel) || channel === FRIENDS || channel === LOUNGE || channel.startsWith("dm:")) {
+  if (isChannel(channel) || channel === FRIENDS || channel === LOUNGE || channel.startsWith("dm:")) {
     return channel;
   }
   return null;
@@ -266,6 +304,10 @@ function handleServerMessage(event) {
       outdated = true;  // a reconnect after a deploy that changed the page
       reloadIfOutdated();
     }
+    return;
+  }
+  if (data.type === "channels") {
+    channelsChanged(data.channels);
     return;
   }
   if (data.type === "appearance") {

@@ -66,7 +66,7 @@
     - [x] Text formatting: **bold**, *italic*, `code`, code blocks, > quotes, ||spoilers||, ~~strikethrough~~
     - [x] Link previews (title and picture for pasted links, fetched safely by the server)
 - [ ] **16.** Organising the chat
-    - [ ] Admins create, rename, delete and reorder channels from the app, with headings to group them
+    - [x] Admins create, rename, delete and reorder channels from the app, with headings to group them (Settings → Channels)
     - [ ] Group DMs (private chats with 3-10 people)
     - [ ] Pinned messages per channel
     - [x] LaTeX support (maths in messages, drawn by KaTeX)

@@ -437,6 +437,7 @@ class Chattus:
         self.websocket = None
         self.my_id = None
         self.names = {}         # user id -> username, for turning <@2> into @kari
+        self.channel_names = {}  # channel key -> its name ("c:5f3a9b21" -> "games"), from "channels"
         self.emoji = {}         # custom emoji id -> name, for turning <:17> into :pog:
         self.emoji_files = {}   # custom emoji id -> its picture's file name
         self.emoji_notes = json.loads(EMOJI_NOTES.read_text(encoding="utf-8")) if EMOJI_NOTES.exists() else {}
@@ -529,6 +530,8 @@ class Chattus:
             self.my_id = data["id"]
         elif kind == "users":
             self.names = {user["id"]: user["name"] for user in data["users"]}
+        elif kind == "channels":  # at the start, and whenever an admin changes them
+            self.channel_names = {item["key"]: item["name"] for item in data["channels"]}
         elif kind == "custom_emoji":  # at the start, and whenever one is added, replaced or deleted
             self.emoji = {emoji["id"]: emoji["name"] for emoji in data["emoji"]}
             self.emoji_files = {emoji["id"]: emoji["file"] for emoji in data["emoji"]}
@@ -799,15 +802,16 @@ class Chattus:
         return f"{sent:%H:%M}" if sent.date() == date.today() else f"{sent:%d %b %H:%M}"
 
     def where(self, channel):
+        name = self.channel_names.get(channel, channel)
         if channel == HOME:
-            return "You're in #chattus, your own channel: every message there is for you."
+            return f"You're in #{name}, your own channel: every message there is for you."
         if channel.startswith("dm:"):
             people = [self.names.get(int(part), "someone") for part in channel.split(":")[1:] if int(part) != self.my_id]
             if len(people) == 1:
                 return f"You're in a private chat with {people[0]}."
             return (f"You're in a private chat between {people[0]} and {people[1]}. One of them mentioned "
                     "you (@Chattus) to ask you something: answer that, and keep out of the rest.")
-        return f"You're in #{channel}, a channel for everyone. Someone mentioned you (@Chattus)."
+        return f"You're in #{name}, a channel for everyone. Someone mentioned you (@Chattus)."
 
     def attachments_to_show(self, messages, target, wanted, lookback=PICTURE_LOOKBACK, earlier=1):
         """The ids of the messages whose file the model gets to see (wanted(file): a picture, say): the

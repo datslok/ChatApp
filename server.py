@@ -84,7 +84,8 @@ if not INVITE_CODE:
 if not SMTP_HOST:
     print("No SMTP_HOST set: emails will be printed here instead of sent.")
 
-CHANNELS = ["general", "memes", "chattus"]  # add a name here to make a new channel (chattus: the AI bot's own)
+MAX_CHANNEL_NAME = 30  # characters, for channels and headings (Settings → Channels)
+MAX_CHANNELS = 50      # channels and headings together
 
 # Every emoji allowed as a reaction, from static/emoji.json (made from Unicode's official list by
 # tools/make_emoji_json.py). The page's emoji picker uses the same file, so they always agree.
@@ -288,6 +289,24 @@ db.execute("""
         image       TEXT            -- its picture's file name in uploads/previews; NULL = none
     )
 """)
+# The sidebar's channels and headings (Settings → Channels, for admins). Messages point to a
+# channel by its key, which never changes, so renaming one only changes its name.
+db.execute("""
+    CREATE TABLE IF NOT EXISTS channels (
+        key      TEXT PRIMARY KEY,           -- what messages.channel holds: "general", or "c:5f3a9b21"
+        name     TEXT NOT NULL,              -- what people see after the #
+        position INTEGER NOT NULL,           -- the order in the sidebar, from the top
+        heading  INTEGER NOT NULL DEFAULT 0  -- 1 = a heading over the channels below it ("h:..."), not a channel
+    )
+""")
+if db.execute("SELECT COUNT(*) FROM channels").fetchone()[0] == 0:
+    # The first start with this table (or a brand new database): the channels that used to be
+    # written in the code. Their keys are their old names, so every message stays where it was.
+    with db:
+        db.executemany(
+            "INSERT INTO channels (key, name, position) VALUES (?, ?, ?)",
+            [("general", "general", 0), ("memes", "memes", 1), ("chattus", "chattus", 2)],
+        )
 
 
 def create_friendships_table():
@@ -1624,7 +1643,7 @@ def push_in_background(user_ids, payload, **options):
 def push_message(people, message):
     """A new message for these people (a DM to them, or mentioning them): "axel in #general"."""
     channel = message["channel"]
-    title = message["name"] if channel.startswith("dm:") else f'{message["name"]} in #{channel}'
+    title = message["name"] if channel.startswith("dm:") else f'{message["name"]} in #{channel_name(channel)}'
     body = readable_text(message["text"])
     if len(body) > PUSH_TEXT_LENGTH:
         body = body[:PUSH_TEXT_LENGTH] + "…"
@@ -2219,9 +2238,149 @@ async def release_file(name: str):
     return FileResponse(RELEASES_DIR / name, headers={"Cache-Control": "no-cache"})
 
 
+# ---------- Channels ----------
+#
+# The sidebar is one list, top to bottom, of channels and headings: a heading groups the channels
+# under it, until the next heading. Admins change it in Settings → Channels; every change goes
+# out to every open page at once ({"type": "channels"}), which redraws its sidebar.
+
+def channel_list():
+    """The sidebar, top to bottom: [{"key": "general", "name": "general", "heading": False}, ...]"""
+    rows = db.execute("SELECT key, name, heading FROM channels ORDER BY position").fetchall()
+    return [{"key": key, "name": name, "heading": bool(heading)} for key, name, heading in rows]
+
+
+def is_channel(key):
+    """Is this a channel that exists? (Headings aren't: nobody can join one.)"""
+    if not isinstance(key, str):
+        return False  # (the page could send anything as a channel, a list say)
+    return db.execute("SELECT 1 FROM channels WHERE key = ? AND heading = 0", (key,)).fetchone() is not None
+
+
+def channel_name(key):
+    """A channel's name, for notifications ("kari in #memes"). Its key if it's gone."""
+    row = db.execute("SELECT name FROM channels WHERE key = ?", (key,)).fetchone()
+    return row[0] if row else key
+
+
+async def announce_channels():
+    await send_to_everyone({"type": "channels", "channels": channel_list()})
+
+
+def clean_channel_name(name):
+    """A name as typed, tidied: spaces at the ends and line breaks gone, runs of spaces made one."""
+    name = " ".join(name.split())
+    if not name:
+        raise HTTPException(400, "Give it a name.")
+    if len(name) > MAX_CHANNEL_NAME:
+        raise HTTPException(400, f"That's a bit long: at most {MAX_CHANNEL_NAME} characters.")
+    return name
+
+
+def existing_channel(key):
+    """(is it a heading?) for a channel or heading that exists, or a 404."""
+    row = db.execute("SELECT heading FROM channels WHERE key = ?", (key,)).fetchone()
+    if row is None:
+        raise HTTPException(404, "That channel doesn't exist (any more).")
+    return bool(row[0])
+
+
 @app.get("/channels")
 async def channels():
-    return CHANNELS
+    return channel_list()
+
+
+class NewChannel(BaseModel):
+    name: str
+    heading: bool = False  # True: a heading instead of a channel
+
+
+@app.post("/channels")
+async def create_channel(request: Request, data: NewChannel):
+    """A new channel or heading, at the bottom of the list (admins only)."""
+    logged_in_admin(request)
+    name = clean_channel_name(data.name)
+    if db.execute("SELECT COUNT(*) FROM channels").fetchone()[0] >= MAX_CHANNELS:
+        raise HTTPException(400, f"That's the most there can be ({MAX_CHANNELS}).")
+    # A key that's never been used: "c:" (or "h:" for a heading) and 8 random hex digits. Not the
+    # name, which can change, and never clashing with "dm:3:7", "voice:..." or the page's "friends".
+    key = ("h:" if data.heading else "c:") + secrets.token_hex(4)
+    with db:
+        db.execute(
+            "INSERT INTO channels (key, name, position, heading) "
+            "VALUES (?, ?, (SELECT COALESCE(MAX(position), -1) + 1 FROM channels), ?)",
+            (key, name, int(data.heading)),
+        )
+    await announce_channels()
+    return {"key": key}
+
+
+class ChannelRename(BaseModel):
+    name: str
+
+
+@app.post("/channels/{key}/rename")
+async def rename_channel(request: Request, key: str, data: ChannelRename):
+    """A new name for a channel or heading (admins only). Its messages keep pointing to its key."""
+    logged_in_admin(request)
+    existing_channel(key)
+    name = clean_channel_name(data.name)
+    with db:
+        db.execute("UPDATE channels SET name = ? WHERE key = ?", (name, key))
+    await announce_channels()
+    return {"ok": True}
+
+
+class ChannelOrder(BaseModel):
+    keys: list[str]  # every channel and heading, in their new order
+
+
+@app.post("/channels/order")
+async def reorder_channels(request: Request, data: ChannelOrder):
+    """Put the channels and headings in a new order (admins only). The page sends the whole list,
+    so it must have exactly the keys there are: no more, no fewer, none twice."""
+    logged_in_admin(request)
+    existing = [key for (key,) in db.execute("SELECT key FROM channels")]
+    if sorted(data.keys) != sorted(existing):
+        raise HTTPException(409, "The channels changed meanwhile. Try again.")
+    with db:
+        # enumerate gives each key its place: (0, "general"), (1, "memes"), ...
+        db.executemany("UPDATE channels SET position = ? WHERE key = ?",
+                       [(position, key) for position, key in enumerate(data.keys)])
+    await announce_channels()
+    return {"ok": True}
+
+
+@app.post("/channels/{key}/delete")
+async def delete_channel(request: Request, key: str):
+    """Delete a heading, or a channel with every message in it (admins only). There's no undo,
+    except a backup, so the page asks first."""
+    logged_in_admin(request)
+    if not existing_channel(key):
+        if db.execute("SELECT COUNT(*) FROM channels WHERE heading = 0").fetchone()[0] <= 1:
+            raise HTTPException(400, "That's the last channel: there must always be one.")
+    files = [file for (file,) in db.execute("SELECT id FROM attachments WHERE channel = ?", (key,))]
+    previews = [image for (image,) in db.execute(
+        "SELECT image FROM link_previews WHERE image IS NOT NULL"
+        " AND message_id IN (SELECT id FROM messages WHERE channel = ?)", (key,))]
+    # Everything that belongs to its messages, then the messages, in one transaction: all or nothing.
+    with db:
+        for table in ("reactions", "mentions", "link_previews"):
+            db.execute(f"DELETE FROM {table} WHERE message_id IN (SELECT id FROM messages WHERE channel = ?)", (key,))
+        db.execute("DELETE FROM messages WHERE channel = ?", (key,))
+        db.execute("DELETE FROM attachments WHERE channel = ?", (key,))
+        db.execute("DELETE FROM last_read WHERE channel = ?", (key,))
+        db.execute("DELETE FROM channels WHERE key = ?", (key,))
+    # The files on disk, only once the database change has been saved (as for one message).
+    for file in files:
+        (UPLOAD_DIR / file).unlink(missing_ok=True)
+    for image in previews:
+        (PREVIEW_DIR / image).unlink(missing_ok=True)
+    for client in clients.values():
+        if client["channel"] == key:
+            client["channel"] = None  # (their page moves to the first channel when it hears)
+    await announce_channels()
+    return {"ok": True}
 
 
 # ---------- Chat ----------
@@ -2299,7 +2458,7 @@ def can_join(channel, user_id):
     """May this user read and write in this channel? Normal channels: anyone logged in.
     DMs ("dm:3:7", the two user ids, smallest first): the two people in it, while they're
     friends; and the AI bot for an hour after one of them mentioned it there."""
-    if channel in CHANNELS:
+    if is_channel(channel):
         return True
     if is_dm_member(channel, user_id):
         return True
@@ -2893,6 +3052,7 @@ async def chat(websocket: WebSocket):
             "appearance": appearance_of(user_id),  # Settings → Appearance (None: the defaults)
             "vapid_public_key": VAPID_PUBLIC_KEY or None,  # for subscribing to push (None: not set up)
         })
+        await send(websocket, {"type": "channels", "channels": channel_list()})  # (they may have changed while away)
         await send(websocket, friends_message(user_id))
         await send(websocket, custom_emoji_message())
         await send(websocket, {

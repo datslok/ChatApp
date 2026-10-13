@@ -264,8 +264,9 @@ cd C:\ChatApp
 
 Then share the address and the invite code with your friends.
 
-**Make it your own:** the channels are a list at the top of `server.py` (`CHANNELS = ["general",
-"memes", "chattus"]`; #chattus is the AI bot's, see below) and the voice channel is `VOICE_ROOMS`; change them and update (see below). The "What's
+**Make it your own:** a new chat starts with #general, #memes and #chattus (the AI bot's, see below).
+Admins (`tools/make_admin.py`) add, rename, move and delete channels, and headings to group them, in
+Settings → Channels. The voice channel is `VOICE_ROOMS` in `server.py`; change it and update (see below). The "What's
 new" page is yours to write (see [What's new](#whats-new)), and the icon should be your own too (see
 [License](#license)).
 
@@ -332,8 +333,9 @@ and makes two scheduled tasks: **ChatApp AI** runs `llama.ps1` (the model) and *
 itself (`http://127.0.0.1:8080`), and only with that key. The bot connects to the chat on the server
 too (`http://127.0.0.1:8000`), and logs in again by itself whenever the chat restarts.
 
-The channel **#chattus** is in `CHANNELS` in `server.py`; without the bot, it's just a quiet channel
-(take it out if you don't use the bot). His personality is `SYSTEM_PROMPT` at the top of
+The bot answers everything in the channel **#chattus** (its key `chattus` in the `channels` table: you
+can rename it, but a new channel with that name isn't his). Without the bot, it's just a quiet channel
+(delete it in Settings → Channels if you don't use the bot). His personality is `SYSTEM_PROMPT` at the top of
 `chattus.py`.
 
 The model lives on the graphics card the whole time (about 7 GB of its memory). The CPU stays nearly

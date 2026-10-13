@@ -82,7 +82,8 @@
     {
       "topic": "⚙️ Settings and help",
       "items": [
-        "Settings: the ⚙️ at the bottom left, next to your name. Its tabs: My Account, Profile, Appearance, Emoji, Notifications, Voice & audio, Video, App behaviour (only in the Windows app), What's new and Bugs & ideas",
+        "Settings: the ⚙️ at the bottom left, next to your name. Its tabs: My Account, Profile, Appearance, Emoji, Notifications, Voice & audio, Video, App behaviour (only in the Windows app), What's new and Bugs & ideas (admins also have Channels and Inbox)",
+        "Channels: admins add, rename, move and delete channels in Settings → Channels, and add headings that group the channels under them in the sidebar",
         "My Account: change your username, email and password. Forgot your password? There's a link on the login page",
         "Appearance: eight themes (Dark, Darker, Light, Blue, Purple, Green, Pink, Light pink), your own colours on top, a font and a text size, and in the Windows app a scale (everything bigger or smaller). Saved with your account, so it's the same on every device",
         "What's new: what changed lately (a red dot on ⚙️ means something new), and everything the chat can do",
@@ -91,6 +92,12 @@
     }
   ],
   "changes": [
+    {
+      "date": "2026-10-14",
+      "items": [
+        "New channels and headings can show up in the sidebar: admins now manage them from the app (Settings → Channels)"
+      ]
+    },
     {
       "date": "2026-10-13",
       "items": [

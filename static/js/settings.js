@@ -17,6 +17,7 @@ settingsButton.addEventListener("click", async () => {
   emojiStatus.textContent = "";
   feedbackStatus.textContent = "";  // (a half-written report stays, in case Settings was closed by mistake)
   renderMyEmoji();
+  showChannelAdmin();  // (admins only: the channels to manage)
   loadInbox();  // (admins only: the bug reports and ideas, fetched fresh)
   showNotificationSettings();  // (the browser's permission may have changed since)
   showPushSetting();  // (and whether this device gets push notifications)
@@ -727,6 +728,122 @@ feedbackForm.addEventListener("submit", async (event) => {
   }
   feedbackForm.reset();  // empties the text (and goes back to "bug")
   showStatus(feedbackStatus, kind === "bug" ? "Thanks! The bug report is sent." : "Thanks! Your idea is sent.", "success");
+});
+
+// ---------- Settings: Channels (admins only) ----------
+//
+// The sidebar's channels and headings: rename, move and delete them, and add new ones. The list
+// is the same `channels` the sidebar shows (core.js). Each change goes to the server, which tells
+// every page, this one too, with a "channels" message: that redraws the sidebar and this list.
+
+const channelsTab = document.getElementById("channels-tab");
+const channelAdminList = document.getElementById("channel-admin-list");
+const newChannelForm = document.getElementById("new-channel-form");
+const newChannelName = document.getElementById("new-channel-name");
+const channelAdminStatus = document.getElementById("channel-admin-status");
+
+// Called when Settings opens. For everyone else the tab stays hidden (and the server would refuse).
+function showChannelAdmin() {
+  channelsTab.hidden = !amAdmin();
+  if (channelsTab.hidden && settingsPage === "channels") showSettingsPage("account");  // (no longer an admin)
+  channelAdminStatus.textContent = "";
+  renderChannelAdmin();
+}
+
+// One row per channel or heading, in the sidebar's order. (map passes each item and its index.)
+function renderChannelAdmin() {
+  channelAdminList.replaceChildren(...channels.map(makeChannelAdminItem));
+}
+
+// A small grey button. type="button" matters: a button inside a form is a submit button unless
+// told otherwise, so ↑ would also "submit" the row (rename it).
+function makeChannelAdminButton(text, label) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.textContent = text;
+  button.title = label;                     // shown when hovering
+  button.setAttribute("aria-label", label);  // read out by screen readers instead of "↑"
+  return button;
+}
+
+// A row: "#" (or ▾ for a heading), the name in a text box, Save (once it's been changed), ↑ ↓ 🗑.
+// The row is a form, so Enter in the text box saves too.
+function makeChannelAdminItem(item, index) {
+  const row = document.createElement("form");
+  row.className = "channel-admin-item" + (item.heading ? " heading" : "");
+
+  const mark = document.createElement("span");
+  mark.className = "channel-admin-mark";
+  mark.textContent = item.heading ? "▾" : "#";
+
+  const name = document.createElement("input");
+  name.value = item.name;  // (.value, like textContent, is never read as HTML)
+  name.maxLength = 30;     // as the server's MAX_CHANNEL_NAME
+  name.required = true;    // the browser won't submit it empty
+  name.autocomplete = "off";
+  name.setAttribute("aria-label", item.heading ? "Heading name" : "Channel name");
+
+  const save = document.createElement("button");
+  save.type = "submit";
+  save.className = "save";
+  save.textContent = "Save";
+  save.hidden = true;
+  // "input" fires at every key: show Save only when the name is different from the saved one.
+  name.addEventListener("input", () => {
+    save.hidden = name.value.trim() === item.name;
+  });
+  row.addEventListener("submit", (event) => {
+    event.preventDefault();  // (a form would otherwise load a new page)
+    channelAdminRequest(`/channels/${encodeURIComponent(item.key)}/rename`, { name: name.value });
+  });
+
+  const up = makeChannelAdminButton("↑", "Move up");
+  up.disabled = index === 0;
+  up.addEventListener("click", () => moveChannel(index, -1));
+  const down = makeChannelAdminButton("↓", "Move down");
+  down.disabled = index === channels.length - 1;
+  down.addEventListener("click", () => moveChannel(index, 1));
+  const remove = makeChannelAdminButton("🗑", "Delete");
+  remove.className = "delete";
+  remove.addEventListener("click", () => deleteChannel(item));
+
+  row.append(mark, name, save, up, down, remove);
+  return row;
+}
+
+// Send a change. The new list comes back through the WebSocket (to every page), so here we only
+// show an error if there is one. Returns whether it worked.
+async function channelAdminRequest(url, data) {
+  const result = await postJson(url, data);
+  if (result.ok) channelAdminStatus.textContent = "";
+  else showStatus(channelAdminStatus, result.error, "error");
+  return result.ok;
+}
+
+// Swap a row with the one above (step -1) or below (+1), and send the whole new order.
+function moveChannel(index, step) {
+  const keys = channels.map((item) => item.key);
+  // [a, b] = [b, a] swaps two values in one go.
+  [keys[index], keys[index + step]] = [keys[index + step], keys[index]];
+  channelAdminRequest("/channels/order", { keys });
+}
+
+function deleteChannel(item) {
+  const question = item.heading
+    ? `Delete the heading "${item.name}"? The channels under it stay.`
+    : `Delete #${item.name} and every message and file in it? This can't be undone.`;
+  if (!confirm(question)) return;  // the browser's own OK/Cancel box
+  channelAdminRequest(`/channels/${encodeURIComponent(item.key)}/delete`, {});
+}
+
+// Add channel / Add heading: both submit the form, and event.submitter is the one clicked.
+newChannelForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const heading = event.submitter?.value === "heading";
+  if (await channelAdminRequest("/channels", { name: newChannelName.value, heading })) {
+    newChannelForm.reset();
+    showStatus(channelAdminStatus, heading ? "Heading added at the bottom." : "Channel added at the bottom.", "success");
+  }
 });
 
 // ---------- Settings: the inbox (admins only) ----------
