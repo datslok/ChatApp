@@ -68,7 +68,7 @@
 - [ ] **16.** Organising the chat
     - [x] Admins create, rename, delete and reorder channels from the app, with headings to group them (Settings → Channels)
     - [x] Group DMs (private chats with 3-10 people, with group calls)
-    - [ ] Pinned messages per channel
+    - [x] Pinned messages per channel (and in DMs and groups; the 📌 at the top of a chat)
     - [x] LaTeX support (maths in messages, drawn by KaTeX)
     - [x] Open on startup: the Windows app can start with Windows (Settings → App behaviour; app 0.1.16)
     - [ ] Search messages (by text, person or channel; SQLite's FTS5)

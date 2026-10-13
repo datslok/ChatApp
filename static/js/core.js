@@ -445,6 +445,19 @@ function handleServerMessage(event) {
     }
     if (editingId === data.message_id) editingId = null;
     redrawMessages();
+    if (pinsDialog.open) sendToServer({ type: "pins" });  // (it may have been pinned)
+  } else if (data.type === "pinned") {
+    // A message was pinned or unpinned (by anyone): its 📌 button, and the list if it's open.
+    const message = shownMessages.find((m) => m.id === data.message_id);
+    if (message) {
+      message.pinned = data.pinned;
+      redrawMessages();
+    }
+    if (pinsDialog.open) sendToServer({ type: "pins" });
+  } else if (data.type === "pins") {
+    showPins(data.messages);  // the 📌 list (messages.js)
+  } else if (data.type === "pins_full") {
+    showUploadError(`This chat already has ${data.max} pinned messages: unpin one first.`);
   } else if (data.type === "typing") {
     showTyping(data.name);
   } else if (data.type === "reactions") {
@@ -503,6 +516,7 @@ function joinCurrentChannel() {
   loadingOlder = false;        // an answer still on its way belongs to what we just cleared
   reachedStart = false;        // (the history says whether there's more)
   pendingJump = null;          // (openMessage sets it again right after switching)
+  jumpLoading = null;          // (messages.js: loading older messages to reach one, in the old channel)
   clearReply();                // a reply belongs to the channel we just left
   clearTyping();
   // Show the Friends page, the Lounge page or the channel: one of them.

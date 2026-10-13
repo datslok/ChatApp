@@ -1022,13 +1022,36 @@ function makeReplyLine(reply) {
 }
 
 // Scroll to a message and light it up briefly, if it's on the page.
+// A message we're loading older batches to reach (a pin or a reply's quote far up): {id, batches}.
+// showOlderMessages calls jumpToMessage again with each batch, until it's there. joinCurrentChannel
+// forgets it. At most MAX_JUMP_BATCHES batches of 50 (2,000 messages), then it gives up.
+let jumpLoading = null;
+const MAX_JUMP_BATCHES = 40;
+
 function jumpToMessage(messageId) {
   // The id is a number from the server, so it's safe to put in a CSS selector.
   const target = messages.querySelector(`[data-id="${messageId}"]`);
   if (!target) {
-    // Not loaded yet: older messages only come in by scrolling up.
-    showUploadError("That message is further up: scroll up to load it.");
+    // Not on the page. Older than everything loaded (ids only grow): load older messages until it
+    // is. Otherwise (between loaded ones, or nothing older left) it was deleted.
+    const oldest = shownMessages[0]?.id;
+    const batches = jumpLoading?.id === messageId ? jumpLoading.batches : 0;
+    if (oldest !== undefined && messageId < oldest && !reachedStart && batches < MAX_JUMP_BATCHES) {
+      jumpLoading = { id: messageId, batches: batches + 1 };
+      uploadStatus.className = "";
+      uploadStatus.textContent = "Finding the message…";
+      loadOlderMessages();  // (if a batch is already on its way, its arrival brings us back here)
+      return;
+    }
+    jumpLoading = null;
+    uploadStatus.textContent = "";
+    showUploadError(batches >= MAX_JUMP_BATCHES ? "That message is very far up: scroll up to find it."
+      : "That message has been deleted.");
     return;
+  }
+  if (jumpLoading) {
+    jumpLoading = null;
+    uploadStatus.textContent = "";  // ("Finding the message…")
   }
   jumpTarget = target;
   target.scrollIntoView({ block: "center", behavior: "smooth" });
@@ -1038,6 +1061,83 @@ function jumpToMessage(messageId) {
   void target.offsetWidth;
   target.classList.add("flash");
 }
+
+// ---------- Pinned messages ----------
+//
+// 📌 at the top of a chat opens this list: its pinned messages, the latest pinned first, each with
+// Jump and Unpin. Asked from the server when it opens ({"type": "pins"}), and again whenever a pin
+// changes or a message is deleted while it's open (core.js).
+
+const pinsDialog = document.getElementById("pins-dialog");
+const pinsList = document.getElementById("pins-list");
+const pinsEmpty = document.getElementById("pins-empty");
+
+function openPins() {
+  pinsList.replaceChildren();
+  pinsEmpty.hidden = false;
+  pinsEmpty.textContent = "Loading…";
+  pinsDialog.showModal();
+  sendToServer({ type: "pins" });  // (the answer comes to showPins)
+}
+
+// The server's list (core.js, "pins").
+function showPins(list) {
+  if (!pinsDialog.open) return;
+  pinsList.replaceChildren(...list.map(makePinnedItem));
+  pinsEmpty.hidden = list.length > 0;
+  pinsEmpty.textContent = "Nothing pinned here yet. Hover over a message and click 📌 to pin it.";
+}
+
+// One pinned message: who and when, its text (formatted like in the chat), its file's name, and buttons.
+function makePinnedItem(message) {
+  const item = document.createElement("article");
+  item.className = "pinned-item";
+
+  const head = document.createElement("div");
+  head.className = "pinned-head";
+  head.appendChild(makeAvatar(message.user_id, message.name, "small"));
+  const name = document.createElement("strong");
+  name.textContent = message.name;  // (textContent: never as HTML)
+  const time = document.createElement("time");
+  const sent = new Date(message.sent_at);
+  time.textContent = dayName(sent) + " at " + formatClock(sent);  // "Yesterday at 14:03"
+  head.append(name, time);
+  item.appendChild(head);
+
+  if (message.text) {
+    const text = document.createElement("div");
+    text.className = "message-text";
+    formatText(text, message.text);  // **bold**, mentions, emoji, links: as in the chat
+    item.appendChild(text);
+  }
+  if (message.file) {
+    const file = document.createElement("div");
+    file.className = "pinned-file";
+    file.textContent = (message.file.image ? "🖼️ " : "📎 ") + message.file.filename;
+    item.appendChild(file);
+  }
+
+  const buttons = document.createElement("div");
+  buttons.className = "pinned-buttons";
+  const jump = document.createElement("button");
+  jump.type = "button";
+  jump.textContent = "Jump";
+  jump.addEventListener("click", () => {
+    pinsDialog.close();
+    jumpToMessage(message.id);  // (loads older messages until it's there)
+  });
+  const unpin = document.createElement("button");
+  unpin.type = "button";
+  unpin.className = "secondary";
+  unpin.textContent = "Unpin";
+  unpin.addEventListener("click", () => sendToServer({ type: "pin", message_id: message.id, pinned: false }));
+  buttons.append(jump, unpin);
+  item.appendChild(buttons);
+  return item;
+}
+
+document.getElementById("pins-button").addEventListener("click", openPins);
+document.getElementById("pins-close").addEventListener("click", () => pinsDialog.close());
 
 // ---------- Editing and deleting ----------
 
@@ -1115,6 +1215,10 @@ function showOlderMessages(older, more) {
   shownMessages = older.concat(shownMessages);  // older ones first
   drawAllMessages(false);  // a full redraw, so grouping and date dividers are right where they meet
   messages.scrollTop = topBefore + (messages.scrollHeight - heightBefore);
+  if (jumpLoading) {
+    jumpToMessage(jumpLoading.id);  // on the way to a message further up: there yet? (or the next batch)
+    return;
+  }
   // Still near the top (a tall screen, or a batch of short messages)? Then the next batch.
   if (messages.scrollTop < 300) loadOlderMessages();
 }
@@ -1253,7 +1357,8 @@ function showMessage(message, follow = true) {
   const div = document.createElement("div");
   div.className = grouped ? "message grouped" : "message";
   if (mentionsMe(message.text)) div.classList.add("mentions-me");  // highlighted for us
-  if (message.kind === "call") div.classList.add("call-note");     // "📞 Call · 12 min", written by the server
+  // Notes written by the server: "📞 Call · 12 min", "📌 pinned a message." (muted, in italics)
+  if (message.kind) div.classList.add("call-note");
   div.dataset.id = message.id;  // so features like replies (jumping to the original) can find it
 
   // The buttons that appear when hovering a message (more will join Reply later).
@@ -1270,13 +1375,25 @@ function showMessage(message, follow = true) {
   reactButton.title = "Add reaction";
   reactButton.addEventListener("click", () => openEmojiPicker(message.id, reactButton));
   actions.append(reactButton, replyButton);
+  if (!message.kind) {
+    // 📌 Pin, or Unpin (highlighted) when it's pinned. Anyone can, as on Discord in DMs; not the notes.
+    const pinButton = document.createElement("button");
+    pinButton.type = "button";
+    pinButton.textContent = "📌";
+    pinButton.title = message.pinned ? "Unpin" : "Pin";
+    pinButton.setAttribute("aria-pressed", message.pinned ? "true" : "false");
+    pinButton.addEventListener("click", () => {
+      sendToServer({ type: "pin", message_id: message.id, pinned: !message.pinned });  // ("pinned" comes back)
+    });
+    actions.append(pinButton);
+  }
   if (canModify(message)) {
     const editButton = document.createElement("button");
     editButton.type = "button";
     editButton.textContent = "✏️";
     editButton.title = "Edit";
     editButton.addEventListener("click", () => startEdit(message));
-    if (message.kind === "call") editButton.hidden = true;  // call notes can be deleted, not edited
+    if (message.kind) editButton.hidden = true;  // notes (call, pin) can be deleted, not edited
     const deleteButton = document.createElement("button");
     deleteButton.type = "button";
     deleteButton.textContent = "🗑️";

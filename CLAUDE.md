@@ -129,6 +129,14 @@ the point is for me to understand how it works, not just to have it done.
   it) and aren't offered in the page's friend picker.
   Page: + next to "Direct messages" (#group-dialog with friend checkboxes), groups first in the DM list,
   #dm-header shows members and Add people / Rename (prompt()) / Leave (confirm()) / 📞 Call.
+- Pinned messages: `messages.pinned_at` / `pinned_by` (NULL = not pinned); anyone who can see a message
+  (`can_join`) may pin or unpin it over the WebSocket (`{"type": "pin", "message_id", "pinned"}`), never a
+  note (`kind` set); `MAX_PINS` 50 per chat (else "pins_full"). Everyone in the chat gets "pinned"; a pin also
+  saves a note (`kind` "pin", "📌 pinned a message.", `reply_to` the message: drawn like call notes).
+  `{"type": "pins"}` answers with `pinned_messages(channel)`. `MESSAGES_QUERY` + `message_dicts` build both
+  the history and that list (every message has "pinned"). Page: 📌 in each message's hover bar, and in the
+  top bar (#dm-header, now on every chat; the call button only in DMs and groups), #pins-dialog with Jump and
+  Unpin. `jumpToMessage` loads older batches by itself (`jumpLoading`, up to 40 x 50) to reach an old message.
 - Calls in DMs and groups (server.py, "Calls in DMs and group DMs"): the room is the DM's or group's key;
   `is_call_member` (never bots) gates /voice-token and "voice"; `calls[channel]["ringing"]` is the set still
   being rung (a DM: the other one). Group: everyone else rings, a decline only stops your own ringing

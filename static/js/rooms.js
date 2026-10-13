@@ -403,15 +403,18 @@ callPanelCamera.addEventListener("click", toggleCamera);
 callPanelEnd.addEventListener("click", leaveVoice);
 callPanelJoin.addEventListener("click", () => joinVoice(currentChannel, channelLabel(currentChannel)));
 
-// The bar at the top of a DM, with the call button ("In call" while we're in that DM's call),
-// and of a group DM, with its members and buttons instead (people.js, showGroupHeader).
+// The bar at the top of every chat: its name and 📌 (the pinned messages, messages.js). In a DM
+// also the call button ("In call" while we're in that DM's call); in a group DM its members, its
+// buttons (people.js, showGroupHeader) and the call button.
 function showDmHeader() {
   renderCallPanel();  // (the banner below it changes at the same moments)
   const inDm = dmPartner(currentChannel) !== null;
   showGroupHeader();
-  dmHeader.hidden = !inDm && groupButtons.hidden;
+  const inGroup = !groupButtons.hidden;
+  dmHeader.hidden = !inDm && !inGroup && !isChannel(currentChannel);
   if (dmHeader.hidden) return;
   dmHeaderName.textContent = channelLabel(currentChannel);
+  callButton.hidden = !inDm && !inGroup;  // (no calls in channels: that's what Lounge is for)
   const inThisCall = voiceRoomName === currentChannel;
   callButton.disabled = inThisCall;
   callButton.textContent = inThisCall ? "📞 In call" : "📞 Call";

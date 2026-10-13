@@ -195,7 +195,9 @@ db.execute("""
         attachment_id TEXT REFERENCES attachments(id),
         reply_to      INTEGER REFERENCES messages(id),  -- the message this one replies to; NULL = none
         edited_at     TEXT,                             -- when it was last edited; NULL = never
-        kind          TEXT                              -- NULL = a normal message, "call" = a call note
+        kind          TEXT,                             -- NULL = a normal message, "call" = a call note, "pin" = a pin note
+        pinned_at     TEXT,                             -- when it was pinned; NULL = not pinned
+        pinned_by     INTEGER REFERENCES users(id)      -- who pinned it
     )
 """)
 db.execute("""
@@ -508,6 +510,12 @@ if "kind" not in table_columns("messages"):
     with db:
         db.execute("ALTER TABLE messages ADD COLUMN kind TEXT")
 
+if "pinned_at" not in table_columns("messages"):
+    # From before pinned messages existed: nothing is pinned (NULL).
+    with db:
+        db.execute("ALTER TABLE messages ADD COLUMN pinned_at TEXT")  # when it was pinned; NULL = not pinned
+        db.execute("ALTER TABLE messages ADD COLUMN pinned_by INTEGER REFERENCES users(id)")  # who pinned it
+
 if "is_admin" not in table_columns("users"):
     # From before admins existed: nobody is one, until tools/make_admin.py says so.
     with db:
@@ -672,39 +680,33 @@ def reactions_for(message_ids):
     return result
 
 
-def recent_messages(channel, before=None):
-    """The channel's newest messages, oldest first, in the same shape as live messages.
-    With `before` (a message id): the newest ones *older* than that message instead, for
-    scrolling up. Ids only ever grow, so "older" simply means "a smaller id"."""
-    # LEFT JOINs: each message, plus its sender's *current* username, plus its attachment
-    # (NULLs where there's none). COALESCE(a, b) means "a, or b if a is NULL": for messages from
-    # before accounts existed, there's no user, so we show the name that was typed back then.
-    #
-    # For replies, the messages table is joined with *itself*: "original" is a second copy of it
-    # (an alias), holding the message being replied to, and "original_sender" its sender.
-    # And its link preview, if it got one (link_previews).
-    rows = db.execute(
-        """
-        SELECT messages.id, messages.sent_at, messages.edited_at, messages.reply_to, messages.kind,
-               messages.user_id, COALESCE(users.username, messages.legacy_name), messages.text,
-               attachments.id, attachments.filename, attachments.size, attachments.content_type,
-               link_previews.url, link_previews.site, link_previews.title, link_previews.description,
-               link_previews.image,
-               original.id, original.user_id, COALESCE(original_sender.username, original.legacy_name),
-               original.text, original.attachment_id
-        FROM messages
-        LEFT JOIN users ON users.id = messages.user_id
-        LEFT JOIN attachments ON attachments.id = messages.attachment_id
-        LEFT JOIN messages AS original ON original.id = messages.reply_to
-        LEFT JOIN users AS original_sender ON original_sender.id = original.user_id
-        LEFT JOIN link_previews ON link_previews.message_id = messages.id
-        WHERE messages.channel = ? AND messages.id < ?
-        ORDER BY messages.id DESC LIMIT ?
-        """,
-        # No `before`: SQLite's biggest whole number, so the condition lets every message through.
-        (channel, before if before is not None else 2**63 - 1, HISTORY_LIMIT),
-    ).fetchall()
-    rows.reverse()  # we fetched newest-first; chat reads oldest-first
+# Everything the page needs about messages, for the history and for the pinned list (each adds its
+# own WHERE and ORDER BY). LEFT JOINs: each message, plus its sender's *current* username, plus its
+# attachment (NULLs where there's none). COALESCE(a, b) means "a, or b if a is NULL": for messages
+# from before accounts existed, there's no user, so we show the name that was typed back then.
+#
+# For replies, the messages table is joined with *itself*: "original" is a second copy of it
+# (an alias), holding the message being replied to, and "original_sender" its sender.
+# And its link preview, if it got one (link_previews).
+MESSAGES_QUERY = """
+    SELECT messages.id, messages.sent_at, messages.edited_at, messages.reply_to, messages.kind,
+           messages.pinned_at, messages.user_id, COALESCE(users.username, messages.legacy_name), messages.text,
+           attachments.id, attachments.filename, attachments.size, attachments.content_type,
+           link_previews.url, link_previews.site, link_previews.title, link_previews.description,
+           link_previews.image,
+           original.id, original.user_id, COALESCE(original_sender.username, original.legacy_name),
+           original.text, original.attachment_id
+    FROM messages
+    LEFT JOIN users ON users.id = messages.user_id
+    LEFT JOIN attachments ON attachments.id = messages.attachment_id
+    LEFT JOIN messages AS original ON original.id = messages.reply_to
+    LEFT JOIN users AS original_sender ON original_sender.id = original.user_id
+    LEFT JOIN link_previews ON link_previews.message_id = messages.id
+"""
+
+
+def message_dicts(rows):
+    """Rows from MESSAGES_QUERY in the same shape as live messages."""
     reactions = reactions_for([row[0] for row in rows])  # all the reactions, in one query
     return [
         {
@@ -718,12 +720,39 @@ def recent_messages(channel, before=None):
             # A reply whose original has been deleted: reply_to is still set, but the JOIN found nothing.
             "reply": reply_preview(*rest[5:]) or ({"id": reply_to, "deleted": True} if reply_to else None),
             "reactions": reactions[message_id],
-            "kind": kind,  # None, or "call" for a call note
+            "kind": kind,  # None, "call" for a call note, "pin" for a pin note
+            "pinned": pinned_at is not None,
             "preview": preview_info(*rest[:5]) if rest[0] else None,  # rest: the preview, then the original
         }
-        for (message_id, sent_at, edited_at, reply_to, kind, user_id, name, text,
+        for (message_id, sent_at, edited_at, reply_to, kind, pinned_at, user_id, name, text,
              file_id, filename, size, content_type, *rest) in rows
     ]
+
+
+def recent_messages(channel, before=None):
+    """The channel's newest messages, oldest first, in the same shape as live messages.
+    With `before` (a message id): the newest ones *older* than that message instead, for
+    scrolling up. Ids only ever grow, so "older" simply means "a smaller id"."""
+    rows = db.execute(
+        MESSAGES_QUERY + " WHERE messages.channel = ? AND messages.id < ? ORDER BY messages.id DESC LIMIT ?",
+        # No `before`: SQLite's biggest whole number, so the condition lets every message through.
+        (channel, before if before is not None else 2**63 - 1, HISTORY_LIMIT),
+    ).fetchall()
+    rows.reverse()  # we fetched newest-first; chat reads oldest-first
+    return message_dicts(rows)
+
+
+MAX_PINS = 50  # pinned messages per channel, DM or group (like Discord)
+
+
+def pinned_messages(channel):
+    """A channel's pinned messages, the most recently pinned first."""
+    rows = db.execute(
+        MESSAGES_QUERY + " WHERE messages.channel = ? AND messages.pinned_at IS NOT NULL"
+        " ORDER BY messages.pinned_at DESC, messages.id DESC",
+        (channel,),
+    ).fetchall()
+    return message_dicts(rows)
 
 
 def parse_json(raw):
@@ -2877,7 +2906,7 @@ async def end_call(channel, reason):
     message = {
         "type": "message", "channel": channel, "id": message_id, "sent_at": sent_at,
         "user_id": call["caller"], "name": username_of(call["caller"]), "text": text, "file": None,
-        "reply": None, "reactions": [], "edited_at": None, "kind": "call",
+        "reply": None, "reactions": [], "edited_at": None, "kind": "call", "pinned": False,
     }
     await send_to_channel(channel, message)
     await announce_new_message(channel)
@@ -3391,6 +3420,7 @@ async def chat(websocket: WebSocket):
                     "reactions": [],  # a brand new message has none yet
                     "edited_at": None,
                     "kind": None,
+                    "pinned": False,
                     "preview": None,  # a link's preview comes a moment later, as its own "preview"
                 }
                 await send_to_channel(channel, message)  # everyone in the channel, including us
@@ -3484,6 +3514,50 @@ async def chat(websocket: WebSocket):
                     await send_to_channel(message_channel, {
                         "type": "deleted", "channel": message_channel, "message_id": message_id,
                     })
+
+            elif kind == "pin":
+                # {"type": "pin", "message_id": 57, "pinned": true}: pin a message, or unpin it (false).
+                # Anyone who can see it may (a chat of friends), but not the server's own notes.
+                message_id = data.get("message_id")
+                if not isinstance(message_id, int) or isinstance(message_id, bool):
+                    continue
+                row = db.execute("SELECT channel, kind, pinned_at FROM messages WHERE id = ?", (message_id,)).fetchone()
+                if row is None or not can_join(row[0], user_id) or row[1] is not None:
+                    continue
+                message_channel, _, pinned_at = row
+                pin = data.get("pinned") is True
+                if pin == (pinned_at is not None):
+                    continue  # it already is (pinned twice at once from two tabs, say)
+                if pin:
+                    count = db.execute("SELECT COUNT(*) FROM messages WHERE channel = ? AND pinned_at IS NOT NULL",
+                                       (message_channel,)).fetchone()[0]
+                    if count >= MAX_PINS:
+                        await send(websocket, {"type": "pins_full", "channel": message_channel, "max": MAX_PINS})
+                        continue
+                with db:
+                    db.execute(
+                        "UPDATE messages SET pinned_at = CASE WHEN ? THEN CURRENT_TIMESTAMP END, pinned_by = ? WHERE id = ?",
+                        (pin, user_id if pin else None, message_id),
+                    )
+                await send_to_channel(message_channel, {
+                    "type": "pinned", "channel": message_channel, "message_id": message_id, "pinned": pin,
+                })
+                if pin:
+                    # A note in the chat, quoting the message, so everyone notices (like Discord). Saved and
+                    # sent like any message, so it gets unread dots; like a call note, it can't be edited.
+                    note_id, sent_at = save_message(message_channel, user_id, "📌 pinned a message.", None, message_id, kind="pin")
+                    await send_to_channel(message_channel, {
+                        "type": "message", "channel": message_channel, "id": note_id, "sent_at": sent_at,
+                        "user_id": user_id, "name": username_of(user_id), "text": "📌 pinned a message.",
+                        "file": None, "reply": live_reply_preview(message_id), "reactions": [],
+                        "edited_at": None, "kind": "pin", "pinned": False, "preview": None,
+                    })
+                    await announce_new_message(message_channel)
+
+            elif kind == "pins" and channel is not None:
+                # {"type": "pins"}: the pinned messages of the channel we're in (the 📌 list).
+                if can_join(channel, user_id):
+                    await send(websocket, {"type": "pins", "channel": channel, "messages": pinned_messages(channel)})
 
             elif kind == "typing" and channel is not None:
                 # Tell the others in this channel; you don't need to see yourself typing.

@@ -132,7 +132,8 @@
 
     <!-- A channel or DM: the messages and everything for writing one. -->
     <div id="channel-view">
-      <!-- Only in DMs and group DMs: who it's with, and the call button (DMs) or the group's buttons. -->
+      <!-- The bar at the top of a channel, DM or group: its name, 📌 (pinned messages), and in DMs
+           and groups the call button (groups also their members and buttons). -->
       <header id="dm-header" hidden>
         <div class="dm-header-text">
           <span id="dm-header-name"></span>
@@ -143,7 +144,10 @@
           <button type="button" id="group-rename">Rename</button>
           <button type="button" id="group-leave">Leave</button>
         </div>
-        <button type="button" id="call-button">📞 Call</button>
+        <div class="header-buttons">
+          <button type="button" id="pins-button" title="Pinned messages" aria-label="Pinned messages">📌</button>
+          <button type="button" id="call-button">📞 Call</button>
+        </div>
       </header>
       <!-- While this DM has a call: both pictures (a green ring for whoever talks), and the buttons. -->
       <section id="call-panel" hidden>
@@ -205,6 +209,16 @@
     <h2 id="offline-heading" class="section-heading">Offline</h2>
     <ul id="offline-list"></ul>
   </aside>
+
+  <!-- The pinned messages of the chat we're in (messages.js, "Pinned messages"). -->
+  <dialog id="pins-dialog">
+    <header class="pins-top">
+      <h2>📌 Pinned messages</h2>
+      <button type="button" id="pins-close" title="Close" aria-label="Close">×</button>
+    </header>
+    <p id="pins-empty" class="pins-empty" hidden></p>
+    <div id="pins-list"></div>
+  </dialog>
 
   <!-- Starting a group DM, or adding people to one: your friends to tick (people.js, "Group DMs"). -->
   <dialog id="group-dialog">
