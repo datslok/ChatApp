@@ -122,7 +122,10 @@ the point is for me to understand how it works, not just to have it done.
   `/groups/{key}/add` (any member, their own friends), `/rename`, `/leave` (the last one out deletes it all);
   members needn't be friends with each other; others get a 404. Each member's pages get `{"type": "groups"}`
   (at connect and after changes, `announce_groups`). Every message counts as a mention for the other members
-  except bots (Chattus only answers @mentions there; `where()` describes the group).
+  except bots (Chattus only answers @mentions there; `where()` describes the group). Every bot is in every
+  group: `create_group` adds them, `add_bots_to_groups()` at every start fills in older groups and new bots;
+  bots never count as people (`group_people`: the size limit, the default name, the last person out deletes
+  it) and aren't offered in the page's friend picker.
   Page: + next to "Direct messages" (#group-dialog with friend checkboxes), groups first in the DM list,
   #dm-header shows members and Add people / Rename (prompt()) / Leave (confirm()) / 📞 Call.
 - Calls in DMs and groups (server.py, "Calls in DMs and group DMs"): the room is the DM's or group's key;

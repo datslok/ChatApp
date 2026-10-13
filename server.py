@@ -553,6 +553,20 @@ def befriend_bots():
 befriend_bots()
 
 
+def add_bots_to_groups():
+    """Every bot is in every group DM (Chattus answers @mentions there). New groups get them when
+    they're made (create_group); this adds them to the groups made before, and a bot made since.
+    INSERT OR IGNORE: skip the rows that are already there (the table's PRIMARY KEY)."""
+    with db:
+        db.execute(
+            "INSERT OR IGNORE INTO group_members (group_key, user_id)"
+            " SELECT group_dms.key, users.id FROM group_dms, users WHERE users.is_bot = 1"
+        )
+
+
+add_bots_to_groups()
+
+
 def is_admin(user_id):
     """Checked fresh from the database every time, so tools/make_admin.py works straight away."""
     row = db.execute("SELECT is_admin FROM users WHERE id = ?", (user_id,)).fetchone()
@@ -2419,16 +2433,22 @@ def delete_messages_in(key):
 # Private chats for 3 to 10 people. Anyone can start one with their friends; any member can add
 # more of their own friends and rename it; anyone can leave, and the last one out deletes it.
 # The members don't have to be friends with each other (as in Discord). Calls: see "Calls in DMs
-# and group DMs".
+# and group DMs". Every bot is in every group too (add_bots_to_groups), answering @mentions, but
+# bots don't count as people: not for the size, and the last *person* out deletes the group.
 # Each member's pages get {"type": "groups"} with their groups at the start and after every change.
 
-MAX_GROUP_SIZE = 10  # people in a group, its starter included
+MAX_GROUP_SIZE = 10  # people in a group, its starter included (bots not counted)
 
 
 def group_members(key):
-    """A group's members' ids, in the order they joined."""
+    """A group's members' ids, bots included, in the order they joined."""
     rows = db.execute("SELECT user_id FROM group_members WHERE group_key = ? ORDER BY rowid", (key,))
     return [user_id for (user_id,) in rows]
+
+
+def group_people(key):
+    """A group's members without the bots."""
+    return [user_id for user_id in group_members(key) if not is_bot(user_id)]
 
 
 def is_group_member(key, user_id):
@@ -2439,11 +2459,11 @@ def is_group_member(key, user_id):
 
 
 def group_title(key):
-    """What a group is called in notifications: its name, or its members' names ("axel, kari, ola")."""
+    """What a group is called in notifications: its name, or its people's names ("axel, kari, ola")."""
     row = db.execute("SELECT name FROM group_dms WHERE key = ?", (key,)).fetchone()
     if row and row[0]:
         return row[0]
-    return ", ".join(username_of(user_id) for user_id in group_members(key))
+    return ", ".join(username_of(user_id) for user_id in group_people(key))
 
 
 def groups_message(user_id):
@@ -2477,11 +2497,11 @@ def logged_in_member(request, key):
 
 def new_group_members(user_id, wanted, already):
     """The people to add (sorted, without those already in it): each must be a friend of whoever adds
-    them, and the group may not grow past MAX_GROUP_SIZE."""
+    them, and the group may not grow past MAX_GROUP_SIZE people. (Bots are in every group already.)"""
     new = sorted(set(wanted) - set(already))
-    if any(other == user_id or not are_friends(user_id, other) for other in new):
+    if any(other == user_id or not are_friends(user_id, other) or is_bot(other) for other in new):
         raise HTTPException(400, "You can only add your friends.")
-    if len(already) + len(new) > MAX_GROUP_SIZE:
+    if len([member for member in already if not is_bot(member)]) + len(new) > MAX_GROUP_SIZE:
         raise HTTPException(400, f"A group has at most {MAX_GROUP_SIZE} people.")
     return new
 
@@ -2509,11 +2529,12 @@ async def create_group(request: Request, data: NewGroup):
         raise HTTPException(400, "Pick at least two friends (for one, send them a DM).")
     name = clean_group_name(data.name)
     key = "g:" + secrets.token_hex(4)  # random, like a new channel's key
+    bots = [bot for (bot,) in db.execute("SELECT id FROM users WHERE is_bot = 1")]  # in every group
     with db:
         db.execute("INSERT INTO group_dms (key, name) VALUES (?, ?)", (key, name))
         db.executemany("INSERT INTO group_members (group_key, user_id) VALUES (?, ?)",
-                       [(key, member) for member in [user_id, *others]])  # (*: the list's items, one by one)
-    await announce_groups([user_id, *others])
+                       [(key, member) for member in [user_id, *others, *bots]])  # (*: the list's items, one by one)
+    await announce_groups([user_id, *others, *bots])
     return {"key": key}
 
 
@@ -2555,8 +2576,9 @@ async def leave_group(request: Request, key: str):
         db.execute("DELETE FROM group_members WHERE group_key = ? AND user_id = ?", (key, user_id))
         db.execute("DELETE FROM last_read WHERE user_id = ? AND channel = ?", (user_id, key))
     remaining = group_members(key)
-    if not remaining:  # the last one out: nobody can ever see it again, so it goes
+    if not group_people(key):  # the last person out (only bots left): nobody will see it again, so it goes
         with db:
+            db.execute("DELETE FROM group_members WHERE group_key = ?", (key,))
             db.execute("DELETE FROM group_dms WHERE key = ?", (key,))
         delete_messages_in(key)
     for client in clients.values():

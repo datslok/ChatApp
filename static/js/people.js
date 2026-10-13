@@ -344,12 +344,17 @@ function isGroup(channel) {
   return typeof channel === "string" && channel.startsWith("g:");
 }
 
-// What a group is called: its name, or the others' names ("kari, ola").
+// A group's people: its members without the bots (every bot is in every group, see server.py).
+function groupPeople(group) {
+  return group.members.filter((id) => !people.get(id)?.bot);
+}
+
+// What a group is called: its name, or the other people's names ("kari, ola").
 function groupLabel(key) {
   const group = groups.get(key);
   if (!group) return "a group";
   if (group.name) return group.name;
-  const others = group.members.filter((id) => id !== myId).map((id) => people.get(id)?.name ?? "someone");
+  const others = groupPeople(group).filter((id) => id !== myId).map((id) => people.get(id)?.name ?? "someone");
   return others.length ? others.join(", ") : "Just you";
 }
 
@@ -385,7 +390,7 @@ function makeGroupRow(group) {
   name.textContent = groupLabel(group.key);
   const count = document.createElement("span");
   count.className = "person-status";
-  count.textContent = `${group.members.length} members`;
+  count.textContent = `${groupPeople(group).length} members`;
   text.append(name, count);
   row.appendChild(text);
   return row;
@@ -405,16 +410,18 @@ function showGroupHeader() {
 function openGroupDialog(key) {
   closeDrawers();  // (on a phone, the + is in the sidebar drawer)
   groupDialogKey = key;
-  const members = key ? groups.get(key).members : [myId];
+  const members = key ? groupPeople(groups.get(key)) : [myId];
   groupDialogTitle.textContent = key ? "Add people" : "New group";
   groupDialogHelp.textContent = key
     ? `Pick friends to add (up to ${MAX_GROUP_SIZE - members.length} more). They'll see the whole chat.`
-    : `Pick 2 to ${MAX_GROUP_SIZE - 1} friends. Everyone in a group can read and write in it, add their own friends, and leave.`;
+    : `Pick 2 to ${MAX_GROUP_SIZE - 1} friends. Everyone in a group can read and write in it, add their own friends, and leave. Chattus is in every group: write @Chattus to ask him something.`;
   groupNameRow.hidden = key !== null;  // (renaming has its own button)
   groupNameInput.value = "";
   groupStatus.textContent = "";
   groupSubmit.textContent = key ? "Add" : "Create group";
-  const choices = [...people.values()].filter((person) => friendIds.has(person.id) && !members.includes(person.id));
+  // Friends not in it yet; never bots (they're in every group by themselves).
+  const choices = [...people.values()].filter((person) =>
+    friendIds.has(person.id) && !person.bot && !members.includes(person.id));
   groupFriends.replaceChildren(...choices.map(makeGroupChoice));
   if (choices.length === 0) {
     const note = document.createElement("p");
@@ -446,7 +453,7 @@ function chosenFriends() {
 // After each tick: at the size limit, the unticked boxes can't be ticked; and the button only
 // works with enough people picked (2 for a new group, 1 to add).
 function updateGroupChoices() {
-  const already = groupDialogKey ? groups.get(groupDialogKey).members.length : 1;
+  const already = groupDialogKey ? groupPeople(groups.get(groupDialogKey)).length : 1;
   const chosen = chosenFriends().length;
   for (const box of groupFriends.querySelectorAll("input")) {
     box.disabled = !box.checked && already + chosen >= MAX_GROUP_SIZE;
@@ -486,7 +493,8 @@ document.getElementById("group-rename").addEventListener("click", async () => {
 
 document.getElementById("group-leave").addEventListener("click", async () => {
   const key = currentChannel;
-  const question = groups.get(key)?.members.length === 1
+  const group = groups.get(key);
+  const question = group && groupPeople(group).length === 1
     ? "Leave this group? You're the last one in it, so it's deleted with all its messages."
     : `Leave ${groupLabel(key)}? You can only come back if someone adds you again.`;
   if (!confirm(question)) return;
