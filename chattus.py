@@ -137,6 +137,10 @@ MAX_CUSTOM_EMOJI = 50  # how many of the chat's own emoji the prompt lists by na
 # Pictures: each costs the model ~600 tokens (of its 8192) and a few seconds, so only a couple.
 PICTURE_SIZE = 768      # pixels on the longest side, shrunk to before the model sees it
 PICTURE_LOOKBACK = 5    # besides the message he answers: the newest picture this many messages before it
+# With Claude more, and sharper: a picture costs it ~(width x height) / 750 tokens of its far bigger memory.
+CLAUDE_PICTURE_SIZE = 1568     # the size Claude reads best (bigger ones it shrinks itself)
+CLAUDE_PICTURE_LOOKBACK = 10   # ... in this many messages before the one he answers,
+CLAUDE_EARLIER_PICTURES = 3    # ... at most this many pictures
 EMOJI_NOTES = Path("chattus-emoji.json")  # what each custom emoji shows, in his words (git-ignored)
 
 # Files he can read, only with Claude: PDFs (Claude reads their text and pages) and text files, chosen
@@ -810,7 +814,11 @@ class Chattus:
                                             custom=custom, claude_tools=CLAUDE_TOOLS_PROMPT if self.claude else "",
                                             count=self.context_messages),
         }]
-        show = self.attachments_to_show(messages, target, lambda file: file["image"])
+        if self.claude:
+            show = self.attachments_to_show(messages, target, lambda file: file["image"],
+                                            CLAUDE_PICTURE_LOOKBACK, CLAUDE_EARLIER_PICTURES)
+        else:
+            show = self.attachments_to_show(messages, target, lambda file: file["image"])
         read = self.attachments_to_show(messages, target, file_kind, FILE_LOOKBACK, MAX_EARLIER_FILES) if self.claude else set()
         for message in messages[-self.context_messages:]:
             if message.get("kind"):
@@ -820,7 +828,8 @@ class Chattus:
             told = False  # has the text already said what the file is?
             if message["id"] in show:
                 try:
-                    picture = picture_data_url(self.fetch(f"/uploads/{message['file']['id']}"))
+                    picture = picture_data_url(self.fetch(f"/uploads/{message['file']['id']}"),
+                                               CLAUDE_PICTURE_SIZE if self.claude else PICTURE_SIZE)
                 except Exception as error:  # gone, or not a picture Pillow can read: just say there was one
                     log(f"Couldn't look at the picture in message {message['id']}: {error!r}")
             elif message["id"] in read:

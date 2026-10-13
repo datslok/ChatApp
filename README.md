@@ -364,6 +364,8 @@ tool reads the page (Anthropic's servers fetch it, not yours; at most about a lo
 from it. Some big sites block AI readers; then he says he couldn't open it. He **reads files** people send
 too: PDFs (up to 5 MB; their text and pages, scans included) and text files (`.txt`, `.md`, `.csv`, code...,
 their first 50,000 characters), the one in the message he answers and up to 3 in the 10 messages before it.
+Pictures the same way: up to 3 earlier ones besides the message's own, and sharper (1568 pixels instead of 768),
+so small text in screenshots and photos is readable.
 
 With Claude he also keeps **reminders** ("remind me tomorrow at 9 to call mum", "in 20 minutes", or
 "remind: ..."): the model copies the words into fields (a day, a time, or an amount and a unit) and Python

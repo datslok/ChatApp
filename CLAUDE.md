@@ -287,6 +287,8 @@ the point is for me to understand how it works, not just to have it done.
   MAX_EARLIER_FILES 3)` picks the target's file and up to 3 in the 10 messages before. A PDF becomes our own
   `{"type": "pdf", "data": base64}` part, which `for_claude` turns into a `document` block; a text file goes into
   the message's text between "[sent the file x:]" and "[end of the file]". Too-big PDFs are named as such.
+  Pictures with Claude: the target's and up to `CLAUDE_EARLIER_PICTURES` 3 in the `CLAUDE_PICTURE_LOOKBACK` 10
+  messages before, shrunk to `CLAUDE_PICTURE_SIZE` 1568 px (Claude's best size; ~2,500 tokens each) instead of 1 at 768.
   Reminders, only with Claude (Qwen 9B got times wrong; tried and removed on 2026-10-13): `CLAUDE_TOOLS_PROMPT` (put into
   `{claude_tools}` only with Claude; single braces, as a format value) and `remind` in `CLAUDE_ANSWER_SCHEMA`
   ("remind:" -> `ONLY_REMIND_SCHEMA`): what, day (today/tomorrow/weekday/MM-DD), time (HH:MM), in (amount + unit),
