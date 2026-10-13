@@ -102,7 +102,8 @@
         "Chattus shows pictures 📷: ask him for photos of a place, an animal or a thing, and he posts a few real ones from Wikimedia Commons",
         "No more double notifications: while the Windows app is open on your PC, your phone stays quiet (the app notifies you)",
         "Fixed: the category buttons at the top of the emoji picker can jump back up again (after jumping down to flags, say)",
-        "Settings → Voice & audio lists your microphones and speakers straight away, without pressing Test microphone first"
+        "Settings → Voice & audio lists your microphones and speakers straight away, without pressing Test microphone first",
+        "Windows app 0.1.18: fixes the app forgetting your audio settings (and showing the What's new dot again) every time it starts. After this update, set your audio settings once more and they'll stick"
       ]
     },
     {

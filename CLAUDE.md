@@ -188,6 +188,11 @@ the point is for me to understand how it works, not just to have it done.
   Notification clicks: the plugin's stand-in `Notification` has no click event, so the page puts
   `extra: {channel, messageId}` in it and main.rs's `on_action` ("tap") focuses the window and calls the
   page's `openMessage` (notifications.js) with them. Windows only reports clicks while the toast is on screen. `npm run tauri dev` in `desktop/` to try it.
+  localStorage lives in WebView2's LevelDB (`%LOCALAPPDATA%\no.datslok.chat\EBWebView\Default\Local Storage`);
+  a write cut off by a kill leaves its log damaged, and LevelDB then drops everything written after it at each
+  start (its `leveldb\LOG`: "Corruption: checksum mismatch"), so nothing was remembered (2026-10-14, after the
+  0.1.17 update). Since 0.1.18, `repair_local_storage` moves a damaged one aside ("Local Storage.broken")
+  before the window opens, and `update()` downloads, destroys the chat window, waits 2 s, then installs.
   Updates install silently (installMode "quiet") while our own window, `desktop/ui/update.html`
   (bundled in the app), shows the progress. To test it: `npm run tauri dev -- --config pretend.json`
   with `{"version": "0.1.0"}` in pretend.json, so the live version counts as an update.

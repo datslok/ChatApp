@@ -35,6 +35,9 @@ fn main() {
         // Made permissions in build.rs, allowed for the chat page in capabilities/default.json.
         .invoke_handler(tauri::generate_handler![check_for_update, set_zoom, get_autostart, set_autostart])
         .setup(|app| {
+            // First, before the chat window opens WebView2's storage: repair it if it's damaged.
+            repair_local_storage(app.handle());
+
             // The chat window, from its settings in tauri.conf.json ("create": false there, so that
             // we make it here, with a handler added): it shows https://chat.datslok.no.
             let handle = app.handle().clone();
@@ -162,6 +165,32 @@ fn turn_on_autostart_once(app: &tauri::AppHandle) {
     }
 }
 
+// The page's localStorage (the audio settings, What's new's count, ...) is a small LevelDB database in
+// WebView2's folder (%LOCALAPPDATA%\no.datslok.chat\EBWebView). If the app is killed while it's writing
+// (an update's installer, a power cut), its file ends in half a record. LevelDB then throws away
+// everything after that spot each time it opens, but keeps writing to the same file: from then on
+// nothing new is ever kept (2026-10-14). Its LOG file says so ("Corruption"). Then move the database
+// aside, before WebView2 opens it, and WebView2 makes a fresh one. (What was in it is lost either way.)
+fn repair_local_storage(app: &tauri::AppHandle) {
+    let Ok(folder) = app.path().app_local_data_dir() else {
+        return;
+    };
+    let profile = folder.join("EBWebView").join("Default");
+    let storage = profile.join("Local Storage");
+    let Ok(log) = std::fs::read_to_string(storage.join("leveldb").join("LOG")) else {
+        return;  // no database yet (a first start), or nothing to read
+    };
+    if !log.contains("Corruption") {
+        return;
+    }
+    let aside = profile.join("Local Storage.broken");
+    let _ = std::fs::remove_dir_all(&aside);  // (one set aside before: only the newest is kept)
+    match std::fs::rename(&storage, &aside) {
+        Ok(()) => eprintln!("localStorage was damaged: moved aside, WebView2 makes a new one."),
+        Err(error) => eprintln!("localStorage is damaged, but couldn't move it aside: {error}"),
+    }
+}
+
 // Look for an update in the background (so the window stays usable), unless one is already running.
 fn update_in_background(app: tauri::AppHandle) {
     // swap sets it to true and gives back what it was: true means another check is busy.
@@ -205,7 +234,7 @@ async fn update(app: tauri::AppHandle) -> tauri_plugin_updater::Result<()> {
     let mut downloaded = 0;
     let mut shown = 0;
     let result = update
-        .download_and_install(
+        .download(
             |chunk, total| {
                 downloaded += chunk as u64;
                 if let Some(total) = total {
@@ -221,14 +250,29 @@ async fn update(app: tauri::AppHandle) -> tauri_plugin_updater::Result<()> {
             },
         )
         .await;
+    let bytes = match result {
+        Ok(bytes) => bytes,
+        Err(error) => {
+            // Couldn't download (offline, say): back to the chat, and try again later.
+            window.close()?;
+            if let Some(main) = &main {
+                main.show()?;
+            }
+            return Err(error);
+        }
+    };
 
-    // On Windows we only get here if something went wrong: a successful install starts the
-    // installer and ends this program, and the installer starts the new version (installMode
-    // "quiet" in tauri.conf.json: no installer window). So: back to the chat, and try again later.
-    window.close()?;
-    if let Some(main) = &main {
-        main.show()?;
+    // Before installing: close the chat window for good (it was only hidden) and give WebView2 a
+    // moment to finish saving the page's localStorage. The installer ends this program, and a write
+    // it cut off halfway damaged that storage (see repair_local_storage). Then install: on Windows a
+    // successful install starts the installer and ends this program, and the installer starts the
+    // new version (installMode "quiet" in tauri.conf.json: no installer window).
+    if let Some(main) = main {
+        main.destroy()?;
     }
-    result?;
+    std::thread::sleep(std::time::Duration::from_secs(2));  // (this task's own thread: the window stays drawn)
+    if let Err(error) = update.install(bytes) {
+        eprintln!("Couldn't install the update: {error}");  // the chat window is gone: start again instead
+    }
     app.restart();
 }
