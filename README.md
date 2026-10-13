@@ -291,8 +291,9 @@ name and **Log out** at the top (the page asks the chat's `/whoami`, which only 
 ### Optional: an AI bot
 
 **Chattus** is a friendly AI cat in the chat: an account like everyone's, which answers every message
-in **#chattus**, anything that mentions **@Chattus** elsewhere (as a reply), and DMs to him (he
-accepts friend requests by himself). He reads the channel's last 20 messages (200 with Claude, see below). In a DM between two
+in **#chattus**, anything that mentions **@Chattus** elsewhere (as a reply), and DMs to him (everyone
+is friends with a bot: the server adds those friendships at every start and for each new account, and
+they can't be removed). He reads the channel's last 20 messages (200 with Claude, see below). In a DM between two
 people, a mention invites him in: he may then read and write there for an hour (never join its
 calls), and only answers mentions. He can react instead of (or as well as) answering, and knows the
 chat's custom emoji by name. He sees pictures: the one in the message he answers and the newest one

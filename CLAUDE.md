@@ -220,7 +220,9 @@ the point is for me to understand how it works, not just to have it done.
   "join"s it and uses its "history". Answers the newest message after his own last one (`answered` ids
   against double answers), never messages over 1 h old, one at a time (a queue), "typing" every 2 s,
   `reply_to` in shared channels (and in #chattus/DMs when someone wrote after it), auto-accepts friend
-  requests, defuses @everyone/@here, max 400 tokens. DMs between friends: `users.is_bot` (set only by
+  requests (rarely needed now: server.py's `befriend_bots` makes everyone a bot's friend at every start and at
+  /register; /friends/remove refuses for bots and the page shows no Remove for them), defuses @everyone/@here,
+  max 400 tokens. DMs between friends: `users.is_bot` (set only by
   make_bot.py) lets a bot into a DM for an hour after a member names it there (`bot_invited`, `BOT_INVITE_TIME`;
   `save_mentions` saves a bot's DM mention by name, never via @everyone); calls use the strict
   `is_dm_member` (not `can_join`), so a bot never gets into DM calls. "users" has `"bot"`, so the page's @

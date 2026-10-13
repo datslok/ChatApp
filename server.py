@@ -495,6 +495,29 @@ def is_bot(user_id):
     return row is not None and row[0] == 1
 
 
+def befriend_bots():
+    """Everyone is friends with every bot (so anyone can DM Chattus without a request): adds the
+    missing friendships as accepted, and turns open requests with a bot into friendships. At every
+    start (for everyone so far, and a bot made by tools/make_bot.py since) and for each new account."""
+    with db:
+        # Every pair of a person and a bot, smallest id first (the table's rule), unless the pair
+        # already has a row: "INSERT OR IGNORE" skips those (PRIMARY KEY (user_a, user_b)).
+        db.execute("""
+            INSERT OR IGNORE INTO friendships (user_a, user_b, requested_by, accepted)
+            SELECT MIN(person.id, bot.id), MAX(person.id, bot.id), bot.id, 1
+            FROM users AS person, users AS bot
+            WHERE bot.is_bot = 1 AND person.id != bot.id
+        """)
+        db.execute("""
+            UPDATE friendships SET accepted = 1
+            WHERE accepted = 0 AND (user_a IN (SELECT id FROM users WHERE is_bot = 1)
+                                    OR user_b IN (SELECT id FROM users WHERE is_bot = 1))
+        """)
+
+
+befriend_bots()
+
+
 def is_admin(user_id):
     """Checked fresh from the database every time, so tools/make_admin.py works straight away."""
     row = db.execute("SELECT is_admin FROM users WHERE id = ?", (user_id,)).fetchone()
@@ -800,6 +823,7 @@ async def register(credentials: Credentials, request: Request, response: Respons
         raise HTTPException(400, "That username is taken.")
 
     start_session(response, cursor.lastrowid)  # lastrowid: the id SQLite gave the new user
+    befriend_bots()  # Chattus is their friend from the start
     await send_to_everyone(users_message())  # so the new person shows up in everyone's DM list
     return {"ok": True}
 
@@ -2008,6 +2032,8 @@ async def friend_remove(data: FriendAction, request: Request):
     """Decline a request, cancel your own, or end a friendship: all three remove the row.
     The DM's messages stay in the database, hidden; becoming friends again brings them back."""
     me, other = other_person(data, request)
+    if is_bot(me) or is_bot(other):  # (the page shows no Remove for bots; this is for anyone who asks by hand)
+        raise HTTPException(400, "Bots stay everyone's friend.")
     with db:
         db.execute("DELETE FROM friendships WHERE user_a = ? AND user_b = ?", pair(me, other))
     await send_friends_update(me, other)

@@ -241,7 +241,8 @@ function makeFriendButtons(userId, statusElement) {
 
   if (friendIds.has(userId)) {
     add("Message", () => openDm(userId));
-    add("Remove", () => friendAction("remove", userId, statusElement), true);
+    // Bots are everyone's friend (the server adds and keeps those friendships): no Remove.
+    if (!people.get(userId)?.bot) add("Remove", () => friendAction("remove", userId, statusElement), true);
   } else if (incomingIds.has(userId)) {
     add("Accept", () => friendAction("accept", userId, statusElement));
     add("Decline", () => friendAction("remove", userId, statusElement), true);

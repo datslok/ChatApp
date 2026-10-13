@@ -64,7 +64,7 @@
       "topic": "🐱 Chattus, the AI cat",
       "items": [
         "Chattus is a friendly cat who answers everything in #chattus, and anywhere else when you write @Chattus. He has a BOT tag, and his own Bots section at the top of the member list",
-        "Add him as a friend to DM him: he accepts by himself",
+        "Everyone is his friend from the start, so you can DM him anytime",
         "In a DM with a friend, write @Chattus to ask him something there: he only answers when mentioned. Mentioning him lets him read that DM's latest messages for an hour (and like everything he reads, they go to his AI, Claude, to answer)",
         "He reacts to messages too (🎉 for good news, 🐾 for a thanks), and knows our own emoji by name",
         "He can see pictures: send one in #chattus (or with @Chattus), or ask about the pictures above (up to 3 of the last few), small text in them too",
@@ -102,7 +102,8 @@
         "Chattus reads files 📄: send a PDF or a text file (notes, code, a .csv) and ask him about it",
         "Chattus sees pictures better 👀: several at once (\"which of these is cuter?\"), and sharp enough to read small text in screenshots and photos",
         "Chattus knows what he looks like, so he no longer thinks every cat picture is him",
-        "Bots have their own section at the top of the member list, and a BOT tag after their name"
+        "Bots have their own section at the top of the member list, and a BOT tag after their name",
+        "Everyone is friends with Chattus now: DM him anytime, no friend request needed"
       ]
     },
     {
