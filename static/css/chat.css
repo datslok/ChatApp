@@ -1762,14 +1762,20 @@ button.download-button {
   position: relative;
 }
 
-/* The suggestion list in the editor: right under the box, over the "Enter to save" hint (above
-   the box, it'd be cut off when editing a message at the top of the chat). */
+/* The suggestion list in the editor: right under the box, over the "Enter to save" hint... */
 .editor #autocomplete {
   left: 0;
   right: 0;
   top: calc(100% + 4px);
   bottom: auto;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+
+/* ... or over the box, when the bottom of the message area would cut it off (ui.js, placeAutocomplete). */
+.editor #autocomplete.above {
+  top: auto;
+  bottom: calc(100% + 4px);
+  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.3);
 }
 
 /* The edit box, in place of a message's text. */

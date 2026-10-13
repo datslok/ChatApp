@@ -276,6 +276,22 @@ function renderAutocomplete() {
     autocompleteBox.appendChild(row);
   });
   autocompleteBox.hidden = false;
+  placeAutocomplete();
+}
+
+// In the edit box the list opens under the box, unless the message area's bottom edge would cut
+// it off and there's more room above: then over the box (class "above"). Measured now that it's
+// drawn: getBoundingClientRect() gives where something is on screen, offsetHeight how tall.
+function placeAutocomplete() {
+  autocompleteBox.classList.remove("above");
+  if (typingIn === input) return;  // the message box: always above it (CSS)
+  const box = typingIn.getBoundingClientRect();
+  const area = messages.getBoundingClientRect();  // the visible part of the scrolling messages
+  const roomBelow = area.bottom - box.bottom;
+  const roomAbove = box.top - area.top;
+  if (autocompleteBox.offsetHeight > roomBelow && roomAbove > roomBelow) {
+    autocompleteBox.classList.add("above");
+  }
 }
 
 // Replace the typed ":po" with the chosen ":pog: " (or the emoji itself), cursor after it.
