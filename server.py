@@ -299,6 +299,22 @@ db.execute("""
         heading  INTEGER NOT NULL DEFAULT 0  -- 1 = a heading over the channels below it ("h:..."), not a channel
     )
 """)
+# Group DMs: private chats for 3 to 10 people. Their messages are saved under the group's key
+# ("g:5f3a9b21"), the way a DM's are under "dm:3:7".
+db.execute("""
+    CREATE TABLE IF NOT EXISTS group_dms (
+        key        TEXT PRIMARY KEY,  -- "g:" and 8 random hex digits
+        name       TEXT,              -- NULL = called after its members ("kari, ola")
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+""")
+db.execute("""
+    CREATE TABLE IF NOT EXISTS group_members (
+        group_key TEXT NOT NULL REFERENCES group_dms(key),
+        user_id   INTEGER NOT NULL REFERENCES users(id),
+        PRIMARY KEY (group_key, user_id)  -- each person once per group
+    )
+""")
 if db.execute("SELECT COUNT(*) FROM channels").fetchone()[0] == 0:
     # The first start with this table (or a brand new database): the channels that used to be
     # written in the code. Their keys are their old names, so every message stays where it was.
@@ -1643,7 +1659,12 @@ def push_in_background(user_ids, payload, **options):
 def push_message(people, message):
     """A new message for these people (a DM to them, or mentioning them): "axel in #general"."""
     channel = message["channel"]
-    title = message["name"] if channel.startswith("dm:") else f'{message["name"]} in #{channel_name(channel)}'
+    if channel.startswith("dm:"):
+        title = message["name"]
+    elif channel.startswith("g:"):
+        title = f'{message["name"]} in {group_title(channel)}'
+    else:
+        title = f'{message["name"]} in #{channel_name(channel)}'
     body = readable_text(message["text"])
     if len(body) > PUSH_TEXT_LENGTH:
         body = body[:PUSH_TEXT_LENGTH] + "…"
@@ -1823,6 +1844,9 @@ def save_mentions(message_id, channel, sender_id, mentioned, everyone):
         # In a DM, every message counts as mentioning the other person (like Discord): it gets a
         # red number and a notification. "dm:3:7" -> both ids; the sender is left out below.
         mentioned = set(mentioned) | {int(part) for part in channel.split(":")[1:]}
+    elif channel.startswith("g:"):
+        # A group DM: the same, for every member but a bot (Chattus only wants his @mentions there).
+        mentioned = set(mentioned) | {member for member in group_members(channel) if not is_bot(member)}
     people = [user_id for user_id in mentioned
               if user_id != sender_id and (can_join(channel, user_id) or user_id in invited)]
     with db:
@@ -2359,6 +2383,19 @@ async def delete_channel(request: Request, key: str):
     if not existing_channel(key):
         if db.execute("SELECT COUNT(*) FROM channels WHERE heading = 0").fetchone()[0] <= 1:
             raise HTTPException(400, "That's the last channel: there must always be one.")
+    with db:
+        db.execute("DELETE FROM channels WHERE key = ?", (key,))
+    delete_messages_in(key)
+    for client in clients.values():
+        if client["channel"] == key:
+            client["channel"] = None  # (their page moves to the first channel when it hears)
+    await announce_channels()
+    return {"ok": True}
+
+
+def delete_messages_in(key):
+    """Delete every message in a channel or group, with its reactions, mentions, previews and files,
+    and everyone's read marker there. (For a deleted channel, and a group its last member left.)"""
     files = [file for (file,) in db.execute("SELECT id FROM attachments WHERE channel = ?", (key,))]
     previews = [image for (image,) in db.execute(
         "SELECT image FROM link_previews WHERE image IS NOT NULL"
@@ -2370,16 +2407,161 @@ async def delete_channel(request: Request, key: str):
         db.execute("DELETE FROM messages WHERE channel = ?", (key,))
         db.execute("DELETE FROM attachments WHERE channel = ?", (key,))
         db.execute("DELETE FROM last_read WHERE channel = ?", (key,))
-        db.execute("DELETE FROM channels WHERE key = ?", (key,))
     # The files on disk, only once the database change has been saved (as for one message).
     for file in files:
         (UPLOAD_DIR / file).unlink(missing_ok=True)
     for image in previews:
         (PREVIEW_DIR / image).unlink(missing_ok=True)
+
+
+# ---------- Group DMs ----------
+#
+# Private chats for 3 to 10 people. Anyone can start one with their friends; any member can add
+# more of their own friends and rename it; anyone can leave, and the last one out deletes it.
+# The members don't have to be friends with each other (as in Discord). No calls: only DMs have those.
+# Each member's pages get {"type": "groups"} with their groups at the start and after every change.
+
+MAX_GROUP_SIZE = 10  # people in a group, its starter included
+
+
+def group_members(key):
+    """A group's members' ids, in the order they joined."""
+    rows = db.execute("SELECT user_id FROM group_members WHERE group_key = ? ORDER BY rowid", (key,))
+    return [user_id for (user_id,) in rows]
+
+
+def is_group_member(key, user_id):
+    if not isinstance(key, str) or not key.startswith("g:"):
+        return False
+    row = db.execute("SELECT 1 FROM group_members WHERE group_key = ? AND user_id = ?", (key, user_id)).fetchone()
+    return row is not None
+
+
+def group_title(key):
+    """What a group is called in notifications: its name, or its members' names ("axel, kari, ola")."""
+    row = db.execute("SELECT name FROM group_dms WHERE key = ?", (key,)).fetchone()
+    if row and row[0]:
+        return row[0]
+    return ", ".join(username_of(user_id) for user_id in group_members(key))
+
+
+def groups_message(user_id):
+    """One person's groups, oldest first: {"type": "groups", "groups": [{"key", "name", "members"}, ...]}"""
+    rows = db.execute(
+        "SELECT key, name FROM group_dms JOIN group_members ON group_members.group_key = group_dms.key"
+        " WHERE group_members.user_id = ? ORDER BY group_dms.created_at, group_dms.rowid",
+        (user_id,),
+    ).fetchall()
+    return {"type": "groups", "groups": [
+        {"key": key, "name": name, "members": group_members(key)} for key, name in rows
+    ]}
+
+
+async def announce_groups(user_ids):
+    """Send these people their groups again (each their own list), after a change."""
+    for user_id in set(user_ids):
+        await send_to_user(user_id, groups_message(user_id))
+
+
+def logged_in_member(request, key):
+    """The logged-in user's id if they're in this group, or an error. A 404 also for groups that
+    exist but aren't theirs: nobody can find out about other people's groups by trying keys."""
+    user_id = current_user(request)
+    if user_id is None:
+        raise HTTPException(401, "You're not logged in.")
+    if not is_group_member(key, user_id):
+        raise HTTPException(404, "That group doesn't exist (any more).")
+    return user_id
+
+
+def new_group_members(user_id, wanted, already):
+    """The people to add (sorted, without those already in it): each must be a friend of whoever adds
+    them, and the group may not grow past MAX_GROUP_SIZE."""
+    new = sorted(set(wanted) - set(already))
+    if any(other == user_id or not are_friends(user_id, other) for other in new):
+        raise HTTPException(400, "You can only add your friends.")
+    if len(already) + len(new) > MAX_GROUP_SIZE:
+        raise HTTPException(400, f"A group has at most {MAX_GROUP_SIZE} people.")
+    return new
+
+
+def clean_group_name(name):
+    """A group's name as typed, tidied like a channel's; empty means none (called after its members)."""
+    name = " ".join(name.split())
+    if len(name) > MAX_CHANNEL_NAME:
+        raise HTTPException(400, f"That's a bit long: at most {MAX_CHANNEL_NAME} characters.")
+    return name or None
+
+
+class NewGroup(BaseModel):
+    user_ids: list[int]  # the friends to start it with (not yourself)
+    name: str = ""
+
+
+@app.post("/groups")
+async def create_group(request: Request, data: NewGroup):
+    user_id = current_user(request)
+    if user_id is None:
+        raise HTTPException(401, "You're not logged in.")
+    others = new_group_members(user_id, data.user_ids, [user_id])
+    if len(others) < 2:
+        raise HTTPException(400, "Pick at least two friends (for one, send them a DM).")
+    name = clean_group_name(data.name)
+    key = "g:" + secrets.token_hex(4)  # random, like a new channel's key
+    with db:
+        db.execute("INSERT INTO group_dms (key, name) VALUES (?, ?)", (key, name))
+        db.executemany("INSERT INTO group_members (group_key, user_id) VALUES (?, ?)",
+                       [(key, member) for member in [user_id, *others]])  # (*: the list's items, one by one)
+    await announce_groups([user_id, *others])
+    return {"key": key}
+
+
+class GroupName(BaseModel):
+    name: str  # "" = no name (called after its members)
+
+
+@app.post("/groups/{key}/rename")
+async def rename_group(request: Request, key: str, data: GroupName):
+    logged_in_member(request, key)
+    with db:
+        db.execute("UPDATE group_dms SET name = ? WHERE key = ?", (clean_group_name(data.name), key))
+    await announce_groups(group_members(key))
+    return {"ok": True}
+
+
+class GroupAdd(BaseModel):
+    user_ids: list[int]
+
+
+@app.post("/groups/{key}/add")
+async def add_to_group(request: Request, key: str, data: GroupAdd):
+    """Add some of your friends to a group you're in. They see its whole history, as in Discord."""
+    user_id = logged_in_member(request, key)
+    members = group_members(key)
+    new = new_group_members(user_id, data.user_ids, members)
+    if not new:
+        raise HTTPException(400, "Pick someone to add.")
+    with db:
+        db.executemany("INSERT INTO group_members (group_key, user_id) VALUES (?, ?)", [(key, other) for other in new])
+    await announce_groups(members + new)
+    return {"ok": True}
+
+
+@app.post("/groups/{key}/leave")
+async def leave_group(request: Request, key: str):
+    user_id = logged_in_member(request, key)
+    with db:
+        db.execute("DELETE FROM group_members WHERE group_key = ? AND user_id = ?", (key, user_id))
+        db.execute("DELETE FROM last_read WHERE user_id = ? AND channel = ?", (user_id, key))
+    remaining = group_members(key)
+    if not remaining:  # the last one out: nobody can ever see it again, so it goes
+        with db:
+            db.execute("DELETE FROM group_dms WHERE key = ?", (key,))
+        delete_messages_in(key)
     for client in clients.values():
-        if client["channel"] == key:
+        if client["user_id"] == user_id and client["channel"] == key:
             client["channel"] = None  # (their page moves to the first channel when it hears)
-    await announce_channels()
+    await announce_groups([user_id, *remaining])
     return {"ok": True}
 
 
@@ -2460,7 +2642,7 @@ def can_join(channel, user_id):
     friends; and the AI bot for an hour after one of them mentioned it there."""
     if is_channel(channel):
         return True
-    if is_dm_member(channel, user_id):
+    if is_dm_member(channel, user_id) or is_group_member(channel, user_id):
         return True
     people = dm_people(channel)  # (a member who's no longer friends stays out, even a bot)
     return people is not None and user_id not in people and bot_invited(channel, user_id)
@@ -3054,6 +3236,7 @@ async def chat(websocket: WebSocket):
         })
         await send(websocket, {"type": "channels", "channels": channel_list()})  # (they may have changed while away)
         await send(websocket, friends_message(user_id))
+        await send(websocket, groups_message(user_id))
         await send(websocket, custom_emoji_message())
         await send(websocket, {
             "type": "unread", "channels": unread_channels(user_id), "mentions": unread_mentions(user_id),

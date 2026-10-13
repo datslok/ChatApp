@@ -206,7 +206,8 @@ function channelsChanged(list) {
   showChannels(list);
   renderChannelAdmin();  // Settings → Channels, in case an admin has it open (settings.js)
   if (currentChannel === null) return;  // not started yet: connect's "open" picks one
-  const special = currentChannel === FRIENDS || currentChannel === LOUNGE || currentChannel.startsWith("dm:");
+  const special = currentChannel === FRIENDS || currentChannel === LOUNGE || currentChannel.startsWith("dm:")
+    || isGroup(currentChannel);
   if (!special && !isChannel(currentChannel)) {
     switchChannel(firstChannel, channelLabel(firstChannel));  // ours was deleted
   } else {
@@ -269,11 +270,11 @@ function checkForAppUpdate() {
 // The channel this tab was in before a reload, or null. switchChannel saves every channel in the
 // browser's history for the back button ({channel: "memes"}), and the browser keeps that through
 // a reload. Only something that still exists counts: a channel the server lists, Friends, Lounge,
-// or a DM (one with someone who's no longer a friend is left again once the friend list arrives).
+// a DM or a group (one we're no longer in is left again once the friend or group list arrives).
 function channelBeforeReload() {
   const channel = history.state?.channel;
   if (typeof channel !== "string") return null;
-  if (isChannel(channel) || channel === FRIENDS || channel === LOUNGE || channel.startsWith("dm:")) {
+  if (isChannel(channel) || channel === FRIENDS || channel === LOUNGE || channel.startsWith("dm:") || isGroup(channel)) {
     return channel;
   }
   return null;
@@ -308,6 +309,10 @@ function handleServerMessage(event) {
   }
   if (data.type === "channels") {
     channelsChanged(data.channels);
+    return;
+  }
+  if (data.type === "groups") {
+    setGroups(data.groups);  // our group DMs (people.js)
     return;
   }
   if (data.type === "appearance") {
@@ -403,7 +408,8 @@ function handleServerMessage(event) {
     showMessage(data);
     // In the channel we're in, but the tab is hidden or the window isn't focused:
     // a DM or a mention still notifies, and counts in the tab title until we're back.
-    const forMe = data.user_id !== myId && (dmPartner(currentChannel) !== null || mentionsMe(data.text));
+    const forMe = data.user_id !== myId
+      && (dmPartner(currentChannel) !== null || isGroup(currentChannel) || mentionsMe(data.text));
     if (forMe && !isLooking()) {
       missedWhileAway += 1;
       updateTitle();

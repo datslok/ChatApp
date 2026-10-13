@@ -426,10 +426,11 @@ function isLooking() {
   return !document.hidden && document.hasFocus();
 }
 
-// How a channel is called: "#memes", or "@kari" for a DM (or "Friends" for that page).
+// How a channel is called: "#memes", "@kari" for a DM, a group's name (or "Friends" for that page).
 function channelLabel(channel) {
   if (channel === FRIENDS) return "Friends";
   if (channel === LOUNGE) return "Lounge";
+  if (isGroup(channel)) return groupLabel(channel);
   const partner = dmPartner(channel);
   return partner === null ? "#" + channelName(channel) : "@" + (people.get(partner)?.name ?? "someone");
 }
@@ -443,7 +444,7 @@ function notify(channel, messageId, senderId, senderName, text) {
   const isDm = dmPartner(channel) !== null;
   const avatar = people.get(senderId)?.avatar;
   try {
-    const notification = new Notification(isDm ? senderName : `${senderName} in #${channel}`, {
+    const notification = new Notification(isDm ? senderName : `${senderName} in ${channelLabel(channel)}`, {
       body: tokensToCodes(text),  // <@2> -> @kari, <:17> -> :pog:
       icon: avatar ? "/avatars/" + encodeURIComponent(avatar) : undefined,
       tag: channel,  // a newer one from the same channel replaces the older one

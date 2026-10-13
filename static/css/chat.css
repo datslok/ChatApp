@@ -362,6 +362,160 @@ body {
 #dm-header[hidden] {
   display: none;
 }
+
+/* The name, and in a group the members underneath (min-width: 0 lets a long list shrink and get
+   its "…" instead of pushing the buttons off the screen). */
+.dm-header-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+#group-members {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;  /* "you, kari, ola, pe…" when it doesn't fit */
+  font-size: 0.75rem;
+  font-weight: normal;
+  color: var(--text-muted);
+}
+
+/* Add people, Rename, Leave: grey and small, next to each other at the right. */
+#group-buttons {
+  display: flex;
+  flex-shrink: 0;
+  gap: 6px;
+}
+#group-buttons[hidden] {
+  display: none;
+}
+#group-buttons button {
+  padding: 6px 10px;
+  border: none;
+  border-radius: 6px;
+  background: var(--bg-neutral);
+  color: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+#group-buttons button:hover {
+  background: var(--bg-active);
+}
+
+/* "Direct messages" with the + for a new group at its right end. */
+.dm-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+#new-group {
+  padding: 0 4px;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  font-size: 1.2rem;
+  line-height: 1;
+  cursor: pointer;
+}
+#new-group:hover {
+  color: var(--text);
+}
+
+/* A group's picture in the DM list: 👥 on a neutral circle. */
+.group-avatar {
+  background: var(--bg-neutral);
+  font-size: 0.8rem;
+}
+
+/* The New group / Add people popup. */
+#group-dialog {
+  width: min(420px, 100% - 32px);
+  box-sizing: border-box;
+  padding: 20px;
+  border: none;
+  border-radius: 8px;
+  background: var(--bg-panel);
+  color: inherit;
+}
+#group-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.6);
+}
+#group-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+#group-form h2 {
+  margin: 0;
+}
+.group-dialog-help {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+/* The friends to tick: a list that scrolls on its own when there are many. */
+#group-friends {
+  display: flex;
+  flex-direction: column;
+  max-height: 45vh;
+  overflow-y: auto;
+}
+.group-choice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.group-choice:hover {
+  background: var(--bg-hover);
+}
+/* A friend that can't be ticked any more (the group would be too big): faded. */
+.group-choice:has(input:disabled) {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+#group-name-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.85rem;
+  color: var(--text-soft);
+}
+#group-name-row[hidden] {
+  display: none;
+}
+#group-name {
+  padding: 10px 12px;
+  border: none;
+  border-radius: 6px;
+  background: var(--bg-darkest);
+  color: inherit;
+  font-size: 1rem;
+}
+.group-dialog-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.group-dialog-buttons button {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 6px;
+  background: var(--accent);
+  color: white;
+  font-size: 1rem;
+  cursor: pointer;
+}
+.group-dialog-buttons button.secondary {
+  background: var(--bg-neutral);
+  color: inherit;
+}
+.group-dialog-buttons button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 #call-button {
   padding: 6px 12px;
   border: none;

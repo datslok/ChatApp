@@ -96,6 +96,10 @@ window.addEventListener("popstate", (event) => {
     history.replaceState({ channel: currentChannel }, "");
     return;
   }
+  if (isGroup(channel) && !groups.has(channel)) {
+    history.replaceState({ channel: currentChannel }, "");  // a group we've left: the same
+    return;
+  }
   switchChannel(channel, channelLabel(channel), true);
 });
 
@@ -187,11 +191,14 @@ function updateAutocomplete(area = input) {  // (= input: the message box, when 
 }
 
 // People for "@ka": whoever can see this channel (in a DM: just the other person, and the AI bot,
-// which a mention invites in), names starting with it first, then names containing it; and @everyone.
+// which a mention invites in; in a group: its members), names starting with it first, then names
+// containing it; and @everyone.
 function findPeople(query) {
   const partner = dmPartner(currentChannel);
+  const members = groups.get(currentChannel)?.members;  // (undefined outside a group)
   const candidates = [...people.values()].filter((person) =>
-    person.id !== myId && (partner === null || person.id === partner || person.bot)
+    person.id !== myId && (members ? members.includes(person.id)
+      : partner === null || person.id === partner || person.bot)
   );
   const name = (person) => person.name.toLowerCase();
   const ordered = [

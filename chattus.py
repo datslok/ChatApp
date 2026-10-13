@@ -438,6 +438,7 @@ class Chattus:
         self.my_id = None
         self.names = {}         # user id -> username, for turning <@2> into @kari
         self.channel_names = {}  # channel key -> its name ("c:5f3a9b21" -> "games"), from "channels"
+        self.groups = {}         # group DMs he's in: key -> {"key", "name", "members"}, from "groups"
         self.emoji = {}         # custom emoji id -> name, for turning <:17> into :pog:
         self.emoji_files = {}   # custom emoji id -> its picture's file name
         self.emoji_notes = json.loads(EMOJI_NOTES.read_text(encoding="utf-8")) if EMOJI_NOTES.exists() else {}
@@ -532,6 +533,8 @@ class Chattus:
             self.names = {user["id"]: user["name"] for user in data["users"]}
         elif kind == "channels":  # at the start, and whenever an admin changes them
             self.channel_names = {item["key"]: item["name"] for item in data["channels"]}
+        elif kind == "groups":  # the group DMs someone added him to
+            self.groups = {group["key"]: group for group in data["groups"]}
         elif kind == "custom_emoji":  # at the start, and whenever one is added, replaced or deleted
             self.emoji = {emoji["id"]: emoji["name"] for emoji in data["emoji"]}
             self.emoji_files = {emoji["id"]: emoji["file"] for emoji in data["emoji"]}
@@ -811,6 +814,12 @@ class Chattus:
                 return f"You're in a private chat with {people[0]}."
             return (f"You're in a private chat between {people[0]} and {people[1]}. One of them mentioned "
                     "you (@Chattus) to ask you something: answer that, and keep out of the rest.")
+        if channel.startswith("g:"):
+            group = self.groups.get(channel, {})
+            people = [self.names.get(member, "someone") for member in group.get("members", []) if member != self.my_id]
+            called = f' called "{group["name"]}"' if group.get("name") else ""
+            return (f"You're in a group chat{called} with {', '.join(people)}. Someone mentioned you (@Chattus) "
+                    "to ask you something: answer that, and keep out of the rest.")
         return f"You're in #{name}, a channel for everyone. Someone mentioned you (@Chattus)."
 
     def attachments_to_show(self, messages, target, wanted, lookback=PICTURE_LOOKBACK, earlier=1):

@@ -115,6 +115,16 @@ the point is for me to understand how it works, not just to have it done.
   (also sent at each connect); core.js `showChannels` redraws the sidebar, a page in a deleted channel goes
   to the first one. Settings → Channels (settings.js, admins only): each row a small form (Enter/Save
   renames), ↑ ↓, 🗑 with confirm(). `can_join` uses `is_channel`; push titles use `channel_name`.
+  `delete_messages_in(key)` removes a channel's or group's messages with everything belonging to them.
+- Group DMs (server.py, "Group DMs"; people.js, "Group DMs"): `group_dms` (key `g:` + 8 hex, name or NULL =
+  the members' names) and `group_members`. Their messages are saved under the key, so `can_join`
+  (`is_group_member`) is the only gate. 3–10 people (`MAX_GROUP_SIZE`): `POST /groups` (2+ of your friends),
+  `/groups/{key}/add` (any member, their own friends), `/rename`, `/leave` (the last one out deletes it all);
+  members needn't be friends with each other; others get a 404. Each member's pages get `{"type": "groups"}`
+  (at connect and after changes, `announce_groups`). Every message counts as a mention for the other members
+  except bots (Chattus only answers @mentions there; `where()` describes the group). No calls (only `dm:`).
+  Page: + next to "Direct messages" (#group-dialog with friend checkboxes), groups first in the DM list,
+  #dm-header shows members and Add people / Rename (prompt()) / Leave (confirm()).
 - Settings → "Bugs & ideas": `/feedback` saves a report in the `feedback` table and emails it to every
   admin with an email. Admins read them in Settings → "Inbox" (settings.js; `GET /feedback` and
   `POST /feedback/{id}/done`, both admin-only on the server), or with `tools/feedback.py`

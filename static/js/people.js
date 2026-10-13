@@ -152,9 +152,17 @@ function fillPeopleList(list, users) {
   }
 }
 
-// DM list in the sidebar: only friends (DMs are only allowed between friends).
+// DM list in the sidebar: our group DMs first, then friends (DMs are only allowed between friends).
 function renderDmList() {
   dmList.replaceChildren();
+  for (const group of groups.values()) {
+    const button = document.createElement("button");
+    button.className = "channel";
+    button.dataset.channel = group.key;
+    button.appendChild(makeGroupRow(group));
+    button.addEventListener("click", () => switchChannel(group.key, channelLabel(group.key)));
+    dmList.appendChild(button);
+  }
   for (const user of people.values()) {  // a Map remembers the order: alphabetical, from the server
     if (!friendIds.has(user.id)) continue;
     const button = document.createElement("button");
@@ -164,7 +172,7 @@ function renderDmList() {
     button.addEventListener("click", () => switchChannel(dmChannel(user.id), "@" + user.name));
     dmList.appendChild(button);
   }
-  if (friendIds.size === 0) {
+  if (friendIds.size === 0 && groups.size === 0) {
     const note = document.createElement("p");
     note.className = "empty-note";
     note.textContent = "Add friends to send direct messages.";
@@ -308,6 +316,182 @@ for (const tab of document.querySelectorAll(".tab")) {
     renderPeopleList();
   });
 }
+
+// ---------- Group DMs ----------
+//
+// Private chats for 3 to 10 people. The server sends our own groups in a "groups" message, at the
+// start and after every change (someone made one with us, added people, renamed it, left):
+// [{key: "g:5f3a9b21", name: "Weekend plans" or null, members: [3, 7, 12]}]. Messages in a group
+// work like in a channel; its key is the "channel" they're saved under.
+
+const MAX_GROUP_SIZE = 10;  // as the server's
+const groups = new Map();   // key -> the group, in the order the server sent them (oldest first)
+const groupDialog = document.getElementById("group-dialog");
+const groupForm = document.getElementById("group-form");
+const groupDialogTitle = document.getElementById("group-dialog-title");
+const groupDialogHelp = document.getElementById("group-dialog-help");
+const groupFriends = document.getElementById("group-friends");
+const groupNameRow = document.getElementById("group-name-row");
+const groupNameInput = document.getElementById("group-name");
+const groupStatus = document.getElementById("group-status");
+const groupSubmit = document.getElementById("group-submit");
+const groupMembersLine = document.getElementById("group-members");
+const groupButtons = document.getElementById("group-buttons");
+let groupDialogKey = null;  // null: the popup starts a new group; a key: it adds people to that one
+
+function isGroup(channel) {
+  return typeof channel === "string" && channel.startsWith("g:");
+}
+
+// What a group is called: its name, or the others' names ("kari, ola").
+function groupLabel(key) {
+  const group = groups.get(key);
+  if (!group) return "a group";
+  if (group.name) return group.name;
+  const others = group.members.filter((id) => id !== myId).map((id) => people.get(id)?.name ?? "someone");
+  return others.length ? others.join(", ") : "Just you";
+}
+
+// The server's "groups": ours changed (or we just connected).
+function setGroups(list) {
+  groups.clear();
+  for (const group of list) groups.set(group.key, group);
+  renderDmList();
+  if (isGroup(currentChannel)) {
+    if (groups.has(currentChannel)) {
+      setLabel(channelLabel(currentChannel));  // (renamed, or people came or went)
+    } else {
+      switchChannel(firstChannel, channelLabel(firstChannel));  // we left it (perhaps on another device)
+    }
+  }
+}
+
+// A group in the DM list: a 👥 circle, its name, and how many are in it.
+function makeGroupRow(group) {
+  const row = document.createElement("span");
+  row.className = "person";
+  const picture = document.createElement("span");
+  picture.className = "person-picture";
+  const circle = document.createElement("div");
+  circle.className = "avatar small letter group-avatar";
+  circle.textContent = "👥";
+  picture.appendChild(circle);
+  row.appendChild(picture);
+  const text = document.createElement("span");
+  text.className = "person-text";
+  const name = document.createElement("span");
+  name.textContent = groupLabel(group.key);
+  const count = document.createElement("span");
+  count.className = "person-status";
+  count.textContent = `${group.members.length} members`;
+  text.append(name, count);
+  row.appendChild(text);
+  return row;
+}
+
+// The bar at the top of a group (called by showDmHeader, rooms.js): who's in it, and its buttons.
+function showGroupHeader() {
+  const inGroup = isGroup(currentChannel) && groups.has(currentChannel);
+  groupMembersLine.hidden = groupButtons.hidden = !inGroup;
+  if (!inGroup) return;
+  const names = groups.get(currentChannel).members.map((id) => (id === myId ? "you" : people.get(id)?.name ?? "someone"));
+  groupMembersLine.textContent = names.join(", ");
+}
+
+// The popup: starting a new group (key null), or adding people to one. It lists our friends who
+// aren't in it yet, each with a checkbox.
+function openGroupDialog(key) {
+  closeDrawers();  // (on a phone, the + is in the sidebar drawer)
+  groupDialogKey = key;
+  const members = key ? groups.get(key).members : [myId];
+  groupDialogTitle.textContent = key ? "Add people" : "New group";
+  groupDialogHelp.textContent = key
+    ? `Pick friends to add (up to ${MAX_GROUP_SIZE - members.length} more). They'll see the whole chat.`
+    : `Pick 2 to ${MAX_GROUP_SIZE - 1} friends. Everyone in a group can read and write in it, add their own friends, and leave.`;
+  groupNameRow.hidden = key !== null;  // (renaming has its own button)
+  groupNameInput.value = "";
+  groupStatus.textContent = "";
+  groupSubmit.textContent = key ? "Add" : "Create group";
+  const choices = [...people.values()].filter((person) => friendIds.has(person.id) && !members.includes(person.id));
+  groupFriends.replaceChildren(...choices.map(makeGroupChoice));
+  if (choices.length === 0) {
+    const note = document.createElement("p");
+    note.className = "empty-note";
+    note.textContent = key ? "All your friends are in it already." : "Add friends first: groups are made with friends.";
+    groupFriends.appendChild(note);
+  }
+  updateGroupChoices();
+  groupDialog.showModal();
+}
+
+// One friend to tick. Inside a <label>, a click anywhere on the row ticks the box.
+function makeGroupChoice(person) {
+  const label = document.createElement("label");
+  label.className = "group-choice";
+  const box = document.createElement("input");
+  box.type = "checkbox";
+  box.value = person.id;  // (a checkbox's value is text: Number() turns it back below)
+  box.addEventListener("change", updateGroupChoices);
+  label.append(box, makePerson(person));
+  return label;
+}
+
+function chosenFriends() {
+  // ":checked" in a selector: only the ticked boxes.
+  return [...groupFriends.querySelectorAll("input:checked")].map((box) => Number(box.value));
+}
+
+// After each tick: at the size limit, the unticked boxes can't be ticked; and the button only
+// works with enough people picked (2 for a new group, 1 to add).
+function updateGroupChoices() {
+  const already = groupDialogKey ? groups.get(groupDialogKey).members.length : 1;
+  const chosen = chosenFriends().length;
+  for (const box of groupFriends.querySelectorAll("input")) {
+    box.disabled = !box.checked && already + chosen >= MAX_GROUP_SIZE;
+  }
+  groupSubmit.disabled = chosen < (groupDialogKey ? 1 : 2);
+}
+
+groupForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const key = groupDialogKey;
+  groupSubmit.disabled = true;  // (no double groups from a double click)
+  const result = key
+    ? await postJson(`/groups/${encodeURIComponent(key)}/add`, { user_ids: chosenFriends() })
+    : await postJson("/groups", { user_ids: chosenFriends(), name: groupNameInput.value });
+  if (!result.ok) {
+    groupStatus.textContent = result.error;
+    updateGroupChoices();
+    return;
+  }
+  groupDialog.close();
+  // A new group: go there. (Its name arrives with the "groups" message, which corrects the label.)
+  if (!key) switchChannel(result.data.key, channelLabel(result.data.key));
+});
+
+document.getElementById("group-cancel").addEventListener("click", () => groupDialog.close());
+document.getElementById("new-group").addEventListener("click", () => openGroupDialog(null));
+document.getElementById("group-add").addEventListener("click", () => openGroupDialog(currentChannel));
+
+// Rename: the browser's own question box. prompt() gives back the text, or null for Cancel.
+document.getElementById("group-rename").addEventListener("click", async () => {
+  const key = currentChannel;
+  const name = prompt("Group name (leave it empty to name it after its members):", groups.get(key)?.name ?? "");
+  if (name === null) return;
+  const result = await postJson(`/groups/${encodeURIComponent(key)}/rename`, { name });
+  if (!result.ok) alert(result.error);
+});
+
+document.getElementById("group-leave").addEventListener("click", async () => {
+  const key = currentChannel;
+  const question = groups.get(key)?.members.length === 1
+    ? "Leave this group? You're the last one in it, so it's deleted with all its messages."
+    : `Leave ${groupLabel(key)}? You can only come back if someone adds you again.`;
+  if (!confirm(question)) return;
+  const result = await postJson(`/groups/${encodeURIComponent(key)}/leave`, {});
+  if (!result.ok) alert(result.error);
+  // (The "groups" message that follows takes us out of it: setGroups.)
+});
 
 // ---------- Profile popup ----------
 
