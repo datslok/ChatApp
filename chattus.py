@@ -39,6 +39,7 @@ CONTEXT_MESSAGES = 20      # how many of the latest messages the model reads
 CLAUDE_CONTEXT_MESSAGES = 200  # ... with Claude (fetched like scrolling up: 50 at a time)
 MAX_ANSWER_TOKENS = 400    # an emergency brake on length (the prompt asks for short answers)
 CLAUDE_MAX_TOKENS = 2000   # ... with Claude more, as its (short) thinking counts too
+CLAUDE_TIMEOUT = 90        # seconds before a Claude request counts as stuck (and is tried again)
 MAX_TEXT_LENGTH = 2000     # the chat's own limit for a message (server.py)
 MAX_AGE = timedelta(hours=1)  # older messages are never answered (after he was offline for a while)
 
@@ -503,7 +504,11 @@ class Chattus:
         self.exa_key = exa_key  # optional: Exa's search works without one, but with a smaller, shared limit
         # With a Claude model (CHATTUS_MODEL), the answers come from Anthropic's API instead of llama-server.
         self.claude_model = claude_model
-        self.claude = anthropic.Anthropic(api_key=anthropic_key) if claude_model else None
+        # timeout: give up on a request after this many seconds and try again (max_retries times). The
+        # package's own default is 10 minutes, and he answers one thing at a time: on 2026-10-14 one stalled
+        # request (the connection open, no answer) kept him silent for everyone until he was restarted.
+        # (90 s, not less: his web searches and page reads run on Anthropic's side and take a while.)
+        self.claude = anthropic.Anthropic(api_key=anthropic_key, timeout=CLAUDE_TIMEOUT, max_retries=2) if claude_model else None
         # How many of a chat's latest messages the model reads (Claude's memory is far bigger)
         self.context_messages = CLAUDE_CONTEXT_MESSAGES if claude_model else CONTEXT_MESSAGES
         self.cookie = None      # "session=..." after logging in
