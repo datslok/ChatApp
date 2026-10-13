@@ -1623,12 +1623,18 @@ def is_looking(user_id):
     return any(client["user_id"] == user_id and client["looking"] for client in clients.values())
 
 
+def has_app_open(user_id):
+    """Has this person got the Windows app open (focused or not)? It notifies by itself, so their
+    phones stay quiet meanwhile. (The page says it's the app in its "looking" messages.)"""
+    return any(client["user_id"] == user_id and client["app"] for client in clients.values())
+
+
 async def send_push(user_ids, payload, ttl=24 * 60 * 60, urgency="normal"):
     """Push this to every device of these people that turned push on and isn't muted, unless they're
-    looking at the chat somewhere right now (then they see it there). ttl: how many seconds the push
-    service keeps trying a phone that's off or offline. Run it as a background task: each push
-    service takes a moment to answer, and the chat mustn't wait for that."""
-    user_ids = [user_id for user_id in user_ids if not is_looking(user_id)]
+    looking at the chat somewhere right now or have the Windows app open (then they get it there).
+    ttl: how many seconds the push service keeps trying a phone that's off or offline. Run it as a
+    background task: each push service takes a moment to answer, and the chat mustn't wait for that."""
+    user_ids = [user_id for user_id in user_ids if not is_looking(user_id) and not has_app_open(user_id)]
     if not VAPID_PRIVATE_KEY or not user_ids:
         return
     marks = ",".join("?" * len(user_ids))  # "?,?,?": one placeholder per person
@@ -3286,7 +3292,8 @@ async def chat(websocket: WebSocket):
     was_online = user_id in online_user_ids()  # already open in another tab?
     # No channel until they "join", no voice room until they say they joined one.
     clients[websocket] = {"user_id": user_id, "channel": None, "voice": None, "muted": False, "deafened": False,
-                          "looking": False}  # looking at it right now (the page says, see "looking")
+                          "looking": False,  # looking at it right now (the page says, see "looking")
+                          "app": False}      # the Windows app (the page says so in "looking" too)
     try:
         # Tell the page who it is (the id is for building DM names).
         await send(websocket, {
@@ -3509,6 +3516,7 @@ async def chat(websocket: WebSocket):
                 # {"type": "looking", "looking": true}: the page is in sight and has the focus (or
                 # not any more). Nobody gets a push while they're looking at the chat somewhere.
                 clients[websocket]["looking"] = data.get("looking") is True
+                clients[websocket]["app"] = data.get("app") is True  # (then no pushes at all: has_app_open)
 
             elif kind == "call":
                 await start_call(data.get("channel"), user_id)

@@ -63,7 +63,8 @@ the point is for me to understand how it works, not just to have it done.
   Windows app). Sent by server.py's `send_push` (in a thread, in the background; 404/410 deletes the
   subscription) for new messages to `save_mentions`' people (DMs, mentions, @everyone) and for DM calls
   (ttl 30 s, urgency high), but never to someone "looking" at the chat on any device (each page sends
-  `{"type": "looking"}` on focus/visibility changes) or to a muted device (`/push/mute`). sw.js shows them
+  `{"type": "looking"}` on focus/visibility changes), nor while they have the Windows app open at all (the
+  page adds `app: inDesktopApp` to "looking"; `has_app_open`), nor to a muted device (`/push/mute`). sw.js shows them
   (one per channel, `tag`) and on a tap focuses an open chat (postMessage "open") or opens
   `/?channel=..&message=..` (core.js reads it). A device with push on doesn't notify by itself (`pushOn`).
   On phones, a banner (`#phone-banner`, notifications.js) offers Install (Chrome's `beforeinstallprompt`, kept and

@@ -164,9 +164,10 @@ if (canPush) currentSubscription().then((subscription) => { pushOn = Boolean(sub
 
 // Tell the server whether we're looking at the chat (tab in sight and window focused): while we
 // are, on any device, nobody pushes us anything (server.py, send_push). On every change, and on
-// each new connection (core.js). "blur": the window lost the focus.
+// each new connection (core.js). "blur": the window lost the focus. "app": this is the Windows
+// app, which notifies by itself: while it's open at all, our phones get no pushes either.
 function sendLooking() {
-  if (socket) sendToServer({ type: "looking", looking: isLooking() });  // (no connection yet: on "open")
+  if (socket) sendToServer({ type: "looking", looking: isLooking(), app: inDesktopApp });  // (no connection yet: on "open")
   clearSeenNotifications();
 }
 
