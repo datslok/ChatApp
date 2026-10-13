@@ -499,7 +499,11 @@ function buildCategoryButtons() {
         emojiSearch.value = "";
         renderEmojiGrid("");
       }
-      document.getElementById(anchorId).scrollIntoView({ block: "start" });
+      // Scroll the grid so that category's section starts at the top. offsetTop: how far down the
+      // grid (its "offsetParent", position: relative in chat.css) the section begins. Not
+      // scrollIntoView on the heading: a sticky heading already stuck at the top counts as "in view",
+      // so going back up to an earlier category did nothing.
+      emojiGrid.scrollTop = document.getElementById(anchorId).offsetTop;
     });
     emojiCategories.appendChild(button);
   }
@@ -526,12 +530,16 @@ function customSections() {
 function renderEmojiGrid(query) {
   emojiGrid.replaceChildren();
 
+  // Each category is a <section> of its own, its heading and its emoji: a sticky heading only sticks
+  // inside its parent, so it stays at the top while its own emoji scroll by, and the next one
+  // pushes it away. (Straight in the grid, every heading passed stayed stuck there, under the others.)
   function section(title, list, anchorId) {
+    const box = document.createElement("section");
+    if (anchorId) box.id = anchorId;  // (where the category buttons scroll to)
     const heading = document.createElement("h4");
     heading.className = "emoji-section-title";
     heading.textContent = title;
-    if (anchorId) heading.id = anchorId;
-    emojiGrid.appendChild(heading);
+    box.appendChild(heading);
     const row = document.createElement("div");
     row.className = "emoji-row";
     for (const [emoji, name] of list) {
@@ -551,7 +559,8 @@ function renderEmojiGrid(query) {
       });
       row.appendChild(button);
     }
-    emojiGrid.appendChild(row);
+    box.appendChild(row);
+    emojiGrid.appendChild(box);
   }
 
   const search = query.trim().toLowerCase();
