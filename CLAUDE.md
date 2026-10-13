@@ -89,8 +89,8 @@ the point is for me to understand how it works, not just to have it done.
 - Emails (reset links) go out through Resend's SMTP server, configured in `.env`. Without `SMTP_HOST`
   (as in development) they're printed in the server window instead.
 - `static/changelog.json`: Settings → "What's new" (settings.js), written by hand: `features` (everything the
-  chat can do, by topic, with how to use it) and `changes` (newest day first). Any change to `changes` (its
-  fingerprint differs from localStorage "changelogSeen") puts a red dot on ⚙️ and the tab; shown in two `<details>`
+  chat can do, by topic, with how to use it) and `changes` (newest day first). More lines in `changes` than
+  localStorage "changelogSeenCount" (saved when What's new opens; edited lines don't count) puts a red dot on ⚙️ and the tab; shown in two `<details>`
   sections, Changes (open) and features (closed). **In the same commit
   as every feature friends would notice: a line in `changes` (same day: add to that day's entry) and update
   `features`** (short, for friends, no technical details; say where things are, like "Settings → Notifications":

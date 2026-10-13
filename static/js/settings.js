@@ -184,9 +184,9 @@ scaleSlider.addEventListener("change", () => changeAppearance({ scale: Number(sc
 // Written by hand in static/changelog.json, in two parts:
 //   "changes":  what changed when, newest day first: [{"date": "2026-10-12", "items": [...]}]
 //   "features": everything the chat can do, by topic: [{"topic": "💬 Messages", "items": [...]}]
-// This browser remembers a fingerprint of the "changes" it has shown (localStorage
-// "changelogSeen"). Any change there (a new line, or an edited one) gives a different
-// fingerprint, which puts a red dot on ⚙️ and on the tab. Editing "features" alone doesn't.
+// This browser remembers how many lines of "changes" it has shown (localStorage
+// "changelogSeenCount"). More lines than that puts a red dot on ⚙️ and on the tab; editing a
+// line, or "features", doesn't. (Removing one line and adding one in the same go isn't noticed.)
 
 const settingsNewDot = document.getElementById("settings-new-dot");
 const changelogNewDot = document.getElementById("changelog-new-dot");
@@ -205,21 +205,18 @@ async function loadChangelog() {
   updateChangelogDots();
 }
 
-// A short fingerprint of the changes: the same text always gives the same number, and any
-// change to it almost certainly a different one. (A simple "hash": each character's code
-// mixes into the number so far. Math.imul multiplies like 32-bit whole numbers do, and ">>> 0"
-// keeps the result a positive number.)
-function changesFingerprint() {
-  const text = JSON.stringify(changelog.changes);
-  let hash = 0;
-  for (let i = 0; i < text.length; i++) {
-    hash = (Math.imul(hash, 31) + text.charCodeAt(i)) >>> 0;
-  }
-  return String(hash);
+// How many lines "changes" has, over all its days.
+function countChangeLines() {
+  let count = 0;
+  for (const entry of changelog.changes) count += entry.items.length;
+  return count;
 }
 
+localStorage.removeItem("changelogSeen");  // the old way (a fingerprint of all the text), no longer used
+
 function updateChangelogDots() {
-  const unseen = changelog.changes.length > 0 && changesFingerprint() !== localStorage.getItem("changelogSeen");
+  // Number(...) turns the saved text into a number; nothing saved yet (null) becomes 0.
+  const unseen = countChangeLines() > Number(localStorage.getItem("changelogSeenCount"));
   settingsNewDot.hidden = !unseen;
   changelogNewDot.hidden = !unseen;
 }
@@ -261,7 +258,7 @@ function showChangelog() {
     topic.textContent = group.topic;
     featuresBox.appendChild(makeChangelogCard(topic, group.items));
   }
-  if (changelog.changes.length > 0) localStorage.setItem("changelogSeen", changesFingerprint());
+  localStorage.setItem("changelogSeenCount", String(countChangeLines()));
   updateChangelogDots();
 }
 
