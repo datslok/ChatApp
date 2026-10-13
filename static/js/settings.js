@@ -60,6 +60,7 @@ function showSettingsPage(name) {
   settingsPagesBox.scrollTop = 0;  // start at the top of the new page
   if (name === "changelog" && settingsDialog.open) showChangelog();  // (also marks it as seen)
   if (name === "appearance") showAppearanceSettings();
+  if (name === "voice" && settingsDialog.open) unlockDevices();  // (voice-settings.js: the devices' names)
 }
 
 for (const tab of settingsTabs) {

@@ -34,6 +34,23 @@ async function listDevices() {
     : "Press Test microphone (or join voice) to see your devices' names.";
 }
 
+// Browsers only tell a page which microphones and speakers there are (and their names) once it may use
+// the microphone. So when Voice & audio opens without that (settings.js, showSettingsPage): open the
+// microphone for a moment (the browser asks the first time; the Windows app may ask again after a
+// restart), close it straight away, and list them. Not for cameras: that would switch the camera light on.
+async function unlockDevices() {
+  if (!navigator.mediaDevices || micStream) return;  // (open already: the names are there)
+  const devices = await navigator.mediaDevices.enumerateDevices().catch(() => []);
+  if (devices.some((device) => device.kind === "audioinput" && device.label)) return;  // allowed already
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    for (const track of stream.getTracks()) track.stop();  // only needed it for the permission
+  } catch {
+    return;  // refused (or no microphone): the hint under the lists stays
+  }
+  listDevices();
+}
+
 // Plugging in or out a headset: the lists change.
 if (navigator.mediaDevices) navigator.mediaDevices.addEventListener("devicechange", listDevices);
 
