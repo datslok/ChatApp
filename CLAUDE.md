@@ -93,7 +93,8 @@ the point is for me to understand how it works, not just to have it done.
   fingerprint differs from localStorage "changelogSeen") puts a red dot on ⚙️ and the tab; shown in two `<details>`
   sections, Changes (open) and features (closed). **In the same commit
   as every feature friends would notice: a line in `changes` (same day: add to that day's entry) and update
-  `features`** (short, for friends, no technical details). Part of `PAGE_VERSION`, so a changelog-only
+  `features`** (short, for friends, no technical details; say where things are, like "Settings → Notifications":
+  Chattus reads `features` as the chat's manual, see below). Part of `PAGE_VERSION`, so a changelog-only
   deploy reloads open pages.
 - `static/emoji.json`: every emoji for the reaction picker (and the server's list of allowed reactions),
   made from Unicode's `emoji-test.txt` by `tools/make_emoji_json.py`.
@@ -293,6 +294,9 @@ the point is for me to understand how it works, not just to have it done.
   the message's text between "[sent the file x:]" and "[end of the file]". Too-big PDFs are named as such.
   Pictures with Claude: the target's and up to `CLAUDE_EARLIER_PICTURES` 3 in the `CLAUDE_PICTURE_LOOKBACK` 10
   messages before, shrunk to `CLAUDE_PICTURE_SIZE` 1568 px (Claude's best size; ~2,500 tokens each) instead of 1 at 768.
+  The chat's manual, with Claude: `load_manual` fetches `/changelog.json` at every start and puts its `features`
+  ("## topic" / "- item") into `{manual}` (`MANUAL_PROMPT`: answer how-to and where-is questions from it, with the
+  way there, and don't make up settings). ~2,000 tokens; the whole prompt ~2,800.
   Reminders, only with Claude (Qwen 9B got times wrong; tried and removed on 2026-10-13): `CLAUDE_TOOLS_PROMPT` (put into
   `{claude_tools}` only with Claude; single braces, as a format value) and `remind` in `CLAUDE_ANSWER_SCHEMA`
   ("remind:" -> `ONLY_REMIND_SCHEMA`): what, day (today/tomorrow/weekday/MM-DD), time (HH:MM), in (amount + unit),

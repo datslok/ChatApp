@@ -366,7 +366,9 @@ from it. Some big sites block AI readers; then he says he couldn't open it. He *
 too: PDFs (up to 5 MB; their text and pages, scans included) and text files (`.txt`, `.md`, `.csv`, code...,
 their first 50,000 characters), the one in the message he answers and up to 3 in the 10 messages before it.
 Pictures the same way: up to 3 earlier ones besides the message's own, and sharper (1568 pixels instead of 768),
-so small text in screenshots and photos is readable.
+so small text in screenshots and photos is readable. And he knows how the chat works: at every start he reads
+the `features` part of "What's new" (see [What's new](#whats-new)), so "where do I change my theme?" gets the way
+there. Keep that list complete, and say where each setting is.
 
 With Claude he also keeps **reminders** ("remind me tomorrow at 9 to call mum", "in 20 minutes", or
 "remind: ..."): the model copies the words into fields (a day, a time, or an amount and a unit) and Python

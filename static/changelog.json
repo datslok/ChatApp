@@ -65,6 +65,7 @@
       "items": [
         "Chattus is a friendly cat who answers everything in #chattus, and anywhere else when you write @Chattus. He has a BOT tag, and his own Bots section at the top of the member list",
         "Everyone is his friend from the start, so you can DM him anytime",
+        "He knows how the chat works (everything on this page): ask him where a setting is or how to do something",
         "In a DM with a friend, write @Chattus to ask him something there: he only answers when mentioned. Mentioning him lets him read that DM's latest messages for an hour (and like everything he reads, they go to his AI, Claude, to answer)",
         "He reacts to messages too (🎉 for good news, 🐾 for a thanks), and knows our own emoji by name",
         "He can see pictures: send one in #chattus (or with @Chattus), or ask about the pictures above (up to 3 of the last few), small text in them too",
@@ -81,8 +82,10 @@
     {
       "topic": "⚙️ Settings and help",
       "items": [
+        "Settings: the ⚙️ at the bottom left, next to your name. Its tabs: My Account, Profile, Appearance, Emoji, Notifications, Voice & audio, Video, App behaviour (only in the Windows app), What's new and Bugs & ideas",
         "My Account: change your username, email and password. Forgot your password? There's a link on the login page",
         "Appearance: eight themes (Dark, Darker, Light, Blue, Purple, Green, Pink, Light pink), your own colours on top, a font and a text size, and in the Windows app a scale (everything bigger or smaller). Saved with your account, so it's the same on every device",
+        "What's new: what changed lately (a red dot on ⚙️ means something new), and everything the chat can do",
         "Bugs & ideas: tell us what's broken or what you'd like"
       ]
     }
@@ -103,7 +106,8 @@
         "Chattus sees pictures better 👀: several at once (\"which of these is cuter?\"), and sharp enough to read small text in screenshots and photos",
         "Chattus knows what he looks like, so he no longer thinks every cat picture is him",
         "Bots have their own section at the top of the member list, and a BOT tag after their name",
-        "Everyone is friends with Chattus now: DM him anytime, no friend request needed"
+        "Everyone is friends with Chattus now: DM him anytime, no friend request needed",
+        "Chattus knows how the chat works: ask him where a setting is or how to do something"
       ]
     },
     {

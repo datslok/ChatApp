@@ -75,7 +75,15 @@ You answer with JSON: "reply" is your message, and "reaction" is one emoji to pu
   leave everything else empty: the dice are rolled for you and the result is shown. Otherwise leave it "".
 - "poll": when someone asks you to make a poll (a vote), put its question and its 2 to 10 options here, each short,
   and leave everything else empty: the poll is posted for you. Someone asking what you prefer is not a poll.
-  Otherwise leave the question "" and the options [].{claude_tools}{custom}"""
+  Otherwise leave the question "" and the options [].{claude_tools}{custom}{manual}"""
+# With Claude, the chat's own manual: the "features" list of Settings -> What's new (static/changelog.json),
+# so he can tell people how the chat works and where a setting is. (Put in as a value: braces are fine.)
+MANUAL_PROMPT = """
+
+How this chat works, from its own help page (Settings -> What's new). When someone asks how to do something
+here or where a setting is, answer from this, briefly, with the way there (like "Settings -> Appearance").
+Don't make up settings or buttons that aren't in it; if it isn't there, say you're not sure.
+{features}"""
 # What he can only do with Claude: read a page someone linked, and reminders (the local model too often got
 # the times wrong; the model only copies the words into the fields, and Python works out the moment).
 CLAUDE_TOOLS_PROMPT = """
@@ -434,6 +442,7 @@ class Chattus:
         self.emoji_notes = json.loads(EMOJI_NOTES.read_text(encoding="utf-8")) if EMOJI_NOTES.exists() else {}
         # (file name -> what it shows, like "a surprised face": a replaced picture gets a new file name)
         self.allowed_emoji = set()  # every emoji the server accepts as a reaction (static/emoji.json)
+        self.manual = ""        # with Claude: how the chat works, for the prompt (load_manual)
         self.channel = None     # the channel we've joined
         self.messages = {}      # channel -> its latest messages (from "history", then live ones)
         self.history_arrived = None  # a Future the reader completes when a joined channel's history comes
@@ -465,6 +474,18 @@ class Chattus:
             groups = json.loads(response.read())["groups"]
         self.allowed_emoji = {emoji for group in groups for emoji, _ in group["emoji"]}
 
+    def load_manual(self):
+        """The chat's manual for the prompt (with Claude): the "features" of /changelog.json, what the
+        page shows in Settings -> What's new, as "## topic" and "- item" lines. Fetched at every start,
+        so a deploy with new features teaches him them too."""
+        with urllib.request.urlopen(f"{self.chat_url}/changelog.json", timeout=30) as response:
+            features = json.loads(response.read())["features"]
+        lines = []
+        for topic in features:
+            lines.append(f"## {topic['topic']}")
+            lines += [f"- {item}" for item in topic["items"]]
+        self.manual = MANUAL_PROMPT.format(features="\n".join(lines))
+
     def fetch(self, path):
         """A file from the chat (a picture), with our login: the server only gives it to people who
         may see the message it's in. Blocking: run it in a thread."""
@@ -476,6 +497,11 @@ class Chattus:
         """Log in, connect and work, until the connection drops (then run() returns or raises)."""
         await asyncio.to_thread(self.log_in)
         await asyncio.to_thread(self.load_emoji)
+        if self.claude:  # (too much for the local model's small memory)
+            try:
+                await asyncio.to_thread(self.load_manual)
+            except Exception as error:  # without it he still works, he just knows less about the chat
+                log(f"Couldn't load the chat's manual: {error!r}")
         ws_url = self.chat_url.replace("http", "ws", 1) + "/ws"
         async with connect(ws_url, additional_headers={"Cookie": self.cookie}, max_size=2**24) as websocket:
             self.websocket = websocket
@@ -815,6 +841,7 @@ class Chattus:
             "role": "system",
             "content": SYSTEM_PROMPT.format(where=self.where(channel), now=f"{datetime.now():%A %d %B %Y, %H:%M}",
                                             custom=custom, claude_tools=CLAUDE_TOOLS_PROMPT if self.claude else "",
+                                            manual=self.manual,
                                             count=self.context_messages),
         }]
         if self.claude:
