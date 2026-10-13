@@ -107,7 +107,8 @@
         "Chattus knows what he looks like, so he no longer thinks every cat picture is him",
         "Bots have their own section at the top of the member list, and a BOT tag after their name",
         "Everyone is friends with Chattus now: DM him anytime, no friend request needed",
-        "Chattus knows how the chat works: ask him where a setting is or how to do something"
+        "Chattus knows how the chat works: ask him where a setting is or how to do something",
+        "Fixed: @name and :emoji suggestions now also work when you edit a message"
       ]
     },
     {

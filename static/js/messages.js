@@ -1167,7 +1167,9 @@ function makeEditor(message) {
     editDraft = area.value;
     grow();
   });
+  useAutocomplete(area);  // @name and :emoji suggestions, like in the message box (ui.js)
   area.addEventListener("keydown", (event) => {
+    if (autocompleteKeydown(event)) return;  // the list is open: ↑ ↓ Enter Tab Esc are its keys
     if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
       event.preventDefault();
       saveEdit(message);

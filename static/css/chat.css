@@ -1756,6 +1756,21 @@ button.download-button {
   font-family: var(--font);
 }
 
+/* The editor (the edit box and its hint): "relative", so the suggestion list can sit under the box. */
+.editor {
+  position: relative;
+}
+
+/* The suggestion list in the editor: below the box (above it, it'd be cut off when editing a
+   message at the top of the chat). */
+.editor #autocomplete {
+  left: 0;
+  right: 0;
+  top: 100%;
+  bottom: auto;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+
 /* The edit box, in place of a message's text. */
 .edit-input {
   box-sizing: border-box;
@@ -2740,7 +2755,8 @@ button.download-button {
 
 /* "#chat-form #autocomplete button": more specific than the "#chat-form button" rule
    (two ids beat one), so these list rows don't become blue Send-style buttons. */
-#chat-form #autocomplete button {
+#chat-form #autocomplete button,
+.editor #autocomplete button {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -2754,7 +2770,8 @@ button.download-button {
   cursor: pointer;
 }
 
-#chat-form #autocomplete button.active {
+#chat-form #autocomplete button.active,
+.editor #autocomplete button.active {
   background: var(--bg-active);  /* the highlighted one: Enter or Tab picks it */
 }
 

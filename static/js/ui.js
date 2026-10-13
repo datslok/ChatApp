@@ -161,10 +161,19 @@ const TYPING_CODE = /(^|\s):([A-Za-z0-9_]{2,32})$/;
 // {0,32}: the list already shows right after typing "@".
 const TYPING_MENTION = /(^|\s)@([A-Za-z0-9_-]{0,32})$/;
 
-function updateAutocomplete() {
-  const cursor = input.selectionStart;
-  if (input.selectionEnd !== cursor) return closeAutocomplete();  // (text is selected)
-  const before = input.value.slice(0, cursor);
+// The text box the list belongs to: the message box, or the edit box of a message being edited.
+// There's one list (#autocomplete); it's moved next to whichever box you're typing in.
+let typingIn = input;
+
+function updateAutocomplete(area = input) {  // (= input: the message box, when no box is given)
+  typingIn = area;
+  // Its place: in the message form (above the box), or in the editor (below the box, so it isn't
+  // cut off when editing a message at the top). appendChild moves an element that's already on the page.
+  const home = area === input ? input.form : area.parentElement;
+  if (autocompleteBox.parentElement !== home) home.appendChild(autocompleteBox);
+  const cursor = area.selectionStart;
+  if (area.selectionEnd !== cursor) return closeAutocomplete();  // (text is selected)
+  const before = area.value.slice(0, cursor);
   const mention = before.match(TYPING_MENTION);
   const code = before.match(TYPING_CODE);
   const match = mention || code;
@@ -272,18 +281,62 @@ function renderAutocomplete() {
 // Replace the typed ":po" with the chosen ":pog: " (or the emoji itself), cursor after it.
 function pickSuggestion(index) {
   const suggestion = suggestions[index];
-  const cursor = input.selectionStart;
-  const newText = input.value.slice(0, codeStart) + suggestion.insert + input.value.slice(cursor);
+  const area = typingIn;
+  const cursor = area.selectionStart;
+  const newText = area.value.slice(0, codeStart) + suggestion.insert + area.value.slice(cursor);
   if (newText.length > maxTextLength) {  // maxlength only stops typing, not values set by code
     closeAutocomplete();
-    updateCharCount("No room for that emoji: character limit reached");
+    if (area === input) updateCharCount("No room for that emoji: character limit reached");
     return;
   }
-  input.value = newText;
-  input.selectionStart = input.selectionEnd = codeStart + suggestion.insert.length;
+  area.value = newText;
+  area.selectionStart = area.selectionEnd = codeStart + suggestion.insert.length;
   closeAutocomplete();
-  autoGrow();
-  input.focus();
+  // As if it had been typed: the box's own "input" listener grows it (and the edit box keeps its
+  // draft). The list doesn't reopen: after the inserted space or emoji, nothing is being typed.
+  area.dispatchEvent(new Event("input"));
+  area.focus();
+}
+
+// ↑ ↓ Enter Tab Esc while the list is open belong to it (in the message box and in the edit box).
+// True if the key was used for the list, so the box's own handler leaves it alone.
+// isComposing: typing with an input method (e.g. Japanese), where Enter confirms a character.
+function autocompleteKeydown(event) {
+  // isConnected: still on the page. (A new message redraws the messages, editor and all: a list
+  // that was open in the old editor is gone with it, and counts as closed.)
+  if (autocompleteBox.hidden || !autocompleteBox.isConnected) return false;
+  if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+    event.preventDefault();  // don't move the cursor
+    const step = event.key === "ArrowDown" ? 1 : -1;
+    // % wraps around: past the last goes back to the first (and the other way round)
+    suggestionIndex = (suggestionIndex + step + suggestions.length) % suggestions.length;
+    renderAutocomplete();
+    return true;
+  }
+  if ((event.key === "Enter" || event.key === "Tab") && !event.isComposing) {
+    event.preventDefault();  // don't send or save / don't move focus
+    pickSuggestion(suggestionIndex);
+    return true;
+  }
+  if (event.key === "Escape") {
+    // stopImmediatePropagation: the box's other Esc handlers (cancel a reply, cancel an edit)
+    // don't get this keypress. Esc closes the list first; a second Esc does the rest.
+    event.stopImmediatePropagation();
+    closeAutocomplete();
+    return true;
+  }
+  return false;
+}
+
+// The edit box gets the list too (messages.js, makeEditor): after every change, when the cursor
+// moves, and closed when it loses focus. (Its keys: autocompleteKeydown, in its own handler.)
+function useAutocomplete(area) {
+  area.addEventListener("input", () => updateAutocomplete(area));
+  area.addEventListener("click", () => updateAutocomplete(area));
+  area.addEventListener("keyup", (event) => {
+    if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) updateAutocomplete(area);
+  });
+  area.addEventListener("blur", closeAutocomplete);
 }
 
 function closeAutocomplete() {
@@ -292,43 +345,16 @@ function closeAutocomplete() {
 }
 
 // Check after every change, and when the cursor moves (clicking, or arrow keys sideways).
+useAutocomplete(input);
 input.addEventListener("input", () => {
   autoGrow();
-  updateAutocomplete();
   updateCharCount();
 });
-input.addEventListener("click", updateAutocomplete);
-input.addEventListener("keyup", (event) => {
-  if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) updateAutocomplete();
-});
-input.addEventListener("blur", closeAutocomplete);  // the text box lost focus
 
-// The keys. While the list is open, ↑ ↓ Enter Tab Esc belong to it.
+// The keys. While the list is open, ↑ ↓ Enter Tab Esc belong to it (autocompleteKeydown).
 // Enter (without Shift) otherwise sends; Shift+Enter starts a new line.
-// isComposing: typing with an input method (e.g. Japanese), where Enter confirms a character.
 input.addEventListener("keydown", (event) => {
-  if (!autocompleteBox.hidden) {
-    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-      event.preventDefault();  // don't move the cursor
-      const step = event.key === "ArrowDown" ? 1 : -1;
-      // % wraps around: past the last goes back to the first (and the other way round)
-      suggestionIndex = (suggestionIndex + step + suggestions.length) % suggestions.length;
-      renderAutocomplete();
-      return;
-    }
-    if ((event.key === "Enter" || event.key === "Tab") && !event.isComposing) {
-      event.preventDefault();  // don't send / don't move focus
-      pickSuggestion(suggestionIndex);
-      return;
-    }
-    if (event.key === "Escape") {
-      // stopImmediatePropagation: the other Esc handler on the text box (which cancels a reply)
-      // doesn't get this keypress. Esc closes the list first; a second Esc cancels the reply.
-      event.stopImmediatePropagation();
-      closeAutocomplete();
-      return;
-    }
-  }
+  if (autocompleteKeydown(event)) return;
   // ↑ in an empty text box: edit our last message (like Discord).
   if (event.key === "ArrowUp" && input.value === "") {
     const mine = shownMessages.filter((message) => message.user_id === myId);
