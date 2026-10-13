@@ -1294,6 +1294,8 @@ function showMessage(message, follow = true) {
     nameElement.className = "name";
     nameElement.textContent = message.name;
     header.appendChild(nameElement);
+    // ?. means "if there's such a person": old messages may be from accounts that are gone.
+    if (people.get(message.user_id)?.bot) header.appendChild(makeBotBadge());
     const timeElement = document.createElement("span");
     timeElement.className = "message-time";
     const day = dayName(time);

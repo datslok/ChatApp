@@ -76,6 +76,14 @@ function redrawAvatars() {
   }
 }
 
+// The little "BOT" tag after a bot's name (in the lists, above its messages, in its profile).
+function makeBotBadge() {
+  const badge = document.createElement("span");
+  badge.className = "bot-badge";
+  badge.textContent = "BOT";
+  return badge;
+}
+
 // A row for one person: picture with an online dot, name, and status underneath.
 function makePerson(user) {
   const row = document.createElement("span");
@@ -91,6 +99,7 @@ function makePerson(user) {
   text.className = "person-text";
   const name = document.createElement("span");
   name.textContent = user.name;
+  if (user.bot) name.appendChild(makeBotBadge());
   text.appendChild(name);
   if (user.status) {
     const status = document.createElement("span");
@@ -109,10 +118,16 @@ function showUsers(users) {
 
   renderDmList();
 
-  // The right column: everyone, split into online and offline (both alphabetical, as the
-  // server sent them). Click someone for their profile.
-  const online = users.filter((user) => user.online);
-  const offline = users.filter((user) => !user.online);  // ! means "not"
+  // The right column: bots in a section of their own at the top (like a role in Discord), then
+  // everyone else, split into online and offline (all alphabetical, as the server sent them).
+  // Click someone for their profile.
+  const bots = users.filter((user) => user.bot);
+  const humans = users.filter((user) => !user.bot);  // ! means "not"
+  const online = humans.filter((user) => user.online);
+  const offline = humans.filter((user) => !user.online);
+  botsHeading.hidden = botsList.hidden = bots.length === 0;  // (no bots: as if the section weren't there)
+  botsHeading.textContent = `Bots — ${bots.length}`;
+  fillPeopleList(botsList, bots);
   onlineHeading.textContent = `Online — ${online.length}`;
   offlineHeading.textContent = `Offline — ${offline.length}`;
   fillPeopleList(onlineList, online);
@@ -322,6 +337,7 @@ function renderProfile(userId) {
     badge.textContent = "Admin";
     profileName.appendChild(badge);
   }
+  if (person.bot) profileName.appendChild(makeBotBadge());
   profileStatus.textContent = person.status || "";
   profileBio.textContent = person.bio || "";
   profileActionStatus.textContent = "";

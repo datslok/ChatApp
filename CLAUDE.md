@@ -224,7 +224,9 @@ the point is for me to understand how it works, not just to have it done.
   make_bot.py) lets a bot into a DM for an hour after a member names it there (`bot_invited`, `BOT_INVITE_TIME`;
   `save_mentions` saves a bot's DM mention by name, never via @everyone); calls use the strict
   `is_dm_member` (not `can_join`), so a bot never gets into DM calls. "users" has `"bot"`, so the page's @
-  suggestions in a DM offer bots. Chattus answers everything only in #chattus and his own DMs
+  suggestions in a DM offer bots, the member list puts bots in a "Bots" section at the top (`#bots-list`,
+  people.js `showUsers`), and `makeBotBadge` adds a "BOT" tag (`--bot-badge`, the theme's accent) after a bot's
+  name in the lists, above its messages and in its profile. Chattus answers everything only in #chattus and his own DMs
   (`answers_everything`); in friends' DMs only mentions, as replies. Context: the last 20 messages (with Claude 200: `CLAUDE_CONTEXT_MESSAGES`, `join()` asks for "older" 50 at a time like scrolling up) as "name: text"
   (`<@id>` -> @name, `<:id>` -> :name:, files as "[sent a picture]"). Personality: `SYSTEM_PROMPT`.
   Development: `.\chattus.ps1 -Dev` with start.ps1 and `ssh -L 8080:127.0.0.1:8080 chatserver`; its

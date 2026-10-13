@@ -38,6 +38,8 @@
   --button-red: #da373c;     /* hang up, muted */
   --button-red-hover: #a12828;
   --yellow: #f0b232;         /* mentions of you, warnings */
+  --bot-badge: var(--accent);  /* the "BOT" tag after a bot's name: each theme's own accent */
+  --bot-badge-text: #ffffff;
   --font: system-ui, sans-serif;  /* Settings → Appearance can choose another (appearance.js) */
 }
 
@@ -2899,6 +2901,13 @@ button.download-button {
   margin-top: 20px;
 }
 
+/* "Online" right under the Bots section gets the same space above it. "+" means "the element
+   right after": the Online heading, when it follows a Bots list that isn't hidden. */
+#bots-list:not([hidden]) + #online-heading {
+  margin-top: 20px;
+}
+
+#bots-list,
 #online-list,
 #offline-list {
   margin: 0;
@@ -2906,9 +2915,24 @@ button.download-button {
   list-style: none;  /* no bullet points */
 }
 
+#bots-list li,
 #online-list li,
 #offline-list li {
   padding: 4px 0;
+}
+
+/* The "BOT" tag after a bot's name (people.js, makeBotBadge): small capitals on a coloured
+   background, like Discord's. */
+.bot-badge {
+  margin-left: 6px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--bot-badge);
+  color: var(--bot-badge-text);
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  vertical-align: middle;
 }
 
 /* Offline people: dimmed, so the online ones stand out. */
