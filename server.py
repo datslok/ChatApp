@@ -2418,7 +2418,8 @@ def delete_messages_in(key):
 #
 # Private chats for 3 to 10 people. Anyone can start one with their friends; any member can add
 # more of their own friends and rename it; anyone can leave, and the last one out deletes it.
-# The members don't have to be friends with each other (as in Discord). No calls: only DMs have those.
+# The members don't have to be friends with each other (as in Discord). Calls: see "Calls in DMs
+# and group DMs".
 # Each member's pages get {"type": "groups"} with their groups at the start and after every change.
 
 MAX_GROUP_SIZE = 10  # people in a group, its starter included
@@ -2702,35 +2703,56 @@ def voice_members_message():
     return {"type": "voice_members", "rooms": {room: members_in(room) for room in VOICE_ROOMS}}
 
 
-# ---------- DM calls ----------
+# ---------- Calls in DMs and group DMs ----------
 #
-# A DM call is a LiveKit room named after the DM ("dm:3:7"). Our server only does the ringing,
-# over the chat's WebSocket:
-#   caller's page:  {"type": "call", "channel": "dm:3:7"}                 (and joins the room)
-#   callee's tabs:  {"type": "call", "channel": ..., "from": 3, "name": "axel"}  (they ring)
-#   callee's page:  {"type": "call_answer", "channel": ..., "accept": true}      (and joins)
-#   both:           {"type": "call_answered", "channel": ...}  (every tab stops ringing)
-#   or              {"type": "call_ended", "channel": ..., "reason": "no_answer"}
-# When it's over, a call note goes into the DM: "📞 Call · 12 min", or "📞 Missed call".
+# A call is a LiveKit room named after the DM or group ("dm:3:7", "g:5f3a9b21"). Our server only
+# does the ringing, over the chat's WebSocket:
+#   caller's page:     {"type": "call", "channel": "dm:3:7"}                 (and joins the room)
+#   the others' tabs:  {"type": "call", "channel": ..., "from": 3, "name": "axel"}  (they ring)
+#   one who answers:   {"type": "call_answer", "channel": ..., "accept": true}      (and joins)
+#   their tabs (and the caller's, the first time): {"type": "call_answered", "channel": ...}  (the
+#                      ringing, or the caller's "Calling…", stops)
+#   everyone:          {"type": "call_ended", "channel": ..., "reason": "no_answer"}
+# In a DM, declining ends the call. In a group, it only stops your own ringing: the others ring
+# until they answer or 30 seconds pass, and the call goes on as long as anyone is in it.
+# When it's over, a call note goes into the chat: "📞 Call · 12 min", or "📞 Missed call".
 
 RING_SECONDS = 30
 
-# The calls ringing or going on, by DM:
-# {"dm:3:7": {"caller": 3, "callee": 7, "started": None while ringing (then the time it was answered),
-#             "caller_joined": True once the caller's page is in the room, "ring": the 30 s timer}}
+# The calls ringing or going on, by DM or group:
+# {"dm:3:7": {"caller": 3, "ringing": {7} (those still being rung), "started": None until someone
+#             answered (then the time), "caller_joined": True once the caller's page is in the room,
+#             "ring": the 30 s timer}}
 calls = {}
 
 
+def is_private_room(room):
+    """A DM's or group's call (not Lounge)?"""
+    return isinstance(room, str) and (room.startswith("dm:") or room.startswith("g:"))
+
+
+def is_call_member(room, user_id):
+    """May this person be in this DM's or group's call? The two friends of a DM, or a group's members.
+    Never a bot: not one invited to read a DM, nor one added to a group."""
+    return is_dm_member(room, user_id) or (is_group_member(room, user_id) and not is_bot(user_id))
+
+
+def call_people(channel):
+    """Everyone a DM's or group's call belongs to: who hears about it."""
+    people = dm_people(channel)
+    return list(people) if people else group_members(channel)
+
+
 def dm_call_message(channel):
-    """Who's in a DM's call right now, for the call banner and "Join call":
+    """Who's in a DM's or group's call right now, for the call banner and "Join call":
     {"type": "dm_call", "channel": "dm:3:7", "members": [{"id": 7, "muted": false, "deafened": false}]}."""
     return {"type": "dm_call", "channel": channel, "members": members_in(channel)}
 
 
 async def announce_dm_call(channel):
-    """Tell the two people in this DM (and nobody else) who's in its call."""
+    """Tell the people of this DM or group (and nobody else) who's in its call."""
     message = dm_call_message(channel)
-    for person in (int(part) for part in channel.split(":")[1:]):
+    for person in call_people(channel):
         await send_to_user(person, message)
 
 
@@ -2745,47 +2767,65 @@ def call_message(channel):
 
 
 async def start_call(channel, caller):
-    if not is_dm_member(channel, caller):
-        return  # only in your own DMs with friends
+    if not is_call_member(channel, caller):
+        return  # only in your own DMs with friends, and your groups
     call = calls.get(channel)
     if call is not None:
-        if call["started"] is None and call["callee"] == caller:
-            await answer_call(channel, caller, True)  # they called each other at once: that's an answer
+        if caller in call["ringing"]:
+            await answer_call(channel, caller, True)  # it rang for them while they called: that's an answer
         return  # already ringing or going on: the page just joins the room
-    first, second = (int(part) for part in channel.split(":")[1:])
-    callee = second if caller == first else first
+    # Ring everyone else who could join (in a group: not its bots).
+    others = {person for person in call_people(channel) if person != caller and is_call_member(channel, person)}
     calls[channel] = {
-        "caller": caller, "callee": callee, "started": None, "caller_joined": False,
+        "caller": caller, "ringing": others, "started": None, "caller_joined": False,
         # A background task that ends the call if nobody answers in time. (asyncio runs it while
         # we wait for other things, like the next WebSocket message.)
         "ring": asyncio.create_task(ring_timeout(channel)),
     }
-    await send_to_user(callee, call_message(channel))  # every tab and device they have open rings
+    for person in others:
+        await send_to_user(person, call_message(channel))  # every tab and device they have open rings
     # ...and their phones: "high" urgency (wake it now), and gone after the 30 s it rings.
-    push_in_background([callee], {
-        "title": username_of(caller), "body": "📞 Calling you", "channel": channel, "call": True,
-        "icon": "/icons/icon-192.png",
+    if channel.startswith("dm:"):
+        title, body = username_of(caller), "📞 Calling you"
+    else:
+        title, body = group_title(channel), f"📞 {username_of(caller)} is calling"
+    push_in_background(list(others), {
+        "title": title, "body": body, "channel": channel, "call": True, "icon": "/icons/icon-192.png",
     }, ttl=30, urgency="high")
 
 
 async def ring_timeout(channel):
     await asyncio.sleep(RING_SECONDS)
     call = calls.get(channel)
-    if call is not None and call["started"] is None:
+    if call is None:
+        return
+    if call["started"] is None:
         await end_call(channel, "no_answer")
+        return
+    # A group call that's going on: those who never answered stop ringing (they can still join).
+    for person in list(call["ringing"]):
+        call["ringing"].discard(person)
+        await send_to_user(person, {"type": "call_answered", "channel": channel})
 
 
 async def answer_call(channel, user_id, accept):
     call = calls.get(channel)
-    if call is None or call["started"] is not None or call["callee"] != user_id:
+    if call is None or user_id not in call["ringing"]:
         return  # not ringing, or not for them
-    if not accept:
-        await end_call(channel, "declined")
+    if not accept and channel.startswith("dm:"):
+        await end_call(channel, "declined")  # in a DM, a no ends it
         return
-    call["ring"].cancel()
-    call["started"] = time.time()
-    for person in (call["caller"], call["callee"]):
-        await send_to_user(person, {"type": "call_answered", "channel": channel})
+    call["ringing"].discard(user_id)
+    await send_to_user(user_id, {"type": "call_answered", "channel": channel})  # all their tabs stop ringing
+    if not accept:
+        if not call["ringing"] and call["started"] is None:
+            await end_call(channel, "declined")  # everyone in the group said no
+        return
+    if call["started"] is None:  # the first to answer: the call has started
+        call["started"] = time.time()
+        await send_to_user(call["caller"], {"type": "call_answered", "channel": channel})
+    if not call["ringing"]:
+        call["ring"].cancel()  # nobody left to ring
 
 
 async def end_call(channel, reason):
@@ -2795,7 +2835,7 @@ async def end_call(channel, reason):
         return
     if call["ring"] is not asyncio.current_task():  # (cancelling ourselves would stop us right here)
         call["ring"].cancel()
-    for person in (call["caller"], call["callee"]):
+    for person in call_people(channel):
         await send_to_user(person, {"type": "call_ended", "channel": channel, "reason": reason})
 
     if call["started"] is None:
@@ -2816,7 +2856,7 @@ async def end_call(channel, reason):
 
 
 async def check_call(channel):
-    """After someone's voice room changed: has this DM's call been called off, or ended?"""
+    """After someone's voice room changed: has this DM's or group's call been called off, or ended?"""
     call = calls.get(channel)
     if call is None:
         return
@@ -2837,8 +2877,8 @@ async def voice_token(room: str, request: Request):
     user_id, username, password_hash, email = logged_in_user(request)
     if not (LIVEKIT_URL and LIVEKIT_API_KEY and LIVEKIT_API_SECRET):
         raise HTTPException(503, "Voice isn't set up on this server.")
-    # Lounge: anyone logged in. A DM call: only the two friends (not a bot invited to read the DM).
-    if room not in VOICE_ROOMS and not is_dm_member(room, user_id):
+    # Lounge: anyone logged in. A DM's or group's call: only its people (see is_call_member).
+    if room not in VOICE_ROOMS and not is_call_member(room, user_id):
         raise HTTPException(403, "You can't join that voice room.")
     return {"url": LIVEKIT_URL, "token": make_voice_token(user_id, username, room)}
 
@@ -3246,13 +3286,13 @@ async def chat(websocket: WebSocket):
         else:
             await send_to_everyone(users_message())  # they came online
         await send(websocket, voice_members_message())  # who's in the voice channels right now
-        # Their DM calls that someone is in right now (so the banner can offer "Join call").
-        dm_rooms = {c["voice"] for c in clients.values() if isinstance(c["voice"], str) and c["voice"].startswith("dm:")}
-        for room in dm_rooms:
-            if user_id in (int(part) for part in room.split(":")[1:]):
+        # Their DM and group calls that someone is in right now (so the banner can offer "Join call").
+        private_rooms = {c["voice"] for c in clients.values() if is_private_room(c["voice"])}
+        for room in private_rooms:
+            if is_call_member(room, user_id):
                 await send(websocket, dm_call_message(room))
         for channel, call in list(calls.items()):  # opened while someone is calling them: ring here too
-            if call["callee"] == user_id and call["started"] is None:
+            if user_id in call["ringing"]:
                 await send(websocket, call_message(channel))
 
         while True:
@@ -3428,19 +3468,19 @@ async def chat(websocket: WebSocket):
                 # muted, unmuted or deafened ({"muted": true, "deafened": false}). Only for showing
                 # who's in voice: getting into the audio itself still needs a ticket from /voice-token.
                 room = data.get("room")
-                if room is not None and room not in VOICE_ROOMS and not is_dm_member(room, user_id):
+                if room is not None and room not in VOICE_ROOMS and not is_call_member(room, user_id):
                     continue  # not a room they may be in
                 old_room = clients[websocket]["voice"]
                 clients[websocket]["voice"] = room
                 clients[websocket]["muted"] = data.get("muted") is True
                 clients[websocket]["deafened"] = data.get("deafened") is True
-                # Everyone sees who's in the voice channels; DM calls stay private.
+                # Everyone sees who's in the voice channels; DM and group calls stay private.
                 if old_room in VOICE_ROOMS or room in VOICE_ROOMS:
                     await send_to_everyone(voice_members_message())
                 for changed in {old_room, room}:
-                    if isinstance(changed, str) and changed.startswith("dm:"):
-                        await announce_dm_call(changed)  # the two of them see who's in their call
-                    if changed in calls:  # a DM call may have been called off, or ended
+                    if is_private_room(changed):
+                        await announce_dm_call(changed)  # its people see who's in their call
+                    if changed in calls:  # a call may have been called off, or ended
                         await check_call(changed)
 
             elif kind == "looking":
@@ -3468,7 +3508,7 @@ async def chat(websocket: WebSocket):
             await send_to_everyone(users_message())
         if voice_room in VOICE_ROOMS:  # closed the tab while in voice: they're out
             await send_to_everyone(voice_members_message())
-        if isinstance(voice_room, str) and voice_room.startswith("dm:"):  # ...or out of a DM call
+        if is_private_room(voice_room):  # ...or out of a DM's or group's call
             await announce_dm_call(voice_room)
         if voice_room in calls:
             await check_call(voice_room)

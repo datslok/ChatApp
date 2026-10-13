@@ -123,11 +123,11 @@ async function joinVoice(roomName, label) {
     // In a DM call, that's the call starting or ending: a cue. (Not in Lounge: too many sounds.)
     room.on(LivekitClient.RoomEvent.ParticipantConnected, () => {
       renderCallPanel();
-      if (roomName.startsWith("dm:")) playVoiceCue("join");
+      if (roomName !== "lounge") playVoiceCue("join");
     });
     room.on(LivekitClient.RoomEvent.ParticipantDisconnected, () => {
       renderCallPanel();
-      if (roomName.startsWith("dm:")) playVoiceCue("leave");
+      if (roomName !== "lounge") playVoiceCue("leave");
     });
     // Who's talking: LiveKit measures it on the server and tells everyone in the room.
     room.on(LivekitClient.RoomEvent.ActiveSpeakersChanged, (speakers) => {
@@ -334,15 +334,49 @@ function renderCallPanel() {
   renderLoungeView();  // (the Lounge page changes at the same moments)
   const channel = currentChannel;
   const partner = dmPartner(channel);
+  const inGroup = isGroup(channel) && groups.has(channel);
   const members = dmCalls[channel] || [];
-  const inCall = partner !== null && voiceRoomName === channel;
-  // Only in a DM, and only while someone is in its call.
-  callPanel.hidden = partner === null || (!inCall && members.length === 0);
+  const inCall = (partner !== null || inGroup) && voiceRoomName === channel;
+  // Only in a DM or group, and only while someone is in its call.
+  callPanel.hidden = (partner === null && !inGroup) || (!inCall && members.length === 0);
   if (callPanel.hidden) {
     if (document.fullscreenElement === callPanel) document.exitFullscreen().catch(() => {});  // the call ended
     return;
   }
+  if (inGroup) {
+    renderGroupCallTiles(members, inCall);
+  } else {
+    renderDmCallTiles(partner, members, inCall);
+  }
+  callPanelFullscreen.hidden = !inCall;
+  callPanelMute.hidden = !inCall;
+  callPanelCamera.hidden = !inCall;
+  callPanelShare.hidden = !inCall || !canShareScreen;
+  callPanelEnd.hidden = !inCall;
+  callPanelJoin.hidden = inCall;
+  callPanelMute.classList.toggle("off", micMuted);
+  callPanelMute.title = micMuted ? "Unmute" : "Mute";
+  callPanelMute.setAttribute("aria-label", callPanelMute.title);
+  showSpeaking();  // the rings
+}
 
+// A group's call: like the Lounge page, a tile for everyone in it (from the server's list), and
+// us first, faded while we're not in it. Shared screens before them, while we're in it ourselves.
+function renderGroupCallTiles(members, inCall) {
+  const others = members.filter(({ id }) => id !== myId);
+  const screens = inCall
+    ? [myId, ...others.map(({ id }) => id)].filter((id) => screenTrack(id)).map(makeScreenTile)
+    : [];
+  showTiles(callTiles, [
+    ...screens,
+    makeTile(myId, { muted: inCall && micMuted, deafened: inCall && deafened, video: inCall ? cameraTrack(myId) : null, away: !inCall }),
+    ...others.map(({ id, muted, deafened }) => makeTile(id, { muted, deafened, video: inCall ? cameraTrack(id) : null })),
+  ]);
+}
+
+// A DM's call: always both of us, the other person faded (or "Calling…") while not in it.
+function renderDmCallTiles(partner, members, inCall) {
+  const channel = currentChannel;
   const partnerMember = members.find((member) => member.id === partner);
   // In the call ourselves, LiveKit knows best whether they're there; otherwise, the server.
   const partnerHere = inCall
@@ -362,16 +396,6 @@ function renderCallPanel() {
       note: !partnerHere && outgoingCall === channel ? "Calling…" : "",
     }),
   ]);
-  callPanelFullscreen.hidden = !inCall;
-  callPanelMute.hidden = !inCall;
-  callPanelCamera.hidden = !inCall;
-  callPanelShare.hidden = !inCall || !canShareScreen;
-  callPanelEnd.hidden = !inCall;
-  callPanelJoin.hidden = inCall;
-  callPanelMute.classList.toggle("off", micMuted);
-  callPanelMute.title = micMuted ? "Unmute" : "Mute";
-  callPanelMute.setAttribute("aria-label", callPanelMute.title);
-  showSpeaking();  // the rings
 }
 
 callPanelMute.addEventListener("click", toggleMute);  // the same as the 🎤 at the bottom left
@@ -386,10 +410,8 @@ function showDmHeader() {
   const inDm = dmPartner(currentChannel) !== null;
   showGroupHeader();
   dmHeader.hidden = !inDm && groupButtons.hidden;
-  callButton.hidden = !inDm;
   if (dmHeader.hidden) return;
   dmHeaderName.textContent = channelLabel(currentChannel);
-  if (!inDm) return;
   const inThisCall = voiceRoomName === currentChannel;
   callButton.disabled = inThisCall;
   callButton.textContent = inThisCall ? "📞 In call" : "📞 Call";
@@ -398,6 +420,10 @@ function showDmHeader() {
 callButton.addEventListener("click", async () => {
   const channel = currentChannel;
   if (voiceRoom) leaveVoice();  // leave Lounge (or another call) first, so leaving doesn't hang up this one
+  if ((dmCalls[channel] || []).length > 0) {
+    joinVoice(channel, channelLabel(channel));  // a call is going on already: just join it, no ringing
+    return;
+  }
   setOutgoingCall(channel);
   sendToServer({ type: "call", channel });  // their tabs start ringing
   await joinVoice(channel, channelLabel(channel));
@@ -474,7 +500,8 @@ function startRinging(call) {
     return;
   }
   incomingCall = call;
-  incomingCallName.textContent = call.name;
+  // In a group: who's calling, and in which group ("kari · Weekend plans").
+  incomingCallName.textContent = isGroup(call.channel) ? `${call.name} · ${groupLabel(call.channel)}` : call.name;
   incomingCallAvatar.replaceChildren(makeAvatar(call.from, call.name, "large"));
   // showModal(): on the browser's top layer, above any other popup that's open (Settings, a
   // profile...), which would otherwise cover it and make Accept unclickable.

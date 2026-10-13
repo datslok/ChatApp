@@ -322,7 +322,8 @@ for (const tab of document.querySelectorAll(".tab")) {
 // Private chats for 3 to 10 people. The server sends our own groups in a "groups" message, at the
 // start and after every change (someone made one with us, added people, renamed it, left):
 // [{key: "g:5f3a9b21", name: "Weekend plans" or null, members: [3, 7, 12]}]. Messages in a group
-// work like in a channel; its key is the "channel" they're saved under.
+// work like in a channel; its key is the "channel" they're saved under. Calls work like a DM's
+// (rooms.js), ringing everyone else, with a tile for everyone in the call like the Lounge.
 
 const MAX_GROUP_SIZE = 10;  // as the server's
 const groups = new Map();   // key -> the group, in the order the server sent them (oldest first)
@@ -357,6 +358,7 @@ function setGroups(list) {
   groups.clear();
   for (const group of list) groups.set(group.key, group);
   renderDmList();
+  if (isGroup(voiceRoomName) && !groups.has(voiceRoomName)) leaveVoice();  // left a group while in its call
   if (isGroup(currentChannel)) {
     if (groups.has(currentChannel)) {
       setLabel(channelLabel(currentChannel));  // (renamed, or people came or went)

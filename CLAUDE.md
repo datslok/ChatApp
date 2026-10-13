@@ -122,9 +122,17 @@ the point is for me to understand how it works, not just to have it done.
   `/groups/{key}/add` (any member, their own friends), `/rename`, `/leave` (the last one out deletes it all);
   members needn't be friends with each other; others get a 404. Each member's pages get `{"type": "groups"}`
   (at connect and after changes, `announce_groups`). Every message counts as a mention for the other members
-  except bots (Chattus only answers @mentions there; `where()` describes the group). No calls (only `dm:`).
+  except bots (Chattus only answers @mentions there; `where()` describes the group).
   Page: + next to "Direct messages" (#group-dialog with friend checkboxes), groups first in the DM list,
-  #dm-header shows members and Add people / Rename (prompt()) / Leave (confirm()).
+  #dm-header shows members and Add people / Rename (prompt()) / Leave (confirm()) / 📞 Call.
+- Calls in DMs and groups (server.py, "Calls in DMs and group DMs"): the room is the DM's or group's key;
+  `is_call_member` (never bots) gates /voice-token and "voice"; `calls[channel]["ringing"]` is the set still
+  being rung (a DM: the other one). Group: everyone else rings, a decline only stops your own ringing
+  (`call_answered` to you), the first accept starts it, the rest stop ringing after 30 s, it ends when the
+  room empties. "dm_call" (who's in it) goes to `call_people`. Page (rooms.js `renderCallPanel`): a group's
+  banner draws everyone in the call like the Lounge (`renderGroupCallTiles`), a DM's stays two tiles;
+  📞 Call joins without ringing when a call is already going. FastAPI's TestClient loses messages between
+  connections (one event loop per connection): test ringing against real uvicorn + websockets clients.
 - Settings → "Bugs & ideas": `/feedback` saves a report in the `feedback` table and emails it to every
   admin with an email. Admins read them in Settings → "Inbox" (settings.js; `GET /feedback` and
   `POST /feedback/{id}/done`, both admin-only on the server), or with `tools/feedback.py`

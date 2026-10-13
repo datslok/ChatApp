@@ -353,6 +353,8 @@ body {
 /* The bar at the top of a DM: the name on the left, the call button on the right. */
 #dm-header {
   display: flex;
+  flex-wrap: wrap;  /* on a phone, a group's buttons go on a second line when they don't fit */
+  gap: 6px;
   align-items: center;
   justify-content: space-between;
   padding: 8px 16px;

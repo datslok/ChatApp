@@ -67,7 +67,7 @@
     - [x] Link previews (title and picture for pasted links, fetched safely by the server)
 - [ ] **16.** Organising the chat
     - [x] Admins create, rename, delete and reorder channels from the app, with headings to group them (Settings → Channels)
-    - [x] Group DMs (private chats with 3-10 people; no calls in them yet)
+    - [x] Group DMs (private chats with 3-10 people, with group calls)
     - [ ] Pinned messages per channel
     - [x] LaTeX support (maths in messages, drawn by KaTeX)
     - [x] Open on startup: the Windows app can start with Windows (Settings → App behaviour; app 0.1.16)

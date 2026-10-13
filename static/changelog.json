@@ -20,7 +20,7 @@
       "topic": "👥 People",
       "items": [
         "Friends: send requests and accept them on the Friends page. DMs are between friends",
-        "Group DMs: the + next to \"Direct messages\" starts a private chat with 2 to 9 friends. At the top of a group: Add people (your own friends), Rename and Leave. Every message there notifies the others, like a DM. No calls in groups (yet)",
+        "Group DMs: the + next to \"Direct messages\" starts a private chat with 2 to 9 friends. At the top of a group: Add people (your own friends), Rename and Leave. Every message there notifies the others, like a DM. 📞 Call rings everyone in the group; whoever answers joins, and the rest can join later from the call banner",
         "Online and offline people on the right, and \"is typing…\" under the messages",
         "Click someone's picture or name for their profile: picture, banner, status and bio",
         "Your own in Settings → Profile. Pictures and banners can be animated GIFs, and you can move and zoom them",
@@ -97,7 +97,7 @@
       "date": "2026-10-14",
       "items": [
         "New channels and headings can show up in the sidebar: admins now manage them from the app (Settings → Channels)",
-        "Group DMs 👥: click the + next to \"Direct messages\" to start a private chat with up to 9 friends"
+        "Group DMs 👥: click the + next to \"Direct messages\" to start a private chat with up to 9 friends, with group calls 📞"
       ]
     },
     {
