@@ -38,7 +38,7 @@ JavaScript for the page, no frameworks.
 | Voice, video, screen sharing | A self-hosted [LiveKit](https://livekit.io/) server (WebRTC). |
 | Reaching it from the internet | A [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/), so no ports need opening for the chat itself. |
 | Desktop app | [Tauri](https://tauri.app/) (`desktop/`): a small window around the site. |
-| AI bot (optional) | Chattus (`chattus.py`), an account that talks over the same WebSocket, with a language model on the server's graphics card ([llama.cpp](https://github.com/ggml-org/llama.cpp)). |
+| AI bot (optional) | Chattus (`chattus.py`), an account that talks over the same WebSocket, with a language model on the server's graphics card ([llama.cpp](https://github.com/ggml-org/llama.cpp)), or Claude through Anthropic's API. |
 | Phone app (in progress) | [React Native](https://reactnative.dev/) with [Expo](https://expo.dev/) (`mobile/`), Android first. Until it's ready, the site installs as a PWA. |
 
 **Windows only, for now.** The server itself is plain Python, but the scripts that install and run it
@@ -342,6 +342,24 @@ To talk to the model directly: llama-server has its own chat page. From your PC,
 with `ssh -L 8080:127.0.0.1:8080 chatserver`, leave that window open, and go to http://localhost:8080.
 It asks for the key: on the server, `Select-String LLAMA_API_KEY .env` shows it.
 
+**Or Claude instead of the local model** (no graphics card needed): with `CHATTUS_MODEL` in `.env`, his
+answers come from Anthropic's API, through its `anthropic` package. Make an account at
+[platform.claude.com](https://platform.claude.com), add a little credit (and a monthly spending limit),
+create an API key, and add two lines to `.env`, then restart the bot (`Stop-ScheduledTask "ChatApp bot";
+Start-ScheduledTask "ChatApp bot"`):
+
+```
+CHATTUS_MODEL=claude-haiku-5-5
+ANTHROPIC_API_KEY=sk-ant-...
+```
+
+Claude Haiku 5.5 is small, quick and cheap: a group of friends chatting with him costs well under a
+dollar a month. **But then the chat's messages leave your server:** to answer, he sends Anthropic the
+channel's last 20 messages and the pictures he looks at, so tell your friends. Without `CHATTUS_MODEL`
+(or with the line empty), he uses the local model again. With Claude, the ChatApp AI task (the local
+model) isn't needed; disable it to free the graphics card (`Disable-ScheduledTask "ChatApp AI";
+Stop-ScheduledTask "ChatApp AI"`).
+
 **Working on the bot** on your PC, with the development chat (`start.ps1`) and the server's model
 through that same tunnel:
 
@@ -350,6 +368,8 @@ python tools\make_bot.py --db dev.db --uploads dev-uploads --env dev-chattus.env
 # then add the server's key to dev-chattus.env (git-ignored), as a line LLAMA_API_KEY=...
 .\chattus.ps1 -Dev    # with start.ps1 running, and the tunnel open in another window
 ```
+
+With Claude, put `CHATTUS_MODEL` and `ANTHROPIC_API_KEY` in `dev-chattus.env` instead; no tunnel needed.
 
 ### 8. Optional: update from your other PC
 

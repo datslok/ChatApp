@@ -27,6 +27,7 @@ import urllib.request
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
+import anthropic  # Anthropic's package for the Claude API (only used with CHATTUS_MODEL set)
 from PIL import Image  # Pillow (in requirements.txt, for the server's pictures): shrinking pictures for the model
 from websockets.asyncio.client import connect  # the WebSocket library (installed with uvicorn[standard])
 
@@ -35,17 +36,22 @@ Image.MAX_IMAGE_PIXELS = 25_000_000  # like server.py: refuse "decompression bom
 HOME = "chattus"           # his own channel: he answers every message there
 CONTEXT_MESSAGES = 20      # how many of the latest messages the model reads
 MAX_ANSWER_TOKENS = 400    # an emergency brake on length (the prompt asks for short answers)
+CLAUDE_MAX_TOKENS = 2000   # ... with Claude more, as its (short) thinking counts too
 MAX_TEXT_LENGTH = 2000     # the chat's own limit for a message (server.py)
 MAX_AGE = timedelta(hours=1)  # older messages are never answered (after he was offline for a while)
 
 SYSTEM_PROMPT = """You are Chattus, a friendly and helpful cat who lives in a small group chat of friends.
+You're playful and very catlike: you love cat puns (purrfect, pawsome, meowvelous, fur real, claws for celebration...)
+and now and then you say "nyan" or "nya~", or put a ^-^ or :3 at the end of a sentence. Use them in most messages,
+but lightly: one or two of these is plenty, and a real question still gets a clear, real answer.
 Write like a person in a chat: usually one to three short sentences, no headings or bullet lists.
 Only write more when someone asks you to explain something in detail. Use at most one emoji in a message, often none.
 The messages you're given are the latest ones in this chat (up to 20), oldest first. Each one from the others starts
 with when it was sent and who sent it, like "[14:05] kari: hi" (with the date when it wasn't today). Don't start
 yours with a time or your name. You can't see anything older than these: if someone asks about something further
 back, say it's too far back for you to see.
-If you don't know something, say so instead of making it up.
+If you don't know something or aren't sure, look it up with "search" (below) instead of guessing or saying you don't
+know. Only say you don't know when a search can't help, like things about this chat that you can't see.
 The chat draws maths written in LaTeX: $...$ inside a sentence, $$...$$ on a line of its own (no space just inside
 the dollar signs). Use it whenever you write a formula, an equation or a symbol, like $E = mc^2$.
 You can see pictures people send. A picture comes from the person whose message it's in; you never send pictures.
@@ -159,6 +165,52 @@ def picture_data_url(raw, size=PICTURE_SIZE):
 
 # ---------- Web search ----------
 
+def for_claude(conversation):
+    """A conversation in llama-server's (OpenAI's) shape as Claude's API wants it: (system, messages).
+    The differences: the system prompt is a field of its own, a picture is an "image" block instead of
+    a data URL, and the messages must start with a person's (and end with one: Claude's newest models
+    don't continue a message of their own)."""
+    system, messages = "", []
+    for message in conversation:
+        content = message["content"]
+        if message["role"] == "system":
+            system += content
+            continue
+        if isinstance(content, list):  # text and a picture
+            parts = []
+            for part in content:
+                if part["type"] == "image_url":
+                    # "data:image/jpeg;base64,/9j/4AAQ..." -> the type and the base64 text after the comma
+                    header, data = part["image_url"]["url"].split(",", 1)
+                    media_type = header.removeprefix("data:").removesuffix(";base64")
+                    parts.append({"type": "image", "source": {"type": "base64", "media_type": media_type, "data": data}})
+                elif part.get("text"):
+                    parts.append({"type": "text", "text": part["text"]})
+            content = parts
+        if content:  # (Claude refuses empty messages)
+            messages.append({"role": message["role"], "content": content})
+    while messages and messages[0]["role"] == "assistant":
+        messages.pop(0)
+    while messages and messages[-1]["role"] == "assistant":
+        messages.pop()
+    return system, messages
+
+
+def claude_schema(schema):
+    """A JSON shape as Claude's structured outputs want it: every object closed to other fields
+    ("additionalProperties": false), and without the limits it doesn't support (maxItems, minimum, ...).
+    A copy: the original stays as llama-server wants it."""
+    if isinstance(schema, dict):
+        copy = {key: claude_schema(value) for key, value in schema.items()
+                if key not in ("maxItems", "minItems", "minimum", "maximum", "pattern")}
+        if copy.get("type") == "object":
+            copy["additionalProperties"] = False
+        return copy
+    if isinstance(schema, list):
+        return [claude_schema(item) for item in schema]
+    return schema
+
+
 def exa_search(query, api_key=None):
     """Search the web with Exa, through its MCP server. Blocking. Raises SearchRefused at its limit.
 
@@ -249,12 +301,15 @@ def roll_dice(spec):
 
 
 class Chattus:
-    def __init__(self, chat_url, llama_url, password, llama_key, exa_key=None):
+    def __init__(self, chat_url, llama_url, password, llama_key, exa_key=None, claude_model=None, anthropic_key=None):
         self.chat_url = chat_url
         self.llama_url = llama_url
         self.password = password
         self.llama_key = llama_key
         self.exa_key = exa_key  # optional: Exa's search works without one, but with a smaller, shared limit
+        # With a Claude model (CHATTUS_MODEL), the answers come from Anthropic's API instead of llama-server.
+        self.claude_model = claude_model
+        self.claude = anthropic.Anthropic(api_key=anthropic_key) if claude_model else None
         self.cookie = None      # "session=..." after logging in
         self.websocket = None
         self.my_id = None
@@ -401,19 +456,11 @@ class Chattus:
                 continue
             name = self.emoji.get(emoji_id, "emoji")
             picture = picture_data_url(self.fetch(f"/custom-emoji/files/{file}"), size=256)
-            answer, _ = post_json(
-                f"{self.llama_url}/v1/chat/completions",
-                {
-                    "messages": [{"role": "user", "content": [
-                        {"type": "text", "text": f"This is a custom emoji called :{name}: in a group chat. "
-                                                 "What does it show? Answer in at most eight words, no full sentence."},
-                        {"type": "image_url", "image_url": {"url": picture}},
-                    ]}],
-                    "max_tokens": 30, "temperature": 0.2,
-                },
-                {"Authorization": f"Bearer {self.llama_key}"},
-            )
-            note = (answer["choices"][0]["message"]["content"] or "").strip().rstrip(".")
+            note = self.ask([{"role": "user", "content": [
+                {"type": "text", "text": f"This is a custom emoji called :{name}: in a group chat. "
+                                         "What does it show? Answer in at most eight words, no full sentence."},
+                {"type": "image_url", "image_url": {"url": picture}},
+            ]}], max_tokens=30, temperature=0.2).strip().rstrip(".")
             self.emoji_notes[file] = note[:100]
             EMOJI_NOTES.write_text(json.dumps(self.emoji_notes, indent=1, ensure_ascii=False), encoding="utf-8")
             log(f"Looked at :{name}: -> {note!r}")
@@ -618,17 +665,31 @@ class Chattus:
         answer = self.complete(conversation, ANSWER_SCHEMA)
         return answer.get("reaction", ""), answer.get("reply", ""), None
 
+    def ask(self, conversation, schema=None, max_tokens=MAX_ANSWER_TOKENS, temperature=0.7):
+        """The model's answer (text) to a conversation in the OpenAI shape llama-server uses: Claude's
+        when CHATTUS_MODEL is set, otherwise the local model's. With `schema`, the answer is JSON of
+        that shape. Blocking."""
+        if self.claude:
+            system, messages = for_claude(conversation)
+            output_config = {"effort": "low"}  # chat: quick and short, no deep thinking
+            if schema:
+                output_config["format"] = {"type": "json_schema", "schema": claude_schema(schema)}
+            response = self.claude.messages.create(
+                model=self.claude_model, max_tokens=CLAUDE_MAX_TOKENS, system=system, messages=messages,
+                output_config=output_config,
+            )  # (no temperature: Claude's newest models only take their default)
+            return next((block.text for block in response.content if block.type == "text"), "")
+
+        request = {"messages": conversation, "max_tokens": max_tokens, "temperature": temperature}
+        if schema:
+            request["response_format"] = {"type": "json_schema", "json_schema": {"schema": schema}}
+        answer, _ = post_json(f"{self.llama_url}/v1/chat/completions", request,
+                              {"Authorization": f"Bearer {self.llama_key}"})
+        return answer["choices"][0]["message"]["content"] or ""
+
     def complete(self, conversation, schema):
-        """Ask the model, in the JSON shape `schema`. Blocking."""
-        answer, _ = post_json(
-            f"{self.llama_url}/v1/chat/completions",
-            {
-                "messages": conversation, "max_tokens": MAX_ANSWER_TOKENS, "temperature": 0.7,
-                "response_format": {"type": "json_schema", "json_schema": {"schema": schema}},
-            },
-            {"Authorization": f"Bearer {self.llama_key}"},
-        )
-        content = answer["choices"][0]["message"]["content"] or ""
+        """Ask the model, in the JSON shape `schema`, and read its answer. Blocking."""
+        content = self.ask(conversation, schema)
         try:
             parsed = json.loads(content)
             # Texts as texts (the poll stays an object, {"question", "options"})
@@ -712,13 +773,16 @@ async def main():
     args = parser.parse_args()
 
     settings = read_env(args.env)
-    for name in ("CHATTUS_PASSWORD", "LLAMA_API_KEY"):
+    # CHATTUS_MODEL (like claude-haiku-5-5): Claude through Anthropic's API instead of the local model.
+    claude_model = settings.get("CHATTUS_MODEL") or None
+    for name in ("CHATTUS_PASSWORD", "ANTHROPIC_API_KEY" if claude_model else "LLAMA_API_KEY"):
         if not settings.get(name):
             raise SystemExit(f"{name} is missing in {args.env} (see the README, 'Optional: an AI bot').")
+    log(f"Using {claude_model or 'the local model (llama-server)'}.")
 
     while True:  # forever: when the chat restarts (every deploy), the connection drops; log in again
-        bot = Chattus(args.chat, args.llama, settings["CHATTUS_PASSWORD"], settings["LLAMA_API_KEY"],
-                      settings.get("EXA_API_KEY") or None)
+        bot = Chattus(args.chat, args.llama, settings["CHATTUS_PASSWORD"], settings.get("LLAMA_API_KEY"),
+                      settings.get("EXA_API_KEY") or None, claude_model, settings.get("ANTHROPIC_API_KEY"))
         try:
             await bot.run()
             log("The connection closed.")

@@ -65,14 +65,14 @@
       "items": [
         "Chattus is a friendly cat who answers everything in #chattus, and anywhere else when you write @Chattus",
         "Add him as a friend to DM him: he accepts by himself",
-        "In a DM with a friend, write @Chattus to ask him something there: he only answers when mentioned. Mentioning him lets him read that DM's latest messages for an hour (on our own server, never sent anywhere)",
+        "In a DM with a friend, write @Chattus to ask him something there: he only answers when mentioned. Mentioning him lets him read that DM's latest messages for an hour (and like everything he reads, they go to his AI, Claude, to answer)",
         "He reacts to messages too (🎉 for good news, 🐾 for a thanks), and knows our own emoji by name",
         "He can see pictures: send one in #chattus (or with @Chattus), or ask about \"the picture above\"",
-        "He searches the web when he needs fresh facts. Start with \"search:\" to make him search the web, or \"wiki:\" for Wikipedia. Only his search words leave our server, never the chat",
+        "He searches the web when he needs fresh facts. Start with \"search:\" to make him search the web, or \"wiki:\" for Wikipedia. The search engines only get his search words, never the chat",
         "He writes maths as real formulas, like $E = mc^2$",
         "He rolls dice: ask him (\"roll a d20\"), or write \"roll: 2d6\" (up to 20 dice, and a bonus like \"1d20+3\")",
         "He makes polls: ask him, or write \"poll: Friday dinner? pizza, sushi, tacos\". Vote by clicking a number under it (up to 10 options)",
-        "He runs on our own server, so nothing goes to an AI company. He can be wrong, and only knows the last messages of a channel"
+        "He thinks with Claude Haiku, an AI from Anthropic: to answer, he sends it what he reads (a chat's last 20 messages, and pictures he looks at). Anthropic doesn't use it to train its AI. He can be wrong, and only knows the last messages of a channel"
       ]
     },
     {
@@ -89,7 +89,9 @@
       "date": "2026-10-13",
       "items": [
         "Chattus rolls dice 🎲: ask him to roll a d20, or write \"roll: 2d6\"",
-        "Chattus makes polls 📊: ask him, or write \"poll: Friday dinner? pizza, sushi, tacos\", then vote with the numbers under it"
+        "Chattus makes polls 📊: ask him, or write \"poll: Friday dinner? pizza, sushi, tacos\", then vote with the numbers under it",
+        "Chattus got a new brain 🧠: he now thinks with Claude Haiku, an AI from Anthropic, instead of the one on our server. He's smarter and quicker, and looks things up when he isn't sure. This does mean what he reads to answer (a chat's last 20 messages, pictures he looks at) now goes to Anthropic",
+        "Chattus is more catlike, nya~ :3"
       ]
     },
     {

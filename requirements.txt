@@ -3,3 +3,4 @@ uvicorn[standard]
 argon2-cffi
 pillow
 pywebpush
+anthropic

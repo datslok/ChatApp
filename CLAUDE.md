@@ -262,6 +262,15 @@ the point is for me to understand how it works, not just to have it done.
   copied "[time]"/"Chattus:". A search he chooses himself that names a chat member isn't sent (the web
   knows nothing about them; forced search:/wiki: always go): the 9B model ignored the prompt's rule.
   Possible later: letting him page back through a chat ("older", 50 at a time) for questions about it.
+  Since 2026-10-13 he runs on **Claude Haiku 5.5** (`CHATTUS_MODEL=claude-haiku-5-5` and `ANTHROPIC_API_KEY` in
+  the server's `.env`; the `anthropic` package), until a better model is found; without `CHATTUS_MODEL` he's back
+  on llama-server. `ask()` is the one place that calls a model: for Claude, `for_claude` turns the OpenAI-shaped
+  conversation into `system` + messages (image blocks from the data URLs; no leading or trailing assistant
+  message) and `claude_schema` closes every object (`additionalProperties: false`) and drops `maxItems` etc.;
+  `output_config` effort `low` + `format` json_schema, `CLAUDE_MAX_TOKENS` 2000 (its thinking counts), no
+  temperature. My API key (platform.claude.com) expires 2026-11-12: replace it in `.env` before then. The friends
+  were told in What's new that what he reads goes to Anthropic. The prompt makes him catlike (puns, nyan, ^-^,
+  :3) and says to search when unsure instead of saying he doesn't know.
 
 ## Hosting
 
