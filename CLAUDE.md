@@ -249,6 +249,9 @@ the point is for me to understand how it works, not just to have it done.
   (en.wikipedia.org API, search + intro extracts). Optional `EXA_API_KEY` in .env (`?exaApiKey=`). Max 100
   searches a day (`searches_today`, kept across reconnects). Tavily was dropped for Exa (no account needed).
   The prompt tells him the chat draws LaTeX ($...$, $$...$$), so he writes formulas that way.
+  Dice: a `roll` field in `ANSWER_OR_SEARCH_SCHEMA` (dice notation like "2d6", "1d20+3"), or a message starting
+  with "roll:" (checked first in `ask_model`, no model call); `roll_dice` reads the notation anywhere in the text,
+  rolls with `random` (1–20 dice, 2–1000 sides) and its text ("🎲 2d6: 4 + 2 = **6**") is the reply.
   Context lines are "[09:43] name: text" (local time; with the date when not today; `when()`), and the prompt
   says he only sees those (up to 20) and should say when something is further back; `clean_answer` strips a
   copied "[time]"/"Chattus:". A search he chooses himself that names a chat member isn't sent (the web

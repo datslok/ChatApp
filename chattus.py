@@ -20,6 +20,7 @@ import asyncio
 import base64
 import io
 import json
+import random
 import re
 import urllib.parse
 import urllib.request
@@ -59,7 +60,9 @@ You answer with JSON: "reply" is your message, and "reaction" is one emoji to pu
 - "search": when you'd need facts you don't know, or that may have changed since you learned them (news, dates,
   prices, results, anything recent), write a short web search here and leave "reply" and "reaction" empty: you'll
   get the results and answer then. For everything else (chatting, opinions, things you know well) leave it "".
-  Never search for things about this chat or the people in it: the web knows nothing about them.{custom}"""
+  Never search for things about this chat or the people in it: the web knows nothing about them.
+- "roll": when someone asks you to roll dice, write them here in dice notation, like "1d20", "2d6" or "1d20+3", and
+  leave everything else empty: the dice are rolled for you and the result is shown. Otherwise leave it "".{custom}"""
 
 # The shape every answer must have. llama-server turns it into grammar rules, so the model can't write
 # anything else: always valid JSON with exactly these texts (any of them can be empty).
@@ -68,11 +71,12 @@ ANSWER_SCHEMA = {
     "properties": {"reaction": {"type": "string"}, "reply": {"type": "string"}},
     "required": ["reaction", "reply"],
 }
-# The first time he's asked, he may also ask for a search; after the results, he has to answer.
+# The first time he's asked, he may also ask for a search or a dice roll; after search results, he has to answer.
 ANSWER_OR_SEARCH_SCHEMA = {
     "type": "object",
-    "properties": {"search": {"type": "string"}, "reaction": {"type": "string"}, "reply": {"type": "string"}},
-    "required": ["search", "reaction", "reply"],
+    "properties": {"search": {"type": "string"}, "roll": {"type": "string"},
+                   "reaction": {"type": "string"}, "reply": {"type": "string"}},
+    "required": ["search", "roll", "reaction", "reply"],
 }
 MAX_CUSTOM_EMOJI = 50  # how many of the chat's own emoji the prompt lists by name
 
@@ -90,6 +94,10 @@ SEARCH_RESULTS = 3          # results per search
 SEARCH_TEXT = 1500          # characters per result the model reads (3 x 1500 ~ 1100 tokens)
 MAX_SEARCHES_PER_DAY = 100  # so nobody can use up the free searches by spamming him
 searches_today = {"day": None, "count": 0}  # (outside the Chattus object: kept when he reconnects)
+
+# Dice: the model only says what to roll; Python rolls (models are bad at random numbers).
+MAX_DICE = 20
+MAX_SIDES = 1000
 
 
 class SearchRefused(Exception):
@@ -202,6 +210,29 @@ def wikipedia_search(query):
         link = "https://en.wikipedia.org/wiki/" + urllib.parse.quote(title.replace(" ", "_"))
         results.append(f"Title: {title}\nURL: {link}\n{extracts.get(title, '')[:SEARCH_TEXT]}")
     return "\n\n".join(results)
+
+
+def roll_dice(spec):
+    """Roll dice written like "2d6", "d20" or "1d20+3" (count, "d", sides, an optional modifier), and say
+    how it went, like "🎲 2d6: 4 + 2 = **6**". Finds the notation anywhere in the text ("d20 for initiative")."""
+    match = re.search(r"\b(\d*)d(\d+)(?:\s*([+-])\s*(\d+))?\b", spec, re.IGNORECASE)
+    if not match:
+        return f"🎲 I can't roll \"{spec.strip()[:50]}\": write dice like 2d6, d20 or 1d20+3."
+    count = int(match[1] or 1)  # "d20" means one die
+    sides = int(match[2])
+    modifier = int(match[4] or 0) * (-1 if match[3] == "-" else 1)
+    if not 1 <= count <= MAX_DICE or not 2 <= sides <= MAX_SIDES:
+        return f"🎲 I can roll 1 to {MAX_DICE} dice, with 2 to {MAX_SIDES} sides each."
+
+    rolls = [random.randint(1, sides) for _ in range(count)]
+    total = sum(rolls) + modifier
+    name = f"{count}d{sides}" + (f"{modifier:+d}" if modifier else "")  # :+d writes the sign: +3 or -2
+    if count == 1 and not modifier:
+        return f"🎲 {name}: **{total}**"
+    sums = " + ".join(map(str, rolls))
+    if modifier:
+        sums += f" {'+' if modifier > 0 else '-'} {abs(modifier)}"
+    return f"🎲 {name}: {sums} = **{total}**"
 
 
 class Chattus:
@@ -473,6 +504,10 @@ class Chattus:
     def ask_model(self, channel, messages, target):
         """The latest messages as a conversation for the model, and its answer: (reaction, reply).
         Blocking (run it in a thread)."""
+        forced_roll = re.match(r"^\s*(?:@\S+\s+)?roll:\s*(.+)", self.readable(target["text"]), re.IGNORECASE | re.DOTALL)
+        if forced_roll:
+            return "", roll_dice(forced_roll[1])  # "roll: 2d6": no model needed
+
         custom_emoji = sorted(self.emoji.items(), key=lambda item: item[1].lower())[:MAX_CUSTOM_EMOJI]
         listed = []
         for emoji_id, name in custom_emoji:
@@ -515,7 +550,7 @@ class Chattus:
                 conversation.append({"role": "user", "content": line})
 
         # "search: ..." always searches the web, "wiki: ..." always searches Wikipedia (also after
-        # "@Chattus"). Otherwise he decides: his first answer may be a search.
+        # "@Chattus"). Otherwise he decides: his first answer may be a search or a dice roll.
         forced = re.match(r"^\s*(?:@\S+\s+)?(search|wiki):\s*(.+)", self.readable(target["text"]),
                           re.IGNORECASE | re.DOTALL)
         wiki_only = bool(forced) and forced[1].lower() == "wiki"
@@ -523,6 +558,8 @@ class Chattus:
             query = forced[2].strip()
         else:
             answer = self.complete(conversation, ANSWER_OR_SEARCH_SCHEMA)
+            if answer.get("roll", "").strip():
+                return answer.get("reaction", ""), roll_dice(answer["roll"])
             query = answer.get("search", "").strip()
             if not query:
                 return answer.get("reaction", ""), answer.get("reply", "")

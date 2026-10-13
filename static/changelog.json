@@ -70,6 +70,7 @@
         "He can see pictures: send one in #chattus (or with @Chattus), or ask about \"the picture above\"",
         "He searches the web when he needs fresh facts. Start with \"search:\" to make him search the web, or \"wiki:\" for Wikipedia. Only his search words leave our server, never the chat",
         "He writes maths as real formulas, like $E = mc^2$",
+        "He rolls dice: ask him (\"roll a d20\"), or write \"roll: 2d6\" (up to 20 dice, and a bonus like \"1d20+3\")",
         "He runs on our own server, so nothing goes to an AI company. He can be wrong, and only knows the last messages of a channel"
       ]
     },
@@ -83,6 +84,12 @@
     }
   ],
   "changes": [
+    {
+      "date": "2026-10-13",
+      "items": [
+        "Chattus rolls dice 🎲: ask him to roll a d20, or write \"roll: 2d6\""
+      ]
+    },
     {
       "date": "2026-10-12",
       "items": [
