@@ -138,6 +138,15 @@ MAX_CUSTOM_EMOJI = 50  # how many of the chat's own emoji the prompt lists by na
 PICTURE_SIZE = 768      # pixels on the longest side, shrunk to before the model sees it
 PICTURE_LOOKBACK = 5    # besides the message he answers: the newest picture this many messages before it
 EMOJI_NOTES = Path("chattus-emoji.json")  # what each custom emoji shows, in his words (git-ignored)
+
+# Files he can read, only with Claude: PDFs (Claude reads their text and pages) and text files, chosen
+# like pictures (the one he's answering, and the newest in the few messages before it).
+TEXT_FILES = {".txt", ".md", ".csv", ".json", ".log", ".py", ".js", ".html", ".css", ".ps1", ".yaml", ".yml",
+              ".xml", ".ini", ".toml", ".tex", ".srt"}
+MAX_PDF_SIZE = 5 * 1024 * 1024   # bytes: a PDF costs ~2,000-3,000 tokens a page, so not huge ones
+MAX_TEXT_FILE = 50_000           # characters of a text file (~12,000 tokens, a long essay)
+FILE_LOOKBACK = 10               # besides the message he answers: files in this many messages before it...
+MAX_EARLIER_FILES = 3            # ... at most this many (people send a few and talk about "the PDF above")
 LOOK_AT_EMOJI = "(look at the custom emoji)"  # a job in the queue that isn't a channel
 
 # Web search. Only the search words leave the server, never the chat's messages.
@@ -208,6 +217,19 @@ def picture_data_url(raw, size=PICTURE_SIZE):
 
 # ---------- Web search ----------
 
+def file_kind(file, any_size=False):
+    """What kind of file he can read (with Claude), from a message's file: "pdf", "text", or None (a
+    picture, another kind, or too big; any_size: whatever its size)."""
+    if file["image"]:
+        return None
+    suffix = Path(file["filename"]).suffix.lower()
+    if suffix == ".pdf" and (any_size or file["size"] <= MAX_PDF_SIZE):
+        return "pdf"
+    if suffix in TEXT_FILES:  # (only the first MAX_TEXT_FILE characters are read, so any size)
+        return "text"
+    return None
+
+
 def for_claude(conversation):
     """A conversation in llama-server's (OpenAI's) shape as Claude's API wants it: (system, messages).
     The differences: the system prompt is a field of its own, a picture is an "image" block instead of
@@ -227,6 +249,9 @@ def for_claude(conversation):
                     header, data = part["image_url"]["url"].split(",", 1)
                     media_type = header.removeprefix("data:").removesuffix(";base64")
                     parts.append({"type": "image", "source": {"type": "base64", "media_type": media_type, "data": data}})
+                elif part["type"] == "pdf":  # (our own part, only ever made with Claude: a PDF, in base64)
+                    parts.append({"type": "document", "source": {"type": "base64", "media_type": "application/pdf",
+                                                                  "data": part["data"]}})
                 elif part.get("text"):
                     parts.append({"type": "text", "text": part["text"]})
             content = parts
@@ -751,18 +776,17 @@ class Chattus:
                     "you (@Chattus) to ask you something: answer that, and keep out of the rest.")
         return f"You're in #{channel}, a channel for everyone. Someone mentioned you (@Chattus)."
 
-    def pictures_to_show(self, messages, target):
-        """The ids of the messages whose picture the model gets to see: the one he's answering, and
-        the newest picture in the few messages before it ("what's in the picture above?")."""
-        def has_picture(message):
-            return bool(message["file"] and message["file"]["image"])
+    def attachments_to_show(self, messages, target, wanted, lookback=PICTURE_LOOKBACK, earlier=1):
+        """The ids of the messages whose file the model gets to see (wanted(file): a picture, say): the
+        one he's answering, and the newest `earlier` ones in the `lookback` messages before it ("what's in
+        the picture above?")."""
+        def has(message):
+            return bool(message["file"] and wanted(message["file"]))
 
-        shown = {target["id"]} if has_picture(target) else set()
-        before = [m for m in messages if m["id"] < target["id"]][-PICTURE_LOOKBACK:]
-        for message in reversed(before):
-            if has_picture(message):
-                shown.add(message["id"])
-                break
+        shown = {target["id"]} if has(target) else set()
+        before = [m for m in messages if m["id"] < target["id"]][-lookback:]
+        for message in [m for m in reversed(before) if has(m)][:earlier]:
+            shown.add(message["id"])
         return shown
 
     def ask_model(self, channel, messages, target):
@@ -786,18 +810,37 @@ class Chattus:
                                             custom=custom, claude_tools=CLAUDE_TOOLS_PROMPT if self.claude else "",
                                             count=self.context_messages),
         }]
-        show = self.pictures_to_show(messages, target)
+        show = self.attachments_to_show(messages, target, lambda file: file["image"])
+        read = self.attachments_to_show(messages, target, file_kind, FILE_LOOKBACK, MAX_EARLIER_FILES) if self.claude else set()
         for message in messages[-self.context_messages:]:
             if message.get("kind"):
                 continue  # call notes ("a call started") aren't conversation
             text = self.readable(message["text"])
-            picture = None
+            picture = pdf = None
+            told = False  # has the text already said what the file is?
             if message["id"] in show:
                 try:
                     picture = picture_data_url(self.fetch(f"/uploads/{message['file']['id']}"))
                 except Exception as error:  # gone, or not a picture Pillow can read: just say there was one
                     log(f"Couldn't look at the picture in message {message['id']}: {error!r}")
-            if message["file"] and picture is None:  # files he doesn't see: just that there was one
+            elif message["id"] in read:
+                name = message["file"]["filename"]
+                try:
+                    raw = self.fetch(f"/uploads/{message['file']['id']}")
+                    if file_kind(message["file"]) == "pdf":
+                        pdf = base64.standard_b64encode(raw).decode("ascii")
+                    else:  # a text file: its text right into the message
+                        content = raw.decode("utf-8", errors="replace")
+                        cut = " (cut off here: the file is longer)" if len(content) > MAX_TEXT_FILE else ""
+                        text = (text + "\n" if text else "") + f"[sent the file {name}:]\n{content[:MAX_TEXT_FILE]}\n[end of the file{cut}]"
+                        told = True
+                except Exception as error:
+                    log(f"Couldn't read the file in message {message['id']}: {error!r}")
+            elif (message["file"] and self.claude and message["file"]["size"] > MAX_PDF_SIZE
+                  and file_kind(message["file"], any_size=True) == "pdf"):
+                text = (text + " " if text else "") + f"[sent a PDF too big for you to read: {message['file']['filename']}]"
+                told = True
+            if message["file"] and picture is None and pdf is None and not told:  # just that there was one
                 sent = "a picture" if message["file"]["image"] else f"a file: {message['file']['filename']}"
                 text = (text + " " if text else "") + f"[sent {sent}]"
             if message["user_id"] == self.my_id:
@@ -812,6 +855,11 @@ class Chattus:
                     {"type": "text", "text": line},
                     {"type": "image_url", "image_url": {"url": picture}},
                 ]})
+            elif pdf:
+                # A PDF, like a picture: a part of its own (for_claude makes it a "document" block).
+                line += f" [sent this PDF, {message['file']['filename']}:]"
+                conversation.append({"role": "user", "content": [{"type": "text", "text": line},
+                                                                 {"type": "pdf", "data": pdf}]})
             else:
                 conversation.append({"role": "user", "content": line})
 

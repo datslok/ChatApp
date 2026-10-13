@@ -71,6 +71,7 @@
         "He searches the web when he needs fresh facts. Start with \"search:\" to make him search the web, or \"wiki:\" for Wikipedia. The search engines only get his search words, never the chat",
         "He writes maths as real formulas, like $E = mc^2$",
         "He reads links: post one and ask what it says, or for a summary. Some big sites (like recipe sites) don't let him in",
+        "He reads files: PDFs (up to 5 MB, scans too) and text files like notes, code or a .csv. Ask about the file you send, or one just above",
         "He rolls dice: ask him (\"roll a d20\"), or write \"roll: 2d6\" (up to 20 dice, and a bonus like \"1d20+3\")",
         "He makes polls: ask him, or write \"poll: Friday dinner? pizza, sushi, tacos\". Vote by clicking a number under it (up to 10 options)",
         "He reminds you: \"remind me tomorrow at 9 to call mum\", \"in 20 minutes\", \"on friday at 18\" (or \"remind: ...\"). He says when he understood, and pings you then, up to a year ahead. Asked in a DM between friends, the reminder comes in your DM with him",
@@ -97,7 +98,8 @@
         "Chattus searches the web better: he finds fresh news and results that he often couldn't before",
         "Chattus reminds you ⏰: \"remind me tomorrow at 9 to call mum\", and he pings you then",
         "Chattus remembers much more: a chat's last 200 messages instead of 20. Ask him \"what did I miss?\"",
-        "Chattus reads links 🔗: post one and ask \"what does this say?\" or \"summarize this\" (some big sites don't let him in)"
+        "Chattus reads links 🔗: post one and ask \"what does this say?\" or \"summarize this\" (some big sites don't let him in)",
+        "Chattus reads files 📄: send a PDF or a text file (notes, code, a .csv) and ask him about it"
       ]
     },
     {

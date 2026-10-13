@@ -361,7 +361,9 @@ channel's last 200 messages and the pictures he looks at, so tell your friends. 
 
 With Claude he also **reads links** someone asks about ("what does this page say?"): Claude's own web fetch
 tool reads the page (Anthropic's servers fetch it, not yours; at most about a long article's worth), and he answers
-from it. Some big sites block AI readers; then he says he couldn't open it.
+from it. Some big sites block AI readers; then he says he couldn't open it. He **reads files** people send
+too: PDFs (up to 5 MB; their text and pages, scans included) and text files (`.txt`, `.md`, `.csv`, code...,
+their first 50,000 characters), the one in the message he answers and up to 3 in the 10 messages before it.
 
 With Claude he also keeps **reminders** ("remind me tomorrow at 9 to call mum", "in 20 minutes", or
 "remind: ..."): the model copies the words into fields (a day, a time, or an amount and a unit) and Python

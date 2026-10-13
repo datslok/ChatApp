@@ -234,7 +234,7 @@ the point is for me to understand how it works, not just to have it done.
   when it adds something, reaction-only for thanks/goodbyes, at most one emoji per message.
   `reaction_code` checks it against `/emoji.json` (fetched at start; with/without U+FE0F) or a custom
   emoji's name (-> `custom:<id>`); anything else is dropped. Up to 50 custom emoji names are in the prompt.
-  Pictures: the target message's picture and the newest one in the 5 messages before it (`pictures_to_show`),
+  Pictures: the target message's picture and the newest one in the 5 messages before it (`attachments_to_show`),
   fetched from `/uploads/<id>` with his cookie, flattened on white, shrunk to 768 px JPEG, sent as a data URL
   in an `image_url` content part (~600 tokens, ~6 s). Custom emoji: a `LOOK_AT_EMOJI` job in the same queue
   describes each new picture once (256 px, 8 words) into `chattus-emoji.json` (git-ignored, keyed by file
@@ -282,6 +282,11 @@ the point is for me to understand how it works, not just to have it done.
   `READ_PAGE_TOKENS` 10,000), asking for what matters for the question; the result goes in as a note and he answers
   with `ANSWER_SCHEMA` (one page per question). Anthropic fetches it, not the server (no SSRF here). Big sites that
   block AI fetchers (BBC Good Food, Allrecipes, NRK) answer "no permission": he says he couldn't read it.
+  Reading files, only with Claude: `file_kind` (PDFs up to `MAX_PDF_SIZE` 5 MB, text files by suffix in `TEXT_FILES`,
+  their first `MAX_TEXT_FILE` 50,000 characters); `attachments_to_show(..., file_kind, FILE_LOOKBACK 10,
+  MAX_EARLIER_FILES 3)` picks the target's file and up to 3 in the 10 messages before. A PDF becomes our own
+  `{"type": "pdf", "data": base64}` part, which `for_claude` turns into a `document` block; a text file goes into
+  the message's text between "[sent the file x:]" and "[end of the file]". Too-big PDFs are named as such.
   Reminders, only with Claude (Qwen 9B got times wrong; tried and removed on 2026-10-13): `CLAUDE_TOOLS_PROMPT` (put into
   `{claude_tools}` only with Claude; single braces, as a format value) and `remind` in `CLAUDE_ANSWER_SCHEMA`
   ("remind:" -> `ONLY_REMIND_SCHEMA`): what, day (today/tomorrow/weekday/MM-DD), time (HH:MM), in (amount + unit),
