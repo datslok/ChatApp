@@ -1576,20 +1576,25 @@ body.mini-hidden :fullscreen .tile-strip {
 .voice-button:hover {
   background: var(--bg-hover);
 }
-/* You, at the very bottom of the sidebar: [picture● name/status] 🎤 🎧 ⚙️ (like Discord). */
+/* You, at the very bottom of the sidebar, in two rows:
+     [picture● name/status]
+     [   🎤   ][   🎧   ][   ⚙️   ]
+   flex-wrap lets the row break; the first item takes the whole width (flex-basis: 100%), so the
+   buttons go to a second row, where they share the width equally. */
 #user-panel {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 2px;
+  gap: 4px 2px;  /* (between the rows, between the buttons) */
   margin: 0 -8px -16px;  /* to the sidebar's edges and bottom, through its padding */
   padding: 8px;  /* (room around the big picture) */
   background: var(--bg-panel-alt);  /* a little darker than the sidebar */
 }
 
-/* Your picture, name and status: takes the free space (flex: 1), and gets squeezed first
-   (min-width: 0), so a long name ends in "…" instead of pushing the buttons out. */
+/* Your picture, name and status: the whole first row. min-width: 0 lets it be narrower than its
+   text, so a long name ends in "…". */
 #user-panel-me {
-  flex: 1;
+  flex: 1 1 100%;
   min-width: 0;
   display: flex;
   padding: 4px;
@@ -1682,8 +1687,7 @@ body.mini-hidden :fullscreen .tile-strip {
 
 .user-panel-button {
   position: relative;  /* for the 🔕 in the corner of ⚙️ */
-  flex-shrink: 0;
-  width: 30px;
+  flex: 1;  /* the three share the second row equally */
   height: 30px;
   padding: 0;
   border: none;
@@ -1702,7 +1706,7 @@ body.mini-hidden :fullscreen .tile-strip {
 /* Notifications muted: a small 🔕 on the corner of ⚙️. */
 #muted-icon {
   position: absolute;
-  right: -2px;
+  right: calc(50% - 17px);  /* (the corner of the icon in the middle of the wide button, not the button's) */
   bottom: -2px;
   font-size: 0.6rem;
 }
@@ -1724,7 +1728,7 @@ body.mini-hidden :fullscreen .tile-strip {
 #settings-new-dot {
   position: absolute;
   top: 2px;
-  right: 2px;
+  right: calc(50% - 13px);  /* (next to the ⚙️ in the middle of the wide button) */
 }
 
 /* Next to someone in voice. Deafened: the 🎧 with a red line through it. */
