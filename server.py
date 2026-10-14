@@ -1469,8 +1469,7 @@ def open_invite(code):
 
 
 def my_invites(user_id):
-    """This person's unused invite links that still work, newest first. "expires" is UTC, like
-    every time SQLite makes ("2026-10-21 14:30:00")."""
+    """This person's unused invite links that still work, newest first."""
     rows = db.execute(
         """
         SELECT code, datetime(created_at, ?) FROM invites
@@ -1479,7 +1478,7 @@ def my_invites(user_id):
         """,
         (f"+{INVITE_DAYS} days", user_id, f"-{INVITE_DAYS} days"),
     ).fetchall()
-    return [{"code": code, "link": f"{PUBLIC_URL}/invite/{code}", "expires": expires} for code, expires in rows]
+    return [{"code": code, "link": f"{PUBLIC_URL}/invite/{code}", "expires": iso_time(expires)} for code, expires in rows]
 
 
 @app.get("/invites")
@@ -1513,6 +1512,57 @@ async def cancel_invite(code: str, request: Request):
     with db:
         db.execute("DELETE FROM invites WHERE code = ? AND created_by = ? AND used_by IS NULL", (code, user_id))
     return {"invites": my_invites(user_id), "days": INVITE_DAYS}
+
+
+def all_invites():
+    """For Settings → Admin → Invites: everyone's links that still work (with who made them), and
+    who joined with whose link (newest first). Expired unused links are left out."""
+    open_links = db.execute(
+        """
+        SELECT invites.code, users.username, datetime(invites.created_at, ?) FROM invites
+        JOIN users ON users.id = invites.created_by
+        WHERE invites.used_by IS NULL AND invites.created_at > datetime('now', ?)
+        ORDER BY invites.created_at DESC, invites.rowid DESC
+        """,
+        (f"+{INVITE_DAYS} days", f"-{INVITE_DAYS} days"),
+    ).fetchall()
+    # LEFT JOIN: the person who joined (or who invited them) may have had their account deleted
+    # since; the row still shows, with a name of None.
+    joined = db.execute(
+        """
+        SELECT invites.used_by, joiner.username, inviter.username, invites.used_at FROM invites
+        LEFT JOIN users AS joiner ON joiner.id = invites.used_by
+        LEFT JOIN users AS inviter ON inviter.id = invites.created_by
+        WHERE invites.used_by IS NOT NULL
+        ORDER BY invites.used_at DESC
+        """
+    ).fetchall()
+    return {
+        "open": [
+            {"code": code, "link": f"{PUBLIC_URL}/invite/{code}", "by": by, "expires": iso_time(expires)}
+            for code, by, expires in open_links
+        ],
+        "joined": [
+            {"user_id": user_id, "name": name, "invited_by": inviter, "joined": iso_time(when)}
+            for user_id, name, inviter, when in joined
+        ],
+        "days": INVITE_DAYS,
+    }
+
+
+@app.get("/admin/invites")
+async def admin_invites(request: Request):
+    logged_in_admin(request)  # (admins only: the server's check is what counts, not the hidden tab)
+    return all_invites()
+
+
+@app.post("/admin/invites/{code}/cancel")
+async def admin_cancel_invite(code: str, request: Request):
+    """Cancel anyone's unused link (a link posted somewhere it shouldn't be, say)."""
+    logged_in_admin(request)
+    with db:
+        db.execute("DELETE FROM invites WHERE code = ? AND used_by IS NULL", (code,))
+    return all_invites()
 
 
 @app.get("/invite/{code}")

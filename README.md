@@ -279,7 +279,7 @@ they get in (and so does a new address from Settings), so password resets always
 
 **Make it your own:** a new chat starts with #general, #memes and #chattus (the AI bot's, see below).
 Admins (`tools/make_admin.py`) add, rename, move and delete channels, and headings to group them, in
-Settings → Channels. The voice channel is `VOICE_ROOMS` in `server.py`; change it and update (see below). The "What's
+Settings → Admin → Channels. The voice channel is `VOICE_ROOMS` in `server.py`; change it and update (see below). The "What's
 new" page is yours to write (see [What's new](#whats-new)), and the icon should be your own too (see
 [License](#license)).
 
@@ -362,7 +362,7 @@ too (`http://127.0.0.1:8000`), and logs in again by itself whenever the chat res
 
 The bot answers everything in the channel **#chattus** (its key `chattus` in the `channels` table: you
 can rename it, but a new channel with that name isn't his). Without the bot, it's just a quiet channel
-(delete it in Settings → Channels if you don't use the bot). His personality is `SYSTEM_PROMPT` at the top of
+(delete it in Settings → Admin → Channels if you don't use the bot). His personality is `SYSTEM_PROMPT` at the top of
 `chattus.py`.
 
 The model lives on the graphics card the whole time (about 7 GB of its memory). The CPU stays nearly
@@ -494,7 +494,7 @@ the server itself, in PowerShell as administrator.
 .venv\Scripts\python.exe tools\make_admin.py alex --remove       # take it away again
 
 # Bug reports and ideas (Settings → Bugs & ideas). Each one is also emailed to every admin with an
-# email address. Admins can read them and tick them off in the chat too: Settings → Inbox.
+# email address. Admins can read them and tick them off in the chat too: Settings → Admin → Inbox.
 .venv\Scripts\python.exe tools\feedback.py                       # the ones not done yet
 .venv\Scripts\python.exe tools\feedback.py --done 12             # tick off #12 (--undo 12: back again)
 .venv\Scripts\python.exe tools\feedback.py --all                 # every one, done ones too

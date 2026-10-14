@@ -115,7 +115,7 @@ the point is for me to understand how it works, not just to have it done.
   `/channels/order` (the whole list of keys), `/channels/{key}/delete` (a channel with all its messages,
   files and previews; never the last channel). Every change sends `{"type": "channels"}` to every page
   (also sent at each connect); core.js `showChannels` redraws the sidebar, a page in a deleted channel goes
-  to the first one. Settings → Channels (settings.js, admins only): each row a small form (Enter/Save
+  to the first one. Settings → Admin → Channels (settings.js, admins only): each row a small form (Enter/Save
   renames), ↑ ↓, 🗑 with confirm(). `can_join` uses `is_channel`; push titles use `channel_name`.
   `delete_messages_in(key)` removes a channel's or group's messages with everything belonging to them.
 - Group DMs (server.py, "Group DMs"; people.js, "Group DMs"): `group_dms` (key `g:` + 8 hex, name or NULL =
@@ -157,7 +157,7 @@ the point is for me to understand how it works, not just to have it done.
   ({user_id, member}). "roles" (the list, top first; at connect before "users") and "users" (each person's
   `roles`, top first) go to everyone after each change. Page (people.js): `topRole` / `nameColour` colour names
   in messages and lists; `showUsers` gives each role with people online a member list section (#role-sections,
-  after Bots); role tags in the profile. Settings → Roles (settings.js, admins): colour picker, name, ↑ ↓ 🗑,
+  after Bots); role tags in the profile. Settings → Admin → Roles (settings.js, admins): colour picker, name, ↑ ↓ 🗑,
   members with × and "+ Add someone". core.js redraws messages when the roles or anyone's roles change.
 - The right column (#members, people.js `renderMembers` / `chatMembers`) shows the chat's members: everyone in
   a channel (all channels are open to everyone), the two people in a DM, a group's members (bots too); hidden
@@ -165,7 +165,7 @@ the point is for me to understand how it works, not just to have it done.
   People page was the Friends page: its key (`FRIENDS`, "friends") and ids (#friends-view) keep the old name.
 - Picking people: anywhere you choose from what could be everyone (or many), a type-to-search picker,
   never a drop-down (the user's rule): `usePersonPicker(input, list, {candidates, onPick, onType})` in people.js
-  (search's "From", Settings → Roles "+ Add someone"); a multi-pick list (the group popup's friends) gets a
+  (search's "From", Settings → Admin → Roles "+ Add someone"); a multi-pick list (the group popup's friends) gets a
   search box on top that filters it (`filterGroupChoices`; ticked ones stay visible).
 - The user menu (people.js, "The user menu"): right-click (a long press on phones) on anything with
   `data-user-menu="<id>"` (message picture and name, member list, DM list, Friends page rows, call tiles,
@@ -198,7 +198,7 @@ the point is for me to understand how it works, not just to have it done.
   📞 Call joins without ringing when a call is already going. FastAPI's TestClient loses messages between
   connections (one event loop per connection): test ringing against real uvicorn + websockets clients.
 - Settings → "Bugs & ideas": `/feedback` saves a report in the `feedback` table and emails it to every
-  admin with an email. Admins read them in Settings → "Inbox" (settings.js; `GET /feedback` and
+  admin with an email. Admins read them in Settings → Admin → Inbox (settings.js; `GET /feedback` and
   `POST /feedback/{id}/done`, both admin-only on the server), or with `tools/feedback.py`
   (`--all`, `--done ID`, `--undo ID`, `--db dev.db`).
 - `uploads/`: uploaded files, saved under random names (git-ignored, like `chat.db`).
@@ -243,6 +243,10 @@ the point is for me to understand how it works, not just to have it done.
   kind, releases, logs, leftover .db/.zip files, backups, free disk; only reads). The server
   PC's SSH server (step 7 of scripts\server\install.ps1) only accepts the home network.
 - `.env.example`: template for `.env` (SECURE_COOKIES, the keys). `.env` itself is never committed.
+- Settings → Admin (settings.js, "Admin"; only for `amAdmin()`): one tab ("Admin (n)": open bug reports) whose
+  page has sub-tabs (`.admin-tab`, `showAdminSection`) for the sections Inbox, Channels, Roles and Invites
+  (everyone's open links with ×, and who joined with whose: `GET /admin/invites`, `/admin/invites/{code}/cancel`,
+  `logged_in_admin`). New admin tools go there as another section.
 - Invites and email verification (server.py, "Invites" and "Email verification"; since 2026-10-14, replacing the
   old INVITE_CODE): `/register` needs an unused invite (`invites`: code, created_by, used_by; one use,
   `INVITE_DAYS` 7, `MAX_OPEN_INVITES` 10 each), checked and used up in the same transaction as the INSERT, unless

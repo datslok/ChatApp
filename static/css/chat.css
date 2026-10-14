@@ -3243,6 +3243,53 @@ button.download-button {
   color: var(--text-muted);
 }
 
+/* Settings → Admin: its sub-tabs, like the People page's tabs. ("#settings" in front, to beat
+   "#settings button", which makes every button in Settings a big blue one. A row that wraps on
+   a narrow phone.) */
+.admin-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+#settings .admin-tab {
+  padding: 6px 12px;
+  background: none;
+  color: var(--text-muted);
+  font-size: 0.95rem;
+}
+
+#settings .admin-tab.active {
+  background: var(--bg-active);
+  color: var(--text-strong);
+}
+
+/* Admin → Invites: who joined, invited by whom and when. */
+.joined-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.joined-details {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+/* The open links are the invite popup's rows: their buttons are grey here too, not big blue ones. */
+#settings .invite-row button {
+  padding: 8px 12px;
+  background: var(--bg-neutral);
+  color: inherit;
+  font-size: 0.9rem;
+}
+
 #settings form {
   display: flex;
   flex-direction: column;

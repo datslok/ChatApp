@@ -17,9 +17,7 @@ settingsButton.addEventListener("click", async () => {
   emojiStatus.textContent = "";
   feedbackStatus.textContent = "";  // (a half-written report stays, in case Settings was closed by mistake)
   renderMyEmoji();
-  showChannelAdmin();  // (admins only: the channels to manage)
-  showRoleAdmin();     // (admins only: the roles)
-  loadInbox();  // (admins only: the bug reports and ideas, fetched fresh)
+  showAdmin();  // (admins only: the Admin tab, its inbox, channels, roles and invites fetched fresh)
   showNotificationSettings();  // (the browser's permission may have changed since)
   showPushSetting();  // (and whether this device gets push notifications)
   showAppSettings();  // (and, in the app, whether it starts with Windows)
@@ -761,22 +759,118 @@ feedbackForm.addEventListener("submit", async (event) => {
   showStatus(feedbackStatus, kind === "bug" ? "Thanks! The bug report is sent." : "Thanks! Your idea is sent.", "success");
 });
 
+// ---------- Settings: Admin (admins only) ----------
+//
+// One tab for everything only admins can do. Its page has a row of sub-tabs (Inbox, Channels, Roles,
+// Invites), each showing one section; each section's own code follows below. The server checks
+// every admin request itself: hiding the tab only keeps it out of everyone else's way.
+
+const adminTab = document.getElementById("admin-tab");
+const adminTabs = document.querySelectorAll(".admin-tab");
+const adminSections = document.querySelectorAll(".admin-section");
+let adminSection = "inbox";  // the sub-tab showing; Settings opens on it again (until a reload)
+
+// Called when Settings opens: the tab for admins only, and everything in it fresh.
+function showAdmin() {
+  adminTab.hidden = !amAdmin();
+  if (adminTab.hidden) {
+    if (settingsPage === "admin") showSettingsPage("account");  // (no longer an admin)
+    return;
+  }
+  loadInbox();
+  showChannelAdmin();
+  showRoleAdmin();
+  loadAdminInvites();
+}
+
+function showAdminSection(name) {
+  adminSection = name;
+  for (const section of adminSections) section.hidden = section.dataset.section !== name;
+  for (const tab of adminTabs) tab.classList.toggle("active", tab.dataset.section === name);
+}
+
+for (const tab of adminTabs) {
+  tab.addEventListener("click", () => showAdminSection(tab.dataset.section));
+}
+showAdminSection(adminSection);  // at the start: hide every section but the first
+
+// ---------- Settings: Admin → Invites ----------
+//
+// Everyone's invite links that still work (with × to cancel any of them) and who joined with whose
+// link, from /admin/invites. The rows of links are the People page's (people.js, makeInviteRow).
+
+const adminOpenInvites = document.getElementById("admin-open-invites");
+const adminJoined = document.getElementById("admin-joined");
+const adminInvitesStatus = document.getElementById("admin-invites-status");
+
+async function loadAdminInvites() {
+  adminInvitesStatus.textContent = "";
+  const response = await fetch("/admin/invites").catch(() => null);
+  if (!response?.ok) {
+    showStatus(adminInvitesStatus, "Couldn't load the invites.", "error");
+    return;
+  }
+  showAdminInvites(await response.json());
+}
+
+// The server's answer: {open: [{code, link, by, expires}], joined: [{user_id, name, invited_by, joined}]}.
+function showAdminInvites(data) {
+  adminOpenInvites.replaceChildren(
+    ...data.open.map((invite) => makeInviteRow(invite, () => adminCancelInvite(invite.code))),
+  );
+  if (data.open.length === 0) adminOpenInvites.appendChild(makeEmptyNote("No open links."));
+  adminJoined.replaceChildren(...data.joined.map(makeJoinedRow));
+  if (data.joined.length === 0) adminJoined.appendChild(makeEmptyNote("Nobody has joined with a link yet."));
+}
+
+function makeEmptyNote(text) {
+  const note = document.createElement("p");
+  note.className = "empty-note";
+  note.textContent = text;
+  return note;
+}
+
+// "kari · invited by axel · 14 Oct 2026", with their picture while they still have an account.
+function makeJoinedRow(entry) {
+  const row = document.createElement("div");
+  row.className = "joined-row";
+  const person = people.get(entry.user_id);
+  if (person) {
+    row.appendChild(makePerson(person));
+  } else {
+    const name = document.createElement("strong");
+    name.textContent = entry.name ?? "a deleted account";
+    row.appendChild(name);
+  }
+  const details = document.createElement("span");
+  details.className = "joined-details";
+  const when = new Date(entry.joined).toLocaleDateString([], { dateStyle: "medium" });
+  details.textContent = `invited by ${entry.invited_by ?? "a deleted account"} · ${when}`;
+  row.appendChild(details);
+  return row;
+}
+
+async function adminCancelInvite(code) {
+  adminInvitesStatus.textContent = "";
+  const result = await postJson(`/admin/invites/${encodeURIComponent(code)}/cancel`, {})
+    .catch(() => ({ ok: false, error: "No connection. Try again in a moment." }));
+  if (result.ok) showAdminInvites(result.data);
+  else showStatus(adminInvitesStatus, result.error, "error");
+}
+
 // ---------- Settings: Channels (admins only) ----------
 //
 // The sidebar's channels and headings: rename, move and delete them, and add new ones. The list
 // is the same `channels` the sidebar shows (core.js). Each change goes to the server, which tells
 // every page, this one too, with a "channels" message: that redraws the sidebar and this list.
 
-const channelsTab = document.getElementById("channels-tab");
 const channelAdminList = document.getElementById("channel-admin-list");
 const newChannelForm = document.getElementById("new-channel-form");
 const newChannelName = document.getElementById("new-channel-name");
 const channelAdminStatus = document.getElementById("channel-admin-status");
 
-// Called when Settings opens. For everyone else the tab stays hidden (and the server would refuse).
+// Called when Settings opens, for admins (showAdmin).
 function showChannelAdmin() {
-  channelsTab.hidden = !amAdmin();
-  if (channelsTab.hidden && settingsPage === "channels") showSettingsPage("account");  // (no longer an admin)
   channelAdminStatus.textContent = "";
   renderChannelAdmin();
 }
@@ -884,7 +978,6 @@ newChannelForm.addEventListener("submit", async (event) => {
 // someone. Like Channels, every change goes to the server, which tells every page ("roles", "users"),
 // and that draws this list again (core.js).
 
-const rolesTab = document.getElementById("roles-tab");
 const roleAdminList = document.getElementById("role-admin-list");
 const newRoleForm = document.getElementById("new-role-form");
 const newRoleName = document.getElementById("new-role-name");
@@ -892,14 +985,12 @@ const newRoleColour = document.getElementById("new-role-colour");
 const roleAdminStatus = document.getElementById("role-admin-status");
 
 function showRoleAdmin() {
-  rolesTab.hidden = !amAdmin();
-  if (rolesTab.hidden && settingsPage === "roles") showSettingsPage("account");  // (no longer an admin)
   roleAdminStatus.textContent = "";
   renderRoleAdmin();
 }
 
 function renderRoleAdmin() {
-  if (rolesTab.hidden) return;  // (only admins see it; nothing to draw otherwise)
+  if (!amAdmin()) return;  // (only admins see it; nothing to draw otherwise)
   roleAdminList.replaceChildren(...roles.map(makeRoleAdminItem));
 }
 
@@ -1007,7 +1098,6 @@ newRoleForm.addEventListener("submit", async (event) => {
 // Every bug report and idea, newest first. Loaded from the server each time Settings opens;
 // the filter buttons only choose which of the loaded ones to show.
 
-const inboxTab = document.getElementById("inbox-tab");
 const inboxCount = document.getElementById("inbox-count");
 const inboxFilterButtons = document.querySelectorAll("#inbox-filters button");
 const inboxEmpty = document.getElementById("inbox-empty");
@@ -1015,14 +1105,8 @@ const inboxList = document.getElementById("inbox-list");
 let inboxReports = [];     // [{id, user_id, kind, text, user_agent, created_at, done}, ...]
 let inboxFilter = "open";  // "open", "done" or "all"
 
-// Called when Settings opens. For everyone else the tab stays hidden (and the server would
-// refuse them anyway).
+// Called when Settings opens, for admins (showAdmin).
 async function loadInbox() {
-  inboxTab.hidden = !amAdmin();
-  if (inboxTab.hidden) {
-    if (settingsPage === "inbox") showSettingsPage("account");  // (no longer an admin)
-    return;
-  }
   const response = await fetch("/feedback");
   if (!response.ok) {
     inboxEmpty.hidden = false;

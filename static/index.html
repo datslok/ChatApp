@@ -364,10 +364,9 @@
       </button>
       <button type="button" class="settings-tab" role="tab" data-tab="feedback">Bugs &amp; ideas</button>
       <!-- Only for admins (settings.js shows them); the server checks too. -->
-      <button type="button" class="settings-tab" role="tab" data-tab="channels" id="channels-tab" hidden>Channels</button>
-      <button type="button" class="settings-tab" role="tab" data-tab="roles" id="roles-tab" hidden>Roles</button>
-      <button type="button" class="settings-tab" role="tab" data-tab="inbox" id="inbox-tab" hidden>
-        Inbox <span id="inbox-count"></span>
+      <!-- Admins only: the inbox, channels, roles and invites (the count: open bug reports). -->
+      <button type="button" class="settings-tab" role="tab" data-tab="admin" id="admin-tab" hidden>
+        Admin <span id="inbox-count"></span>
       </button>
       <!-- The Windows app: always in sight at the bottom of the tabs (hidden inside the app itself). -->
       <a id="desktop-app" href="/download" target="_blank">
@@ -692,55 +691,75 @@
         </form>
       </section>
 
-      <!-- The sidebar's channels and headings, for admins (settings.js, "Channels"). -->
-      <section class="settings-page" data-page="channels" role="tabpanel" aria-label="Channels">
-        <h2>Channels</h2>
-        <p class="settings-help">
-          The sidebar, top to bottom. A heading groups the channels under it. Everyone sees changes straight away.
-        </p>
-        <div id="channel-admin-list"></div>
-        <h3>Add</h3>
-        <!-- Two submit buttons: the one clicked (event.submitter) says which kind to make. -->
-        <form id="new-channel-form">
-          <label>
-            Name
-            <input id="new-channel-name" maxlength="30" placeholder="e.g. games" autocomplete="off" required>
-          </label>
-          <div class="button-row">
-            <button type="submit" value="channel">Add channel</button>
-            <button type="submit" value="heading">Add heading</button>
-          </div>
-        </form>
-        <div id="channel-admin-status" class="status"></div>
-      </section>
-
-      <!-- Roles, for admins (settings.js, "Roles"): each with its colour, name and members. -->
-      <section class="settings-page" data-page="roles" role="tabpanel" aria-label="Roles">
-        <h2>Roles</h2>
-        <p class="settings-help">
-          A role colours its people's names and gives them a section in the member list. Someone with several
-          roles gets the one highest in this list. Everyone sees changes straight away.
-        </p>
-        <div id="role-admin-list"></div>
-        <h3>Add a role</h3>
-        <form id="new-role-form" class="new-role">
-          <input type="color" id="new-role-colour" value="#3ba55c" aria-label="Colour">
-          <input id="new-role-name" maxlength="30" placeholder="e.g. Gamers" autocomplete="off" required aria-label="Name">
-          <button type="submit">Add role</button>
-        </form>
-        <div id="role-admin-status" class="status"></div>
-      </section>
-
-      <section class="settings-page" data-page="inbox" role="tabpanel" aria-label="Inbox">
-        <h2>Inbox</h2>
-        <!-- Which reports to show. aria-pressed marks the chosen one (and the CSS colours it). -->
-        <div id="inbox-filters" role="group" aria-label="Show">
-          <button type="button" data-filter="open" aria-pressed="true">Open</button>
-          <button type="button" data-filter="done" aria-pressed="false">Done</button>
-          <button type="button" data-filter="all" aria-pressed="false">All</button>
+      <!-- Admins only (settings.js, "Admin"): one page with a row of sub-tabs, each showing one of the
+           sections below it. -->
+      <section class="settings-page" data-page="admin" role="tabpanel" aria-label="Admin">
+        <h2>Admin</h2>
+        <div class="admin-tabs" role="tablist">
+          <button type="button" class="admin-tab" data-section="inbox">Inbox</button>
+          <button type="button" class="admin-tab" data-section="channels">Channels</button>
+          <button type="button" class="admin-tab" data-section="roles">Roles</button>
+          <button type="button" class="admin-tab" data-section="invites">Invites</button>
         </div>
-        <p id="inbox-empty" class="settings-help" hidden></p>
-        <div id="inbox-list"></div>
+
+        <!-- The sidebar's channels and headings (settings.js, "Channels"). -->
+        <div class="admin-section" data-section="channels">
+          <p class="settings-help">
+            The sidebar, top to bottom. A heading groups the channels under it. Everyone sees changes straight away.
+          </p>
+          <div id="channel-admin-list"></div>
+          <h3>Add</h3>
+          <!-- Two submit buttons: the one clicked (event.submitter) says which kind to make. -->
+          <form id="new-channel-form">
+            <label>
+              Name
+              <input id="new-channel-name" maxlength="30" placeholder="e.g. games" autocomplete="off" required>
+            </label>
+            <div class="button-row">
+              <button type="submit" value="channel">Add channel</button>
+              <button type="submit" value="heading">Add heading</button>
+            </div>
+          </form>
+          <div id="channel-admin-status" class="status"></div>
+        </div>
+
+        <!-- Roles (settings.js, "Roles"): each with its colour, name and members. -->
+        <div class="admin-section" data-section="roles">
+          <p class="settings-help">
+            A role colours its people's names and gives them a section in the member list. Someone with several
+            roles gets the one highest in this list. Everyone sees changes straight away.
+          </p>
+          <div id="role-admin-list"></div>
+          <h3>Add a role</h3>
+          <form id="new-role-form" class="new-role">
+            <input type="color" id="new-role-colour" value="#3ba55c" aria-label="Colour">
+            <input id="new-role-name" maxlength="30" placeholder="e.g. Gamers" autocomplete="off" required aria-label="Name">
+            <button type="submit">Add role</button>
+          </form>
+          <div id="role-admin-status" class="status"></div>
+        </div>
+
+        <!-- Bug reports and ideas (settings.js, "the inbox"). -->
+        <div class="admin-section" data-section="inbox">
+          <!-- Which reports to show. aria-pressed marks the chosen one (and the CSS colours it). -->
+          <div id="inbox-filters" role="group" aria-label="Show">
+            <button type="button" data-filter="open" aria-pressed="true">Open</button>
+            <button type="button" data-filter="done" aria-pressed="false">Done</button>
+            <button type="button" data-filter="all" aria-pressed="false">All</button>
+          </div>
+          <p id="inbox-empty" class="settings-help" hidden></p>
+          <div id="inbox-list"></div>
+        </div>
+
+        <!-- Everyone's invite links, and who joined with whose (settings.js, "Admin: invites"). -->
+        <div class="admin-section" data-section="invites">
+          <p class="settings-help">Invite links that still work, whoever made them, and who joined with whose link.</p>
+          <h3>Open links</h3>
+          <div id="admin-open-invites"></div>
+          <h3>Joined</h3>
+          <div id="admin-joined"></div>
+          <div id="admin-invites-status" class="status"></div>
+        </div>
       </section>
     </div>
   </dialog>

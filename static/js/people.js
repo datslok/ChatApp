@@ -432,7 +432,9 @@ function showInvites(answer) {
   }
 }
 
-function makeInviteRow(invite) {
+// One link: the address, Copy, × (onCancel: by default our own cancel; Settings → Admin passes its
+// own), and until when it works (and who made it, when the server says: the Admin list).
+function makeInviteRow(invite, onCancel = () => inviteAction(`/invites/${encodeURIComponent(invite.code)}/cancel`)) {
   const row = document.createElement("div");
   row.className = "invite-row";
   // A read-only text box, so the whole link can also be selected and copied by hand.
@@ -456,13 +458,12 @@ function makeInviteRow(invite) {
   cancel.type = "button";
   cancel.textContent = "×";
   cancel.title = "Cancel this link";
-  cancel.addEventListener("click", () => inviteAction(`/invites/${encodeURIComponent(invite.code)}/cancel`));
+  cancel.addEventListener("click", onCancel);
   const expires = document.createElement("span");
   expires.className = "invite-expires";
-  // SQLite's "2026-10-21 14:30:00" is UTC: as "2026-10-21T14:30:00Z", Date reads it as such, and
-  // toLocaleString shows it in our own time zone and language.
-  const until = new Date(invite.expires.replace(" ", "T") + "Z");
-  expires.textContent = "Works once, until " + until.toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
+  // "2026-10-21T14:30:00Z" (UTC, from the server): toLocaleString shows it in our own time zone and language.
+  const until = new Date(invite.expires).toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
+  expires.textContent = (invite.by ? `Made by ${invite.by} · works` : "Works") + " once, until " + until;
   row.append(link, copy, cancel, expires);
   return row;
 }
