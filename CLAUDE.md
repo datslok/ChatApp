@@ -104,7 +104,8 @@ the point is for me to understand how it works, not just to have it done.
   Drawn by KaTeX: `static/katex-0.18.9/` (`katex.min.js`, `katex.min.css`, the woff2 fonts and LICENSE, from
   npm's tarball, checked against npm's integrity hash; served at `/katex-0.18.9/` with a week's caching,
   `LastingStaticFiles`). Its defaults stay (trust off: no `\href`; maxExpand), plus `maxSize: 20`.
-- `tools/make_admin.py`: make someone an admin (or `--remove`, or `--list`); `--db dev.db` for development.
+- The first account on an empty server (bots don't count) becomes admin by itself (`/register`, decided inside
+  the INSERT). `tools/make_admin.py`: make someone an admin (or `--remove`, or `--list`); `--db dev.db` for development.
   Admins can edit and delete anyone's messages and custom emoji, and manage the channels.
 - Channels (server.py, "Channels"): the `channels` table, one ordered list (`position`) of channels and
   headings (`heading` 1; a heading groups the channels below it until the next one). Messages and the rest

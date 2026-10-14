@@ -116,8 +116,8 @@ between them. This uses its own database (`dev.db`) and upload folder (`dev-uplo
 `dev-secrets.env` here, as a line `GIPHY_API_KEY=...`: start.ps1 reads it, and git ignores it, so the
 key is never committed. Without it the GIF button says GIF search isn't set up.
 
-To make your account an admin: `python tools\make_admin.py yourname --db dev.db` (with the `chatapp`
-environment active: `conda activate chatapp`).
+The first account in a new `dev.db` is the admin by itself. To make another one an admin:
+`python tools\make_admin.py theirname --db dev.db` (with the `chatapp` environment active: `conda activate chatapp`).
 
 **Voice and video** need LiveKit's server program: download `livekit_<version>_windows_amd64.zip`
 from [LiveKit's releases](https://github.com/livekit/livekit/releases) (the version in
@@ -249,16 +249,19 @@ carry). So your router has to send two ports straight to the server:
    - **TCP 7881** (the fallback, for networks that block UDP)
 3. Give the server a **DHCP reservation** in the router, so its address never changes.
 
-### 6. Your account, and making yourself admin
+### 6. Your account (the admin)
 
 Open `https://chat.example.com`, click **Create one**, and make your account. The very first account
-needs no invite link; everyone after you does. Click the link in the email you get to verify your address
-(without `SMTP_HOST`, it's in `logs\chat.log` instead). Then, on the server, make yourself an admin (admins can edit and delete anyone's messages and
-custom emoji, and read the bug reports):
+needs no invite link (everyone after you does), and becomes the admin by itself: admins can edit and
+delete anyone's messages and custom emoji, manage channels and roles, and read the bug reports. Click
+the link in the email you get to verify your address (without `SMTP_HOST`, it's in `logs\chat.log`
+instead).
+
+To make someone else an admin later (or yourself, on a server that already had accounts), on the server:
 
 ```powershell
 cd C:\ChatApp
-.venv\Scripts\python.exe tools\make_admin.py yourname
+.venv\Scripts\python.exe tools\make_admin.py theirname
 ```
 
 ### 7. Check

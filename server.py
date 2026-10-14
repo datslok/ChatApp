@@ -1067,8 +1067,11 @@ async def register(credentials: Credentials, request: Request, response: Respons
         # (an error inside "with db" undoes everything in it). So two people can't both use one
         # link at the same moment: the second one's UPDATE finds it used and changes no row.
         with db:
+            # The first person on a new server (bots don't count) becomes its admin. Decided inside the
+            # INSERT itself, so two people signing up at the same moment can't both be first.
             cursor = db.execute(
-                "INSERT INTO users (username, password_hash, email, email_verified) VALUES (?, ?, ?, 0)",
+                "INSERT INTO users (username, password_hash, email, email_verified, is_admin)"
+                " VALUES (?, ?, ?, 0, NOT EXISTS (SELECT 1 FROM users WHERE is_bot = 0))",
                 (username, password_hash, email),
             )
             user_id = cursor.lastrowid  # the id SQLite gave the new user
