@@ -19,7 +19,7 @@ from email.utils import formatdate, make_msgid, parseaddr
 from html.parser import HTMLParser
 from io import BytesIO
 from pathlib import Path
-from urllib.parse import urlencode, urljoin, urlsplit
+from urllib.parse import quote, urlencode, urljoin, urlsplit
 
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
@@ -49,7 +49,9 @@ async def errors_are_never_cached(request, error):
     return response
 
 # Settings from the environment. serve.ps1 loads them from the .env file (which is never committed).
-INVITE_CODE = os.environ.get("INVITE_CODE", "")  # needed to create an account; empty = anyone can
+# New accounts need an invite link from someone in the chat ("Invites"). Only "0" turns that off (dev.env:
+# development has no strangers), so a server whose .env forgot it stays closed.
+REQUIRE_INVITE = os.environ.get("REQUIRE_INVITE", "1") != "0"
 SECURE_COOKIES = os.environ.get("SECURE_COOKIES") == "1"  # 1 = cookies only ever sent over HTTPS
 # Where messages and files are kept. Development (start.ps1, via dev.env) uses its own,
 # so test messages never end up in the real chat.
@@ -79,8 +81,8 @@ LIVEKIT_API_SECRET = os.environ.get("LIVEKIT_API_SECRET", "")
 VAPID_PUBLIC_KEY = os.environ.get("VAPID_PUBLIC_KEY", "")
 VAPID_PRIVATE_KEY = os.environ.get("VAPID_PRIVATE_KEY", "")
 print(f"Using database {DATABASE_FILE} and upload folder {UPLOAD_DIR}/")
-if not INVITE_CODE:
-    print("WARNING: no INVITE_CODE set, so anyone who can reach this server can create an account.")
+if not REQUIRE_INVITE:
+    print("WARNING: REQUIRE_INVITE=0, so anyone who can reach this server can create an account.")
 if not SMTP_HOST:
     print("No SMTP_HOST set: emails will be printed here instead of sent.")
 
@@ -107,6 +109,9 @@ FAILURE_WINDOW = 15 * 60  # ...within this many seconds, before we refuse to che
 EMAIL_PATTERN = re.compile(r"[^@\s]+@[^@\s]+\.[^@\s]+")
 MAX_EMAIL_LENGTH = 254
 RESET_MINUTES = 60  # how long a password reset link works
+VERIFY_HOURS = 24   # how long an email verification link works
+INVITE_DAYS = 7     # how long an invite link works (once)
+MAX_OPEN_INVITES = 10  # unused invite links per person
 
 UPLOAD_DIR.mkdir(exist_ok=True)  # create the folder if it isn't there yet
 MAX_UPLOAD_SIZE = 10 * 1024 * 1024  # 10 MB, in bytes
@@ -259,6 +264,23 @@ db.execute("""
         token_hash TEXT PRIMARY KEY,  -- a hash of the token in the emailed link, never the token itself
         user_id    INTEGER NOT NULL REFERENCES users(id),
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+""")
+db.execute("""
+    CREATE TABLE IF NOT EXISTS email_verifications (
+        token_hash TEXT PRIMARY KEY,  -- a hash of the token in the emailed link, like password_resets
+        user_id    INTEGER NOT NULL REFERENCES users(id),
+        email      TEXT NOT NULL,     -- the address it was sent to: the link verifies that one only
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+""")
+db.execute("""
+    CREATE TABLE IF NOT EXISTS invites (
+        code       TEXT PRIMARY KEY,  -- the random part of the link: /invite/<code>
+        created_by INTEGER NOT NULL REFERENCES users(id),
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,  -- it works for INVITE_DAYS after this
+        used_by    INTEGER REFERENCES users(id),  -- who made an account with it; NULL = not used yet
+        used_at    TEXT
     )
 """)
 db.execute("""
@@ -604,6 +626,14 @@ if "is_bot" not in table_columns("users"):
     # From before the AI bot: nobody is one, until tools/make_bot.py makes its account.
     with db:
         db.execute("ALTER TABLE users ADD COLUMN is_bot INTEGER NOT NULL DEFAULT 0")
+
+if "email_verified" not in table_columns("users"):
+    # From before email verification: every existing account counts as verified (DEFAULT 1), and so
+    # do bots (tools/make_bot.py: they have no email). Only /register makes an account with 0.
+    # pending_email: a new address from Settings, waiting for its link to be clicked (NULL = none).
+    with db:
+        db.execute("ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 1")
+        db.execute("ALTER TABLE users ADD COLUMN pending_email TEXT")
 
 
 def is_bot(user_id):
@@ -971,34 +1001,54 @@ def start_session(response, user_id):
     )
 
 
-def user_id_from_token(token):
-    """The id of the user a session token belongs to, or None if it's missing, unknown or expired."""
+def session_user(token):
+    """(user id, email verified?) for a session token, or None if it's missing, unknown or expired."""
     if not token:
         return None
-    row = db.execute(
-        "SELECT user_id FROM sessions WHERE token = ? AND created_at > datetime('now', ?)",
+    return db.execute(
+        """
+        SELECT users.id, users.email_verified FROM sessions JOIN users ON users.id = sessions.user_id
+        WHERE sessions.token = ? AND sessions.created_at > datetime('now', ?)
+        """,
         (token, f"-{SESSION_DAYS} days"),
     ).fetchone()
-    return row[0] if row else None
+
+
+def user_id_from_token(token):
+    """The id of the user a session token belongs to, or None if it's missing, unknown or expired,
+    or the account's email isn't verified yet: until then, the account can only use the
+    verification page ("Email verification"), so everything else treats it as logged out."""
+    row = session_user(token)
+    return row[0] if row and row[1] == 1 else None
 
 
 def current_user(request):
-    """The logged-in user's id for an HTTP request, or None."""
+    """The logged-in (and verified) user's id for an HTTP request, or None."""
     return user_id_from_token(request.cookies.get(SESSION_COOKIE))
 
 
+def unverified_user(request):
+    """The id of a logged-in account still waiting for its email to be verified, or None."""
+    row = session_user(request.cookies.get(SESSION_COOKIE))
+    return row[0] if row and row[1] == 0 else None
+
+
 @app.post("/register")
-async def register(credentials: Credentials, request: Request, response: Response):
-    if INVITE_CODE:
-        # Limit guesses per visitor (IP address), so the code can't be found by trying them all.
+async def register(credentials: Credentials, request: Request, response: Response, background_tasks: BackgroundTasks):
+    # An invite link is needed (see "Invites"), except with REQUIRE_INVITE=0 or for the very first
+    # account on a new server, when there's nobody yet to make one.
+    code = credentials.invite.strip()
+    needs_invite = REQUIRE_INVITE and has_people()
+    if needs_invite:
+        # Limit wrong tries per visitor (IP address). The codes are far too long to guess anyway.
         key = "invite:" + client_ip(request)
         if too_many_failures(key):
             raise HTTPException(429, "Too many attempts. Try again in 15 minutes.")
-        # compare_digest takes the same time however much of the guess is right,
-        # so the response time gives no hints about the real code.
-        if not secrets.compare_digest(credentials.invite.strip().encode(), INVITE_CODE.encode()):
+        if not code:
+            raise HTTPException(403, "You need an invite link from someone in the chat to make an account.")
+        if open_invite(code) is None:
             record_failure(key)
-            raise HTTPException(403, "Wrong invite code.")
+            raise HTTPException(403, INVITE_GONE)
 
     username = credentials.username.strip()
     password = credentials.password
@@ -1013,19 +1063,31 @@ async def register(credentials: Credentials, request: Request, response: Respons
 
     password_hash = hasher.hash(password)  # salted and hashed; the password itself is never stored
     try:
+        # One transaction: the account and using up the invite happen together, or neither does
+        # (an error inside "with db" undoes everything in it). So two people can't both use one
+        # link at the same moment: the second one's UPDATE finds it used and changes no row.
         with db:
             cursor = db.execute(
-                "INSERT INTO users (username, password_hash, email) VALUES (?, ?, ?)",
+                "INSERT INTO users (username, password_hash, email, email_verified) VALUES (?, ?, ?, 0)",
                 (username, password_hash, email),
             )
+            user_id = cursor.lastrowid  # the id SQLite gave the new user
+            if needs_invite:
+                used = db.execute(
+                    "UPDATE invites SET used_by = ?, used_at = CURRENT_TIMESTAMP"
+                    " WHERE code = ? AND used_by IS NULL AND created_at > datetime('now', ?)",
+                    (user_id, code, f"-{INVITE_DAYS} days"),
+                )
+                if used.rowcount != 1:
+                    raise HTTPException(403, INVITE_GONE)
     except sqlite3.IntegrityError as error:  # a UNIQUE rule was broken: username or email
         if "email" in str(error):
             raise HTTPException(400, "That email is already used by another account.")
         raise HTTPException(400, "That username is taken.")
 
-    start_session(response, cursor.lastrowid)  # lastrowid: the id SQLite gave the new user
-    befriend_bots()  # Chattus is their friend from the start
-    await send_to_everyone(users_message())  # so the new person shows up in everyone's DM list
+    # Logged in, but only to the "check your inbox" page until the link in this email is clicked.
+    start_session(response, user_id)
+    send_verification(background_tasks, user_id, username, email)
     return {"ok": True}
 
 
@@ -1224,6 +1286,250 @@ async def reset(data: ResetRequest, background_tasks: BackgroundTasks):
     return {"ok": True}
 
 
+# ---------- Email verification ----------
+#
+# A new account gets an email with a link, and until it's clicked the account can only use the
+# "check your inbox" page (static/verify.html, at /verify-email): user_id_from_token treats it as
+# logged out everywhere else, and it isn't in anyone's lists yet. A new address from Settings
+# waits in pending_email the same way, while the old one stays in use (a typo can't lock anyone
+# out of password resets). Like reset links, only a hash of each link's token is stored.
+
+def send_verification(background_tasks, user_id, username, email):
+    """Email a link that verifies `email` for this account (in the background, see send_email).
+    Each one counts towards verification_limited."""
+    token = secrets.token_urlsafe(32)
+    with db:
+        db.execute(
+            "INSERT INTO email_verifications (token_hash, user_id, email) VALUES (?, ?, ?)",
+            (hash_token(token), user_id, email),
+        )
+    record_failure(f"verify:{user_id}")
+    link = f"{PUBLIC_URL}/verify?token={token}"
+    body = (
+        f"Hi {username},\n\n"
+        "Open this link to confirm that this is your email address for ChatApp.\n"
+        f"It works for the next {VERIFY_HOURS} hours:\n\n"
+        f"{link}\n\n"
+        "If you didn't make a ChatApp account or change your email there, just ignore this email.\n"
+    )
+    background_tasks.add_task(send_email, email, "Confirm your email for ChatApp", body)
+
+
+def verification_limited(user_id):
+    """Has this account had MAX_FAILURES (5) verification emails in the last 15 minutes? Then no
+    more for now, so "Send again" can't be used to flood someone's inbox through our mail service."""
+    return too_many_failures(f"verify:{user_id}")
+
+
+TOO_MANY_EMAILS = "We've sent a few already. Check your spam folder, or try again in 15 minutes."
+
+
+@app.get("/verify")
+async def verify(token: str, background_tasks: BackgroundTasks):
+    """The link in the email. It verifies the address it was sent to: a new account's own, or a new
+    one from Settings (then that becomes the account's email). Then on to the page, which says how
+    it went (?result=...)."""
+    row = db.execute(
+        """
+        SELECT email_verifications.user_id, email_verifications.email,
+               users.username, users.email, users.email_verified, users.pending_email
+        FROM email_verifications JOIN users ON users.id = email_verifications.user_id
+        WHERE email_verifications.token_hash = ? AND email_verifications.created_at > datetime('now', ?)
+        """,
+        (hash_token(token), f"-{VERIFY_HOURS} hours"),
+    ).fetchone()
+    if row is None:
+        return RedirectResponse("/verify-email?result=expired")
+    user_id, address, username, email, verified, pending = row
+
+    if not verified and address == email:
+        # A new account: in. It joins everyone's lists, and the bots become its friends.
+        with db:
+            db.execute("UPDATE users SET email_verified = 1 WHERE id = ?", (user_id,))
+            db.execute("DELETE FROM email_verifications WHERE user_id = ?", (user_id,))
+        befriend_bots()
+        await send_to_everyone(users_message())
+        return RedirectResponse("/verify-email?result=verified")
+
+    if verified and address == pending:
+        # A new address from Settings. (Someone else may have taken it in the meantime: UNIQUE.)
+        try:
+            with db:
+                db.execute("UPDATE users SET email = ?, pending_email = NULL WHERE id = ?", (address, user_id))
+                db.execute("DELETE FROM email_verifications WHERE user_id = ?", (user_id,))
+        except sqlite3.IntegrityError:
+            return RedirectResponse("/verify-email?result=taken")
+        # To the *old* address: if someone else did this, the new one is theirs, and reset links
+        # go there now. So the real owner needs the admin, who can put their email back.
+        send_security_notice(
+            background_tasks, email, username,
+            "Your ChatApp email address was changed",
+            f"The email address for your ChatApp account was just changed to {address}",
+            "Password reset links now go to that new address, so tell the admin right away:"
+            " they can put your own email back.",
+        )
+        return RedirectResponse("/verify-email?result=changed")
+
+    # A link for an address the account no longer uses (changed again since).
+    return RedirectResponse("/verify-email?result=expired")
+
+
+@app.get("/verify-email")
+async def verify_page():
+    return FileResponse("static/verify.html", headers={"Cache-Control": "no-cache"})
+
+
+@app.get("/verify/status")
+async def verify_status(request: Request):
+    """For the verify page: who's logged in in this browser, and whether their email is verified."""
+    row = session_user(request.cookies.get(SESSION_COOKIE))
+    if row is None:
+        return {"logged_in": False}
+    username, email, pending = db.execute(
+        "SELECT username, email, pending_email FROM users WHERE id = ?", (row[0],)
+    ).fetchone()
+    return {"logged_in": True, "verified": row[1] == 1, "username": username, "email": email, "pending_email": pending}
+
+
+@app.post("/verify/resend")
+async def resend_verification(request: Request, background_tasks: BackgroundTasks):
+    """"Send again": a new link, to a new account's address or to the one waiting in Settings."""
+    row = session_user(request.cookies.get(SESSION_COOKIE))
+    if row is None:
+        raise HTTPException(401, "You're not logged in.")
+    user_id, verified = row
+    username, email, pending = db.execute(
+        "SELECT username, email, pending_email FROM users WHERE id = ?", (user_id,)
+    ).fetchone()
+    address = pending if verified else email
+    if not address:
+        raise HTTPException(400, "Your email is already verified.")
+    if verification_limited(user_id):
+        raise HTTPException(429, TOO_MANY_EMAILS)
+    send_verification(background_tasks, user_id, username, address)
+    return {"ok": True, "email": address}
+
+
+class NewEmail(BaseModel):
+    email: str
+
+
+@app.post("/verify/change")
+async def change_unverified_email(data: NewEmail, request: Request, background_tasks: BackgroundTasks):
+    """"Wrong address?" on the verify page: a new account fixes its email, and gets a new link."""
+    user_id = unverified_user(request)
+    if user_id is None:
+        raise HTTPException(401, "You're not logged in, or your email is already verified.")
+    email = clean_email(data.email)
+    if email is None:
+        raise HTTPException(400, "That doesn't look like an email address.")
+    if verification_limited(user_id):
+        raise HTTPException(429, TOO_MANY_EMAILS)
+    try:
+        with db:
+            db.execute("UPDATE users SET email = ? WHERE id = ?", (email, user_id))
+            db.execute("DELETE FROM email_verifications WHERE user_id = ?", (user_id,))  # old links stop working
+    except sqlite3.IntegrityError:
+        raise HTTPException(400, "That email is already used by another account.")
+    username = db.execute("SELECT username FROM users WHERE id = ?", (user_id,)).fetchone()[0]
+    send_verification(background_tasks, user_id, username, email)
+    return {"ok": True, "email": email}
+
+
+# ---------- Invites ----------
+#
+# A new account needs an invite link from someone in the chat: /invite/<code>, which opens the
+# create-account page with the code filled in. Each link works once, for INVITE_DAYS; anyone can
+# have MAX_OPEN_INVITES unused ones (the People page: Invite someone). A used one stays in the
+# table, so who invited whom is remembered (invites.created_by and used_by).
+
+INVITE_GONE = ("This invite link doesn't work any more: it has been used, or it's more than "
+               f"{INVITE_DAYS} days old. Ask for a new one.")
+
+
+def has_people():
+    """Does anyone have an account yet (bots don't count)? The very first account needs no invite."""
+    return db.execute("SELECT 1 FROM users WHERE is_bot = 0 LIMIT 1").fetchone() is not None
+
+
+def open_invite(code):
+    """(code, the inviter's name) for an invite that can still be used, or None."""
+    if not code:
+        return None
+    return db.execute(
+        """
+        SELECT invites.code, users.username FROM invites JOIN users ON users.id = invites.created_by
+        WHERE invites.code = ? AND invites.used_by IS NULL AND invites.created_at > datetime('now', ?)
+        """,
+        (code, f"-{INVITE_DAYS} days"),
+    ).fetchone()
+
+
+def my_invites(user_id):
+    """This person's unused invite links that still work, newest first. "expires" is UTC, like
+    every time SQLite makes ("2026-10-21 14:30:00")."""
+    rows = db.execute(
+        """
+        SELECT code, datetime(created_at, ?) FROM invites
+        WHERE created_by = ? AND used_by IS NULL AND created_at > datetime('now', ?)
+        ORDER BY created_at DESC, rowid DESC
+        """,
+        (f"+{INVITE_DAYS} days", user_id, f"-{INVITE_DAYS} days"),
+    ).fetchall()
+    return [{"code": code, "link": f"{PUBLIC_URL}/invite/{code}", "expires": expires} for code, expires in rows]
+
+
+@app.get("/invites")
+async def list_invites(request: Request):
+    user_id = current_user(request)
+    if user_id is None:
+        raise HTTPException(401, "You're not logged in.")
+    return {"invites": my_invites(user_id), "days": INVITE_DAYS}
+
+
+@app.post("/invites")
+async def create_invite(request: Request):
+    """A new link. Answers with all of this person's open ones (the new one first)."""
+    user_id = current_user(request)
+    if user_id is None:
+        raise HTTPException(401, "You're not logged in.")
+    if len(my_invites(user_id)) >= MAX_OPEN_INVITES:
+        raise HTTPException(400, f"You have {MAX_OPEN_INVITES} unused links already: cancel one first.")
+    code = secrets.token_urlsafe(12)  # 12 random bytes as 16 characters: impossible to guess
+    with db:
+        db.execute("INSERT INTO invites (code, created_by) VALUES (?, ?)", (code, user_id))
+    return {"invites": my_invites(user_id), "days": INVITE_DAYS}
+
+
+@app.post("/invites/{code}/cancel")
+async def cancel_invite(code: str, request: Request):
+    """Cancel one of our own unused links (someone else's, or a used one, is left alone)."""
+    user_id = current_user(request)
+    if user_id is None:
+        raise HTTPException(401, "You're not logged in.")
+    with db:
+        db.execute("DELETE FROM invites WHERE code = ? AND created_by = ? AND used_by IS NULL", (code, user_id))
+    return {"invites": my_invites(user_id), "days": INVITE_DAYS}
+
+
+@app.get("/invite/{code}")
+async def open_invite_link(code: str):
+    """The link itself: on to the create-account page, with the code for it to send along.
+    (quote() makes whatever was typed safe to put in an address.)"""
+    return RedirectResponse(f"/login?register&invite={quote(code, safe='')}")
+
+
+@app.get("/invite-info")
+async def invite_info(code: str = ""):
+    """For the login page: is an invite needed, and if one was given, does it work and whose is it?"""
+    invite = open_invite(code)
+    return {
+        "required": REQUIRE_INVITE and has_people(),
+        "valid": invite is not None,
+        "inviter": invite[1] if invite else None,
+    }
+
+
 # ---------- Settings (logged in) ----------
 
 def logged_in_user(request):
@@ -1251,10 +1557,13 @@ def check_current_password(username, password_hash, password):
 @app.get("/me")
 async def me(request: Request):
     user_id, username, password_hash, email = logged_in_user(request)
-    avatar, banner, status, bio = db.execute(
-        "SELECT avatar_id, banner_id, status, bio FROM users WHERE id = ?", (user_id,)
+    avatar, banner, status, bio, pending = db.execute(
+        "SELECT avatar_id, banner_id, status, bio, pending_email FROM users WHERE id = ?", (user_id,)
     ).fetchone()
-    return {"username": username, "email": email, "avatar": avatar, "banner": banner, "status": status, "bio": bio}
+    return {
+        "username": username, "email": email, "pending_email": pending,  # (a new address waiting for its link)
+        "avatar": avatar, "banner": banner, "status": status, "bio": bio,
+    }
 
 
 class EmailChange(BaseModel):
@@ -1271,22 +1580,34 @@ async def change_email(data: EmailChange, request: Request, background_tasks: Ba
     email = clean_email(data.email)
     if email is None:
         raise HTTPException(400, "That doesn't look like an email address.")
-    try:
-        with db:
-            db.execute("UPDATE users SET email = ? WHERE id = ?", (email, user_id))
-    except sqlite3.IntegrityError:
+    if email == old_email:  # (back to the one we have: nothing waits any more)
+        cancel_pending_email(user_id)
+        return {"ok": True, "email": old_email, "pending": None}
+    if db.execute("SELECT 1 FROM users WHERE email = ? AND id != ?", (email, user_id)).fetchone():
         raise HTTPException(400, "That email is already used by another account.")
-    if email != old_email:
-        # To the *old* address: if someone else did this, the new one is theirs, and reset links
-        # would go there too. So the real owner needs the admin, who can put their email back.
-        send_security_notice(
-            background_tasks, old_email, username,
-            "Your ChatApp email address was changed",
-            f"The email address for your ChatApp account was just changed to {email}",
-            "Password reset links now go to that new address, so tell the admin right away:"
-            " they can put your own email back.",
-        )
-    return {"ok": True, "email": email}
+    if verification_limited(user_id):
+        raise HTTPException(429, TOO_MANY_EMAILS)
+    # The new address waits until its link is clicked (see "Email verification", /verify), which
+    # also tells the old address. Until then the old one stays in use.
+    with db:
+        db.execute("UPDATE users SET pending_email = ? WHERE id = ?", (email, user_id))
+        db.execute("DELETE FROM email_verifications WHERE user_id = ?", (user_id,))  # older links stop working
+    send_verification(background_tasks, user_id, username, email)
+    return {"ok": True, "email": old_email, "pending": email}
+
+
+def cancel_pending_email(user_id):
+    with db:
+        db.execute("UPDATE users SET pending_email = NULL WHERE id = ?", (user_id,))
+        db.execute("DELETE FROM email_verifications WHERE user_id = ?", (user_id,))
+
+
+@app.post("/settings/email/cancel")
+async def cancel_email_change(request: Request):
+    """Settings: forget the new address that was waiting for its link."""
+    user_id = logged_in_user(request)[0]
+    cancel_pending_email(user_id)
+    return {"ok": True}
 
 
 class UsernameChange(BaseModel):
@@ -2333,6 +2654,8 @@ async def index(request: Request):
     if LANDING_HOST and (request.headers.get("host") or "").split(":")[0].lower() == LANDING_HOST:
         return landing_page()
     if current_user(request) is None:
+        if unverified_user(request) is not None:
+            return RedirectResponse("/verify-email")  # logged in, but the email isn't verified yet
         return RedirectResponse("/login")  # not logged in: send them to the login page
     # no-cache: the browser asks each time whether it changed, so a reload after a new version
     # (see PAGE_VERSION) never gets an old copy.
@@ -2356,6 +2679,8 @@ async def welcome():
 async def login_page(request: Request):
     if current_user(request) is not None:
         return RedirectResponse("/")  # already logged in: straight to the chat
+    if unverified_user(request) is not None:
+        return RedirectResponse("/verify-email")  # (logged in, waiting for the email's link)
     return FileResponse("static/login.html")
 
 
@@ -2981,6 +3306,7 @@ def users_message():
     ("status" is the line people write about themselves, "playing Minecraft"; "online" is "not offline".)"""
     rows = db.execute(
         "SELECT id, username, avatar_id, banner_id, status, bio, is_admin, is_bot, presence FROM users"
+        " WHERE email_verified = 1"  # (a new account joins the lists once its email is verified)
         " ORDER BY username COLLATE NOCASE"
     ).fetchall()
     # Everyone's roles, in one query: the top one first (the list's order), so the page takes roles[0].

@@ -4,7 +4,7 @@
 #   chat.db     the messages and accounts (a safe copy, even while the server runs)
 #   uploads/    pictures and files
 #   releases/   the desktop app's installers and latest.json
-#   .env        the settings and secrets (invite code, mail password, LiveKit keys)
+#   .env        the settings and secrets (mail password, LiveKit keys, ...)
 #
 # Run it on the PC the chat runs on now:   .\scripts\server\export.ps1
 # Then copy chatapp-data.zip to the new PC (a USB stick, say) and run .\scripts\server\import.ps1 there.

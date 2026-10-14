@@ -23,6 +23,7 @@
     {
       "topic": "👥 People",
       "items": [
+        "Invite a friend: People → Invite someone makes a link that lets one person make an account, within a week. Copy it and send it to them. New accounts confirm their email with a link before they get in",
         "People (at the top of the sidebar): your Friends, Everyone on the chat (with a search box, to find someone and add them), friend Requests and the people you Blocked",
         "Friends: send requests and accept them on the People page. DMs are between friends. A new request pings you (and your phone, with notifications on)",
         "Block someone: Block in their profile (click their name or picture). You stop being friends, they can't send you requests or reach you, and their messages are hidden for you (\"Show\" to see one). They aren't told. Unblock them in their profile or on the People page's Blocked tab. Admins and bots can't be blocked",
@@ -97,7 +98,7 @@
       "items": [
         "Settings: the ⚙️ at the bottom left, next to your name. Its tabs: My Account, Profile, Appearance, Emoji, Notifications, Voice & audio, Video, App behaviour (only in the Windows app), What's new and Bugs & ideas (admins also have Channels, Roles and Inbox)",
         "Channels: admins add, rename, move and delete channels in Settings → Channels, and add headings that group the channels under them in the sidebar",
-        "My Account: change your username, email and password. Forgot your password? There's a link on the login page",
+        "My Account: change your username, email and password. A new email address only takes over once you click the link we send to it. Forgot your password? There's a link on the login page",
         "Appearance: eight themes (Dark, Darker, Light, Blue, Purple, Green, Pink, Light pink), your own colours on top, a font and a text size, and in the Windows app a scale (everything bigger or smaller). Saved with your account, so it's the same on every device",
         "What's new: what changed lately (a red dot on ⚙️ means something new), and everything the chat can do",
         "Bugs & ideas: tell us what's broken or what you'd like"
@@ -108,6 +109,7 @@
     {
       "date": "2026-10-14",
       "items": [
+        "Invite friends with a link 💌: People → Invite someone (each link works once, for a week). New accounts confirm their email address first, and so does a new address in Settings",
         "GIFs 🎞️: the new GIF button next to the text box searches GIPHY. Click one to send it",
         "The member list on the right now shows who's in the chat you're in (a DM: the two of you, a group: its members). Everyone is on the new Everyone tab of the People page (the old Friends page), with a search box",
         "A red NEW line shows where you stopped reading in a chat, and opening a chat with lots of new messages starts there",

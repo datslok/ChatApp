@@ -12,11 +12,14 @@ param([string]$LogFile)
 # Work from the folder this script is in, wherever it was started from.
 Set-Location $PSScriptRoot
 
-# Refuse to start without a real invite code, so the site is never accidentally open to everyone.
-$hasInvite = (Test-Path .env) -and (Select-String -Path .env -Pattern '^INVITE_CODE=.+' -Quiet) -and
-             -not (Select-String -Path .env -Pattern '^INVITE_CODE=change-me' -Quiet)
-if (-not $hasInvite) {
-    Write-Host "No invite code set. Copy .env.example to .env and choose an INVITE_CODE."
+# Refuse to start without settings, or with sign-ups open to anyone (REQUIRE_INVITE=0 is only for
+# development), so the real site is never accidentally open to everyone.
+if (-not (Test-Path .env)) {
+    Write-Host "No settings yet. Copy .env.example to .env and fill it in (README, Host your own)."
+    exit 1
+}
+if (Select-String -Path .env -Pattern '^REQUIRE_INVITE=0' -Quiet) {
+    Write-Host "REQUIRE_INVITE=0 in .env would let anyone make an account. Remove that line."
     exit 1
 }
 
@@ -30,7 +33,7 @@ if (Test-Path .venv\Scripts\python.exe) {
 }
 
 # --host 127.0.0.1: only programs on this PC (like the tunnel) can connect, not other devices.
-# --env-file .env:  load INVITE_CODE and SECURE_COOKIES from the .env file.
+# --env-file .env:  load the settings (SECURE_COOKIES, the keys, ...) from the .env file.
 # No --reload: that's only for development.
 $arguments = "-m uvicorn server:app --host 127.0.0.1 --port 8000 --env-file .env"
 

@@ -409,6 +409,83 @@ for (const tab of document.querySelectorAll(".tab")) {
   });
 }
 
+// ---------- Invites ----------
+//
+// New accounts need an invite link from someone in the chat (server.py, "Invites"). Invite someone
+// on the People page opens a popup with our unused links: Copy to share one, × to cancel it, and
+// New link for another. Each works once, for a week.
+
+const inviteDialog = document.getElementById("invite-dialog");
+const inviteList = document.getElementById("invite-list");
+const inviteStatus = document.getElementById("invite-status");
+
+// Fill the popup from the server's answer: {invites: [{code, link, expires}], days: 7}.
+function showInvites(answer) {
+  document.getElementById("invite-help").textContent =
+    `Each link lets one person make an account, within ${answer.days} days. Send it to them yourself.`;
+  inviteList.replaceChildren(...answer.invites.map(makeInviteRow));
+  if (answer.invites.length === 0) {
+    const note = document.createElement("p");
+    note.className = "empty-note";
+    note.textContent = "No unused links. Click New link to make one.";
+    inviteList.appendChild(note);
+  }
+}
+
+function makeInviteRow(invite) {
+  const row = document.createElement("div");
+  row.className = "invite-row";
+  // A read-only text box, so the whole link can also be selected and copied by hand.
+  const link = document.createElement("input");
+  link.readOnly = true;
+  link.value = invite.link;
+  link.addEventListener("focus", () => link.select());
+  const copy = document.createElement("button");
+  copy.type = "button";
+  copy.textContent = "Copy";
+  copy.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(invite.link);  // the browser's clipboard (needs https, or localhost)
+      copy.textContent = "Copied ✓";
+      setTimeout(() => (copy.textContent = "Copy"), 2000);
+    } catch {
+      link.focus();  // (not allowed: the link is selected instead, for Ctrl+C)
+    }
+  });
+  const cancel = document.createElement("button");
+  cancel.type = "button";
+  cancel.textContent = "×";
+  cancel.title = "Cancel this link";
+  cancel.addEventListener("click", () => inviteAction(`/invites/${encodeURIComponent(invite.code)}/cancel`));
+  const expires = document.createElement("span");
+  expires.className = "invite-expires";
+  // SQLite's "2026-10-21 14:30:00" is UTC: as "2026-10-21T14:30:00Z", Date reads it as such, and
+  // toLocaleString shows it in our own time zone and language.
+  const until = new Date(invite.expires.replace(" ", "T") + "Z");
+  expires.textContent = "Works once, until " + until.toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
+  row.append(link, copy, cancel, expires);
+  return row;
+}
+
+// New link and × both answer with the whole list again.
+async function inviteAction(url) {
+  inviteStatus.textContent = "";
+  const result = await postJson(url, {}).catch(() => ({ ok: false, error: "No connection. Try again in a moment." }));
+  if (result.ok) showInvites(result.data);
+  else inviteStatus.textContent = result.error;
+}
+
+document.getElementById("invite-button").addEventListener("click", async () => {
+  inviteStatus.textContent = "";
+  inviteList.replaceChildren();
+  inviteDialog.showModal();
+  const response = await fetch("/invites").catch(() => null);
+  if (response?.ok) showInvites(await response.json());
+  else inviteStatus.textContent = "Couldn't load your links. Try again in a moment.";
+});
+document.getElementById("invite-new").addEventListener("click", () => inviteAction("/invites"));
+document.getElementById("invite-close").addEventListener("click", () => inviteDialog.close());
+
 // ---------- Group DMs ----------
 //
 // Private chats for 3 to 10 people. The server sends our own groups in a "groups" message, at the

@@ -32,6 +32,7 @@ settingsButton.addEventListener("click", async () => {
     const me = await response.json();  // {username, email, avatar, status, bio}
     currentUsername.textContent = me.username;
     currentEmail.textContent = me.email || "none yet";
+    showPendingEmail(me.pending_email);
     statusInput.value = me.status || "";
     bioInput.value = me.bio || "";
     settingsAvatar.replaceChildren(makeAvatar(myId, me.username, "large"));
@@ -687,9 +688,37 @@ emailForm.addEventListener("submit", async (event) => {
     showStatus(emailStatus, result.error, "error");
     return;
   }
-  currentEmail.textContent = result.data.email;
+  currentEmail.textContent = result.data.email || "none yet";
+  showPendingEmail(result.data.pending);
   emailForm.reset();
-  showStatus(emailStatus, "Email saved.", "success");
+  showStatus(emailStatus, result.data.pending
+    ? "We sent a link to the new address: your email changes when you click it."
+    : "That's already your email.", "success");
+});
+
+// A new address waiting for its link (or null: none). It only becomes the account's email once the
+// link in the email to it is clicked (/verify, which also tells the old address).
+const pendingEmail = document.getElementById("pending-email");
+
+function showPendingEmail(address) {
+  pendingEmail.hidden = !address;
+  document.getElementById("pending-email-address").textContent = address || "";
+}
+
+document.getElementById("pending-resend").addEventListener("click", async () => {
+  const result = await postJson("/verify/resend", {});
+  if (result.ok) showStatus(emailStatus, "Sent again. Check that inbox, and its spam folder.", "success");
+  else showStatus(emailStatus, result.error, "error");
+});
+
+document.getElementById("pending-cancel").addEventListener("click", async () => {
+  const result = await postJson("/settings/email/cancel", {});
+  if (!result.ok) {
+    showStatus(emailStatus, result.error, "error");
+    return;
+  }
+  showPendingEmail(null);
+  showStatus(emailStatus, "Cancelled: your email stays as it is.", "success");
 });
 
 passwordForm.addEventListener("submit", async (event) => {

@@ -716,6 +716,72 @@ body {
 }
 
 /* The New group / Add people popup. */
+/* The People page's Invite someone button, at the right end of its header. */
+#invite-button {
+  margin-left: auto;  /* (in a flex row: takes all the space on its left, so it sits at the end) */
+  padding: 6px 12px;
+  border: none;
+  border-radius: 6px;
+  background: var(--button-green);
+  color: white;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+/* The invite popup: like the group popup. */
+#invite-dialog {
+  width: min(460px, 100% - 32px);
+  box-sizing: border-box;
+  padding: 20px;
+  border: none;
+  border-radius: 8px;
+  background: var(--bg-panel);
+  color: inherit;
+}
+#invite-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.6);
+}
+.invite-content {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.invite-content h2 {
+  margin: 0;
+}
+
+/* One link: the address (selectable, scrolls sideways if long), Copy and ×, and until when it works. */
+.invite-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 4px 6px;
+  align-items: center;
+}
+.invite-row input {
+  min-width: 0;  /* (lets it shrink in the grid instead of pushing the buttons out) */
+  padding: 8px 10px;
+  border: none;
+  border-radius: 6px;
+  background: var(--bg-darkest);
+  color: inherit;
+  font-family: monospace;
+  font-size: 0.85rem;
+}
+.invite-row button {
+  padding: 8px 12px;
+  border: none;
+  border-radius: 6px;
+  background: var(--bg-neutral);
+  color: inherit;
+  cursor: pointer;
+}
+.invite-row .invite-expires {
+  grid-column: 1 / -1;  /* the whole row's width, under the rest */
+  margin-bottom: 6px;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
 #group-dialog {
   width: min(420px, 100% - 32px);
   box-sizing: border-box;
@@ -3295,6 +3361,24 @@ button.download-button {
   padding: 0;
   border-radius: 50%;
   background: var(--bg-darkest);
+}
+
+/* My Account: a new email waiting for its link, with Send again and Cancel. */
+#pending-email p {
+  margin: 0 0 8px;
+  color: var(--text-muted);
+}
+
+.pending-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+#settings .pending-buttons button {
+  padding: 6px 12px;
+  background: var(--bg-active);
+  color: var(--text);
+  font-size: 0.9rem;
 }
 
 #settings .status {

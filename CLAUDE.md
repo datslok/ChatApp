@@ -241,7 +241,18 @@ the point is for me to understand how it works, not just to have it done.
   `scripts\usage.ps1` shows the space used there (runs `scripts\server\usage.ps1`: database, uploads by
   kind, releases, logs, leftover .db/.zip files, backups, free disk; only reads). The server
   PC's SSH server (step 7 of scripts\server\install.ps1) only accepts the home network.
-- `.env.example`: template for `.env` (INVITE_CODE, SECURE_COOKIES). `.env` itself is never committed.
+- `.env.example`: template for `.env` (SECURE_COOKIES, the keys). `.env` itself is never committed.
+- Invites and email verification (server.py, "Invites" and "Email verification"; since 2026-10-14, replacing the
+  old INVITE_CODE): `/register` needs an unused invite (`invites`: code, created_by, used_by; one use,
+  `INVITE_DAYS` 7, `MAX_OPEN_INVITES` 10 each), checked and used up in the same transaction as the INSERT, unless
+  `REQUIRE_INVITE=0` (dev.env; serve.ps1 refuses it) or nobody has an account yet. `/invite/<code>` redirects to
+  `/login?register&invite=`, which asks `/invite-info`. People page → Invite someone (#invite-dialog, people.js
+  "Invites"). New accounts get `email_verified` 0 and a link (`email_verifications`, hashed token + the address,
+  `VERIFY_HOURS` 24); `user_id_from_token` only accepts verified accounts, so an unverified one is "logged out"
+  everywhere except static/verify.html (`/verify-email`, `/verify/status`, `/verify/resend`, `/verify/change`;
+  `/` and `/login` redirect there) and missing from `users_message`. Existing accounts and bots count as verified
+  (the column's DEFAULT 1). Settings' new email waits in `pending_email` until its link is clicked (then the old
+  address gets the security notice). 5 verification emails per account per 15 min (`verify:<id>` in `failures`).
 - `desktop/`: the Windows app (Tauri). A window around https://chat.datslok.no, with real Windows
   notifications (notification plugin, allowed for the site in `src-tauri/capabilities/default.json`)
   automatic updates at startup and when the page asks (updater plugin; `check_for_update` in main.rs, called by core.js after a reconnect and after leaving a call), the zoom of Settings → Appearance's scale (`set_zoom` in main.rs, called by appearance.js; since 0.1.15),

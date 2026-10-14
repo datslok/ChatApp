@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="/favicon.ico?v=2">
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#1e1f22">
+  <title>Check your email · ChatApp</title>
+  <!-- The "check your inbox" page (server.py, "Email verification"): where a new account waits until
+       the link in its email is clicked, and where that link leads afterwards (?result=...).
+       The same look as the login page. -->
+  <style>
+    body {
+      margin: 0;
+      height: 100vh;
+      height: 100dvh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: system-ui, sans-serif;
+      background: #313338;
+      color: #dbdee1;
+    }
+
+    main {
+      width: min(400px, 100% - 32px);
+      box-sizing: border-box;
+      padding: 32px;
+      border-radius: 8px;
+      background: #2b2d31;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      text-align: center;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 1.5rem;
+      color: white;
+    }
+
+    p {
+      margin: 0;
+      line-height: 1.5;
+    }
+
+    strong {
+      color: white;
+      overflow-wrap: anywhere;  /* a long email address wraps instead of sticking out */
+    }
+
+    [hidden] {
+      display: none !important;
+    }
+
+    #waiting,
+    #change-form {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .button {
+      padding: 10px;
+      border: none;
+      border-radius: 6px;
+      background: #5865f2;
+      color: white;
+      font: inherit;
+      text-decoration: none;  /* (the "Open the chat" link looks like a button too) */
+      cursor: pointer;
+    }
+
+    .button.secondary {
+      background: #4e5058;
+    }
+
+    input {
+      padding: 10px 12px;
+      border: none;
+      border-radius: 6px;
+      background: #1e1f22;
+      color: inherit;
+      font-size: 1rem;
+    }
+
+    summary {
+      color: #00a8fc;
+      font-size: 0.9rem;
+      cursor: pointer;
+    }
+
+    details[open] summary {
+      margin-bottom: 10px;
+    }
+
+    #status {
+      min-height: 1.2em;
+      font-size: 0.9rem;
+      color: #b5bac1;
+    }
+
+    #status.error {
+      color: #f23f43;
+    }
+
+    .link-button {
+      padding: 0;
+      border: none;
+      background: none;
+      color: #00a8fc;
+      font: inherit;
+      font-size: 0.9rem;
+      text-decoration: underline;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1 id="heading">ChatApp</h1>
+    <p id="message"></p>
+
+    <!-- Waiting for the link to be clicked. -->
+    <div id="waiting" hidden>
+      <button type="button" id="resend" class="button secondary">Send again</button>
+      <!-- <details>: the browser's own fold-out. Clicking the <summary> opens it. -->
+      <details>
+        <summary>Wrong address? Change it</summary>
+        <form id="change-form">
+          <input id="new-email" type="email" autocomplete="email" placeholder="Your email address" required>
+          <button class="button">Send the link there</button>
+        </form>
+      </details>
+      <p id="status"></p>
+      <p><button type="button" id="logout" class="link-button">Log out</button></p>
+    </div>
+
+    <!-- Done (or nothing to do here): on to the chat, or to logging in. -->
+    <a id="continue" class="button" href="/" hidden>Open the chat</a>
+  </main>
+
+  <script>
+    const heading = document.getElementById("heading");
+    const message = document.getElementById("message");
+    const waiting = document.getElementById("waiting");
+    const statusLine = document.getElementById("status");
+    const continueButton = document.getElementById("continue");
+    const changeForm = document.getElementById("change-form");
+    const newEmailInput = document.getElementById("new-email");
+
+    // How the email's link went, if we came from it: verified, changed, taken or expired.
+    const result = new URLSearchParams(location.search).get("result");
+
+    // The message is built from text pieces and <strong> elements, never innerHTML: an email
+    // address is something someone typed, so it must never be able to run as code.
+    function say(...parts) {
+      message.replaceChildren();
+      for (const part of parts) {
+        if (Array.isArray(part)) {  // ["strong", "kari@example.com"]: in bold
+          const strong = document.createElement("strong");
+          strong.textContent = part[1];
+          message.append(strong);
+        } else {
+          message.append(part);
+        }
+      }
+    }
+
+    function showContinue(loggedIn) {
+      continueButton.hidden = false;
+      continueButton.textContent = loggedIn ? "Open the chat" : "Log in";
+      continueButton.href = loggedIn ? "/" : "/login";
+    }
+
+    function showStatus(text, isError) {
+      statusLine.textContent = text;
+      statusLine.className = isError ? "error" : "";
+    }
+
+    async function postJson(url, data) {
+      try {
+        const response = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data),
+        });
+        const answer = await response.json().catch(() => ({}));
+        if (response.ok) return { ok: true, data: answer };
+        return { ok: false, error: typeof answer.detail === "string" ? answer.detail : "Something went wrong." };
+      } catch {
+        return { ok: false, error: "No connection. Try again in a moment." };
+      }
+    }
+
+    async function getStatus() {
+      const response = await fetch("/verify/status");  // {logged_in, verified, username, email, pending_email}
+      return response.json();
+    }
+
+    async function start() {
+      const status = await getStatus();
+
+      // Back from the email's link.
+      if (result === "verified") {
+        heading.textContent = "Email verified ✓";
+        say("Thanks! Your account is ready.");
+        showContinue(status.logged_in && status.verified);
+        return;
+      }
+      if (result === "changed") {
+        heading.textContent = "Email changed ✓";
+        say("Your new email address is saved. Password reset links go there from now on.");
+        showContinue(status.logged_in && status.verified);
+        return;
+      }
+      if (result === "taken") {
+        heading.textContent = "Address taken";
+        say("Another account started using that address in the meantime, so your email stays as it was.");
+        showContinue(status.logged_in && status.verified);
+        return;
+      }
+
+      const expired = result === "expired";
+      if (!status.logged_in) {
+        if (!expired) {
+          location.replace("/login");  // nothing to wait for here
+          return;
+        }
+        heading.textContent = "That link has expired";
+        say("It's more than a day old, or it was already used. Log in, and you can send a new one.");
+        showContinue(false);
+        return;
+      }
+      if (status.verified) {
+        if (!expired) {
+          location.replace("/");  // verified already: straight to the chat
+          return;
+        }
+        heading.textContent = "That link has expired";
+        say("It's more than a day old, or it was already used. (In Settings → My Account you can send a new one.)");
+        showContinue(true);
+        return;
+      }
+
+      // A new account, waiting for its link.
+      heading.textContent = "Check your inbox";
+      say(
+        expired ? "That link has expired, but you can send a new one. " : "",
+        "We sent a link to ", ["strong", status.email], ". Click it to finish making your account.",
+      );
+      waiting.hidden = false;
+
+      // Clicked the link somewhere else (on a phone, say)? Then on to the chat from here too.
+      setInterval(async () => {
+        const now = await getStatus().catch(() => null);
+        if (now?.verified) location.replace("/");
+      }, 5000);
+    }
+
+    document.getElementById("resend").addEventListener("click", async () => {
+      const answer = await postJson("/verify/resend", {});
+      if (answer.ok) showStatus("Sent! Check your inbox, and the spam folder.", false);
+      else showStatus(answer.error, true);
+    });
+
+    changeForm.addEventListener("submit", async (event) => {
+      event.preventDefault();  // (the page itself mustn't reload)
+      const answer = await postJson("/verify/change", { email: newEmailInput.value });
+      if (!answer.ok) {
+        showStatus(answer.error, true);
+        return;
+      }
+      say("We sent a new link to ", ["strong", answer.data.email], ". Click it to finish making your account.");
+      changeForm.reset();
+      changeForm.closest("details").open = false;
+      showStatus("Sent!", false);
+    });
+
+    document.getElementById("logout").addEventListener("click", async () => {
+      await postJson("/logout", {});
+      location.replace("/login");
+    });
+
+    start();
+  </script>
+</body>
+</html>

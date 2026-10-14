@@ -19,7 +19,7 @@ JavaScript for the page, no frameworks.
   (`**bold**`, `*italic*`, `` `code` ``, code blocks, quotes, `||spoilers||`), link previews,
   pictures and files (drag, drop or paste), GIF search (GIPHY), unread dots, and history that loads
   as you scroll up.
-- **People:** accounts with an invite code, friends and friend requests, profiles (picture, banner,
+- **People:** accounts by invite link (each one works once), with verified emails, friends and friend requests, profiles (picture, banner,
   status, bio; GIFs too), who's online and who's typing, admins who can tidy up.
 - **Voice and video:** a voice channel everyone can join and calls in DMs, with cameras, AI noise
   suppression (RNNoise), a noise gate and a volume per person. **Screen sharing** up to 1440p at
@@ -105,9 +105,11 @@ Set-ExecutionPolicy -Scope CurrentUser RemoteSigned   # once: lets PowerShell ru
 .\start.ps1          # the chat, on http://localhost:8001, restarting when you change the code (Ctrl+C stops it)
 ```
 
-Open http://localhost:8001, click **Create one**, and make an account (no invite code is needed
-here). Open a second browser window (a private one, so it has its own login) to make a second account
-and chat between them. This uses its own database (`dev.db`) and upload folder (`dev-uploads/`), set in
+Open http://localhost:8001, click **Create one**, and make an account (no invite link is needed
+here: `dev.env` has `REQUIRE_INVITE=0`). There's no mail server either, so the email with the link that
+verifies your address is printed in the server window instead: open that link to get in. Open a
+second browser window (a private one, so it has its own login) to make a second account and chat
+between them. This uses its own database (`dev.db`) and upload folder (`dev-uploads/`), set in
 `dev.env`.
 
 **GIF search** needs a GIPHY key (see [Optional: GIF search](#optional-gif-search)). Put it in a file
@@ -197,7 +199,6 @@ Every setting is explained in the file. The ones to change:
 
 | Setting | What to put |
 |---------|-------------|
-| `INVITE_CODE` | The code people need to create an account. Something hard to guess. |
 | `PUBLIC_URL` | `https://chat.example.com` |
 | `LIVEKIT_URL` | `wss://voice.example.com` |
 | `LIVEKIT_API_SECRET` | A long random secret (see below). |
@@ -250,8 +251,9 @@ carry). So your router has to send two ports straight to the server:
 
 ### 6. Your account, and making yourself admin
 
-Open `https://chat.example.com`, click **Create one**, and make your account with the invite code.
-Then, on the server, make yourself an admin (admins can edit and delete anyone's messages and
+Open `https://chat.example.com`, click **Create one**, and make your account. The very first account
+needs no invite link; everyone after you does. Click the link in the email you get to verify your address
+(without `SMTP_HOST`, it's in `logs\chat.log` instead). Then, on the server, make yourself an admin (admins can edit and delete anyone's messages and
 custom emoji, and read the bug reports):
 
 ```powershell
@@ -267,7 +269,10 @@ cd C:\ChatApp
   If it says *"could not validate external IP"*, the router's forwarding isn't right yet.
 - Restart the server without logging in, and wait a minute: the chat should come back by itself.
 
-Then share the address and the invite code with your friends.
+Then invite your friends: **People** (top left) → **Invite someone** makes a link that lets one person make
+an account, within a week. Anyone in the chat can make them, so friends can invite their friends too, and
+the `invites` table remembers who invited whom. New accounts confirm their email address with a link before
+they get in (and so does a new address from Settings), so password resets always reach them.
 
 **Make it your own:** a new chat starts with #general, #memes and #chattus (the AI bot's, see below).
 Admins (`tools/make_admin.py`) add, rename, move and delete channels, and headings to group them, in

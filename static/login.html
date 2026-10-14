@@ -65,6 +65,17 @@
       display: none !important;
     }
 
+    /* Who invited you, or why you can't make an account (no link, or one that's used up). */
+    #invite-note {
+      margin: 0;
+      padding: 10px 12px;
+      border-radius: 6px;
+      background: #1e1f22;
+      font-size: 0.9rem;
+      line-height: 1.4;
+      text-align: center;
+    }
+
     #error {
       min-height: 1.2em;  /* keep the space even when empty, so the form doesn't jump */
       color: #f23f43;
@@ -107,11 +118,13 @@
 <body>
   <form id="login-form">
     <h1 id="heading">ChatApp</h1>
-    <label>
+    <!-- Creating an account: who invited you, or that you need an invite link (see showMode). -->
+    <p id="invite-note" hidden></p>
+    <label id="username-field">
       Username
       <input id="username" autocomplete="username" required>
     </label>
-    <label>
+    <label id="password-field">
       Password
       <input id="password" type="password" autocomplete="current-password" required>
     </label>
@@ -119,10 +132,6 @@
     <label id="email-field" hidden>
       Email (for resetting your password)
       <input id="email" type="email" autocomplete="email">
-    </label>
-    <label id="invite-field" hidden>
-      Invite code
-      <input id="invite" autocomplete="off">
     </label>
     <div id="error"></div>
     <button id="submit">Log in</button>
@@ -141,13 +150,14 @@
     const usernameInput = document.getElementById("username");
     const passwordInput = document.getElementById("password");
     const emailInput = document.getElementById("email");
-    const inviteInput = document.getElementById("invite");
     const errorBox = document.getElementById("error");
+    const inviteNote = document.getElementById("invite-note");
+    const usernameField = document.getElementById("username-field");
+    const passwordField = document.getElementById("password-field");
 
     const heading = document.getElementById("heading");
     const submitButton = document.getElementById("submit");
     const emailField = document.getElementById("email-field");
-    const inviteField = document.getElementById("invite-field");
     const forgotLink = document.getElementById("forgot");
     const toRegister = document.getElementById("to-register");
     const toLogin = document.getElementById("to-login");
@@ -155,21 +165,39 @@
     // Already in the desktop app? (Tauri puts __TAURI_INTERNALS__ on its pages; browsers don't have it.)
     if ("__TAURI_INTERNALS__" in window) document.getElementById("get-app").hidden = true;
 
-    // The form has two modes: "login" (username and password) and "register" (plus email and invite code).
+    // An invite link (/invite/<code>) brings people here as /login?register&invite=<code>.
+    // URLSearchParams reads the part of the address after the "?".
+    const params = new URLSearchParams(location.search);
+    const inviteCode = params.get("invite") || "";
+    // What the server says about it (/invite-info): {required, valid, inviter}. Until it has
+    // answered, null: the form is shown as usual, and the server checks the invite anyway.
+    let invite = null;
+
+    // The form has two modes: "login" (username and password) and "register" (plus email).
     let mode = "login";
 
     function showMode(newMode) {
       mode = newMode;
       const registering = mode === "register";
+      // Creating an account without a working invite link: no form, just how to get one.
+      const blocked = registering && invite !== null && invite.required && !invite.valid;
       heading.textContent = registering ? "Create account" : "ChatApp";
       submitButton.textContent = registering ? "Create account" : "Log in";
-      emailField.hidden = !registering;
-      inviteField.hidden = !registering;
+      inviteNote.hidden = !registering || invite === null || (!blocked && !invite.inviter);
+      if (blocked) {
+        inviteNote.textContent = inviteCode
+          ? "This invite link doesn't work any more: it has been used, or it's more than a week old. Ask for a new one."
+          : "To make an account, you need an invite link from someone in the chat. Ask a friend for one!";
+      } else if (registering && invite?.inviter) {
+        inviteNote.textContent = `${invite.inviter} invited you to ChatApp 🎉`;  // (textContent: a name is never code)
+      }
+      usernameField.hidden = passwordField.hidden = submitButton.hidden = blocked;
+      emailField.hidden = !registering || blocked;
       forgotLink.hidden = registering;
       toRegister.hidden = registering;
       toLogin.hidden = !registering;
       // A hidden field mustn't be required, or the browser would refuse to log in.
-      emailInput.required = registering;
+      emailInput.required = registering && !blocked;
       // Tells password managers whether to fill in a saved password or suggest a new one.
       passwordInput.autocomplete = registering ? "new-password" : "current-password";
       errorBox.textContent = "";
@@ -179,9 +207,20 @@
     toRegister.querySelector("button").addEventListener("click", () => showMode("register"));
     toLogin.querySelector("button").addEventListener("click", () => showMode("login"));
 
-    // Opened as /login?register (from the landing page's "Create an account"): start there.
-    // URLSearchParams reads the part of the address after the "?".
-    if (new URLSearchParams(location.search).has("register")) showMode("register");
+    // Opened as /login?register (from an invite link, or the landing page's "Create an account"):
+    // start there.
+    if (params.has("register")) showMode("register");
+
+    // Ask the server whether an invite is needed, and about ours; then show the mode again with that.
+    (async () => {
+      try {
+        const response = await fetch("/invite-info?code=" + encodeURIComponent(inviteCode));
+        if (response.ok) invite = await response.json();
+      } catch {
+        return;  // (no answer: the form stays as it is, and the server checks when it's sent)
+      }
+      if (mode === "register") showMode("register");
+    })();
 
     form.addEventListener("submit", async (event) => {
       event.preventDefault();  // stop the browser from reloading the page
@@ -195,14 +234,15 @@
         body: JSON.stringify({
           username: usernameInput.value,
           password: passwordInput.value,
-          email: emailInput.value,    // these two are ignored when logging in
-          invite: inviteInput.value,
+          email: emailInput.value,  // these two are ignored when logging in
+          invite: inviteCode,
         }),
       });
 
       if (response.ok) {
-        // The server has set our session cookie: on to the chat. replace() instead of href:
-        // the chat takes the login page's place in the history, so "back" doesn't lead here.
+        // The server has set our session cookie: on to the chat (or, for a new account, to "check
+        // your inbox" first: the server sends it there). replace() instead of href: the next page
+        // takes the login page's place in the history, so "back" doesn't lead here.
         location.replace("/");
         return;
       }

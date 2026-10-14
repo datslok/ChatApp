@@ -128,6 +128,7 @@
           <button type="button" class="tab" data-tab="requests">Requests <span id="requests-tab-count"></span></button>
           <button type="button" class="tab" data-tab="blocked">Blocked</button>
         </div>
+        <button type="button" id="invite-button">Invite someone</button>
       </header>
       <!-- Only on the Everyone tab (people.js, renderPeopleList): filters it by name. -->
       <input id="people-filter" type="search" placeholder="Search everyone" autocomplete="off" aria-label="Search everyone" hidden>
@@ -275,6 +276,20 @@
     </form>
   </dialog>
 
+  <!-- Invite links (people.js, "Invites"): make one, copy it, cancel unused ones. -->
+  <dialog id="invite-dialog">
+    <div class="invite-content">
+      <h2>Invite someone</h2>
+      <p id="invite-help" class="group-dialog-help"></p>
+      <div id="invite-list"></div>
+      <p id="invite-status" class="action-status"></p>
+      <div class="group-dialog-buttons">
+        <button type="button" id="invite-close" class="secondary">Close</button>
+        <button type="button" id="invite-new">New link</button>
+      </div>
+    </div>
+  </dialog>
+
   <!-- Your own popup, from the bottom-left panel: your profile, the call you're in, Edit profile and
        Log out. Filled in by people.js (renderMePopup). -->
   <dialog id="me-popup" autofocus>  <!-- autofocus: the popup itself gets the focus, not its first button -->
@@ -387,6 +402,15 @@
         <h3>Email</h3>
         <form id="email-form">
           <p>Current: <strong id="current-email">…</strong></p>
+          <!-- A new address waiting for its link to be clicked (server.py, "Email verification"). -->
+          <div id="pending-email" hidden>
+            <p>Waiting for you to verify <strong id="pending-email-address"></strong>: click the link we
+              sent there. Until then, your current address stays.</p>
+            <div class="pending-buttons">
+              <button type="button" id="pending-resend" class="secondary">Send again</button>
+              <button type="button" id="pending-cancel" class="secondary">Cancel</button>
+            </div>
+          </div>
           <label>
             New email
             <input id="new-email" type="email" autocomplete="email" required>
