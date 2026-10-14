@@ -858,6 +858,7 @@ function addSeasonBadge() {
 
 function openSeasonVideo() {
   seasonVideo.src = season.video;
+  seasonVideo.volume = 0.4;  // (0 to 1: it's loud at full volume; the player's slider still goes up)
   seasonDialog.showModal();
   seasonVideo.play().catch(() => {});  // (play() returns a promise; if the browser says no, the ▶ button is there)
 }
