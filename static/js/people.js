@@ -452,7 +452,8 @@ const inviteStatus = document.getElementById("invite-status");
 function showInvites(answer) {
   document.getElementById("invite-help").textContent =
     `Each link lets one person make an account, within ${answer.days} days. Send it to them yourself.`;
-  inviteList.replaceChildren(...answer.invites.map(makeInviteRow));
+  // (Not .map(makeInviteRow): map also passes each one's position, which would land in onCancel.)
+  inviteList.replaceChildren(...answer.invites.map((invite) => makeInviteRow(invite)));
   if (answer.invites.length === 0) {
     const note = document.createElement("p");
     note.className = "empty-note";
@@ -466,6 +467,7 @@ function showInvites(answer) {
 function makeInviteRow(invite, onCancel = () => inviteAction(`/invites/${encodeURIComponent(invite.code)}/cancel`)) {
   const row = document.createElement("div");
   row.className = "invite-row";
+  row.dataset.code = invite.code;  // (so New link can find its new row)
   // A read-only text box, so the whole link can also be selected and copied by hand.
   const link = document.createElement("input");
   link.readOnly = true;
@@ -497,23 +499,52 @@ function makeInviteRow(invite, onCancel = () => inviteAction(`/invites/${encodeU
   return row;
 }
 
-// New link and × both answer with the whole list again.
+// New link and × both answer with the whole list again. Returns that answer (null if it failed).
 async function inviteAction(url) {
   inviteStatus.textContent = "";
+  inviteStatus.classList.remove("success");
   const result = await postJson(url, {}).catch(() => ({ ok: false, error: "No connection. Try again in a moment." }));
-  if (result.ok) showInvites(result.data);
-  else inviteStatus.textContent = result.error;
+  if (!result.ok) {
+    inviteStatus.textContent = result.error;
+    return null;
+  }
+  showInvites(result.data);
+  return result.data;
+}
+
+// New link: make it, then show clearly that it worked. The new one is the code that wasn't in the
+// list before; it goes straight onto the clipboard (that's what you'd do next anyway), gets
+// highlighted and scrolled into view, and a green line says so.
+async function makeInvite() {
+  const before = new Set([...inviteList.querySelectorAll(".invite-row")].map((row) => row.dataset.code));
+  const answer = await inviteAction("/invites");
+  const invite = answer?.invites.find((item) => !before.has(item.code));
+  if (!invite) return;  // (it failed: inviteAction showed why)
+  const row = inviteList.querySelector(`.invite-row[data-code="${CSS.escape(invite.code)}"]`);
+  row?.classList.add("new");
+  row?.scrollIntoView({ block: "nearest" });
+  let copied = true;
+  try {
+    await navigator.clipboard.writeText(invite.link);
+  } catch {
+    copied = false;  // (not allowed here: Copy, or select it by hand)
+  }
+  inviteStatus.textContent = copied
+    ? "New link made and copied ✓ Paste it to the person you're inviting."
+    : "New link made ✓ Click Copy to copy it.";
+  inviteStatus.classList.add("success");
 }
 
 document.getElementById("invite-button").addEventListener("click", async () => {
   inviteStatus.textContent = "";
+  inviteStatus.classList.remove("success");
   inviteList.replaceChildren();
   inviteDialog.showModal();
   const response = await fetch("/invites").catch(() => null);
   if (response?.ok) showInvites(await response.json());
   else inviteStatus.textContent = "Couldn't load your links. Try again in a moment.";
 });
-document.getElementById("invite-new").addEventListener("click", () => inviteAction("/invites"));
+document.getElementById("invite-new").addEventListener("click", makeInvite);
 document.getElementById("invite-close").addEventListener("click", () => inviteDialog.close());
 
 // ---------- Banning ----------

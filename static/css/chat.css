@@ -802,6 +802,14 @@ body {
   color: inherit;
   cursor: pointer;
 }
+/* The link New link just made (people.js, makeInvite): a frame in the accent colour. */
+.invite-row.new input {
+  outline: 2px solid var(--accent);
+}
+/* "New link made and copied ✓": green, not the usual red of a problem. */
+.action-status.success {
+  color: var(--green);
+}
 .invite-row .invite-expires {
   grid-column: 1 / -1;  /* the whole row's width, under the rest */
   margin-bottom: 6px;
