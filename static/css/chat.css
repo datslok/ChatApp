@@ -3831,6 +3831,53 @@ button.download-button {
   line-height: 1;
 }
 
+/* The line-drawn smiley (on the emoji button and in a message's hover bar): drawn with lines in the
+   text's colour ("currentColor"), not filled; the eyes are small filled dots. 1.25em: the size of the
+   emoji it replaced. */
+.smiley-icon {
+  display: block;
+  width: 1.25em;
+  height: 1.25em;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+}
+.smiley-icon .eye {
+  fill: currentColor;
+  stroke: none;
+}
+#chat-form #compose-emoji {
+  color: var(--text-muted);  /* quieter until pointed at */
+}
+#chat-form #compose-emoji:hover {
+  color: var(--text-strong);
+}
+
+/* The Emoji | GIF tabs at the top of the pickers: only on phones (see the @media rules below), where
+   one button opens both. */
+.picker-tabs {
+  display: none;
+  gap: 4px;
+  padding: 8px 8px 0;
+}
+.picker-tabs button {
+  flex: 1;
+  padding: 6px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.picker-tabs button.active {
+  background: var(--bg-active);
+  color: var(--text-strong);
+}
+
 /* The word GIF, as small bold letters, the same height as the + and 😀 next to it. */
 #chat-form #gif-button {
   padding: 10px;
@@ -4525,14 +4572,24 @@ button.download-button {
     padding: 8px;
   }
 
-  /* Four buttons around the text box: a little slimmer, so the box keeps room to type in. */
+  /* Around the text box: +, the smiley (which opens the GIFs too: the pickers get Emoji | GIF tabs) and
+     Send. No GIF button of its own, and slimmer buttons, so the box has room to type in. */
   #chat-form #attach-button,
   #chat-form #compose-emoji {
     padding: 10px;
   }
 
   #chat-form #gif-button {
-    padding: 10px 8px;
+    display: none;
+  }
+
+  .picker-tabs {
+    display: flex;
+  }
+
+  /* Picking a reaction: emoji only (there are no GIF reactions). */
+  #emoji-picker.reacting .picker-tabs {
+    display: none;
   }
 
   #chat-form > button:last-child {

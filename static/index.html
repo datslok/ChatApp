@@ -202,7 +202,9 @@
              the server's limit when it connects; 2000 is just the starting value. -->
         <textarea id="message-input" rows="1" maxlength="2000" autocomplete="off"></textarea>
         <button type="button" id="gif-button" title="GIFs">GIF</button>
-        <button type="button" id="compose-emoji" class="emoji open-picker" title="Emoji">😀</button>
+        <!-- A line-drawn smiley (an SVG in the text's colour), calmer than a colourful 😀. On phones it also
+             opens the GIFs: the pickers there have Emoji | GIF tabs (messages.js, "One button on phones"). -->
+        <button type="button" id="compose-emoji" class="open-picker" title="Emoji" aria-label="Emoji"><svg class="smiley-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M8.5 14.5c.9 1.3 2.1 2 3.5 2s2.6-.7 3.5-2" /><circle class="eye" cx="9" cy="10" r="1.2" /><circle class="eye" cx="15" cy="10" r="1.2" /></svg></button>
         <button>Send</button>
       </form>
     </div>
@@ -913,6 +915,8 @@
 
   <!-- The emoji picker for reactions: one element, reused for every message. -->
   <div id="emoji-picker" hidden>
+    <!-- Phones only (the CSS): switch to the GIFs in the same place. Not when picking a reaction. -->
+    <div class="picker-tabs"><button type="button" class="active">Emoji</button><button type="button" data-switch="gif">GIF</button></div>
     <input id="emoji-search" placeholder="Search emoji" autocomplete="off">
     <div id="emoji-categories"></div>
     <div id="emoji-grid"></div>
@@ -920,6 +924,7 @@
 
   <!-- GIF search (messages.js, "GIFs"): opened by the GIF button by the text box. -->
   <div id="gif-picker" hidden>
+    <div class="picker-tabs"><button type="button" data-switch="emoji">Emoji</button><button type="button" class="active">GIF</button></div>
     <input id="gif-search" type="search" placeholder="Search GIPHY" autocomplete="off" aria-label="Search GIFs">
     <div id="gif-grid"></div>
     <p id="gif-note"></p>

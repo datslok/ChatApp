@@ -30,10 +30,15 @@ drawerBackdrop.addEventListener("click", closeDrawers);
 //   - an open drawer or popup is one step on top: { channel: "memes", overlay: true }
 // Back closes what's open; with nothing open, it goes to the channel before.
 
+// (The emoji and GIF pickers aren't <dialog>s, so they're asked by name. getElementById: messages.js,
+// which has them as constants, loads after this file.)
+const pickerElements = [document.getElementById("emoji-picker"), document.getElementById("gif-picker")];
+
 function somethingOpen() {
   return sidebarElement.classList.contains("open")
     || membersElement.classList.contains("open")
-    || document.querySelector("dialog[open]") !== null;
+    || document.querySelector("dialog[open]") !== null
+    || pickerElements.some((picker) => !picker.hidden);
 }
 
 // history.back() takes a moment: until its popstate arrives, don't step back a second time.
@@ -74,6 +79,9 @@ for (const drawer of [sidebarElement, membersElement]) {
 for (const dialog of document.querySelectorAll("dialog")) {
   historyObserver.observe(dialog, { attributes: true, attributeFilter: ["open"] });
 }
+for (const picker of pickerElements) {
+  historyObserver.observe(picker, { attributes: true, attributeFilter: ["hidden"] });
+}
 
 // Back (or forward) was pressed. event.state is the object we gave that step.
 window.addEventListener("popstate", (event) => {
@@ -81,6 +89,8 @@ window.addEventListener("popstate", (event) => {
   const state = event.state;
   closeDrawers();
   for (const dialog of document.querySelectorAll("dialog[open]")) dialog.close();
+  if (!emojiPicker.hidden) closeEmojiPicker();  // (their own close: the GIFs also stop playing)
+  if (!gifPicker.hidden) closeGifPicker();
 
   if (state?.overlay) {
     // Forward into a "something was open" step: there's nothing to reopen, so skip past it.
@@ -393,11 +403,15 @@ input.addEventListener("keydown", (event) => {
   }
 });
 
-// The 😀 next to the text box: opens the picker in "insert" mode (or closes it again).
+// The smiley next to the text box: opens the picker in "insert" mode (or closes it again). On phones
+// it opens the GIF picker instead when that was the last one used (messages.js, "One button on phones").
 const composeEmojiButton = document.getElementById("compose-emoji");
 composeEmojiButton.addEventListener("click", () => {
-  if (!emojiPicker.hidden && pickerMode === "insert") {
+  if ((!emojiPicker.hidden && pickerMode === "insert") || !gifPicker.hidden) {
     closeEmojiPicker();
+    closeGifPicker();
+  } else if (window.innerWidth <= 700 && lastPickerTab === "gif") {
+    openGifPicker();
   } else {
     openEmojiPicker(null, composeEmojiButton, "insert");
   }

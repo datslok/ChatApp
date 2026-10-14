@@ -448,6 +448,7 @@ function ensureEmojiData() {
 async function openEmojiPicker(messageId, button, mode = "react") {
   pickerMessageId = messageId;
   pickerMode = mode;
+  emojiPicker.classList.toggle("reacting", mode === "react");  // (no Emoji | GIF tabs for a reaction)
   await ensureEmojiData();
   buildCategoryButtons();  // (every time: the ⭐ button depends on the mode)
   emojiSearch.value = "";
@@ -723,11 +724,56 @@ gifSearch.addEventListener("keydown", (event) => {
   showGifs(gifSearch.value);
 });
 
-// Close it by clicking anywhere else (but the GIF button, which toggles it), or with Esc.
+// Close it by clicking anywhere else (but the GIF button and, on phones, the smiley: they toggle it), or with Esc.
 document.addEventListener("pointerdown", (event) => {
-  if (gifPicker.hidden || gifPicker.contains(event.target) || gifButton.contains(event.target)) return;
+  if (gifPicker.hidden || gifPicker.contains(event.target) || gifButton.contains(event.target)
+      || composeEmojiButton.contains(event.target)) return;
   closeGifPicker();
 });
+
+// ----- One button on phones
+//
+// On phones there's no GIF button (the CSS hides it), so the text box has more room: the smiley opens
+// whichever of the two pickers was used last, and both have Emoji | GIF tabs at the top (also only
+// on phones) to switch between them, in the same place at the bottom of the screen.
+let lastPickerTab = "emoji";
+
+function showPickerTab(name) {
+  lastPickerTab = name;
+  if (name === "gif") {
+    closeEmojiPicker();
+    if (gifPicker.hidden) openGifPicker();
+  } else {
+    closeGifPicker();
+    openEmojiPicker(null, composeEmojiButton, "insert");
+  }
+}
+
+for (const tab of document.querySelectorAll(".picker-tabs [data-switch]")) {
+  tab.addEventListener("click", () => showPickerTab(tab.dataset.switch));
+}
+
+// The line-drawn smiley (the same as the one in index.html), for a message's react button. Made with
+// createElementNS: SVG elements need SVG's own "namespace", or the browser treats them as unknown HTML.
+function makeSmileyIcon() {
+  const svgNs = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(svgNs, "svg");
+  svg.setAttribute("class", "smiley-icon");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("aria-hidden", "true");
+  const parts = [
+    ["circle", { cx: 12, cy: 12, r: 9 }],
+    ["path", { d: "M8.5 14.5c.9 1.3 2.1 2 3.5 2s2.6-.7 3.5-2" }],
+    ["circle", { class: "eye", cx: 9, cy: 10, r: 1.2 }],
+    ["circle", { class: "eye", cx: 15, cy: 10, r: 1.2 }],
+  ];
+  for (const [tag, attributes] of parts) {
+    const part = document.createElementNS(svgNs, tag);
+    for (const [name, value] of Object.entries(attributes)) part.setAttribute(name, value);
+    svg.appendChild(part);
+  }
+  return svg;
+}
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && !gifPicker.hidden) closeGifPicker();
 });
@@ -1696,9 +1742,10 @@ function showMessage(message, follow = true) {
   replyButton.addEventListener("click", () => startReply(message.id, message.name));
   const reactButton = document.createElement("button");
   reactButton.type = "button";
-  reactButton.className = "emoji open-picker";
-  reactButton.textContent = "😀";
+  reactButton.className = "open-picker";
+  reactButton.appendChild(makeSmileyIcon());
   reactButton.title = "Add reaction";
+  reactButton.setAttribute("aria-label", "Add reaction");
   reactButton.addEventListener("click", () => openEmojiPicker(message.id, reactButton));
   actions.append(reactButton, replyButton);
   if (!message.kind) {
