@@ -83,6 +83,8 @@
     - [x] Up arrow in an empty text box edits your last message (was already there)
     - [x] A "New messages" divider where you stopped reading (also for messages that came while away)
     - [x] GIF search (GIPHY; Tenor's API was shut down in June 2026): the GIF button, saved on our server when sent
+    - [ ] Mobile online icon
+    - [ ] Seasonal theme video
     - [ ] Soundboard in voice
     - [ ] Push-to-talk, as an alternative to the noise gate
     - [x] Bug: after scrolling up, sending a message doesn't scroll back down to it (sending should always jump to the bottom)

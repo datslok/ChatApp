@@ -47,3 +47,6 @@ logs/
 
 # Moving the server: holds the secrets and everyone's messages
 chatapp-data.zip
+
+# Your own files kept next to the code, never committed (like videos for trying things out)
+external/
