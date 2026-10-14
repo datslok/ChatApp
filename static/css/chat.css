@@ -2010,7 +2010,7 @@ body.mini-hidden :fullscreen .tile-strip {
 }
 
 /* "Get the Windows app": a card with a big download arrow, the text, and a green Download
-   button: the banner above the chat. (Settings has its own small link, #desktop-app.) */
+   button: the banner above the chat, only in browsers on Windows (notifications.js). */
 .app-card {
   display: flex;
   align-items: center;
@@ -3383,36 +3383,6 @@ button.download-button {
   color: var(--text-strong);
 }
 
-/* "Get the Windows app", pushed to the bottom of the tabs (margin-top: auto takes up all the
-   free space above it). */
-#desktop-app {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: auto;
-  padding: 8px 10px;
-  border-radius: 4px;
-  color: var(--text);
-  font-size: 0.9rem;
-  font-weight: 600;
-  text-decoration: none;
-}
-
-#desktop-app:hover {
-  background: var(--bg-hover-dim);
-}
-
-/* display: flex above would beat the "hidden" attribute (inside the app), so say it explicitly. */
-#desktop-app[hidden] {
-  display: none;
-}
-
-#desktop-app .download-icon {
-  width: 28px;
-  height: 28px;
-  padding: 6px;
-}
-
 /* The page side. Only this scrolls. (The × is placed on the popup itself, so it stays put.) */
 #settings-pages {
   overflow-y: auto;
@@ -4731,14 +4701,9 @@ button.download-button {
     display: none;
   }
 
-  #settings .settings-tab,
-  #desktop-app {
+  #settings .settings-tab {
     flex-shrink: 0;  /* keep their size, so the row scrolls instead of squeezing them */
     white-space: nowrap;
-  }
-
-  #desktop-app {
-    margin-top: 0;
   }
 
   #settings-pages {

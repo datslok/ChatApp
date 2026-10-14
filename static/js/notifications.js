@@ -146,7 +146,6 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 // Already in the desktop app? Then "download the app" makes no sense: hide it.
 // (Tauri puts __TAURI_INTERNALS__ on its pages; ordinary browsers don't have it.)
 const inDesktopApp = "__TAURI_INTERNALS__" in window;
-if (inDesktopApp) document.getElementById("desktop-app").hidden = true;
 
 // ----- Push notifications (the phone app): notifications on this device while the chat is closed.
 // Turning them on asks the browser for a "subscription": this device's address at its push
