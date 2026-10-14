@@ -1027,8 +1027,7 @@ function userMenuItems(userId) {
   }
   if (blockedIds.has(userId)) {
     items.push("-", ["Unblock", () => friendAction("unblock", userId, peopleStatus)]);
-    if (mayBan(person)) items.push(["Ban…", () => openBanDialog(person), "danger"]);
-    return items;
+    return items.concat(adminMenuItems(person));
   }
   if (friendIds.has(userId)) {
     items.push(["Message", () => openDm(userId)]);
@@ -1069,8 +1068,18 @@ function userMenuItems(userId) {
       }
     }, "danger"]);
   }
+  return items.concat(adminMenuItems(person));
+}
+
+// The menu's admin part, under a line of its own: Make admin / Remove admin for the owner (the same
+// as Settings → Admin → Admins: settings.js, setAdmin, which asks first), and Ban… for admins.
+function adminMenuItems(person) {
+  const items = [];
+  if (amOwner() && !person.bot && !person.owner) {
+    items.push([person.admin ? "Remove admin" : "Make admin", () => setAdmin(person, !person.admin)]);
+  }
   if (mayBan(person)) items.push(["Ban…", () => openBanDialog(person), "danger"]);
-  return items;
+  return items.length ? ["-", ...items] : [];
 }
 
 // Show the menu at the pointer (kept inside the window), with the person's name on top.
