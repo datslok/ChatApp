@@ -225,7 +225,9 @@ function updatePushToTalk() {
   const ptt = voiceSettings.inputMode === "ptt";
   const talking = ptt && (document.hasFocus() ? pttHeldHere : pttHeldApp);
   // (No audio engine yet: nothing to tell. setUpAudio tells a new gate the mode itself.)
-  if (voiceEngine) voiceEngine.then(({ gate }) => gate.port.postMessage({ ptt, talking })).catch(() => {});
+  // (The threshold too: a gate from before push to talk, still in a browser's cache, only reads that.)
+  const message = { threshold: voiceSettings.gate, ptt, talking };
+  if (voiceEngine) voiceEngine.then(({ gate }) => gate.port.postMessage(message)).catch(() => {});
 }
 
 // A letter (or space) key pressed while typing in a text box: that's typing, not talking.
