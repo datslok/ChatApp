@@ -105,7 +105,13 @@ the point is for me to understand how it works, not just to have it done.
   with `scripts/seasonal-upload.ps1`, and in backup.ps1/export/import/backup-fetch. Halloween's is "SpOwOky OwOky
   Pumpkin Song", Christmas's "padowo padowo" (the user's own copies in `external/`). The panel's own picture is 32px (24 elsewhere).
 - `static/emoji.json`: every emoji for the reaction picker (and the server's list of allowed reactions),
-  made from Unicode's `emoji-test.txt` by `tools/make_emoji_json.py`.
+  made from Unicode's `emoji-test.txt` by `tools/make_emoji_json.py`. The page only offers the ones the
+  device can draw (messages.js `makeEmojiTester`: drawn on a canvas in black and in white, a colour emoji
+  ignores the paint; wider than 1.5 emoji = a ZWJ sequence fallen apart), so new emoji appear as fonts catch up.
+  Country flags: Segoe UI Emoji has none (letters), so chat.css's `@font-face` "Twemoji Country Flags"
+  (`static/flags-0.1.10/`, the woff2 + LICENSE from npm's country-flag-emoji-polyfill 0.1.10, checked against
+  npm's integrity hash; served at `/flags-0.1.10/` like KaTeX) comes first in body's and `.emoji`'s fonts;
+  `unicode-range` limits it to the flag characters. The tester `document.fonts.load`s it first.
 - Maths in messages (messages.js, `makeMath`): `$...$` inline and `$$...$$` on its own line, with Pandoc's
   rule so money stays text (no space inside the dollars, no digit after the closing one), `\$` a real dollar.
   Drawn by KaTeX: `static/katex-0.18.9/` (`katex.min.js`, `katex.min.css`, the woff2 fonts and LICENSE, from

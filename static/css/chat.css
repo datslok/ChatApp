@@ -1,5 +1,17 @@
 /* The chat page's styles (static/index.html). */
 
+/* Country flags: Windows' emoji font (Segoe UI Emoji) has none and shows two letters ("NO") instead.
+   This font has only the flags (Twemoji's, from npm's country-flag-emoji-polyfill 0.1.10). Because of
+   unicode-range, the browser uses it only for the flag characters (and only downloads it when one is
+   on the page); every other character skips it and uses the next font in the list. */
+@font-face {
+  font-family: "Twemoji Country Flags";
+  unicode-range: U+1F1E6-1F1FF, U+1F3F4, U+E0062-E0063, U+E0065, U+E0067,
+    U+E006C, U+E006E, U+E0073-E0074, U+E0077, U+E007F;
+  src: url("/flags-0.1.10/TwemojiCountryFlags.woff2") format("woff2");
+  font-display: swap;  /* show the letters until it has loaded, rather than nothing */
+}
+
 /* The colours, as variables ("custom properties"): defined once here, used everywhere below as
    var(--name). A theme only has to give these new values. Named by what they're for, not what
    they look like, so they still make sense in a light theme. (Black for shadows, backdrops and
@@ -198,7 +210,7 @@ body {
   inset: 0;
   overflow: hidden;
   display: flex;  /* sidebar, chat and online list side by side */
-  font-family: var(--font);  /* Settings → Appearance (appearance.js) */
+  font-family: "Twemoji Country Flags", var(--font);  /* the flags (see the top), then Settings → Appearance's */
   background: var(--bg-main);
   color: var(--text);
 }
@@ -2160,7 +2172,7 @@ button.download-button {
 /* Emoji are characters, drawn by the device's emoji font. Name the common ones explicitly,
    so emoji always use them (and not a plain text font that draws them black and white). */
 .emoji {
-  font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif;
+  font-family: "Twemoji Country Flags", "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif;
 }
 
 /* A custom emoji is a small picture, sized like text by default. */
@@ -3952,7 +3964,7 @@ button.download-button {
 
 /* A message that's only emoji: shown big, like Discord's "jumbo" emoji. */
 .message-text.jumbo {
-  font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif;
+  font-family: "Twemoji Country Flags", "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif;
   font-size: 2.6rem;
   line-height: 1.2;
 }

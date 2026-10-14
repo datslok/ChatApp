@@ -3055,6 +3055,8 @@ app.mount("/icons", FreshStaticFiles(directory="static/icons"), name="icons")  #
 app.mount("/static/seasonal", FreshStaticFiles(directory="static/seasonal"), name="seasonal")  # the seasons' pictures (the Santa hat)
 # KaTeX, which draws the $maths$ in messages (messages.js), one fixed version from npm (see CLAUDE.md).
 app.mount("/katex-0.18.9", LastingStaticFiles(directory="static/katex-0.18.9"), name="katex")
+# Country flags for Windows, whose emoji font has none (chat.css's @font-face; see CLAUDE.md).
+app.mount("/flags-0.1.10", LastingStaticFiles(directory="static/flags-0.1.10"), name="flags")
 
 
 @app.get("/emoji.json")

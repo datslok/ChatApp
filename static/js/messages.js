@@ -442,6 +442,11 @@ function ensureEmojiData() {
       for (const [emoji, name] of group.emoji) emojiNames.set(emoji, name);  // (all: other people's reactions)
     }
     // Only offer what this device can draw: emoji.json follows the newest Unicode, fonts lag behind.
+    // The flag font (chat.css) only downloads when a flag is on the page, so make it load first, or
+    // the flags would be tested before it's there (and fail). If it can't load, they simply fail.
+    try {
+      await document.fonts.load('16px "Twemoji Country Flags"', "🇳🇴");
+    } catch {}
     const canDraw = makeEmojiTester();
     emojiGroups = groups
       .map((group) => ({ name: group.name, emoji: group.emoji.filter(([emoji]) => canDraw(emoji)) }))
@@ -471,7 +476,7 @@ function makeEmojiTester() {
   const context = canvas.getContext("2d", { willReadFrequently: true });
   if (!context) return () => true;  // (no canvas: offer everything, as before)
   // The same fonts as .emoji in chat.css, so we test what the page will actually show.
-  context.font = `${size - 4}px "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif`;
+  context.font = `${size - 4}px "Twemoji Country Flags", "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif`;
   context.textBaseline = "top";
   const oneWidth = context.measureText("😀").width;
 
@@ -483,9 +488,6 @@ function makeEmojiTester() {
   }
 
   return (emoji) => {
-    // Country flags (two "regional indicator" letters, 🇳 + 🇴 = 🇳🇴) always stay: Windows draws them
-    // as the two letters, which still says which country.
-    if (/^[\u{1F1E6}-\u{1F1FF}]{2}$/u.test(emoji)) return true;
     if (context.measureText(emoji).width > oneWidth * 1.5) return false;  // fell apart
     const black = pixels(emoji, "#000");
     const white = pixels(emoji, "#fff");
