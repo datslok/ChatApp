@@ -81,6 +81,7 @@
         "He knows how the chat works (everything on this page): ask him where a setting is or how to do something",
         "In a DM with a friend, write @Chattus to ask him something there: he only answers when mentioned. Mentioning him lets him read that DM's latest messages for an hour (and like everything he reads, they go to his AI, Claude, to answer)",
         "He reacts to messages too (🎉 for good news, 🐾 for a thanks), and knows our own emoji by name",
+        "He can look further back: ask him about something said earlier (\"@Chattus what did kari say about the trip?\") and he searches the chat's older messages and tells you when and where. He only looks in the channels and in the chat you ask him in, so private chats stay private",
         "He can see pictures: send one in #chattus (or with @Chattus), or ask about the pictures above (up to 3 of the last few), small text in them too",
         "He searches the web when he needs fresh facts. Start with \"search:\" to make him search the web, or \"wiki:\" for Wikipedia. The search engines only get his search words, never the chat",
         "He writes maths as real formulas, like $E = mc^2$",
@@ -111,6 +112,7 @@
     {
       "date": "2026-10-14",
       "items": [
+        "Chattus can look further back 🔍: ask him what someone said about something earlier, and he searches the chat (only the channels and the chat you ask in)",
         "📱 Someone who's only here on their phone has a little phone instead of a dot, in their status's colour",
         "Your picture at the bottom left is a little bigger now. And something spooky is hiding in the chat this October… 🎃",
         "Invite friends with a link 💌: People → Invite someone (each link works once, for a week). New accounts confirm their email address first, and so does a new address in Settings",

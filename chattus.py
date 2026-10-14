@@ -52,7 +52,7 @@ Only write more when someone asks you to explain something in detail. Use at mos
 The messages you're given are the latest ones in this chat (up to {count}), oldest first. Each one from the others starts
 with when it was sent and who sent it, like "[14:05] kari: hi" (with the date when it wasn't today). Don't start
 yours with a time or your name. You can't see anything older than these: if someone asks about something further
-back, say it's too far back for you to see.
+back, say it's too far back for you to see (unless you can search the chat: see below).
 If you don't know something or aren't sure, look it up with "search" (below) instead of guessing or saying you don't
 know. Only say you don't know when a search can't help, like things about this chat that you can't see.
 The chat draws maths written in LaTeX: $...$ inside a sentence, $$...$$ on a line of its own (no space just inside
@@ -103,7 +103,13 @@ CLAUDE_TOOLS_PROMPT = """
   else empty: real photos are looked up on Wikimedia Commons (Wikipedia's free photo library), you see what was found
   and pick the best, and they're posted with your reply. Use the name it has where it is when that finds more (a
   Norwegian place by its Norwegian name, like "Halden fengsel"), otherwise English. Commons has no memes or
-  screenshots. Otherwise leave it ""."""
+  screenshots. Otherwise leave it "".
+- "search_chat": when someone asks about something said in this chat earlier that isn't in the messages you see
+  (what someone said about something, when something was talked about, a link or a plan from before), put 1-3
+  distinctive words in "words" (a message must have every one of them, so few and specific: "pizza", "trip oslo"),
+  and in "from" a person's name if it's about what they wrote (else ""), and leave everything else empty: you get the
+  messages found, newest first, with when and where they were written, and answer then. "words" may be "" when "from"
+  is enough ("what did kari write last?"). Otherwise leave both ""."""
 # (Single braces: this text is put into SYSTEM_PROMPT as a value, so format() leaves it as it is.)
 
 # The shape every answer must have. llama-server turns it into grammar rules, so the model can't write
@@ -143,13 +149,22 @@ REMIND_SCHEMA = {
                           "required": ["amount", "unit"]}},
     "required": ["what", "day", "time", "in"],
 }
-# With Claude, his first answer may also be a page to read or a reminder; "remind: ..." is only that.
+# Searching the chat's own messages (only with Claude, see search_chat): which words, and from whom.
+CHAT_SEARCH_SCHEMA = {
+    "type": "object",
+    "properties": {"words": {"type": "string"}, "from": {"type": "string"}},
+    "required": ["words", "from"],
+}
+# With Claude, his first answer may also be a page to read, a reminder, pictures to find or a search of
+# the chat; "remind: ..." is only a reminder.
 CLAUDE_ANSWER_SCHEMA = {
     "type": "object",
     "properties": {**ANSWER_OR_SEARCH_SCHEMA["properties"], "read": {"type": "string"}, "remind": REMIND_SCHEMA,
-                   "pictures": {"type": "string"}},
-    "required": ANSWER_OR_SEARCH_SCHEMA["required"] + ["read", "remind", "pictures"],
+                   "pictures": {"type": "string"}, "search_chat": CHAT_SEARCH_SCHEMA},
+    "required": ANSWER_OR_SEARCH_SCHEMA["required"] + ["read", "remind", "pictures", "search_chat"],
 }
+CHAT_SEARCH_RESULTS = 20  # at most this many found messages go to the model (the newest)
+CHAT_SEARCH_TEXT = 300    # characters of each (a long message is cut)
 READ_PAGE_TOKENS = 10_000  # at most this much of a page is read (a long article), so a huge one can't cost much
 ONLY_REMIND_SCHEMA = {"type": "object", "properties": {"remind": REMIND_SCHEMA}, "required": ["remind"]}
 MAX_CUSTOM_EMOJI = 50  # how many of the chat's own emoji the prompt lists by name
@@ -527,6 +542,9 @@ class Chattus:
         self.messages = {}      # channel -> its latest messages (from "history", then live ones)
         self.history_arrived = None  # a Future the reader completes when a joined channel's history comes
         self.my_message = None  # ... and one it completes when the server sends back a message we wrote
+        self.chat_searches = {}  # "ask" number -> the Future its "search_results" completes (search_chat)
+        self.search_asks = 0     # the last "ask" number used
+        self.loop = None         # the event loop (the model runs in threads, which hand searches to it)
         self.queue = asyncio.Queue()  # channels to look at, one after the other
         self.queued = set()     # ... the same, to never queue one twice
         self.answered = set()   # ids of messages we've answered (so never twice, whatever the timing)
@@ -582,6 +600,7 @@ class Chattus:
                 await asyncio.to_thread(self.load_manual)
             except Exception as error:  # without it he still works, he just knows less about the chat
                 log(f"Couldn't load the chat's manual: {error!r}")
+        self.loop = asyncio.get_running_loop()
         ws_url = self.chat_url.replace("http", "ws", 1) + "/ws"
         async with connect(ws_url, additional_headers={"Cookie": self.cookie}, max_size=2**24) as websocket:
             self.websocket = websocket
@@ -643,6 +662,11 @@ class Chattus:
                 self.my_message.set_result(data)  # answer() is waiting for its id (a poll)
             if self.should_answer(data, channel):
                 self.enqueue(channel)
+        elif kind == "search_results":
+            # The answer to a search of the chat (search_chat): to whoever is waiting for that "ask".
+            waiting = self.chat_searches.pop(data.get("ask"), None)
+            if waiting and not waiting.done():
+                waiting.set_result(data.get("results") or [])
         elif kind == "unread":
             # A message somewhere else. "notify" (or a count in "mentions") means it mentions us.
             mentions = data.get("mentions") or {}
@@ -917,6 +941,56 @@ class Chattus:
                     "to ask you something: answer that, and keep out of the rest.")
         return f"You're in #{name}, a channel for everyone. Someone mentioned you (@Chattus)."
 
+    # ---------- Searching the chat ----------
+    #
+    # The same search as the page's 🔍: {"type": "search", ...} over our WebSocket, answered with
+    # "search_results". The model runs in a thread (ask_model), so search_chat hands the asking to the
+    # event loop and waits for it there. He may read more than anyone: every channel, his DM with each
+    # person, every group. So the results are cut to what everyone in the chat he was asked in may see:
+    # the channels, plus that chat itself. Never another DM or group of his.
+
+    async def ask_server_search(self, words, author):
+        self.search_asks += 1
+        ask = self.search_asks
+        self.chat_searches[ask] = self.loop.create_future()
+        await self.send({"type": "search", "query": words, "channel": None, "from": author, "ask": ask})
+        try:
+            return await asyncio.wait_for(self.chat_searches[ask], timeout=15)
+        finally:
+            self.chat_searches.pop(ask, None)
+
+    def search_chat(self, channel, words, name):
+        """The messages found for the model, as lines like "[3 Oct 14:02] in #memes, kari: text", or why
+        there are none. Blocking (from ask_model's thread)."""
+        author = None
+        if name:
+            wanted = name.strip().lstrip("@").lower()
+            matches = [user_id for user_id, person in self.names.items() if person.lower() == wanted]
+            matches = matches or [user_id for user_id, person in self.names.items() if person.lower().startswith(wanted)]
+            if not matches:
+                return f"(Nobody in the chat is called {name}.)"
+            author = matches[0]
+        if not re.search(r"\w", words) and author is None:
+            return "(Nothing to search for.)"
+        try:
+            found = asyncio.run_coroutine_threadsafe(self.ask_server_search(words, author), self.loop).result(timeout=20)
+        except Exception as error:
+            log(f"Searching the chat for {words!r} failed: {error!r}")
+            return "(The search didn't work just now.)"
+        allowed = set(self.channel_names) | {channel}  # the channels, and the chat we were asked in
+        found = [message for message in found if message.get("channel") in allowed][:CHAT_SEARCH_RESULTS]
+        log(f"Searched the chat for {words!r}{f' from {name}' if name else ''}: {len(found)} found.")
+        if not found:
+            return "(Nothing found. Fewer or other words might find something.)"
+        lines = []
+        for message in found:
+            place = "here" if message["channel"] == channel else "in #" + self.channel_names.get(message["channel"], "?")
+            text = self.readable(message["text"]) or ("[sent a file]" if message.get("file") else "")
+            if len(text) > CHAT_SEARCH_TEXT:
+                text = text[:CHAT_SEARCH_TEXT] + "…"
+            lines.append(f"[{self.when(message)}] {place}, {message['name']}: {text}")
+        return "\n".join(lines)
+
     def attachments_to_show(self, messages, target, wanted, lookback=PICTURE_LOOKBACK, earlier=1):
         """The ids of the messages whose file the model gets to see (wanted(file): a picture, say): the
         one he's answering, and the newest `earlier` ones in the `lookback` messages before it ("what's in
@@ -1051,6 +1125,17 @@ class Chattus:
             pictures = answer.get("pictures", "").strip() if self.claude else ""
             if pictures:
                 return self.find_pictures(conversation, pictures)
+            wanted = answer.get("search_chat") if self.claude else None
+            if isinstance(wanted, dict) and (wanted.get("words", "").strip() or wanted.get("from", "").strip()):
+                # What the chat's search finds goes in as a note, and he answers with it (no more searching).
+                words, name = wanted.get("words", "").strip(), wanted.get("from", "").strip()
+                about = f'"{words}"' + (f" from {name}" if name else "") if words else f"messages from {name}"
+                conversation.append({"role": "user", "content": (
+                    f"[Search of the chat for {about}, newest first]\n{self.search_chat(channel, words, name)}\n\n"
+                    "[Now answer the conversation above with this. Say when and where it was said.]"
+                )})
+                answer = self.complete(conversation, ANSWER_SCHEMA)
+                return {"reaction": answer.get("reaction", ""), "reply": answer.get("reply", "")}
             query = answer.get("search", "").strip()
             if not query:
                 return {"reaction": reaction, "reply": answer.get("reply", "")}

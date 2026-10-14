@@ -111,7 +111,7 @@
     - [ ] Push notifications through Firebase Cloud Messaging, ringing calls
     - [ ] Settings: profile, appearance, notifications
     - [ ] Distribution: an APK on the download page, and updates
-- [ ] **23.** Chattus, an AI bot in the chat, with a language model on the server's graphics card
+- [x] **23.** Chattus, an AI bot in the chat, with a language model on the server's graphics card
     - [x] A local model answering (llama.cpp's llama-server with Qwen 3.5 9B; Ollama couldn't find the GTX 1070), started at boot ("ChatApp AI", install.ps1 -AI)
     - [x] A bot account and a script that logs in and connects to the WebSocket: answers @Chattus anywhere, and everything in #chattus and in DMs to him
     - [x] The channel's recent messages as context, answers as replies, a friendly personality with short chat-sized answers (English)
@@ -121,4 +121,4 @@
     - [x] Dice and polls (the model reads what's asked; Python rolls, and posts the poll with numbers to vote with)
     - [x] On Claude Haiku 5.5 instead of the local model (a switch in .env), with Claude's own web search
     - [x] Reminders, with Claude only (the 9B model too often got the time wrong)
-    - [ ] Maybe: searching the chat, a "bot" badge
+    - [x] Searching the chat (with Claude: older messages he can't see; only the channels and the chat he's asked in), and a "bot" badge

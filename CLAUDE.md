@@ -406,7 +406,12 @@ the point is for me to understand how it works, not just to have it done.
   says he only sees those (up to 20) and should say when something is further back; `clean_answer` strips a
   copied "[time]"/"Chattus:". A search he chooses himself that names a chat member isn't sent (the web
   knows nothing about them; forced search:/wiki: always go): the 9B model ignored the prompt's rule.
-  Possible later: letting him page back through a chat ("older", 50 at a time) for questions about it.
+  Searching the chat (only with Claude): a `search_chat` field (`CHAT_SEARCH_SCHEMA`: words, from) in
+  `CLAUDE_ANSWER_SCHEMA`; `search_chat` (in ask_model's thread) hands `ask_server_search` to the event loop
+  (`run_coroutine_threadsafe`; a Future per "ask" in `chat_searches`, completed by handle's "search_results"), the
+  same WebSocket "search" as the page's 🔍. Privacy: the results are cut to the channels plus the chat he was asked
+  in (never another DM or group of his, which he could read); up to `CHAT_SEARCH_RESULTS` 20 lines "[when] here/in
+  #x, name: text" go in as a note, then ANSWER_SCHEMA.
   Since 2026-10-13 he runs on **Claude Haiku 5.5** (`CHATTUS_MODEL=claude-haiku-5-5` and `ANTHROPIC_API_KEY` in
   the server's `.env`; the `anthropic` package), until a better model is found; without `CHATTUS_MODEL` he's back
   on llama-server. `ask()` is the one place that calls a model: for Claude, `for_claude` turns the OpenAI-shaped
