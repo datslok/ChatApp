@@ -1582,7 +1582,7 @@ body.mini-hidden :fullscreen .tile-strip {
   align-items: center;
   gap: 2px;
   margin: 0 -8px -16px;  /* to the sidebar's edges and bottom, through its padding */
-  padding: 6px 8px;
+  padding: 8px;  /* (room around the big picture) */
   background: var(--bg-panel-alt);  /* a little darker than the sidebar */
 }
 
@@ -1615,24 +1615,28 @@ body.mini-hidden :fullscreen .tile-strip {
   border-color: var(--bg-panel-alt);  /* the ring around the dot in the panel's colour */
 }
 
-/* Our own picture here: bigger than in the lists (32px, not 24), with a bigger dot to match. */
+/* Our own picture here: bigger than in the lists (40px, not 24), with a bigger dot to match, and
+   a bit more room between it and the name (and status line) next to it. */
 #user-panel-me .avatar.small {
-  width: 32px;
-  height: 32px;
-  font-size: 0.9rem;
+  width: 40px;
+  height: 40px;
+  font-size: 1.05rem;
 }
 #user-panel-me .person-picture .dot {
-  width: 12px;
-  height: 12px;
+  width: 14px;
+  height: 14px;
+}
+#user-panel-me .person {
+  gap: 12px;
 }
 
 /* The seasonal easter egg: the season's emoji on the top corner of our picture. It tilts a little
    when pointed at, as if it knew something. */
 .season-badge {
   position: absolute;
-  top: -7px;
-  left: -7px;
-  font-size: 0.85rem;
+  top: -8px;
+  left: -8px;
+  font-size: 1rem;
   line-height: 1;
   cursor: pointer;
   filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.5));
