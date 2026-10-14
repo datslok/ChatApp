@@ -12,6 +12,7 @@ use tauri_plugin_autostart::ManagerExt as AutostartExt;  // app.autolaunch()
 use tauri_plugin_notification::NotificationExt;
 use tauri_plugin_opener::OpenerExt;
 use tauri_plugin_updater::UpdaterExt;
+use tauri_plugin_window_state::StateFlags;
 
 fn main() {
     tauri::Builder::default()
@@ -21,9 +22,15 @@ fn main() {
         // Updates: where to look and the public key to check them with are in tauri.conf.json.
         .plugin(tauri_plugin_updater::Builder::new().build())
         // Remembers the window's size, position and whether it's maximized: saved when the app
-        // closes (in %APPDATA%\no.datslok.chat), put back when it starts. Not for the update window,
-        // which should always appear centred at its own size.
-        .plugin(tauri_plugin_window_state::Builder::default().with_denylist(&["update"]).build())
+        // closes (in %APPDATA%\no.datslok.chat), put back when it starts. Not for the update and
+        // loading windows, which should always appear centred at their own size. And not whether
+        // it's visible: the chat window starts hidden behind the loading window (show_chat).
+        .plugin(
+            tauri_plugin_window_state::Builder::default()
+                .with_denylist(&["update", "loading"])
+                .with_state_flags(StateFlags::all() & !StateFlags::VISIBLE)
+                .build(),
+        )
         // Opens links in the default browser. Only our Rust code below uses it: the page isn't
         // allowed to (capabilities/default.json only gives it notifications). Without
         // open_js_links_on_click(false) the plugin adds a script to the page that catches left
@@ -35,16 +42,27 @@ fn main() {
         .plugin(tauri_plugin_autostart::Builder::new().build())
         // The commands the page may call (window.__TAURI_INTERNALS__.invoke("check_for_update")).
         // Made permissions in build.rs, allowed for the chat page in capabilities/default.json.
-        .invoke_handler(tauri::generate_handler![check_for_update, set_zoom, get_autostart, set_autostart, set_push_to_talk,
+        .invoke_handler(tauri::generate_handler![check_for_update, set_zoom, get_autostart, set_autostart, set_push_to_talk, page_ready,
                                                  activity::set_activity_settings, activity::list_programs])
         .setup(|app| {
             // First, before the chat window opens WebView2's storage: repair it if it's damaged.
             repair_local_storage(app.handle());
 
+            // The loading window first: it's in the app, so it shows at once (see show_chat).
+            WebviewWindowBuilder::new(app, "loading", WebviewUrl::App("loading.html".into()))
+                .title("ChatApp")
+                .inner_size(300.0, 240.0)
+                .resizable(false)
+                .decorations(false)  // no title bar: a small card, like Discord's
+                .center()
+                .build()?;
+
             // The chat window, from its settings in tauri.conf.json ("create": false there, so that
-            // we make it here, with a handler added): it shows https://chat.datslok.no.
+            // we make it here, with a handler added): it shows https://chat.datslok.no. Hidden
+            // until the page is ready (show_chat).
             let handle = app.handle().clone();
             WebviewWindowBuilder::from_config(app.handle(), &app.config().app.windows[0])?
+                .visible(false)
                 // A link with target="_blank" asks for a new window. Tauri says no to those unless
                 // we decide, so: open web addresses in the default browser, and never a window here.
                 .on_new_window(move |url, _features| {
@@ -101,6 +119,14 @@ fn main() {
             // Activity: what you're playing or listening to (activity.rs).
             activity::watch(app.handle().clone());
 
+            // Show the chat after 10 seconds even if the page never says it's ready (no internet,
+            // the server down): then it shows its own "reconnecting" banner.
+            let handle = app.handle().clone();
+            std::thread::spawn(move || {
+                std::thread::sleep(std::time::Duration::from_secs(10));
+                show_chat(&handle);
+            });
+
             // Starting with Windows is on by default (the first time only, see below).
             turn_on_autostart_once(app.handle());
 
@@ -110,6 +136,33 @@ fn main() {
         })
         .run(tauri::generate_context!())
         .expect("error while running ChatApp");
+}
+
+// ----- The loading window
+//
+// The chat comes over the internet, so for a few seconds after starting there's nothing to draw:
+// the window used to stay empty. Now the chat window starts hidden, the small loading window
+// (ui/loading.html) shows instead, and the page says when it's ready to be seen: connected, and the
+// first chat drawn (core.js, tellAppReady). Then the chat window appears and the loading one closes.
+
+static CHAT_SHOWN: AtomicBool = AtomicBool::new(false);
+
+fn show_chat(app: &tauri::AppHandle) {
+    if CHAT_SHOWN.swap(true, Ordering::SeqCst) {
+        return;  // only the first time (the page says "ready" again after every reload)
+    }
+    if let Some(main) = app.get_webview_window("main") {
+        let _ = main.show();
+        let _ = main.set_focus();
+    }
+    if let Some(loading) = app.get_webview_window("loading") {
+        let _ = loading.close();
+    }
+}
+
+#[tauri::command]
+fn page_ready(app: tauri::AppHandle) {
+    show_chat(&app);
 }
 
 // True while an update check (or the update itself) is running, so that a second one can't start
@@ -280,6 +333,12 @@ async fn update(app: tauri::AppHandle) -> tauri_plugin_updater::Result<()> {
     let main = app.get_webview_window("main");
     if let Some(main) = &main {
         main.hide()?;
+    }
+    // Found at the start: the update window replaces the loading window too, and the chat
+    // mustn't pop up over it later.
+    CHAT_SHOWN.store(true, Ordering::SeqCst);
+    if let Some(loading) = app.get_webview_window("loading") {
+        let _ = loading.close();
     }
 
     // Count the downloaded bytes, and move the progress bar each time the whole percentage changes

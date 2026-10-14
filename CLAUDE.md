@@ -303,6 +303,10 @@ the point is for me to understand how it works, not just to have it done.
   Updates install silently (installMode "quiet") while our own window, `desktop/ui/update.html`
   (bundled in the app), shows the progress. To test it: `npm run tauri dev -- --config pretend.json`
   with `{"version": "0.1.0"}` in pretend.json, so the live version counts as an update.
+  Since 0.1.21 the chat window starts hidden (window-state restores everything but VISIBLE) behind a small
+  undecorated `desktop/ui/loading.html` (the cat, "Starting ChatApp…", a sliding bar); main.rs `show_chat` shows it
+  and closes the loading window when the page invokes `page_ready` (core.js `tellAppReady`: after the first
+  "history", or "users" on the People page/Lounge), after 10 s at the latest, never over an update window.
 - `tools/make_installer_images.py`: makes the installer's pictures (`desktop/src-tauri/installer/`)
   and the update window's cat (`desktop/ui/cat.png`) from the icon, at twice NSIS's sizes so they stay sharp
   with Windows scaling (`installer/hooks.nsh` keeps their shape). Run it again after changing the icon.

@@ -289,6 +289,13 @@ function channelBeforeReload() {
 
 // Send something to the server, but only if we're connected. Returns true if it was sent.
 // (A closed WebSocket silently throws away what you send, and a connecting one throws an error.)
+// The Windows app keeps this window hidden behind its loading window until we're worth looking at
+// (main.rs, "The loading window"): connected, and the first chat drawn. Saying it again after a
+// reload does nothing; an app from before 0.1.21 doesn't know the command (it showed us at once).
+function tellAppReady() {
+  if (inDesktopApp) window.__TAURI_INTERNALS__.invoke("page_ready").catch(() => {});
+}
+
 function sendToServer(data) {
   if (socket.readyState !== WebSocket.OPEN) return false;
   socket.send(JSON.stringify(data));  // object -> JSON string
@@ -391,6 +398,7 @@ function handleServerMessage(event) {
     // Who has which role, as text: if that changed, the names above messages need their new colour.
     const rolesBefore = JSON.stringify([...people.values()].map((person) => [person.id, person.roles]));
     showUsers(data.users);
+    if (currentChannel === FRIENDS || currentChannel === LOUNGE) tellAppReady();  // (no messages to wait for there)
     if (JSON.stringify(data.users.map((user) => [user.id, user.roles])) !== rolesBefore) {
       redrawMessages();
       renderRoleAdmin();
@@ -455,6 +463,7 @@ function handleServerMessage(event) {
       jumpToMessage(pendingJump);
       pendingJump = null;
     }
+    tellAppReady();  // the chat is filled in: the app may show us now
   } else if (data.type === "older") {
     // The batch we asked for by scrolling up. If we didn't ask (or switched channels and back
     // since, which resets loadingOlder), it no longer fits what's on the page: ignore it.

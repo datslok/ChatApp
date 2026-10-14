@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<!-- The small window the app shows while the chat loads (main.rs, "The loading window"). It's bundled
+     inside the app, so it appears at once, before anything has come over the internet. The chat
+     window stays hidden behind it until the page says it's ready (or 10 seconds have passed). -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>ChatApp</title>
+  <style>
+    /* The same colours as the update window and the chat. */
+    body {
+      margin: 0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      background: #313338;
+      color: #dbdee1;
+      font-family: "Segoe UI", sans-serif;
+      user-select: none;
+      cursor: default;
+    }
+    img { width: 88px; height: 88px; }
+    h1 { margin: 4px 0 6px; font-size: 18px; }
+    /* A bar that keeps sliding across: we can't know how far along loading is, only that it's going. */
+    #track {
+      position: relative;
+      width: 200px;
+      height: 6px;
+      border-radius: 3px;
+      background: #1e1f22;
+      overflow: hidden;
+    }
+    #bar {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 40%;
+      border-radius: 3px;
+      background: #5865f2;
+      animation: slide 1.2s ease-in-out infinite;
+    }
+    /* From just off the left edge to just off the right one, over and over. */
+    @keyframes slide {
+      from { left: -40%; }
+      to { left: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <img src="cat.png" alt="">
+  <h1>Starting ChatApp…</h1>
+  <div id="track"><div id="bar"></div></div>
+</body>
+</html>

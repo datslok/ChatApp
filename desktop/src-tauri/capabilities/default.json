@@ -1,11 +1,11 @@
 {
   "identifier": "default",
-  "description": "What the chat page may ask the app to do: only show notifications, look for an update, set its zoom (Settings → Appearance) and whether it starts with Windows (Settings → App behaviour), which push-to-talk key to watch (Settings → Voice & audio), and what to share as your activity (Settings → App behaviour), only from chat.datslok.no.",
+  "description": "What the chat page may ask the app to do: only show notifications, look for an update, set its zoom (Settings → Appearance) and whether it starts with Windows (Settings → App behaviour), which push-to-talk key to watch (Settings → Voice & audio), what to share as your activity (Settings → App behaviour), and when the chat is ready to be shown, only from chat.datslok.no.",
   "windows": ["main"],
   "remote": {
     "urls": ["https://chat.datslok.no/*"]
   },
   "permissions": ["notification:default", "allow-check-for-update", "allow-set-zoom",
-                  "allow-get-autostart", "allow-set-autostart", "allow-set-push-to-talk",
+                  "allow-get-autostart", "allow-set-autostart", "allow-set-push-to-talk", "allow-page-ready",
                   "allow-set-activity-settings", "allow-list-programs"]
 }
