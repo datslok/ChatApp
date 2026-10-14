@@ -631,7 +631,7 @@ function renderEmojiGrid(query) {
     }
     for (const group of emojiGroups) {
       for (const entry of group.emoji) {
-        if (entry[1].includes(search)) results.push(entry);
+        if (entry[1].toLowerCase().includes(search)) results.push(entry);  // ("flag: Norway", "Santa Claus")
       }
     }
     section(results.length ? "Search results" : "No emoji found", results.slice(0, 300));

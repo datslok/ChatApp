@@ -250,7 +250,8 @@ function findSuggestions(query) {
     const words = query.replaceAll("_", " ");  // ":thumbs_up" searches "thumbs up"
     const ranked = [];
     for (const group of emojiGroups) {
-      for (const [emoji, name] of group.emoji) {
+      for (const [emoji, shownName] of group.emoji) {
+        const name = shownName.toLowerCase();  // (what's typed is lowercase too: "flag: Norway", "Santa Claus")
         // 0: exactly the name; 1: the name starts with it; 2: a later word starts with it;
         // 3: it's somewhere inside
         let rank = null;
@@ -258,14 +259,14 @@ function findSuggestions(query) {
         else if (name.startsWith(words)) rank = 1;
         else if (name.includes(" " + words)) rank = 2;
         else if (name.includes(words)) rank = 3;
-        if (rank !== null) ranked.push({ rank: rank, emoji: emoji, name: name });
+        if (rank !== null) ranked.push({ rank: rank, emoji: emoji, name: name, shownName: shownName });
       }
     }
     // Best rank first; within a rank, shorter names first (usually the more basic emoji:
     // "fire" before "firecracker").
     ranked.sort((a, b) => a.rank - b.rank || a.name.length - b.name.length);
-    for (const { emoji, name } of ranked) {  // { } here takes these two fields out of each item
-      results.push({ icon: () => makeEmojiElement(emoji), insert: emoji, label: name, detail: "" });
+    for (const { emoji, shownName } of ranked) {  // { } here takes these fields out of each item
+      results.push({ icon: () => makeEmojiElement(emoji), insert: emoji, label: shownName, detail: "" });
     }
   }
   return results.slice(0, MAX_SUGGESTIONS);

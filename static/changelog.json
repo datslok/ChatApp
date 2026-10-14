@@ -114,6 +114,7 @@
     {
       "date": "2026-10-14",
       "items": [
+        "Fixed: searching emoji (in the picker or with :name) now finds flags (\"norway\") and other names with capitals, like Santa Claus",
         "✨ A calmer look: the buttons have simple line icons instead of emoji (microphone, headphones, camera, pin, search and the rest)",
         "🐱 The Windows app shows a little loading window while the chat starts, instead of an empty window",
         "🎮 Activity: the Windows app now shows everyone what game you're playing or what you're listening to on Spotify, under your name. You can add programs too, or turn it off: Settings → App behaviour → Activity",
