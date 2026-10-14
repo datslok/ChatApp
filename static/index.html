@@ -694,6 +694,21 @@
             It opens by itself when you log in to Windows. You can also turn this off in Task Manager → Startup apps.
           </p>
         </div>
+        <!-- What you're doing, under your name (settings.js, "Activity"; the app sees it: activity.rs). -->
+        <div id="activity-settings" class="settings-group" hidden>
+          <h3>Activity</h3>
+          <label class="checkbox">
+            <input type="checkbox" id="activity-share">
+            Share what I'm doing
+          </label>
+          <p class="settings-help">
+            Everyone sees the game you're playing, the song playing in Spotify, or one of the programs below,
+            under your name. Nothing else on your PC is shared, and window titles never are.
+          </p>
+          <div id="activity-programs"></div>
+          <button type="button" id="activity-add">Add a program</button>
+          <div id="activity-choices" hidden></div>
+        </div>
       </section>
 
       <section class="settings-page" data-page="changelog" role="tabpanel" aria-label="What's new">
@@ -868,6 +883,7 @@
       <div id="profile-avatar"></div>
       <h2 id="profile-name"></h2>
       <div id="profile-roles" hidden></div>
+      <p id="profile-activity" hidden></p>  <!-- 🎮 Playing ... · for 23 min (people.js) -->
       <p id="profile-status"></p>
       <p id="profile-bio"></p>
       <!-- Message / Add friend / Accept / ... depending on how you two are connected. -->

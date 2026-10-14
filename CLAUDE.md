@@ -354,6 +354,16 @@ the point is for me to understand how it works, not just to have it done.
   loud voices, every 500 ms). rooms.js plugs an AnalyserNode into each remote microphone track
   (`setWebAudioPlugins`, before their volume); `checkSpeaking` every 50 ms: RMS over `SPEAKING_LINE` (-50 dB),
   held `SPEAKING_HOLD_MS`. Our own ring: the gate's `open` report (`gateOpen`), so it matches what we send.
+- Activity (since app 0.1.20): `desktop/src-tauri/src/activity.rs` (the `windows` crate 0.62, Tauri's own version)
+  looks at visible titled windows every 5 s: a game = a program under a game library folder (`GAME_FOLDERS`:
+  steamapps\common, Epic Games, XboxGames, Riot Games, ...; the name is that folder's), Spotify's title "Artist - Song",
+  or a program the user added (`list_programs`, by the file's FileDescription). Never other window titles. Calls the
+  page's `activityFromApp` on changes; settings.js ("Activity", in App behaviour, hidden until `set_activity_settings`
+  works) keeps `activitySettings` (share, on by default; programs) in localStorage and sends `{"type": "activity"}`
+  (also at every connect, core.js). server.py: `clean_activity` (kinds playing/listening/using, 100 chars), kept on the
+  connection (memory only), `activity_of` (None while shown offline) in "users" with "since"; announce_presences
+  compares it too. people.js `activityText` replaces the status line in lists; the profile shows both, with
+  `activityDuration`.
 - Screen shares (video.js): H.264, no simulcast, `maintain-framerate` at 60 fps. Chromium on Windows only uses the
   graphics card (Media Foundation, e.g. NVENC) for H.264 profile `42001f`; for LiveKit's default `42e01f` it uses
   OpenH264 on the CPU. So `livekit.yaml`'s `enabled_codecs` adds the `42001f` fmtp line, and must keep plain

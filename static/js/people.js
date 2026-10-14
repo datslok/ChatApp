@@ -108,7 +108,24 @@ function makeBotBadge() {
   return badge;
 }
 
-// A row for one person: picture with an online dot, name, and status underneath.
+// What someone is doing (the Windows app sees it, settings.js "Activity"; the server sends it in
+// "users"): "🎮 Playing Hollow Knight", "🎵 Listening to Song by Artist", "🖥️ Using Visual Studio Code".
+function activityText(activity) {
+  if (activity.kind === "playing") return "🎮 Playing " + activity.name;
+  if (activity.kind === "listening") {
+    return "🎵 Listening to " + activity.name + (activity.details ? " by " + activity.details : "");
+  }
+  return "🖥️ Using " + activity.name;
+}
+
+// How long it's been going on, from "since" (seconds): "for 23 min", "for 2 h 5 min".
+function activityDuration(activity) {
+  const minutes = Math.max(0, Math.floor((Date.now() / 1000 - activity.since) / 60));
+  if (minutes < 1) return "just now";
+  return minutes < 60 ? `for ${minutes} min` : `for ${Math.floor(minutes / 60)} h ${minutes % 60} min`;
+}
+
+// A row for one person: picture with an online dot, name, and what they're doing (or their status) underneath.
 function makePerson(user) {
   const row = document.createElement("span");
   row.className = "person";
@@ -129,10 +146,11 @@ function makePerson(user) {
   name.style.color = nameColour(user.id);  // (their top role's colour, or none)
   if (user.bot) name.appendChild(makeBotBadge());
   text.appendChild(name);
-  if (user.status) {
+  // What they're doing, else the line they wrote (both are in their profile).
+  if (user.activity || user.status) {
     const status = document.createElement("span");
     status.className = "person-status";
-    status.textContent = user.status;
+    status.textContent = user.activity ? activityText(user.activity) : user.status;
     text.appendChild(status);
   }
   row.appendChild(text);
@@ -788,6 +806,9 @@ function renderProfile(userId) {
   }));
   profileRoles.hidden = profileRoles.childElementCount === 0;
   profileStatus.textContent = person.status || "";
+  const profileActivity = document.getElementById("profile-activity");
+  profileActivity.hidden = !person.activity;
+  if (person.activity) profileActivity.textContent = `${activityText(person.activity)} · ${activityDuration(person.activity)}`;
   profileBio.textContent = person.bio || "";
   profileActionStatus.textContent = "";
   // Message / Add friend / Accept / ... (nothing on your own profile).

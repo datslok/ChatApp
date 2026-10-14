@@ -2877,6 +2877,43 @@ button.download-button {
 #voice-meter-level.open {
   background: var(--green);
 }
+/* Settings → App behaviour → Activity: your programs ("Visual Studio Code  ×"), and the running
+   programs to choose from after "Add a program". */
+#activity-settings[hidden],
+#activity-choices[hidden] {
+  display: none;
+}
+.activity-program {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: var(--bg-darkest);
+}
+#settings .activity-program button {
+  padding: 0 6px;
+  background: none;
+  color: var(--text-muted);
+  font-size: 1.2rem;
+}
+#activity-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+#settings #activity-choices button {
+  padding: 8px 10px;
+  background: var(--bg-darkest);
+  color: inherit;
+  text-align: left;
+}
+#settings #activity-choices button:hover {
+  background: var(--bg-active);
+}
+
 /* "Push-to-talk key [ V ]": the button shows the key, or "Press a key…" while it waits for one. */
 #voice-ptt-row {
   display: flex;
@@ -4205,6 +4242,13 @@ button.download-button {
 #profile-status {
   margin: 4px 0 0;
   color: var(--text-muted);
+}
+
+/* What they're doing (people.js, activityText), above the status line they wrote. */
+#profile-activity {
+  margin: 8px 0 0;
+  font-size: 0.9rem;
+  color: var(--text);
 }
 
 #profile-bio {

@@ -3603,6 +3603,36 @@ def on_phone_only(user_id, presence):
     return presence != "offline" and bool(tabs) and all(client["mobile"] for client in tabs)
 
 
+# What someone is doing (the Windows app sees it: desktop/src-tauri/src/activity.rs; the page sends it
+# with {"type": "activity"}). Kept only in memory, with the connection that sent it: when that page
+# closes, it's gone. Never shown while they show as offline (Invisible).
+ACTIVITY_KINDS = ("playing", "listening", "using")
+
+
+def clean_activity(value):
+    """An activity from a page, checked: {"kind": "listening", "name": "Song", "details": "Artist"}
+    ("details" only if there is one), or None for nothing (or anything odd)."""
+    if not isinstance(value, dict) or value.get("kind") not in ACTIVITY_KINDS:
+        return None
+    name, details = value.get("name"), value.get("details")
+    if not isinstance(name, str) or not name.strip():
+        return None
+    activity = {"kind": value["kind"], "name": name.strip()[:100]}
+    if isinstance(details, str) and details.strip():
+        activity["details"] = details.strip()[:100]
+    return activity
+
+
+def activity_of(user_id, presence):
+    """What the others see this person doing (with "since", when it started), or None."""
+    if presence == "offline":
+        return None
+    for client in clients.values():
+        if client["user_id"] == user_id and client["activity"] is not None:
+            return client["activity"]
+    return None
+
+
 def presence_of(user_id):
     """The status this person chose (for their own pages, and for notifications)."""
     row = db.execute("SELECT presence FROM users WHERE id = ?", (user_id,)).fetchone()
@@ -3632,6 +3662,7 @@ def users_message():
         users.append({
             "id": user_id, "name": name, "presence": presence, "online": presence != "offline",
             "mobile": on_phone_only(user_id, presence),  # only on a phone: a little phone for a dot
+            "activity": activity_of(user_id, presence),  # playing, listening to, using (or None)
             "avatar": avatar, "banner": banner, "status": status, "bio": bio, "admin": bool(admin),
             "bot": bool(bot),  # the AI bot: the page offers it in DMs' @ suggestions too
             "owner": bool(owner),  # the server's owner (see "Bans and admins")
@@ -3640,14 +3671,14 @@ def users_message():
     return {"type": "users", "users": users}
 
 
-shown_presences = {}  # what everyone was last told: {user_id: ("idle", False), ...} (see announce_presences)
+shown_presences = {}  # what everyone was last told: {user_id: ("idle", False, None), ...} (see announce_presences)
 
 
 async def announce_presences():
-    """Send everyone the users list again, if anyone's status (or phone) looks different from last time."""
+    """Send everyone the users list again, if anyone's status (phone, activity) looks different from last time."""
     global shown_presences  # (this function gives the name a new dict, so it must say it means the global one)
     message = users_message()
-    now = {user["id"]: (user["presence"], user["mobile"]) for user in message["users"]}
+    now = {user["id"]: (user["presence"], user["mobile"], user["activity"]) for user in message["users"]}
     if now != shown_presences:
         shown_presences = now
         await send_to_everyone(message)
@@ -4530,7 +4561,8 @@ async def chat(websocket: WebSocket):
                           "looking": False,  # looking at it right now (the page says, see "looking")
                           "away_since": time.time(),  # since when it isn't (None while it is): for "idle"
                           "app": False,      # the Windows app (the page says so in "looking" too)
-                          "mobile": False}   # a phone (in "looking" too): see on_phone_only
+                          "mobile": False,   # a phone (in "looking" too): see on_phone_only
+                          "activity": None}  # what they're doing, if this page says (see "activity")
     try:
         # Tell the page who it is (the id is for building DM names).
         await send(websocket, {
@@ -4831,6 +4863,19 @@ async def chat(websocket: WebSocket):
                 clients[websocket]["mobile"] = mobile
                 if looking or phone_changed:
                     await announce_presences()  # back from idle, or now known to be a phone: at once
+
+            elif kind == "activity":
+                # {"type": "activity", "activity": {"kind": "playing", "name": "Hollow Knight"} or null}:
+                # what the Windows app sees them doing. "since" is when this one started: kept while
+                # the same thing goes on, so their profile can say "for 23 min".
+                activity = clean_activity(data.get("activity"))
+                old = clients[websocket]["activity"]
+                old_without_since = {key: value for key, value in old.items() if key != "since"} if old else None
+                if activity != old_without_since:
+                    if activity is not None:
+                        activity["since"] = int(time.time())
+                    clients[websocket]["activity"] = activity
+                    await announce_presences()
 
             elif kind == "mute":
                 # {"type": "mute", "channel": "memes", "muted": true}: mute a chat for ourselves (or unmute).

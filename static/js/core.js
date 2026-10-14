@@ -234,6 +234,7 @@ function connect() {
     banner.hidden = true;
     sendVoiceState();  // a new connection: the server doesn't know we're in voice yet
     sendLooking();     // ...nor whether we're looking at the chat (no pushes then; notifications.js)
+    sendActivity();    // ...nor what we're doing (the Windows app; settings.js, "Activity")
     const opened = new URLSearchParams(location.search);  // "?channel=general&message=57"
     if (currentChannel === null && opened.has("channel")) {
       // Opened by tapping a push notification (sw.js): go to that message (or that DM, for a call).

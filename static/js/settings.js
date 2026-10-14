@@ -100,6 +100,112 @@ autostartBox.addEventListener("change", async () => {
 });
 showAppSettings();
 
+// ---------- Settings: Activity (in App behaviour, only in the Windows app) ----------
+//
+// The app looks at what's open on the PC (activity.rs: a game, the song in Spotify, a program you
+// added) and calls activityFromApp each time that changes; we pass it on to the server, which shows
+// it to everyone under our name ("users": activity). Kept in this app's storage, like the voice
+// settings: on by default, your programs as [["code.exe", "Visual Studio Code"], ...].
+
+const activitySettingsBox = document.getElementById("activity-settings");
+const activityShareBox = document.getElementById("activity-share");
+const activityProgramsList = document.getElementById("activity-programs");
+const activityAddButton = document.getElementById("activity-add");
+const activityChoices = document.getElementById("activity-choices");
+
+const activitySettings = { share: true, programs: [] };
+try {
+  Object.assign(activitySettings, JSON.parse(localStorage.getItem("activitySettings")) || {});
+} catch {}
+
+let myActivity = null;  // what the app saw last (null: nothing), sent again after a reconnect (core.js)
+
+// Called by the app (window.eval in activity.rs).
+function activityFromApp(activity) {
+  myActivity = activity;
+  sendActivity();
+}
+
+function sendActivity() {
+  if (inDesktopApp && socket) sendToServer({ type: "activity", activity: myActivity });
+}
+
+// Save, and tell the app (at every load too: it starts with sharing off until we do). An app from
+// before 0.1.20 doesn't know the command: then the section stays hidden.
+function applyActivitySettings() {
+  try {
+    localStorage.setItem("activitySettings", JSON.stringify(activitySettings));
+  } catch {}
+  if (!inDesktopApp) return;
+  window.__TAURI_INTERNALS__.invoke("set_activity_settings", activitySettings)
+    .then(() => { activitySettingsBox.hidden = false; })
+    .catch(() => {});
+}
+
+function renderActivitySettings() {
+  activityShareBox.checked = activitySettings.share;
+  activityProgramsList.replaceChildren(...activitySettings.programs.map(([file, name]) => {
+    const row = document.createElement("div");
+    row.className = "activity-program";
+    const label = document.createElement("span");
+    label.textContent = name;
+    label.title = file;
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.textContent = "×";
+    remove.title = "Remove";
+    remove.addEventListener("click", () => {
+      activitySettings.programs = activitySettings.programs.filter(([other]) => other !== file);
+      applyActivitySettings();
+      renderActivitySettings();
+    });
+    row.append(label, remove);
+    return row;
+  }));
+}
+
+activityShareBox.addEventListener("change", () => {
+  activitySettings.share = activityShareBox.checked;
+  applyActivitySettings();
+});
+
+// "Add a program": the app lists what's open right now; clicking one adds it (or click Add again to close).
+activityAddButton.addEventListener("click", async () => {
+  if (!activityChoices.hidden) {
+    activityChoices.hidden = true;
+    return;
+  }
+  let programs = [];
+  try {
+    programs = await window.__TAURI_INTERNALS__.invoke("list_programs");
+  } catch {}
+  const chosen = new Set(activitySettings.programs.map(([file]) => file));
+  const buttons = programs.filter(([file]) => !chosen.has(file)).map(([file, name]) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = name;
+    button.title = file;
+    button.addEventListener("click", () => {
+      activitySettings.programs.push([file, name]);
+      activityChoices.hidden = true;
+      applyActivitySettings();
+      renderActivitySettings();
+    });
+    return button;
+  });
+  if (buttons.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "settings-help";
+    empty.textContent = "Open the program first, then press Add a program again.";
+    buttons.push(empty);
+  }
+  activityChoices.replaceChildren(...buttons);
+  activityChoices.hidden = false;
+});
+
+renderActivitySettings();
+applyActivitySettings();
+
 // ---------- Settings: Appearance ----------
 //
 // Theme, colours, font and text size, kept with the account. appearance.js does the work:

@@ -1,6 +1,8 @@
 // In the finished app, don't open a console window next to it (development mode keeps it for errors).
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod activity;  // what you're doing (activity.rs)
+
 use std::os::windows::process::CommandExt;  // raw_arg
 use std::process::Command;
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
@@ -33,7 +35,8 @@ fn main() {
         .plugin(tauri_plugin_autostart::Builder::new().build())
         // The commands the page may call (window.__TAURI_INTERNALS__.invoke("check_for_update")).
         // Made permissions in build.rs, allowed for the chat page in capabilities/default.json.
-        .invoke_handler(tauri::generate_handler![check_for_update, set_zoom, get_autostart, set_autostart, set_push_to_talk])
+        .invoke_handler(tauri::generate_handler![check_for_update, set_zoom, get_autostart, set_autostart, set_push_to_talk,
+                                                 activity::set_activity_settings, activity::list_programs])
         .setup(|app| {
             // First, before the chat window opens WebView2's storage: repair it if it's damaged.
             repair_local_storage(app.handle());
@@ -94,6 +97,9 @@ fn main() {
 
             // Push to talk: watch the chosen key, also while other programs are in front.
             watch_push_to_talk(app.handle().clone());
+
+            // Activity: what you're playing or listening to (activity.rs).
+            activity::watch(app.handle().clone());
 
             // Starting with Windows is on by default (the first time only, see below).
             turn_on_autostart_once(app.handle());

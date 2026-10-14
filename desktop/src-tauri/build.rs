@@ -6,6 +6,7 @@ fn main() {
         tauri_build::Attributes::new()
             .app_manifest(tauri_build::AppManifest::new().commands(&[
                 "check_for_update", "set_zoom", "get_autostart", "set_autostart", "set_push_to_talk",
+                "set_activity_settings", "list_programs",
             ])),
     )
     .expect("failed to run tauri-build");

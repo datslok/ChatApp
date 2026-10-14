@@ -65,7 +65,8 @@
       "topic": "💻 The Windows app",
       "items": [
         "Real Windows notifications, and it updates itself. Get it in Settings or at chat.datslok.no/download",
-        "Settings → App behaviour: start ChatApp when Windows starts (on from the start; turn it off there or in Task Manager → Startup apps)"
+        "Settings → App behaviour: start ChatApp when Windows starts (on from the start; turn it off there or in Task Manager → Startup apps)",
+        "Activity: the app shows everyone what you're doing under your name: the game you're playing (from Steam, Epic, Xbox, Riot and other game libraries), the song playing in Spotify, or a program you added in Settings → App behaviour → Activity (Add a program). Turn it off there with \"Share what I'm doing\". Nothing else on your PC is shared. Click someone to see for how long"
       ]
     },
     {
@@ -113,6 +114,7 @@
     {
       "date": "2026-10-14",
       "items": [
+        "🎮 Activity: the Windows app now shows everyone what game you're playing or what you're listening to on Spotify, under your name. You can add programs too, or turn it off: Settings → App behaviour → Activity",
         "🟢 The green ring around whoever's talking reacts straight away now, and also lights up for quiet voices and whispers",
         "🎙️ Push to talk: Settings → Voice & audio → Input mode. Hold your key (or a mouse button) to talk. In the Windows app it works in games too, after the app updates itself",
         "Fixed: the emoji picker no longer shows empty boxes for emoji your device can't draw yet (brand-new ones)",
