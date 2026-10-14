@@ -1812,6 +1812,15 @@ body.mini-hidden :fullscreen .tile-strip {
 #me-status:empty {
   display: none;
 }
+/* What we're doing (the Windows app sees it): like the profile's. */
+#me-activity {
+  margin: 6px 0 0;
+  font-size: 0.85rem;
+  color: var(--text);
+}
+#me-activity:empty {
+  display: none;
+}
 
 /* "In voice": a card with where and who, and "Open call". */
 #me-call {

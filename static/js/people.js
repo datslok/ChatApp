@@ -916,6 +916,9 @@ function renderMePopup() {
   document.getElementById("me-avatar").replaceChildren(makeAvatar(myId, me.name, "large"));
   document.getElementById("me-name").textContent = me.name;
   document.getElementById("me-status").textContent = me.status || "";
+  // (Empty while there's none, or while we're Invisible: then the others don't see it either.)
+  document.getElementById("me-activity").textContent =
+    me.activity ? `${activityText(me.activity)} · ${activityDuration(me.activity)}` : "";
   renderPresencePicker();
 
   // In voice: where ("Lounge", "@alex") and the pictures of who's there (the server's lists:
