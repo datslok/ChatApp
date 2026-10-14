@@ -318,6 +318,23 @@ db.execute("""
         PRIMARY KEY (group_key, user_id)  -- each person once per group
     )
 """)
+# Roles (Settings → Roles, for admins): a name and a colour; people can have several, and the one
+# highest in the list colours their name and places them in the member list (see "Roles").
+db.execute("""
+    CREATE TABLE IF NOT EXISTS roles (
+        id       INTEGER PRIMARY KEY,
+        name     TEXT NOT NULL,
+        colour   TEXT NOT NULL,     -- "#3ba55c"
+        position INTEGER NOT NULL   -- the order in the list, from the top (the top one wins)
+    )
+""")
+db.execute("""
+    CREATE TABLE IF NOT EXISTS user_roles (
+        user_id INTEGER NOT NULL REFERENCES users(id),
+        role_id INTEGER NOT NULL REFERENCES roles(id),
+        PRIMARY KEY (user_id, role_id)  -- each role once per person
+    )
+""")
 # Blocked people: one row per person someone blocked (see "Blocking").
 db.execute("""
     CREATE TABLE IF NOT EXISTS blocks (
@@ -2639,6 +2656,125 @@ def delete_messages_in(key):
         (PREVIEW_DIR / image).unlink(missing_ok=True)
 
 
+# ---------- Roles ----------
+#
+# Admins make roles (a name and a colour) in Settings → Roles and give them to people. Someone's top
+# role (the highest in the list) colours their name and gives them a section in the member list.
+# Every change goes to every page: "roles" (the list) and "users" (who has which).
+
+MAX_ROLES = 20
+MAX_ROLE_NAME = 30
+
+
+def roles_message():
+    """{"type": "roles", "roles": [{"id": 1, "name": "Gamers", "colour": "#3ba55c"}, ...]}, the top one first."""
+    rows = db.execute("SELECT id, name, colour FROM roles ORDER BY position")
+    return {"type": "roles", "roles": [{"id": role_id, "name": name, "colour": colour} for role_id, name, colour in rows]}
+
+
+async def announce_roles():
+    await send_to_everyone(roles_message())
+    await send_to_everyone(users_message())
+
+
+def clean_role(name, colour):
+    """A role's name, tidied, and its colour, checked: or a 400."""
+    name = " ".join(name.split())
+    if not name:
+        raise HTTPException(400, "Give it a name.")
+    if len(name) > MAX_ROLE_NAME:
+        raise HTTPException(400, f"That's a bit long: at most {MAX_ROLE_NAME} characters.")
+    if not HEX_COLOUR.fullmatch(colour):
+        raise HTTPException(400, "That's not a colour.")
+    return name, colour.lower()
+
+
+def existing_role(role_id):
+    if db.execute("SELECT 1 FROM roles WHERE id = ?", (role_id,)).fetchone() is None:
+        raise HTTPException(404, "That role doesn't exist (any more).")
+
+
+class RoleData(BaseModel):
+    name: str
+    colour: str  # "#3ba55c"
+
+
+@app.post("/roles")
+async def create_role(request: Request, data: RoleData):
+    """A new role, at the bottom of the list (admins only)."""
+    logged_in_admin(request)
+    name, colour = clean_role(data.name, data.colour)
+    if db.execute("SELECT COUNT(*) FROM roles").fetchone()[0] >= MAX_ROLES:
+        raise HTTPException(400, f"That's the most there can be ({MAX_ROLES}).")
+    with db:
+        db.execute("INSERT INTO roles (name, colour, position) VALUES (?, ?, (SELECT COALESCE(MAX(position), -1) + 1 FROM roles))",
+                   (name, colour))
+    await announce_roles()
+    return {"ok": True}
+
+
+@app.post("/roles/{role_id}/edit")
+async def edit_role(request: Request, role_id: int, data: RoleData):
+    """A new name or colour for a role (admins only)."""
+    logged_in_admin(request)
+    existing_role(role_id)
+    name, colour = clean_role(data.name, data.colour)
+    with db:
+        db.execute("UPDATE roles SET name = ?, colour = ? WHERE id = ?", (name, colour, role_id))
+    await announce_roles()
+    return {"ok": True}
+
+
+class RoleOrder(BaseModel):
+    ids: list[int]  # every role, in the new order
+
+
+@app.post("/roles/order")
+async def reorder_roles(request: Request, data: RoleOrder):
+    """Put the roles in a new order (admins only): the whole list, like the channels."""
+    logged_in_admin(request)
+    existing = [role_id for (role_id,) in db.execute("SELECT id FROM roles")]
+    if sorted(data.ids) != sorted(existing):
+        raise HTTPException(409, "The roles changed meanwhile. Try again.")
+    with db:
+        db.executemany("UPDATE roles SET position = ? WHERE id = ?", [(position, role_id) for position, role_id in enumerate(data.ids)])
+    await announce_roles()
+    return {"ok": True}
+
+
+@app.post("/roles/{role_id}/delete")
+async def delete_role(request: Request, role_id: int):
+    """Delete a role, and take it from everyone who had it (admins only)."""
+    logged_in_admin(request)
+    existing_role(role_id)
+    with db:
+        db.execute("DELETE FROM user_roles WHERE role_id = ?", (role_id,))
+        db.execute("DELETE FROM roles WHERE id = ?", (role_id,))
+    await announce_roles()
+    return {"ok": True}
+
+
+class RoleMember(BaseModel):
+    user_id: int
+    member: bool  # True: give them the role; False: take it away
+
+
+@app.post("/roles/{role_id}/members")
+async def set_role_member(request: Request, role_id: int, data: RoleMember):
+    """Give someone a role, or take it from them (admins only)."""
+    logged_in_admin(request)
+    existing_role(role_id)
+    if username_of(data.user_id) is None:
+        raise HTTPException(404, "That person doesn't exist.")
+    with db:
+        if data.member:
+            db.execute("INSERT OR IGNORE INTO user_roles (user_id, role_id) VALUES (?, ?)", (data.user_id, role_id))
+        else:
+            db.execute("DELETE FROM user_roles WHERE user_id = ? AND role_id = ?", (data.user_id, role_id))
+    await send_to_everyone(users_message())
+    return {"ok": True}
+
+
 # ---------- Group DMs ----------
 #
 # Private chats for 3 to 10 people. Anyone can start one with their friends; any member can add
@@ -2847,6 +2983,13 @@ def users_message():
         "SELECT id, username, avatar_id, banner_id, status, bio, is_admin, is_bot, presence FROM users"
         " ORDER BY username COLLATE NOCASE"
     ).fetchall()
+    # Everyone's roles, in one query: the top one first (the list's order), so the page takes roles[0].
+    roles_of = {}
+    for user_id, role_id in db.execute(
+        "SELECT user_roles.user_id, user_roles.role_id FROM user_roles"
+        " JOIN roles ON roles.id = user_roles.role_id ORDER BY roles.position"
+    ):
+        roles_of.setdefault(user_id, []).append(role_id)
     users = []
     for user_id, name, avatar, banner, status, bio, admin, bot, chosen in rows:
         presence = shown_presence(user_id, chosen, bool(bot))
@@ -2854,6 +2997,7 @@ def users_message():
             "id": user_id, "name": name, "presence": presence, "online": presence != "offline",
             "avatar": avatar, "banner": banner, "status": status, "bio": bio, "admin": bool(admin),
             "bot": bool(bot),  # the AI bot: the page offers it in DMs' @ suggestions too
+            "roles": roles_of.get(user_id, []),  # role ids, the top one first (see "roles")
         })
     return {"type": "users", "users": users}
 
@@ -3596,6 +3740,7 @@ async def chat(websocket: WebSocket):
         await send(websocket, groups_message(user_id))
         await send(websocket, mutes_message(user_id))
         await send(websocket, blocks_message(user_id))
+        await send(websocket, roles_message())  # (before "users", whose roles refer to these)
         await send(websocket, custom_emoji_message())
         await send(websocket, {
             "type": "unread", "channels": unread_channels(user_id), "mentions": unread_mentions(user_id),

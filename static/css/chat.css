@@ -3497,13 +3497,18 @@ button.download-button {
   margin-top: 20px;
 }
 
-/* "Online" right under the Bots section gets the same space above it. "+" means "the element
-   right after": the Online heading, when it follows a Bots list that isn't hidden. */
-#bots-list:not([hidden]) + #online-heading {
+/* Every section but the first gets the same space above it. "~" means "a later sibling" and "+" "the
+   one right after": a role's heading after the Bots list (or after another role's list), and Online
+   after the Bots list or the roles. (:empty: the roles' box with nothing in it.) */
+#bots-list:not([hidden]) ~ #role-sections > .section-heading:first-child,
+#role-sections > ul + .section-heading,
+#bots-list:not([hidden]) ~ #online-heading,
+#role-sections:not(:empty) + #online-heading {
   margin-top: 20px;
 }
 
 #bots-list,
+#role-sections ul,
 #online-list,
 #offline-list {
   margin: 0;
@@ -3512,9 +3517,93 @@ button.download-button {
 }
 
 #bots-list li,
+#role-sections li,
 #online-list li,
 #offline-list li {
   padding: 4px 0;
+}
+
+/* Roles in a profile: small tags, each with a dot of the role's colour. */
+#profile-roles {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  margin: 6px 0;
+}
+#profile-roles[hidden] {
+  display: none;
+}
+.role-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: var(--bg-darkest);
+  font-size: 0.8rem;
+}
+.role-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+/* Settings → Roles: each role a box, its row (like the Channels page's), then its people. */
+.role-admin-item {
+  margin-bottom: 10px;
+  padding: 8px;
+  border-radius: 8px;
+  background: var(--bg-darkest);
+}
+#settings .role-admin-item input[type="color"],
+#settings .new-role input[type="color"] {
+  flex: 0 0 36px;
+  width: 36px;
+  height: 32px;
+  padding: 2px;
+  cursor: pointer;
+}
+.role-members {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+.role-member {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px 2px 6px;
+  border-radius: 6px;
+  background: var(--bg-panel);
+  font-size: 0.85rem;
+}
+#settings .role-member button {
+  padding: 0 6px;
+  background: none;
+  color: var(--text-muted);
+}
+#settings .role-member button:hover {
+  color: var(--text);
+}
+.role-members select {
+  padding: 4px 8px;
+  border: none;
+  border-radius: 6px;
+  background: var(--bg-panel);
+  color: inherit;
+  font-size: 0.85rem;
+}
+#settings form.new-role {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+#settings .new-role #new-role-name {
+  flex: 1;
+  min-width: 0;
 }
 
 /* The "BOT" tag after a bot's name (people.js, makeBotBadge): small capitals on a coloured

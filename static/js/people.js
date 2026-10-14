@@ -22,6 +22,21 @@ function makeDot(presence) {
 // up the picture here, so a changed picture shows up everywhere at once.
 const people = new Map();
 
+// The roles, from the server's "roles", the top one first: [{id, name, colour}, ...]. Each person
+// has the ids of theirs (top first) in their "roles"; the top one colours their name.
+let roles = [];
+
+// Someone's top role, or undefined (no roles, or one that's just been deleted).
+function topRole(userId) {
+  const ids = people.get(userId)?.roles ?? [];
+  return roles.find((role) => ids.includes(role.id));  // (roles is in order: the first found is the top one)
+}
+
+// The colour for someone's name: their top role's, or "" (the theme's own).
+function nameColour(userId) {
+  return topRole(userId)?.colour ?? "";
+}
+
 // Colours for the letter circles. Each person always gets the same one (their id picks it).
 const LETTER_COLOURS = ["#5865f2", "#3ba55c", "#faa61a", "#ed4245", "#eb459e", "#9b59b6", "#1abc9c"];
 
@@ -109,6 +124,7 @@ function makePerson(user) {
   text.className = "person-text";
   const name = document.createElement("span");
   name.textContent = user.name;
+  name.style.color = nameColour(user.id);  // (their top role's colour, or none)
   if (user.bot) name.appendChild(makeBotBadge());
   text.appendChild(name);
   if (user.status) {
@@ -128,16 +144,28 @@ function showUsers(users) {
 
   renderDmList();
 
-  // The right column: bots in a section of their own at the top (like a role in Discord), then
-  // everyone else, split into online and offline (all alphabetical, as the server sent them).
-  // Click someone for their profile.
+  // The right column: bots in a section of their own at the top, then a section for each role with
+  // its online people (by their top role, like Discord), then the online people without a role, and
+  // everyone offline at the bottom (all alphabetical, as the server sent them). Click someone for
+  // their profile.
   const bots = users.filter((user) => user.bot);
   const humans = users.filter((user) => !user.bot);  // ! means "not"
-  const online = humans.filter((user) => user.online);
+  const online = humans.filter((user) => user.online && !topRole(user.id));
   const offline = humans.filter((user) => !user.online);
   botsHeading.hidden = botsList.hidden = bots.length === 0;  // (no bots: as if the section weren't there)
   botsHeading.textContent = `Bots — ${bots.length}`;
   fillPeopleList(botsList, bots);
+  roleSections.replaceChildren();
+  for (const role of roles) {
+    const members = humans.filter((user) => user.online && topRole(user.id) === role);
+    if (members.length === 0) continue;  // (a role with nobody online: no empty heading)
+    const heading = document.createElement("h2");
+    heading.className = "section-heading";
+    heading.textContent = `${role.name} — ${members.length}`;  // (textContent: an admin typed the name)
+    const list = document.createElement("ul");
+    fillPeopleList(list, members);
+    roleSections.append(heading, list);
+  }
   onlineHeading.textContent = `Online — ${online.length}`;
   offlineHeading.textContent = `Offline — ${offline.length}`;
   fillPeopleList(onlineList, online);
@@ -538,6 +566,8 @@ const profileVolumeSlider = document.getElementById("profile-volume");
 const profileVolumeValue = document.getElementById("profile-volume-value");
 
 let profileUserId = null;  // whose profile is open
+const profileRoles = document.getElementById("profile-roles");
+const roleSections = document.getElementById("role-sections");
 
 function openProfile(userId) {
   if (!people.has(userId)) return;  // pre-account messages have no profile
@@ -561,6 +591,17 @@ function renderProfile(userId) {
     profileName.appendChild(badge);
   }
   if (person.bot) profileName.appendChild(makeBotBadge());
+  // Their roles, as small tags with a dot of each role's colour (top role first).
+  profileRoles.replaceChildren(...roles.filter((role) => (person.roles ?? []).includes(role.id)).map((role) => {
+    const tag = document.createElement("span");
+    tag.className = "role-tag";
+    const dot = document.createElement("span");
+    dot.className = "role-dot";
+    dot.style.background = role.colour;
+    tag.append(dot, role.name);
+    return tag;
+  }));
+  profileRoles.hidden = profileRoles.childElementCount === 0;
   profileStatus.textContent = person.status || "";
   profileBio.textContent = person.bio || "";
   profileActionStatus.textContent = "";

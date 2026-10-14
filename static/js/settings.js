@@ -18,6 +18,7 @@ settingsButton.addEventListener("click", async () => {
   feedbackStatus.textContent = "";  // (a half-written report stays, in case Settings was closed by mistake)
   renderMyEmoji();
   showChannelAdmin();  // (admins only: the channels to manage)
+  showRoleAdmin();     // (admins only: the roles)
   loadInbox();  // (admins only: the bug reports and ideas, fetched fresh)
   showNotificationSettings();  // (the browser's permission may have changed since)
   showPushSetting();  // (and whether this device gets push notifications)
@@ -844,6 +845,125 @@ newChannelForm.addEventListener("submit", async (event) => {
   if (await channelAdminRequest("/channels", { name: newChannelName.value, heading })) {
     newChannelForm.reset();
     showStatus(channelAdminStatus, heading ? "Heading added at the bottom." : "Channel added at the bottom.", "success");
+  }
+});
+
+// ---------- Settings: Roles (admins only) ----------
+//
+// Each role: its colour (the browser's own colour picker), its name (edit it and press Enter or
+// Save), ↑ ↓ and 🗑, and under it the people who have it (× takes it away) with a list to add
+// someone. Like Channels, every change goes to the server, which tells every page ("roles", "users"),
+// and that draws this list again (core.js).
+
+const rolesTab = document.getElementById("roles-tab");
+const roleAdminList = document.getElementById("role-admin-list");
+const newRoleForm = document.getElementById("new-role-form");
+const newRoleName = document.getElementById("new-role-name");
+const newRoleColour = document.getElementById("new-role-colour");
+const roleAdminStatus = document.getElementById("role-admin-status");
+
+function showRoleAdmin() {
+  rolesTab.hidden = !amAdmin();
+  if (rolesTab.hidden && settingsPage === "roles") showSettingsPage("account");  // (no longer an admin)
+  roleAdminStatus.textContent = "";
+  renderRoleAdmin();
+}
+
+function renderRoleAdmin() {
+  if (rolesTab.hidden) return;  // (only admins see it; nothing to draw otherwise)
+  roleAdminList.replaceChildren(...roles.map(makeRoleAdminItem));
+}
+
+// Send a change and show an error if there is one (the new state comes back to every page).
+async function roleAdminRequest(url, data) {
+  const result = await postJson(url, data);
+  if (result.ok) roleAdminStatus.textContent = "";
+  else showStatus(roleAdminStatus, result.error, "error");
+  return result.ok;
+}
+
+function makeRoleAdminItem(role, index) {
+  const box = document.createElement("div");
+  box.className = "role-admin-item";
+
+  // The top row, a small form: colour, name, Save (once changed), ↑ ↓ 🗑. Enter in the name saves.
+  const row = document.createElement("form");
+  row.className = "channel-admin-item";  // (laid out like the Channels page's rows)
+  const colour = document.createElement("input");
+  colour.type = "color";  // the browser's colour picker; its value is always "#rrggbb"
+  colour.value = role.colour;
+  colour.setAttribute("aria-label", "Colour");
+  const name = document.createElement("input");
+  name.value = role.name;
+  name.maxLength = 30;
+  name.required = true;
+  name.autocomplete = "off";
+  name.setAttribute("aria-label", "Role name");
+  const save = document.createElement("button");
+  save.type = "submit";
+  save.className = "save";
+  save.textContent = "Save";
+  save.hidden = true;
+  name.addEventListener("input", () => { save.hidden = name.value.trim() === role.name; });
+  const edit = () => roleAdminRequest(`/roles/${role.id}/edit`, { name: name.value, colour: colour.value });
+  row.addEventListener("submit", (event) => {
+    event.preventDefault();
+    edit();
+  });
+  colour.addEventListener("change", edit);  // ("change": once a colour is picked, not while dragging)
+
+  const up = makeChannelAdminButton("↑", "Move up");  // (the Channels page's small grey buttons)
+  up.disabled = index === 0;
+  up.addEventListener("click", () => moveRole(index, -1));
+  const down = makeChannelAdminButton("↓", "Move down");
+  down.disabled = index === roles.length - 1;
+  down.addEventListener("click", () => moveRole(index, 1));
+  const remove = makeChannelAdminButton("🗑", "Delete");
+  remove.className = "delete";
+  remove.addEventListener("click", () => {
+    if (confirm(`Delete the role "${role.name}"? Everyone who has it loses it.`)) {
+      roleAdminRequest(`/roles/${role.id}/delete`, {});
+    }
+  });
+  row.append(colour, name, save, up, down, remove);
+  box.appendChild(row);
+
+  // Its people, each with × to take the role away, and a list to give it to someone else.
+  const members = document.createElement("div");
+  members.className = "role-members";
+  const everyone = [...people.values()];
+  for (const person of everyone.filter((person) => (person.roles ?? []).includes(role.id))) {
+    const chip = document.createElement("span");
+    chip.className = "role-member";
+    const take = makeChannelAdminButton("×", `Take ${role.name} from ${person.name}`);
+    take.addEventListener("click", () => roleAdminRequest(`/roles/${role.id}/members`, { user_id: person.id, member: false }));
+    chip.append(makeAvatar(person.id, person.name, "tiny"), person.name, take);
+    members.appendChild(chip);
+  }
+  const add = document.createElement("select");
+  add.setAttribute("aria-label", `Give ${role.name} to someone`);
+  add.append(new Option("+ Add someone", ""),
+    ...everyone.filter((person) => !(person.roles ?? []).includes(role.id)).map((person) => new Option(person.name, person.id)));
+  add.addEventListener("change", () => {
+    if (add.value) roleAdminRequest(`/roles/${role.id}/members`, { user_id: Number(add.value), member: true });
+  });
+  members.appendChild(add);
+  box.appendChild(members);
+  return box;
+}
+
+// Swap a role with the one above or below, and send the whole new order (like moveChannel).
+function moveRole(index, step) {
+  const ids = roles.map((role) => role.id);
+  [ids[index], ids[index + step]] = [ids[index + step], ids[index]];
+  roleAdminRequest("/roles/order", { ids });
+}
+
+newRoleForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (await roleAdminRequest("/roles", { name: newRoleName.value, colour: newRoleColour.value })) {
+    newRoleName.value = "";
+    showStatus(roleAdminStatus, "Role added at the bottom. Give it to people with \"+ Add someone\".", "success");
   }
 });
 

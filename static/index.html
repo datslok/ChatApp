@@ -207,6 +207,8 @@
   <aside id="members">
     <h2 id="bots-heading" class="section-heading" hidden>Bots</h2>
     <ul id="bots-list" hidden></ul>
+    <!-- A heading and list for each role with people online (people.js, showUsers). -->
+    <div id="role-sections"></div>
     <h2 id="online-heading" class="section-heading">Online</h2>
     <ul id="online-list"></ul>
     <h2 id="offline-heading" class="section-heading">Offline</h2>
@@ -342,6 +344,7 @@
       <button type="button" class="settings-tab" role="tab" data-tab="feedback">Bugs &amp; ideas</button>
       <!-- Only for admins (settings.js shows them); the server checks too. -->
       <button type="button" class="settings-tab" role="tab" data-tab="channels" id="channels-tab" hidden>Channels</button>
+      <button type="button" class="settings-tab" role="tab" data-tab="roles" id="roles-tab" hidden>Roles</button>
       <button type="button" class="settings-tab" role="tab" data-tab="inbox" id="inbox-tab" hidden>
         Inbox <span id="inbox-count"></span>
       </button>
@@ -681,6 +684,23 @@
         <div id="channel-admin-status" class="status"></div>
       </section>
 
+      <!-- Roles, for admins (settings.js, "Roles"): each with its colour, name and members. -->
+      <section class="settings-page" data-page="roles" role="tabpanel" aria-label="Roles">
+        <h2>Roles</h2>
+        <p class="settings-help">
+          A role colours its people's names and gives them a section in the member list. Someone with several
+          roles gets the one highest in this list. Everyone sees changes straight away.
+        </p>
+        <div id="role-admin-list"></div>
+        <h3>Add a role</h3>
+        <form id="new-role-form" class="new-role">
+          <input type="color" id="new-role-colour" value="#3ba55c" aria-label="Colour">
+          <input id="new-role-name" maxlength="30" placeholder="e.g. Gamers" autocomplete="off" required aria-label="Name">
+          <button type="submit">Add role</button>
+        </form>
+        <div id="role-admin-status" class="status"></div>
+      </section>
+
       <section class="settings-page" data-page="inbox" role="tabpanel" aria-label="Inbox">
         <h2>Inbox</h2>
         <!-- Which reports to show. aria-pressed marks the chosen one (and the CSS colours it). -->
@@ -722,6 +742,7 @@
     <div class="profile-content">
       <div id="profile-avatar"></div>
       <h2 id="profile-name"></h2>
+      <div id="profile-roles" hidden></div>
       <p id="profile-status"></p>
       <p id="profile-bio"></p>
       <!-- Message / Add friend / Accept / ... depending on how you two are connected. -->

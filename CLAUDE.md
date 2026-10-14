@@ -151,6 +151,13 @@ the point is for me to understand how it works, not just to have it done.
   blockers, `start_call` doesn't ring them, `search_messages` skips blocked senders. Page: `blockedIds`
   (people.js); their messages drawn as "🚫 A message from someone you blocked · Show" (`shownBlocked`);
   Block / Unblock in `makeFriendButtons` (profile, Friends page), and a Blocked tab on the Friends page.
+- Roles (server.py, "Roles"): `roles` (id, name, colour "#rrggbb", position) and `user_roles`; admin-only
+  `POST /roles` (create), `/roles/{id}/edit`, `/roles/order` (all ids), `/roles/{id}/delete`, `/roles/{id}/members`
+  ({user_id, member}). "roles" (the list, top first; at connect before "users") and "users" (each person's
+  `roles`, top first) go to everyone after each change. Page (people.js): `topRole` / `nameColour` colour names
+  in messages and lists; `showUsers` gives each role with people online a member list section (#role-sections,
+  after Bots); role tags in the profile. Settings → Roles (settings.js, admins): colour picker, name, ↑ ↓ 🗑,
+  members with × and "+ Add someone". core.js redraws messages when the roles or anyone's roles change.
 - The user menu (people.js, "The user menu"): right-click (a long press on phones) on anything with
   `data-user-menu="<id>"` (message picture and name, member list, DM list, Friends page rows, call tiles,
   pins/search card heads, our own panel) opens #context-menu, built by `userMenuItems` from how we stand

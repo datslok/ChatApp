@@ -72,11 +72,12 @@
     - [x] LaTeX support (maths in messages, drawn by KaTeX)
     - [x] Open on startup: the Windows app can start with Windows (Settings → App behaviour; app 0.1.16)
     - [x] Search messages (by text, person or channel; SQLite's FTS5; the 🔍 at the top of a chat)
-- [ ] **17.** Social and presence
+- [x] **17.** Social and presence
     - [x] Statuses: Online, Idle (automatic when away), Do Not Disturb (no notifications), Invisible
     - [x] Muting a channel or DM (and groups; admins can't be muted: their messages always get through)
     - [x] Blocking someone (admins can't be blocked, nor bots)
-    - [ ] Roles with colours (coloured names and headings in the member list)
+    - [x] Roles with colours (coloured names and headings in the member list; Settings → Roles)
+    - [x] A user menu on right-click (profile, mention, message, call, friends, mute, block), like Discord's
 - [ ] **18.** Smaller polish
     - [x] Clicking a reply's quote jumps to the original message (was already there)
     - [x] Up arrow in an empty text box edits your last message (was already there)

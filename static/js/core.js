@@ -374,8 +374,22 @@ function handleServerMessage(event) {
     friendsKnown = true;
     return;
   }
+  if (data.type === "roles") {
+    // The roles changed (an admin, in Settings → Roles): names, the member list, open profile, Settings.
+    roles = data.roles;
+    showUsers([...people.values()]);  // (people.js: the same people, drawn again with the new roles)
+    redrawMessages();                 // (names above messages take their colour from roles)
+    renderRoleAdmin();                // (settings.js)
+    return;
+  }
   if (data.type === "users") {
+    // Who has which role, as text: if that changed, the names above messages need their new colour.
+    const rolesBefore = JSON.stringify([...people.values()].map((person) => [person.id, person.roles]));
     showUsers(data.users);
+    if (JSON.stringify(data.users.map((user) => [user.id, user.roles])) !== rolesBefore) {
+      redrawMessages();
+      renderRoleAdmin();
+    }
     renderVoiceMembers();  // (names may have changed)
     // A DM's name ("@kari") needs the people: after a reload straight into a DM, they only
     // arrive now, so the label said "@someone" until this.

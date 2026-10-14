@@ -1621,6 +1621,7 @@ function showMessage(message, follow = true) {
     const nameElement = document.createElement("span");
     nameElement.className = "name";
     nameElement.textContent = message.name;
+    nameElement.style.color = nameColour(message.user_id);  // their top role's colour (people.js), or none
     header.appendChild(nameElement);
     // ?. means "if there's such a person": old messages may be from accounts that are gone.
     if (people.get(message.user_id)?.bot) header.appendChild(makeBotBadge());
