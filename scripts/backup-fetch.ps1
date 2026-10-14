@@ -58,8 +58,8 @@ try {
         if ($LASTEXITCODE -ne 0) { throw "Fetching $newest failed." }
     }
 
-    # 2. Upload and release files we don't have yet (they never change once there, so new ones are enough).
-    $files = Invoke-OnServer "Set-Location '$ServerBackups'; Get-ChildItem uploads, releases -Recurse -File -ErrorAction SilentlyContinue | ForEach-Object { Resolve-Path -Relative `$_.FullName }"
+    # 2. Upload, release and seasonal files we don't have yet (they never change once there, so new ones are enough).
+    $files = Invoke-OnServer "Set-Location '$ServerBackups'; Get-ChildItem uploads, releases, seasonal -Recurse -File -ErrorAction SilentlyContinue | ForEach-Object { Resolve-Path -Relative `$_.FullName }"
     $new = 0
     foreach ($file in $files) {
         $relative = $file.TrimStart(".", "\")  # ".\uploads\abc.png" -> "uploads\abc.png"

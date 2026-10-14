@@ -32,6 +32,9 @@ desktop/node_modules/
 desktop/src-tauri/target/
 desktop/src-tauri/gen/
 
+# The seasonal easter egg's videos (scripts/seasonal-upload.ps1 copies them to the server)
+seasonal/
+
 # Desktop app installers, served at /releases/ for the app's automatic updates
 releases/
 

@@ -84,7 +84,7 @@
     - [x] A "New messages" divider where you stopped reading (also for messages that came while away)
     - [x] GIF search (GIPHY; Tenor's API was shut down in June 2026): the GIF button, saved on our server when sent
     - [ ] Mobile online icon
-    - [ ] Seasonal theme video
+    - [x] Seasonal easter egg video (🎃 on your own picture in October; seasonal/ on the server), and a bigger picture at the bottom left
     - [ ] Soundboard in voice
     - [ ] Push-to-talk, as an alternative to the noise gate
     - [x] Bug: after scrolling up, sending a message doesn't scroll back down to it (sending should always jump to the bottom)

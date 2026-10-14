@@ -1,5 +1,5 @@
 # Unpacks chatapp-data.zip (made by scripts\server\export.ps1 on the old PC) into this folder: chat.db,
-# uploads/, releases/ and .env, in the project folder. Run it on the new PC, before scripts\server\install.ps1:
+# uploads/, releases/, seasonal/ and .env, in the project folder. Run it on the new PC, before scripts\server\install.ps1:
 #
 #   .\scripts\server\import.ps1                       (chatapp-data.zip in the project folder)
 #   .\scripts\server\import.ps1 D:\chatapp-data.zip   (somewhere else, like a USB stick)
@@ -27,7 +27,7 @@ if ((Test-Path chat.db) -and -not $Force) {
 
 Write-Host "Unpacking $Zip..."
 Expand-Archive -Path $Zip -DestinationPath $root -Force
-foreach ($item in "chat.db", "uploads", "releases", ".env") {
+foreach ($item in "chat.db", "uploads", "releases", "seasonal", ".env") {
     $found = if (Test-Path $item) { "ok" } else { "MISSING" }
     Write-Host "  $item : $found"
 }

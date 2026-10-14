@@ -824,6 +824,7 @@ const mePopup = document.getElementById("me-popup");
 function renderUserPanel() {
   const me = people.get(myId);
   if (me) userPanelMe.replaceChildren(makePerson(me));  // (the same as in the online list)
+  if (me && season) addSeasonBadge();
   userPanelMe.dataset.userMenu = myId;  // (right-click: Profile, Edit profile)
   userMuteButton.classList.toggle("off", micMuted);
   userMuteButton.title = micMuted ? "Unmute" : "Mute";
@@ -833,6 +834,44 @@ function renderUserPanel() {
   userDeafenButton.setAttribute("aria-label", userDeafenButton.title);
   if (mePopup.open) renderMePopup();
 }
+
+// ----- The seasonal easter egg
+//
+// During a season (the server's "season" in "welcome": Halloween in October, ...) its emoji sits on
+// the corner of our picture here, and clicking it plays the season's video in a popup. The emoji is
+// inside the panel's button (which opens our popup), so its click must stop there.
+
+const seasonDialog = document.getElementById("season-dialog");
+const seasonVideo = document.getElementById("season-video");
+
+function addSeasonBadge() {
+  const badge = document.createElement("span");
+  badge.className = "season-badge";
+  badge.textContent = season.emoji;
+  badge.title = "?";  // (a hint, not an explanation)
+  badge.addEventListener("click", (event) => {
+    event.stopPropagation();  // not also a click on the panel (which would open our popup)
+    openSeasonVideo();
+  });
+  userPanelMe.querySelector(".person-picture")?.appendChild(badge);
+}
+
+function openSeasonVideo() {
+  seasonVideo.src = season.video;
+  seasonDialog.showModal();
+  seasonVideo.play().catch(() => {});  // (play() returns a promise; if the browser says no, the ▶ button is there)
+}
+
+// Closed (×, Esc or a click outside the video): stop it, and let go of the file.
+seasonDialog.addEventListener("close", () => {
+  seasonVideo.pause();
+  seasonVideo.removeAttribute("src");
+  seasonVideo.load();  // (without a src: drops what was loaded)
+});
+document.getElementById("season-close").addEventListener("click", () => seasonDialog.close());
+seasonDialog.addEventListener("click", (event) => {
+  if (event.target === seasonDialog) seasonDialog.close();  // the dark area around the video
+});
 
 userMuteButton.addEventListener("click", toggleMute);
 userDeafenButton.addEventListener("click", toggleDeafen);

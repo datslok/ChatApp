@@ -933,6 +933,12 @@
   <!-- Phones only: darkens the chat behind an open drawer. -->
   <div id="drawer-backdrop" hidden></div>
 
+  <!-- The seasonal easter egg's video (people.js): opened by the emoji on our picture at the bottom left. -->
+  <dialog id="season-dialog">
+    <button type="button" id="season-close" title="Close" aria-label="Close">×</button>
+    <video id="season-video" controls playsinline></video>
+  </dialog>
+
   <!-- The popup for looking at a picture. Hidden until showModal() opens it. -->
   <dialog id="image-viewer">
     <button type="button" id="viewer-close" title="Close">×</button>

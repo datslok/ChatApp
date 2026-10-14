@@ -120,6 +120,7 @@ let channels = [];
 const FRIENDS = "friends";
 const LOUNGE = "voice:lounge";  // the Lounge page (a "channel" name like FRIENDS, so switching works the same)
 let myId = null;            // our own user id; the server tells us in its "welcome"
+let season = null;          // the server's season now: {name, emoji, video} or null (the easter egg, people.js)
 let myPresence = "online";  // the status we chose: online, idle, dnd or invisible ("welcome", "my_presence")
 let pendingJump = null;     // a message id to go to once its channel's history arrives (from a notification)
 let jumpTarget = null;      // the message we last jumped to: pictures loading keep it in view (messages.js)
@@ -304,6 +305,7 @@ function handleServerMessage(event) {
     input.maxLength = maxTextLength;  // the textarea's maxlength, from the server's limit
     applyAppearance(data.appearance || {});  // the account's (appearance.js); null: the defaults
     vapidPublicKey = data.vapid_public_key;  // for push notifications (notifications.js)
+    season = data.season;  // the seasonal easter egg, or null (people.js, renderUserPanel)
     showPhoneBanner();  // now that we know whether the server has push (notifications.js)
     if (pageVersion === null) {
       pageVersion = data.page_version;  // the first welcome: the version we were loaded with

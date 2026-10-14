@@ -1615,6 +1615,67 @@ body.mini-hidden :fullscreen .tile-strip {
   border-color: var(--bg-panel-alt);  /* the ring around the dot in the panel's colour */
 }
 
+/* Our own picture here: bigger than in the lists (32px, not 24), with a bigger dot to match. */
+#user-panel-me .avatar.small {
+  width: 32px;
+  height: 32px;
+  font-size: 0.9rem;
+}
+#user-panel-me .person-picture .dot {
+  width: 12px;
+  height: 12px;
+}
+
+/* The seasonal easter egg: the season's emoji on the top corner of our picture. It tilts a little
+   when pointed at, as if it knew something. */
+.season-badge {
+  position: absolute;
+  top: -7px;
+  left: -7px;
+  font-size: 0.85rem;
+  line-height: 1;
+  cursor: pointer;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.5));
+  transition: transform 0.15s ease;
+}
+.season-badge:hover {
+  transform: rotate(-15deg) scale(1.25);
+}
+
+/* The video's popup: black, the video as big as fits. */
+#season-dialog {
+  max-width: 92vw;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: black;
+  overflow: visible;  /* (the × sits half outside) */
+}
+#season-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.8);
+}
+#season-video {
+  display: block;
+  max-width: 92vw;
+  max-height: 80vh;
+  border-radius: 8px;
+}
+#season-close {
+  position: absolute;
+  top: -14px;
+  right: -14px;
+  z-index: 1;  /* above the video */
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--bg-darkest);
+  color: var(--text);
+  font-size: 1.2rem;
+  cursor: pointer;
+}
+
 .user-panel-button {
   position: relative;  /* for the 🔕 in the corner of ⚙️ */
   flex-shrink: 0;

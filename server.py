@@ -2944,6 +2944,44 @@ async def reset_page():
     return FileResponse("static/reset.html")
 
 
+# ---------- Seasons ----------
+#
+# A seasonal easter egg: during a season (Halloween in October, ...) a small emoji sits on the corner
+# of your own picture at the bottom left, and clicking it plays that season's video. The videos aren't
+# in git (they're big, and may be someone else's work): they're in the git-ignored seasonal/ folder on
+# the server, copied there with scripts/seasonal-upload.ps1. A season whose video isn't there doesn't
+# show at all, so a copy of the chat without the videos has no easter egg.
+
+SEASONAL_DIR = Path("seasonal")
+SEASONS = [
+    # Its name, the months it lasts (1-12), its emoji, and its video's file name in seasonal/.
+    {"name": "halloween", "months": [10], "emoji": "🎃", "video": "halloween.mp4"},
+]
+
+
+def current_season():
+    """The season it is now (by the server's clock), if its video is here: {name, emoji, video},
+    sent to each page in "welcome". None: no season (or no video for it)."""
+    month = time.localtime().tm_mon
+    for season in SEASONS:
+        if month in season["months"] and (SEASONAL_DIR / season["video"]).is_file():
+            return {"name": season["name"], "emoji": season["emoji"], "video": "/seasonal/" + season["video"]}
+    return None
+
+
+@app.get("/seasonal/{name}")
+async def seasonal_video(name: str, request: Request):
+    """A season's video, for people logged in. Only the file names in SEASONS, so nothing else in
+    the folder (or outside it: "../.env") can ever be asked for. FileResponse answers "Range"
+    requests (a piece of the file), which is how a browser's video player skips ahead."""
+    if current_user(request) is None or name not in {season["video"] for season in SEASONS}:
+        raise HTTPException(404, "Not found.")
+    path = SEASONAL_DIR / name
+    if not path.is_file():
+        raise HTTPException(404, "Not found.")
+    return FileResponse(path, media_type="video/mp4", headers={"Cache-Control": "private, max-age=86400"})
+
+
 @app.get("/favicon.ico")
 async def favicon():
     # The icon in the browser tab. Browsers ask for /favicon.ico by themselves, on every page.
@@ -4483,6 +4521,7 @@ async def chat(websocket: WebSocket):
             "appearance": appearance_of(user_id),  # Settings → Appearance (None: the defaults)
             "presence": presence_of(user_id),  # the status they chose (the others may see another: users)
             "vapid_public_key": VAPID_PUBLIC_KEY or None,  # for subscribing to push (None: not set up)
+            "season": current_season(),  # the seasonal easter egg ("Seasons"; None: none now)
         })
         await send(websocket, {"type": "channels", "channels": channel_list()})  # (they may have changed while away)
         await send(websocket, friends_message(user_id))

@@ -5,6 +5,7 @@
 #   <Destination>\2026-10-11\.env      the settings and secrets, with it
 #   <Destination>\uploads\             every uploaded file: only new ones are copied, nothing is
 #   <Destination>\releases\            ever deleted here (so a file deleted by mistake survives)
+#   <Destination>\seasonal\            (the seasonal easter egg's videos, the same way)
 #
 # By hand:   .\scripts\server\backup.ps1 -Destination E:\ChatApp-backups
 # Every run is written to logs\backup.log. The development PC fetches copies with
@@ -32,9 +33,10 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "Copying chat.db failed." }
     Copy-Item .env $folder -Force
 
-    # 2. Uploads and releases: robocopy (Windows' own copy tool) copies only new and changed files.
-    #    /E: with subfolders. No /PURGE: files deleted here stay in the backup. The rest: less output.
-    foreach ($item in "uploads", "releases") {
+    # 2. Uploads, releases and the seasonal videos: robocopy (Windows' own copy tool) copies only new
+    #    and changed files. /E: with subfolders. No /PURGE: files deleted here stay in the backup.
+    #    The rest: less output.
+    foreach ($item in "uploads", "releases", "seasonal") {
         if (-not (Test-Path $item)) { continue }
         robocopy $item (Join-Path $Destination $item) /E /R:2 /W:5 /NP /NFL /NDL /NJH /NJS | Out-Null
         # robocopy's exit codes: 0-7 mean success (what was copied), 8 and up mean errors.

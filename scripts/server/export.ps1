@@ -4,6 +4,7 @@
 #   chat.db     the messages and accounts (a safe copy, even while the server runs)
 #   uploads/    pictures and files
 #   releases/   the desktop app's installers and latest.json
+#   seasonal/   the seasonal easter egg's videos (if any)
 #   .env        the settings and secrets (mail password, LiveKit keys, ...)
 #
 # Run it on the PC the chat runs on now:   .\scripts\server\export.ps1
@@ -31,7 +32,7 @@ try {
     & $python @pythonArgs tools\copy_db.py chat.db (Join-Path $temp "chat.db")  # (@ spreads the list into arguments)
     if ($LASTEXITCODE -ne 0) { throw "Copying chat.db failed." }
 
-    foreach ($item in "uploads", "releases", ".env") {
+    foreach ($item in "uploads", "releases", "seasonal", ".env") {
         if (Test-Path $item) {
             Write-Host "Copying $item..."
             Copy-Item $item -Destination $temp -Recurse

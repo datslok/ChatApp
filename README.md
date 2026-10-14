@@ -82,6 +82,7 @@ the same PC, but the scripts assume two).
 | `scripts\usage.ps1` | your PC | runs `usage.ps1` on the server |
 | `scripts\backup-fetch.ps1` | your PC | copies the server's newest backup here (`-Install`: every day) |
 | `scripts\release-upload.ps1` | your PC | puts a new desktop app version on the server |
+| `scripts\seasonal-upload.ps1` | your PC | puts a seasonal easter egg's video on the server (see [Optional: a seasonal easter egg](#optional-a-seasonal-easter-egg)) |
 | `scripts\refresh-icons.bat` | any Windows PC | double-click: Windows shows programs' new icons (after a new app icon) |
 | `tools\make_admin.py` | either | make someone an admin, or take it away (the owner can also do it in Settings → Admin → Admins) |
 | `tools\feedback.py` | either | read the bug reports and ideas, mark them done |
@@ -317,6 +318,20 @@ friends: the server remembers each search's answer for an hour, and each person 
 a minute. A GIF someone sends is downloaded by the server and saved like an uploaded picture (an
 animated WebP, usually a few hundred KB), so it stays even if GIPHY removes it, and only the person
 searching ever loads anything from GIPHY. The age rating is `pg-13` (`GIF_RATING` in server.py).
+
+### Optional: a seasonal easter egg
+
+During a season, a small emoji sits on the corner of everyone's own picture at the bottom left, and
+clicking it plays that season's video. The seasons are `SEASONS` in `server.py` (Halloween: October, 🎃,
+`halloween.mp4`); add one with a line there. The videos aren't in git: they go in a `seasonal\` folder on
+the server, from your PC with
+
+```powershell
+.\scripts\seasonal-upload.ps1 path\to\video.mp4 halloween
+```
+
+A season whose video isn't there shows nothing. The videos are only sent to people who are logged in,
+and the nightly backup and `export.ps1` include them.
 
 ### Optional: an AI bot
 
