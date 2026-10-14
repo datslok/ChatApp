@@ -1,5 +1,6 @@
 // The noise gate for voice: lets your microphone through while you're louder than the sensitivity
-// line, and silences it when you're not. This is an AudioWorklet: the browser runs it inside its
+// line, and silences it when you're not. Or, with push to talk, while the key is held (the page
+// tells it, voice.js: the audio engine can't see the keyboard). This is an AudioWorklet: the browser runs it inside its
 // audio engine, on every block of 128 samples (2.7 ms at 48 000 samples a second), even while the
 // window is minimised. The page loads it with audioContext.audioWorklet.addModule("/voice-gate.js").
 //
@@ -14,12 +15,18 @@ class VoiceGate extends AudioWorkletProcessor {
   constructor() {
     super();
     this.threshold = -100;  // dB: the sensitivity line (-100 = always open). The page sends the real one.
+    this.ptt = false;       // push to talk: the key decides, not the line
+    this.talking = false;   // ...and whether it's held right now
     this.holdLeft = 0;      // samples left before the gate may close
     this.gain = 0;          // how open it is right now: 0 (closed) to 1 (open)
     this.loudest = -100;    // the loudest block since the last report, in dB
     this.sinceReport = 0;   // samples since the last report
+    // The page sends {threshold} or {ptt, talking}: take whatever is in the message.
     this.port.onmessage = (event) => {
-      this.threshold = event.data.threshold;
+      const data = event.data;
+      if ("threshold" in data) this.threshold = data.threshold;
+      if ("ptt" in data) this.ptt = data.ptt;
+      if ("talking" in data) this.talking = data.talking;
     };
   }
 
@@ -36,8 +43,9 @@ class VoiceGate extends AudioWorkletProcessor {
     for (const sample of samples) sum += sample * sample;
     const level = Math.max(-100, 10 * Math.log10(sum / samples.length + 1e-10));
 
-    // Loud enough: open (and keep it open for HOLD_SECONDS). Otherwise, count down.
-    if (level > this.threshold) {
+    // Loud enough (or, with push to talk, the key held): open, and keep it open for HOLD_SECONDS
+    // (with push to talk: after letting go, so the last word isn't cut off). Otherwise, count down.
+    if (this.ptt ? this.talking : level > this.threshold) {
       this.holdLeft = HOLD_SECONDS * sampleRate;  // sampleRate: given to every AudioWorklet
     } else {
       this.holdLeft = Math.max(0, this.holdLeft - samples.length);

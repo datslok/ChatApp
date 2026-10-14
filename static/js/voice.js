@@ -50,9 +50,11 @@ let micTesting = false;     // "Test microphone" in Settings is on
 // ----- Settings, remembered in this browser: they belong to this device's microphone and speakers.
 // Device ids "" mean the computer's default. Volumes in %, gate in decibels (-100 = always on).
 // Noise suppression: "on" (RNNoise), "light" (the browser's own) or "off".
+// Input mode: "voice" (the gate's line decides) or "ptt" (push to talk: a key decides, see below).
 const voiceSettings = {
   inputDevice: "", outputDevice: "", cameraDevice: "", micVolume: 100, outputVolume: 100, gate: -60,
   noiseSuppression: "on",
+  inputMode: "voice", pttKey: "", pttWindowsKey: 0, pttName: "",  // (the key: see "Push to talk")
   shareHeight: 1080, shareFps: 30,  // screen sharing quality: the last choice in the 🖥️ menu
   miniCorner: "bottom-right",  // where the others float in fullscreen (rooms.js, the mini window)
   miniHidden: false,           // ...or hidden with 👥
@@ -90,7 +92,7 @@ async function setUpAudio() {
   const destination = context.createMediaStreamDestination();
   micGain.connect(gate).connect(destination);
   micGain.gain.value = voiceSettings.micVolume / 100;
-  gate.port.postMessage({ threshold: voiceSettings.gate });
+  gate.port.postMessage({ threshold: voiceSettings.gate, ptt: voiceSettings.inputMode === "ptt", talking: false });
   gate.port.onmessage = (event) => showMicLevel(event.data);  // the gate's reports, ~30 a second
   const denoiser = await loadDenoiser(context);
   if (denoiser) denoiser.connect(micGain);
@@ -201,9 +203,82 @@ function showMicLevel({ level, open }) {
 function showGateReadout() {
   readoutShownAt = performance.now();
   const decibels = (value) => String(Math.round(value)).replace("-", "−") + " dB";
-  const line = voiceSettings.gate <= -100 ? "Line off (always on)" : "Line " + decibels(voiceSettings.gate);
+  let line = voiceSettings.gate <= -100 ? "Line off (always on)" : "Line " + decibels(voiceSettings.gate);
+  if (voiceSettings.inputMode === "ptt") line = "Push to talk";
   voiceGateReadout.textContent = micStream ? `${line} · Your mic ${decibels(micLevel)}` : line;
 }
+
+// ----- Push to talk (Settings → Voice & audio → Input mode)
+//
+// The key is kept three ways (set in voice-settings.js):
+// - pttKey: the KeyboardEvent's "code", the physical key ("KeyV", "Space", "ShiftLeft"); a mouse button
+//   as "Mouse1" (middle), "Mouse3" (back) or "Mouse4" (forward), after MouseEvent's button numbers
+// - pttWindowsKey: Windows' own number for it (its "virtual-key code"), for the Windows app
+// - pttName: what Settings shows ("V", "Shift Left", "Mouse back button")
+let pttHeldHere = false;  // held, by this window's own key events (only while it has focus)
+let pttHeldApp = false;   // held, says the Windows app, which also sees keys pressed in other programs
+let pttWaiting = false;   // Settings is waiting for the new key (voice-settings.js): don't talk then
+
+// Tell the gate whether to let the microphone through. While this window has focus, its own key
+// events decide (they know when you're typing in a text box); otherwise the app's.
+function updatePushToTalk() {
+  const ptt = voiceSettings.inputMode === "ptt";
+  const talking = ptt && (document.hasFocus() ? pttHeldHere : pttHeldApp);
+  // (No audio engine yet: nothing to tell. setUpAudio tells a new gate the mode itself.)
+  if (voiceEngine) voiceEngine.then(({ gate }) => gate.port.postMessage({ ptt, talking })).catch(() => {});
+}
+
+// A letter (or space) key pressed while typing in a text box: that's typing, not talking.
+function isTyping(event) {
+  return event.key.length === 1 && event.target.closest?.("input, textarea, [contenteditable]");
+}
+
+document.addEventListener("keydown", (event) => {
+  if (voiceSettings.inputMode !== "ptt" || pttWaiting || event.code !== voiceSettings.pttKey) return;
+  if (event.repeat || isTyping(event)) return;  // (repeat: a held key sends keydown again and again)
+  pttHeldHere = true;
+  updatePushToTalk();
+});
+
+document.addEventListener("keyup", (event) => {
+  if (voiceSettings.inputMode !== "ptt" || event.code !== voiceSettings.pttKey) return;
+  pttHeldHere = false;
+  updatePushToTalk();
+});
+
+// Mouse buttons. preventDefault: the back and forward buttons would otherwise go back a page.
+for (const [type, held] of [["mousedown", true], ["mouseup", false], ["auxclick", null]]) {
+  document.addEventListener(type, (event) => {
+    if (voiceSettings.inputMode !== "ptt" || "Mouse" + event.button !== voiceSettings.pttKey) return;
+    event.preventDefault();
+    if (held === null || pttWaiting) return;  // (auxclick: only stopping the browser)
+    pttHeldHere = held;
+    updatePushToTalk();
+  });
+}
+
+// Leaving the window while holding the key: its "up" goes to another program, so let go here.
+window.addEventListener("blur", () => {
+  pttHeldHere = false;
+  updatePushToTalk();
+});
+window.addEventListener("focus", updatePushToTalk);
+
+// The Windows app (0.1.19 and newer, main.rs) watches the key in every program and calls this
+// (window.eval) each time it goes down or up.
+function pushToTalkFromApp(held) {
+  pttHeldApp = held;
+  updatePushToTalk();
+}
+
+// Tell the app which key to watch, as Windows' number for it (0: none, stop watching).
+function tellAppPushToTalkKey() {
+  if (!inDesktopApp) return;
+  const key = voiceSettings.inputMode === "ptt" ? voiceSettings.pttWindowsKey : 0;
+  pttHeldApp = false;
+  window.__TAURI_INTERNALS__.invoke("set_push_to_talk", { key }).catch(() => {});  // (an older app: not there)
+}
+tellAppPushToTalkKey();
 
 // Send our microphone in this room (turning it on if needed). Throws if the browser won't let us.
 async function sendMic(room) {

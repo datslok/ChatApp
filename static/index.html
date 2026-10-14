@@ -633,8 +633,24 @@
             <input type="range" id="voice-output-volume" min="0" max="200" step="5">
             <span id="voice-output-volume-value" class="slider-value"></span>
           </label>
+          <!-- Voice activity (the sensitivity line below) or push to talk. Not on phones (voice-settings.js). -->
+          <label id="voice-mode-row">
+            Input mode
+            <select id="voice-mode">
+              <option value="voice">Voice activity: on when you talk</option>
+              <option value="ptt">Push to talk: on while you hold a key</option>
+            </select>
+          </label>
+          <div id="voice-ptt-row" hidden>
+            <span>Push-to-talk key</span>
+            <button type="button" id="voice-ptt-key"></button>
+          </div>
+          <p id="voice-ptt-help" class="settings-help" hidden>
+            A key, or a mouse button (the side buttons are handy). In the Windows app it also works while
+            you're in another program, like a game; in a browser only while this tab is in front.
+          </p>
           <label>
-            Sensitivity: when the bar is left of the line, your microphone is silent
+            <span id="voice-meter-title">Sensitivity: when the bar is left of the line, your microphone is silent</span>
             <!-- The level meter, with the sensitivity slider laid on top of it. -->
             <div id="voice-meter">
               <div id="voice-meter-level"></div>
@@ -643,7 +659,7 @@
             <!-- The line's value and the microphone's level right now, as numbers. -->
             <span id="voice-gate-readout"></span>
           </label>
-          <p class="settings-help">
+          <p id="voice-gate-help" class="settings-help">
             Stay quiet and drag the line a little right of where the bar sits, then talk: the bar turns
             green when your voice gets through. All the way left: always on.
           </p>

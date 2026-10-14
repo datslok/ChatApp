@@ -116,6 +116,102 @@ voiceGateSlider.addEventListener("input", async () => {
   if (voiceEngine) (await getAudio()).gate.port.postMessage({ threshold: voiceSettings.gate });
 });
 
+// ----- Input mode: voice activity or push to talk (voice.js, "Push to talk")
+
+const voiceModeRow = document.getElementById("voice-mode-row");
+const voiceModeSelect = document.getElementById("voice-mode");
+const voicePttRow = document.getElementById("voice-ptt-row");
+const voicePttHelp = document.getElementById("voice-ptt-help");
+const voicePttKeyButton = document.getElementById("voice-ptt-key");
+const voiceMeterTitle = document.getElementById("voice-meter-title");
+const voiceGateHelp = document.getElementById("voice-gate-help");
+
+// Phones have no keys to hold, so no push to talk there (voiceSettings is kept per device anyway).
+voiceModeRow.hidden = onPhone;
+
+// Show the mode's own controls: the key for push to talk, the sensitivity line for voice activity.
+// The meter stays in both: with push to talk it turns green while you hold the key.
+function showInputMode() {
+  const ptt = voiceSettings.inputMode === "ptt";
+  voiceModeSelect.value = voiceSettings.inputMode;
+  voicePttRow.hidden = !ptt;
+  voicePttHelp.hidden = !ptt;
+  voiceGateSlider.hidden = ptt;
+  voiceGateHelp.hidden = ptt;
+  voiceMeterTitle.textContent = ptt
+    ? "Your microphone: green while it's on"
+    : "Sensitivity: when the bar is left of the line, your microphone is silent";
+  voicePttKeyButton.textContent = pttWaiting ? "Press a key…" : voiceSettings.pttName || "Set key";
+  voicePttKeyButton.classList.toggle("waiting", pttWaiting);
+  showGateReadout();
+}
+showInputMode();
+
+voiceModeSelect.addEventListener("change", () => {
+  voiceSettings.inputMode = voiceModeSelect.value;
+  saveVoiceSettings();
+  stopWaitingForKey();
+  showInputMode();
+  updatePushToTalk();       // the gate switches straight away, also in a call
+  tellAppPushToTalkKey();   // the app starts (or stops) watching the key
+});
+
+// "Set key": the next key or mouse button (middle, back or forward) becomes the push-to-talk key.
+// Esc, or a left or right click, cancels. The listeners are on window and in the "capture" phase:
+// they get the event before anything else on the page, so Esc doesn't also close Settings.
+voicePttKeyButton.addEventListener("click", () => {
+  if (pttWaiting) return;
+  pttWaiting = true;
+  window.addEventListener("keydown", pickKey, true);
+  window.addEventListener("mousedown", pickButton, true);
+  showInputMode();
+});
+
+function stopWaitingForKey() {
+  pttWaiting = false;
+  window.removeEventListener("keydown", pickKey, true);
+  window.removeEventListener("mousedown", pickButton, true);
+  showInputMode();
+}
+
+function pickKey(event) {
+  event.preventDefault();   // no typing, scrolling or closing anything with it
+  event.stopPropagation();  // and nobody else on the page sees it
+  if (event.code === "Escape" || !event.code) {
+    stopWaitingForKey();
+    return;
+  }
+  // The name: what the key types ("V", "Ø"), else its code with spaces ("ShiftLeft" -> "Shift Left").
+  let name = event.code.replace(/([a-z])([A-Z0-9])/g, "$1 $2");
+  if (event.key === " ") name = "Space";
+  else if (event.key.length === 1) name = event.key.toUpperCase();
+  // keyCode: an old part of key events, but in Chrome on Windows it's exactly Windows' own number for
+  // the key on this keyboard layout, which the app needs (voice.js, tellAppPushToTalkKey).
+  setPushToTalkKey(event.code, event.keyCode, name);
+}
+
+const MOUSE_BUTTONS = { 1: ["Middle mouse button", 0x04], 3: ["Mouse back button", 0x05], 4: ["Mouse forward button", 0x06] };
+
+function pickButton(event) {
+  const button = MOUSE_BUTTONS[event.button];
+  if (!button) {  // left or right: cancel (and let the click do what it does)
+    stopWaitingForKey();
+    return;
+  }
+  event.preventDefault();
+  event.stopPropagation();
+  setPushToTalkKey("Mouse" + event.button, button[1], button[0]);
+}
+
+function setPushToTalkKey(code, windowsKey, name) {
+  voiceSettings.pttKey = code;
+  voiceSettings.pttWindowsKey = windowsKey;
+  voiceSettings.pttName = name;
+  saveVoiceSettings();
+  stopWaitingForKey();
+  tellAppPushToTalkKey();
+}
+
 function showTestButton() {
   voiceTestButton.textContent = micTesting ? "Stop test" : "Test microphone";
 }
@@ -200,6 +296,7 @@ cameraSelect.addEventListener("change", async () => {
 // the tests, so the microphone or camera doesn't stay on unseen. (In a call, the microphone
 // stays open: closeMicIfUnused only closes it when nothing needs it.)
 function stopSettingsTests() {
+  if (pttWaiting) stopWaitingForKey();
   micTesting = false;
   showTestButton();
   closeMicIfUnused();

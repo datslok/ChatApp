@@ -2877,6 +2877,24 @@ button.download-button {
 #voice-meter-level.open {
   background: var(--green);
 }
+/* "Push-to-talk key [ V ]": the button shows the key, or "Press a key…" while it waits for one. */
+#voice-ptt-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+#voice-ptt-row[hidden] {
+  display: none;
+}
+#settings #voice-ptt-key {
+  min-width: 8em;
+  padding: 6px 12px;
+  background: var(--bg-darkest);
+  color: inherit;
+}
+#settings #voice-ptt-key.waiting {
+  outline: 2px solid var(--accent);  /* waiting for a key: clearly "listening" */
+}
 #voice-gate-readout {
   font-variant-numeric: tabular-nums;  /* digits all the same width, so the text doesn't jiggle */
   color: var(--text-muted);

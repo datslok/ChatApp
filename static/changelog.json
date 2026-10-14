@@ -46,6 +46,7 @@
         "Click a tile to make it big, right-click it for the profile. ⛶ or double-click a screen for fullscreen, where the others float in a small window: drag it to any corner, or hide it with 👥. In a DM, drag the call's bottom edge to resize it",
         "Volume per person (0–200%) in their profile: click them, also in the voice list. A shared screen has its own volume: hover over it for the slider",
         "Settings → Voice & audio: microphone, speakers, volumes, sensitivity and noise suppression. Settings → Video: your camera, with a preview",
+        "Push to talk: Settings → Voice & audio → Input mode → Push to talk, then Set key (a key, or a mouse button like the side ones). Your microphone is only on while you hold it. In the Windows app it also works while you're in a game or another program; in a browser only while the chat is in front. Not on phones",
         "The signal icon in a call shows your ping. Click it for details, including how a screen share is doing (frame rate, data, and whether the graphics card encodes it)",
         "Sharing one browser window and covering it with another window makes the share go black (the browser stops drawing covered windows). Share the entire screen instead, or keep the window uncovered"
       ]
@@ -112,6 +113,7 @@
     {
       "date": "2026-10-14",
       "items": [
+        "🎙️ Push to talk: Settings → Voice & audio → Input mode. Hold your key (or a mouse button) to talk. In the Windows app it works in games too, after the app updates itself",
         "Fixed: the emoji picker no longer shows empty boxes for emoji your device can't draw yet (brand-new ones)",
         "🇳🇴 Country flags show as real flags on Windows too (Windows itself only has letters for them)",
         "On phones, the smiley next to the text box opens both emoji and GIFs (tabs at the top), so there's more room to type, and Back closes them. The smiley is a calmer line drawing now",

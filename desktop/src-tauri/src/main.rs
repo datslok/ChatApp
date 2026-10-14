@@ -3,7 +3,7 @@
 
 use std::os::windows::process::CommandExt;  // raw_arg
 use std::process::Command;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use tauri::webview::{DownloadEvent, NewWindowResponse};
 use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
 use tauri_plugin_autostart::ManagerExt as AutostartExt;  // app.autolaunch()
@@ -33,7 +33,7 @@ fn main() {
         .plugin(tauri_plugin_autostart::Builder::new().build())
         // The commands the page may call (window.__TAURI_INTERNALS__.invoke("check_for_update")).
         // Made permissions in build.rs, allowed for the chat page in capabilities/default.json.
-        .invoke_handler(tauri::generate_handler![check_for_update, set_zoom, get_autostart, set_autostart])
+        .invoke_handler(tauri::generate_handler![check_for_update, set_zoom, get_autostart, set_autostart, set_push_to_talk])
         .setup(|app| {
             // First, before the chat window opens WebView2's storage: repair it if it's damaged.
             repair_local_storage(app.handle());
@@ -92,6 +92,9 @@ fn main() {
                 }
             })?;
 
+            // Push to talk: watch the chosen key, also while other programs are in front.
+            watch_push_to_talk(app.handle().clone());
+
             // Starting with Windows is on by default (the first time only, see below).
             turn_on_autostart_once(app.handle());
 
@@ -138,6 +141,50 @@ fn set_autostart(app: tauri::AppHandle, on: bool) -> Result<(), String> {
     let autostart = app.autolaunch();
     let result = if on { autostart.enable() } else { autostart.disable() };
     result.map_err(|error| error.to_string())
+}
+
+// ----- Push to talk (Settings → Voice & audio; the page's side is in voice.js)
+//
+// A web page only hears keys while its window is in front, but push to talk matters most while
+// you're in a game. So the app watches the key itself: a thread asks Windows "is this key down right
+// now?" (GetAsyncKeyState) about 60 times a second, and tells the page when the answer changes.
+// Only asking, never taking: Windows' own hotkeys (RegisterHotKey) would take the key away from
+// every other program, so a push-to-talk V could no longer be typed anywhere.
+
+// GetAsyncKeyState is part of Windows itself (user32.dll), so we can declare it and call it
+// directly: no extra package. Its answer has the top bit set (negative) while the key is down.
+#[link(name = "user32")]
+extern "system" {
+    fn GetAsyncKeyState(key: i32) -> i16;
+}
+
+// The key to watch, as Windows' number for it (a "virtual-key code"; 0 = none). Set by the page,
+// read by the thread: an AtomicI32, like UPDATING below, is safe to share between threads.
+static PUSH_TO_TALK_KEY: AtomicI32 = AtomicI32::new(0);
+
+// The page tells us its key (voice.js, tellAppPushToTalkKey), and 0 when push to talk is off.
+// Only real key numbers (1 to 254), so nothing odd ever reaches Windows.
+#[tauri::command]
+fn set_push_to_talk(key: i32) {
+    PUSH_TO_TALK_KEY.store(if (1..=254).contains(&key) { key } else { 0 }, Ordering::SeqCst);
+}
+
+fn watch_push_to_talk(app: tauri::AppHandle) {
+    std::thread::spawn(move || {
+        let mut was_down = false;
+        loop {
+            let key = PUSH_TO_TALK_KEY.load(Ordering::SeqCst);
+            // unsafe: Rust can't check what code outside Rust does. This call only reads a key's state.
+            let down = key != 0 && unsafe { GetAsyncKeyState(key) } < 0;
+            if down != was_down {
+                was_down = down;
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.eval(format!("pushToTalkFromApp({down})"));  // (true or false: never anything else)
+                }
+            }
+            std::thread::sleep(std::time::Duration::from_millis(if key == 0 { 250 } else { 15 }));
+        }
+    });
 }
 
 // On by default: the first time the app runs (0.1.17 or newer, so also after updating from an older
