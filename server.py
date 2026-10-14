@@ -2214,6 +2214,13 @@ async def friend_request(data: FriendAction, request: Request):
             db.execute(
                 "INSERT INTO friendships (user_a, user_b, requested_by) VALUES (?, ?, ?)", (user_a, user_b, me)
             )
+        # Their phones too (the page notifies by itself: notifyFriendRequest). Tapping it opens the
+        # Friends page ("friends" as the channel, like the page's own name for it).
+        avatar = db.execute("SELECT avatar_id FROM users WHERE id = ?", (me,)).fetchone()[0]
+        push_in_background([other], {
+            "title": username_of(me), "body": "👋 sent you a friend request", "channel": "friends",
+            "icon": f"/avatars/{avatar}" if avatar else "/icons/icon-192.png",
+        })
     elif row[1] == 0 and row[0] == other:
         # They had already asked us: asking back counts as accepting.
         with db:

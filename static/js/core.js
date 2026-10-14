@@ -127,6 +127,7 @@ let reconnectDelay = 1000;  // milliseconds to wait before the next reconnect at
 const unread = new Set();   // channels and DMs with messages we haven't seen
 const mentionCounts = new Map();  // channel -> how many unread messages there mention us
 const mutedChats = new Set();  // chats we muted (the server's "mutes"): no unread dot, greyed out
+let friendsKnown = false;      // has the first "friends" list arrived? (after it, new requests notify)
 
 // ----- Reloading by itself after an update to the page (like pressing F5)
 //
@@ -360,10 +361,17 @@ function handleServerMessage(event) {
   }
   if (data.type === "friends") {
     // Our own friends and requests (only we get this): {friends: [ids], incoming, outgoing}
+    const before = new Set(incomingIds);
     setAll(friendIds, data.friends);
     setAll(incomingIds, data.incoming);
     setAll(outgoingIds, data.outgoing);
     friendsChanged();
+    // A request that's new since the last list: notify. (Not the ones already waiting when the page
+    // loaded: the first list only fills friendsKnown.)
+    if (friendsKnown) {
+      for (const id of incomingIds) if (!before.has(id)) notifyFriendRequest(id);  // (notifications.js)
+    }
+    friendsKnown = true;
     return;
   }
   if (data.type === "users") {

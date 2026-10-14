@@ -466,12 +466,38 @@ function notify(channel, messageId, senderId, senderName, text) {
   }
 }
 
+// A new friend request (core.js, "friends"): the ping and a desktop notification, like a DM.
+// Clicking it opens the Friends page's Requests tab (openMessage with FRIENDS).
+function notifyFriendRequest(userId) {
+  if (isMuted()) return;
+  if (pushOn) return;  // this device gets a push for it instead (server.py, friend_request): not twice
+  if (notificationSound) playPing();
+  if (!desktopNotifications || !("Notification" in window) || Notification.permission !== "granted") return;
+  const person = people.get(userId);
+  try {
+    const notification = new Notification(person?.name ?? "Someone", {
+      body: "👋 sent you a friend request",
+      icon: person?.avatar ? "/avatars/" + encodeURIComponent(person.avatar) : undefined,
+      tag: "friend-request-" + userId,
+      extra: { channel: FRIENDS, messageId: null },  // (for the desktop app, as in notify)
+    });
+    if (!inDesktopApp) {
+      notification.addEventListener("click", () => {
+        openMessage(FRIENDS, null);
+        notification.close();
+      });
+    }
+  } catch {}
+}
+
 // A notification was clicked: show that channel and go to the message. Called from the
 // click handler above, and by the desktop app (main.rs). In another channel, the message only
 // arrives with that channel's history, so the jump waits for it (core.js, "history").
-// messageId null: just the channel (a call's notification opens the DM).
+// messageId null: just the channel (a call's notification opens the DM). FRIENDS: the Friends
+// page, on its Requests tab (a friend request's notification).
 function openMessage(channel, messageId) {
   window.focus();
+  if (channel === FRIENDS) document.querySelector('.tab[data-tab="requests"]')?.click();  // (people.js)
   if (channel === currentChannel) {
     if (messageId !== null) jumpToMessage(messageId);
     return;
