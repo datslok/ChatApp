@@ -83,7 +83,7 @@ the same PC, but the scripts assume two).
 | `scripts\backup-fetch.ps1` | your PC | copies the server's newest backup here (`-Install`: every day) |
 | `scripts\release-upload.ps1` | your PC | puts a new desktop app version on the server |
 | `scripts\refresh-icons.bat` | any Windows PC | double-click: Windows shows programs' new icons (after a new app icon) |
-| `tools\make_admin.py` | either | make someone an admin, or take it away |
+| `tools\make_admin.py` | either | make someone an admin, or take it away (the owner can also do it in Settings → Admin → Admins) |
 | `tools\feedback.py` | either | read the bug reports and ideas, mark them done |
 | `tools\make_pwa_icons.py` | your PC | makes the phone app's icons from the app icon |
 | `tools\make_vapid_keys.py` | either | once: the key pair for push notifications, for `.env` |
@@ -252,12 +252,14 @@ carry). So your router has to send two ports straight to the server:
 ### 6. Your account (the admin)
 
 Open `https://chat.example.com`, click **Create one**, and make your account. The very first account
-needs no invite link (everyone after you does), and becomes the admin by itself: admins can edit and
-delete anyone's messages and custom emoji, manage channels and roles, and read the bug reports. Click
+needs no invite link (everyone after you does), and becomes the admin and the **owner** by itself:
+admins can edit and delete anyone's messages and custom emoji, manage channels and roles, read the bug
+reports and ban people (Settings → Admin), and the owner can also make others admins there, or ban an
+admin. Nobody can ban the owner. Click
 the link in the email you get to verify your address (without `SMTP_HOST`, it's in `logs\chat.log`
 instead).
 
-To make someone else an admin later (or yourself, on a server that already had accounts), on the server:
+To make someone an admin from the server instead (or yourself, on a server from before owners existed):
 
 ```powershell
 cd C:\ChatApp

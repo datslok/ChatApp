@@ -3267,6 +3267,66 @@ button.download-button {
   color: var(--text-strong);
 }
 
+/* Admin → Bans and Admins: one row per person, with a button at the end. */
+.admin-person-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.admin-person-row .joined-details {
+  flex: 1;  /* (pushes the button to the end of the row) */
+}
+
+#settings .admin-person-row button {
+  padding: 6px 12px;
+  background: var(--bg-neutral);
+  color: inherit;
+  font-size: 0.9rem;
+}
+
+#ban-picker,
+#make-admin-picker {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* The ban popup: like the invite popup, with a red Ban button. */
+#ban-dialog {
+  width: min(420px, 100% - 32px);
+  box-sizing: border-box;
+  padding: 20px;
+  border: none;
+  border-radius: 8px;
+  background: var(--bg-panel);
+  color: inherit;
+}
+#ban-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.6);
+}
+.ban-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+.ban-field input,
+.ban-field select {
+  padding: 8px 10px;
+  border: none;
+  border-radius: 6px;
+  background: var(--bg-darkest);
+  color: var(--text);
+  font-size: 0.95rem;
+}
+.group-dialog-buttons button.danger {
+  background: var(--button-red);
+}
+
 /* Admin → Invites: who joined, invited by whom and when. */
 .joined-row {
   display: flex;

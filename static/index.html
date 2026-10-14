@@ -276,6 +276,33 @@
     </form>
   </dialog>
 
+  <!-- Banning someone (people.js, "Banning"): a reason, how long, and Ban. Admins only. -->
+  <dialog id="ban-dialog">
+    <form id="ban-form" class="invite-content">
+      <h2 id="ban-title"></h2>
+      <p class="group-dialog-help">They're logged out straight away and can't log in until the ban ends. They aren't
+        told who banned them, only the reason.</p>
+      <label class="ban-field">
+        Reason (optional, shown to them)
+        <input id="ban-reason" maxlength="200" autocomplete="off">
+      </label>
+      <label class="ban-field">
+        How long
+        <select id="ban-days">
+          <option value="">For good</option>
+          <option value="1">1 day</option>
+          <option value="7">1 week</option>
+          <option value="30">1 month</option>
+        </select>
+      </label>
+      <p id="ban-dialog-status" class="action-status"></p>
+      <div class="group-dialog-buttons">
+        <button type="button" id="ban-cancel" class="secondary">Cancel</button>
+        <button type="submit" class="danger">Ban</button>
+      </div>
+    </form>
+  </dialog>
+
   <!-- Invite links (people.js, "Invites"): make one, copy it, cancel unused ones. -->
   <dialog id="invite-dialog">
     <div class="invite-content">
@@ -700,6 +727,9 @@
           <button type="button" class="admin-tab" data-section="channels">Channels</button>
           <button type="button" class="admin-tab" data-section="roles">Roles</button>
           <button type="button" class="admin-tab" data-section="invites">Invites</button>
+          <button type="button" class="admin-tab" data-section="bans">Bans</button>
+          <!-- Only the owner (the first account) makes and removes admins. -->
+          <button type="button" class="admin-tab" data-section="admins" id="admins-tab" hidden>Admins</button>
         </div>
 
         <!-- The sidebar's channels and headings (settings.js, "Channels"). -->
@@ -759,6 +789,34 @@
           <h3>Joined</h3>
           <div id="admin-joined"></div>
           <div id="admin-invites-status" class="status"></div>
+        </div>
+
+        <!-- Bans (settings.js, "Admin: bans"): ban someone, and everyone banned now, with Unban. -->
+        <div class="admin-section" data-section="bans">
+          <p class="settings-help">
+            A banned person is logged out, can't log in until the ban ends, and disappears from everyone's lists.
+            Their messages stay. Admins can't be banned, except by the owner.
+          </p>
+          <div class="person-picker">
+            <input id="ban-picker" placeholder="Ban someone: type a name" autocomplete="off" aria-label="Ban someone">
+            <div id="ban-picker-list" hidden></div>
+          </div>
+          <h3>Banned now</h3>
+          <div id="ban-list"></div>
+          <div id="ban-status" class="status"></div>
+        </div>
+
+        <!-- Admins (settings.js, "Admin: admins"), for the owner only. -->
+        <div class="admin-section" data-section="admins">
+          <p class="settings-help">
+            Admins can edit and delete anyone's messages, manage channels and roles, read the inbox, and ban people.
+          </p>
+          <div id="admin-list"></div>
+          <div class="person-picker">
+            <input id="make-admin-picker" placeholder="Make someone an admin: type a name" autocomplete="off" aria-label="Make someone an admin">
+            <div id="make-admin-list" hidden></div>
+          </div>
+          <div id="admins-status" class="status"></div>
         </div>
       </section>
     </div>

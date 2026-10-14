@@ -247,6 +247,15 @@ the point is for me to understand how it works, not just to have it done.
   page has sub-tabs (`.admin-tab`, `showAdminSection`) for the sections Inbox, Channels, Roles and Invites
   (everyone's open links with ×, and who joined with whose: `GET /admin/invites`, `/admin/invites/{code}/cancel`,
   `logged_in_admin`). New admin tools go there as another section.
+- Bans and the owner (server.py, "Bans and admins"; people.js "Banning"; settings.js "Admin → Bans/Admins"):
+  `users.is_owner` (the first account, set in /register's INSERT like is_admin; older servers: the oldest
+  non-bot admin), `banned_at`/`banned_until` (NULL = for good; 1, 7 or 30 days)/`banned_by`/`ban_reason`.
+  `BANNED_NOW` (SQL) is checked by `session_user` (so banned = logged out), `users_message` (out of the lists)
+  and `ban_message` (/login's answer, after the password). `/admin/ban` (`ban_refusal`: not yourself, bots or
+  the owner; admins only by the owner; also takes admin away) deletes sessions and open invites, removes
+  them from LiveKit rooms (`remove_from_voice`, RoomService/RemoveParticipant with a roomAdmin JWT) and
+  closes their pages; `/admin/unban`, `/admin/bans`; `/admin/admins` (owner only). Page: Ban… in the user
+  menu (`mayBan`), #ban-dialog, Settings → Admin → Bans and Admins (the owner's sub-tab).
 - Invites and email verification (server.py, "Invites" and "Email verification"; since 2026-10-14, replacing the
   old INVITE_CODE): `/register` needs an unused invite (`invites`: code, created_by, used_by; one use,
   `INVITE_DAYS` 7, `MAX_OPEN_INVITES` 10 each), checked and used up in the same transaction as the INSERT, unless

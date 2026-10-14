@@ -151,6 +151,7 @@ function showUsers(users) {
   if (profileDialog.open) renderProfile(profileUserId);
   if (settingsDialog.open) settingsBanner.replaceChildren(makeBanner(myId));
   if (currentChannel === FRIENDS) renderPeopleList();  // names, pictures, online dots
+  if (settingsDialog.open) renderAdmins();  // (Settings → Admin → Admins: who's an admin may have changed)
 }
 
 // Who's in the chat we're looking at, alphabetical (the order the server sent everyone in): a DM's
@@ -486,6 +487,54 @@ document.getElementById("invite-button").addEventListener("click", async () => {
 });
 document.getElementById("invite-new").addEventListener("click", () => inviteAction("/invites"));
 document.getElementById("invite-close").addEventListener("click", () => inviteDialog.close());
+
+// ---------- Banning ----------
+//
+// Admins ban people from the user menu (Ban…) or Settings → Admin → Bans; both open this popup:
+// an optional reason (shown to them when they try to log in), how long, and Ban. The server
+// (server.py, "Bans and admins") checks who may ban whom; mayBan only decides whether to offer it.
+
+const banDialog = document.getElementById("ban-dialog");
+const banReason = document.getElementById("ban-reason");
+const banDays = document.getElementById("ban-days");
+const banDialogStatus = document.getElementById("ban-dialog-status");
+let banTarget = null;  // {id, name} of the person the popup is for
+
+// The owner: the first account, who can also ban admins and make or remove them.
+function amOwner() {
+  return people.get(myId)?.owner === true;
+}
+
+// Never ourselves, bots or the owner; an admin only if we're the owner.
+function mayBan(person) {
+  return amAdmin() && person.id !== myId && !person.bot && !person.owner && (!person.admin || amOwner());
+}
+
+function openBanDialog(person) {
+  closeContextMenu();  // (the user menu, if it's open)
+  banTarget = { id: person.id, name: person.name };
+  document.getElementById("ban-title").textContent = `Ban ${person.name}?`;  // (textContent: a name is never code)
+  banReason.value = "";
+  banDays.value = "";  // "For good" first
+  banDialogStatus.textContent = "";
+  banDialog.showModal();
+}
+
+document.getElementById("ban-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const result = await postJson("/admin/ban", {
+    user_id: banTarget.id,
+    reason: banReason.value,
+    days: banDays.value ? Number(banDays.value) : null,  // (a <select>'s value is text: "7" -> 7)
+  }).catch(() => ({ ok: false, error: "No connection. Try again in a moment." }));
+  if (!result.ok) {
+    banDialogStatus.textContent = result.error;
+    return;
+  }
+  banDialog.close();
+  if (settingsDialog.open) showBans(result.data);  // (settings.js: the Bans list, if it's in sight)
+});
+document.getElementById("ban-cancel").addEventListener("click", () => banDialog.close());
 
 // ---------- Group DMs ----------
 //
@@ -978,6 +1027,7 @@ function userMenuItems(userId) {
   }
   if (blockedIds.has(userId)) {
     items.push("-", ["Unblock", () => friendAction("unblock", userId, peopleStatus)]);
+    if (mayBan(person)) items.push(["Ban…", () => openBanDialog(person), "danger"]);
     return items;
   }
   if (friendIds.has(userId)) {
@@ -1019,6 +1069,7 @@ function userMenuItems(userId) {
       }
     }, "danger"]);
   }
+  if (mayBan(person)) items.push(["Ban…", () => openBanDialog(person), "danger"]);
   return items;
 }
 

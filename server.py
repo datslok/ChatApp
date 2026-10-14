@@ -13,6 +13,7 @@ import socket
 import sqlite3
 import ssl
 import time
+import urllib.request
 import warnings
 from email.message import EmailMessage
 from email.utils import formatdate, make_msgid, parseaddr
@@ -635,6 +636,25 @@ if "email_verified" not in table_columns("users"):
         db.execute("ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 1")
         db.execute("ALTER TABLE users ADD COLUMN pending_email TEXT")
 
+if "is_owner" not in table_columns("users"):
+    # The owner (see "Bans and admins"): the first account, which made the server. On a server from
+    # before owners existed, that's the oldest admin who isn't a bot.
+    with db:
+        db.execute("ALTER TABLE users ADD COLUMN is_owner INTEGER NOT NULL DEFAULT 0")
+        db.execute("UPDATE users SET is_owner = 1 WHERE id = (SELECT MIN(id) FROM users WHERE is_admin = 1 AND is_bot = 0)")
+
+if "banned_at" not in table_columns("users"):
+    # Bans: when, until when (NULL = for good), by whom and why. banned_at NULL = not banned.
+    with db:
+        db.execute("ALTER TABLE users ADD COLUMN banned_at TEXT")
+        db.execute("ALTER TABLE users ADD COLUMN banned_until TEXT")
+        db.execute("ALTER TABLE users ADD COLUMN banned_by INTEGER REFERENCES users(id)")
+        db.execute("ALTER TABLE users ADD COLUMN ban_reason TEXT")
+
+# "Banned right now", as SQL about a row of users: banned, and either for good or not over yet.
+# (Times in SQLite's own form, "2026-10-21 14:30:00" in UTC, so they compare as text.)
+BANNED_NOW = "(users.banned_at IS NOT NULL AND (users.banned_until IS NULL OR users.banned_until > datetime('now')))"
+
 
 def is_bot(user_id):
     """Is this the AI bot's account (tools/make_bot.py)? Bots may be invited into DMs (see can_join)."""
@@ -1005,10 +1025,11 @@ def session_user(token):
     """(user id, email verified?) for a session token, or None if it's missing, unknown or expired."""
     if not token:
         return None
+    # (A banned account is "logged out" too: see "Bans and admins".)
     return db.execute(
-        """
+        f"""
         SELECT users.id, users.email_verified FROM sessions JOIN users ON users.id = sessions.user_id
-        WHERE sessions.token = ? AND sessions.created_at > datetime('now', ?)
+        WHERE sessions.token = ? AND sessions.created_at > datetime('now', ?) AND NOT {BANNED_NOW}
         """,
         (token, f"-{SESSION_DAYS} days"),
     ).fetchone()
@@ -1067,11 +1088,12 @@ async def register(credentials: Credentials, request: Request, response: Respons
         # (an error inside "with db" undoes everything in it). So two people can't both use one
         # link at the same moment: the second one's UPDATE finds it used and changes no row.
         with db:
-            # The first person on a new server (bots don't count) becomes its admin. Decided inside the
-            # INSERT itself, so two people signing up at the same moment can't both be first.
+            # The first person on a new server (bots don't count) becomes its admin and owner. Decided
+            # inside the INSERT itself, so two people signing up at the same moment can't both be first.
+            first = "NOT EXISTS (SELECT 1 FROM users WHERE is_bot = 0)"
             cursor = db.execute(
-                "INSERT INTO users (username, password_hash, email, email_verified, is_admin)"
-                " VALUES (?, ?, ?, 0, NOT EXISTS (SELECT 1 FROM users WHERE is_bot = 0))",
+                "INSERT INTO users (username, password_hash, email, email_verified, is_admin, is_owner)"
+                f" VALUES (?, ?, ?, 0, {first}, {first})",
                 (username, password_hash, email),
             )
             user_id = cursor.lastrowid  # the id SQLite gave the new user
@@ -1122,6 +1144,9 @@ async def login(credentials: Credentials, response: Response):
         raise wrong
 
     failures.pop(key, None)  # logged in: start counting from zero again
+    banned = ban_message(user_id)
+    if banned:
+        raise HTTPException(403, banned)
     start_session(response, user_id)
     return {"ok": True}
 
@@ -1563,6 +1588,182 @@ async def admin_cancel_invite(code: str, request: Request):
     with db:
         db.execute("DELETE FROM invites WHERE code = ? AND used_by IS NULL", (code,))
     return all_invites()
+
+
+# ---------- Bans and admins ----------
+#
+# The owner is the first account (is_owner): they can ban anyone but themselves, and make people
+# admins or take it away (Settings → Admin → Admins). Other admins can ban everyone but admins, the
+# owner and bots. A ban lasts a day, a week, a month or for good (banned_until NULL); it ends by
+# itself, because every check compares banned_until with the time now (BANNED_NOW). While banned,
+# session_user treats them as logged out, /login says why, and they're in nobody's lists. Their
+# messages stay. Unbanning (or the end of the ban) changes nothing else: they just log in again.
+
+BAN_DAYS = (1, 7, 30)  # the lengths on offer; None = for good
+MAX_BAN_REASON = 200
+
+
+def is_owner(user_id):
+    row = db.execute("SELECT is_owner FROM users WHERE id = ?", (user_id,)).fetchone()
+    return bool(row and row[0])
+
+
+def ban_message(user_id):
+    """What /login says to a banned account ("This account is banned until 21 October 2026. Reason:
+    spam"), or None if it isn't banned now."""
+    row = db.execute(f"SELECT banned_until, ban_reason FROM users WHERE id = ? AND {BANNED_NOW}", (user_id,)).fetchone()
+    if row is None:
+        return None
+    until, reason = row
+    if until is None:
+        text = "This account is banned."
+    else:
+        day = time.strftime("%d %B %Y", time.strptime(until, "%Y-%m-%d %H:%M:%S")).lstrip("0")  # "21 October 2026"
+        text = f"This account is banned until {day}."
+    return text + (f" Reason: {reason}" if reason else "")
+
+
+def ban_refusal(admin_id, target_id):
+    """Why this admin may not ban that account, or None if they may."""
+    row = db.execute("SELECT is_admin, is_owner, is_bot FROM users WHERE id = ?", (target_id,)).fetchone()
+    if row is None:
+        return "There's no such account."
+    admin, owner, bot = row
+    if target_id == admin_id:
+        return "You can't ban yourself."
+    if bot:
+        return "Bots can't be banned."
+    if owner:
+        return "The owner can't be banned."
+    if admin and not is_owner(admin_id):
+        return "Only the owner can ban an admin."
+    return None
+
+
+def remove_from_voice(room, user_id):
+    """Throw someone out of a LiveKit room. Closing their chat connection makes their page leave by
+    itself, but a page that doesn't play along could stay connected to LiveKit (tickets are only
+    checked when joining). LiveKit's own API can remove them: an HTTP request to its RoomService,
+    with a short ticket of our own that says we may run that room ("roomAdmin"). Blocking: run it in
+    a thread. LiveKit's address for the API is the same as for browsers, with http(s) for ws(s)."""
+    if not (LIVEKIT_URL and LIVEKIT_API_KEY and LIVEKIT_API_SECRET):
+        return
+    base = LIVEKIT_URL.replace("wss://", "https://", 1).replace("ws://", "http://", 1).rstrip("/")
+    now = int(time.time())
+    token = make_jwt({"iss": LIVEKIT_API_KEY, "nbf": now, "exp": now + 60, "video": {"room": room, "roomAdmin": True}})
+    request = urllib.request.Request(
+        base + "/twirp/livekit.RoomService/RemoveParticipant",
+        data=json.dumps({"room": room, "identity": str(user_id)}).encode(),
+        headers={"Content-Type": "application/json", "Authorization": "Bearer " + token},
+    )
+    try:
+        urllib.request.urlopen(request, timeout=5).close()
+    except Exception as error:  # (not in the room any more, for one: LiveKit answers "not found")
+        print(f"Couldn't remove user {user_id} from voice room {room}: {error}", flush=True)
+
+
+def ban_list():
+    """Everyone banned right now, the newest ban first, for Settings → Admin → Bans. Times as ISO."""
+    rows = db.execute(
+        f"""
+        SELECT users.id, users.username, admin.username, users.banned_at, users.banned_until, users.ban_reason
+        FROM users LEFT JOIN users AS admin ON admin.id = users.banned_by
+        WHERE {BANNED_NOW} ORDER BY users.banned_at DESC
+        """
+    ).fetchall()
+    return {
+        "bans": [
+            {
+                "user_id": user_id, "name": name, "by": by, "at": iso_time(at),
+                "until": iso_time(until) if until else None, "reason": reason,
+            }
+            for user_id, name, by, at, until, reason in rows
+        ],
+    }
+
+
+class BanRequest(BaseModel):
+    user_id: int
+    days: int | None = None  # 1, 7 or 30; None = for good
+    reason: str = ""
+
+
+@app.post("/admin/ban")
+async def ban(data: BanRequest, request: Request):
+    admin_id = logged_in_admin(request)
+    refusal = ban_refusal(admin_id, data.user_id)
+    if refusal:
+        raise HTTPException(403, refusal)
+    if data.days is not None and data.days not in BAN_DAYS:
+        raise HTTPException(400, "A ban lasts 1, 7 or 30 days, or for good.")
+    reason = " ".join(data.reason.split())[:MAX_BAN_REASON] or None
+    with db:
+        db.execute(
+            """
+            UPDATE users SET banned_at = CURRENT_TIMESTAMP, banned_by = ?, ban_reason = ?, is_admin = 0,
+                banned_until = CASE WHEN ? IS NULL THEN NULL ELSE datetime('now', ?) END
+            WHERE id = ?
+            """,
+            (admin_id, reason, data.days, f"+{data.days} days", data.user_id),
+        )
+        # (is_admin = 0: an admin the owner bans isn't one any more when the ban ends.)
+        db.execute("DELETE FROM sessions WHERE user_id = ?", (data.user_id,))  # logged out everywhere
+        db.execute("DELETE FROM invites WHERE created_by = ? AND used_by IS NULL", (data.user_id,))
+    # Out of any call (see remove_from_voice), then every open page closed: it goes to the login page.
+    rooms = {client["voice"] for client in clients.values() if client["user_id"] == data.user_id and client["voice"]}
+    for room in rooms:
+        await asyncio.to_thread(remove_from_voice, room, data.user_id)
+    await disconnect_user(data.user_id)
+    await send_to_everyone(users_message())  # out of everyone's lists
+    return ban_list()
+
+
+class UserChoice(BaseModel):
+    user_id: int
+
+
+@app.post("/admin/unban")
+async def unban(data: UserChoice, request: Request):
+    logged_in_admin(request)
+    with db:
+        db.execute(
+            "UPDATE users SET banned_at = NULL, banned_until = NULL, banned_by = NULL, ban_reason = NULL WHERE id = ?",
+            (data.user_id,),
+        )
+    await send_to_everyone(users_message())  # back in the lists (they log in again by themselves)
+    return ban_list()
+
+
+@app.get("/admin/bans")
+async def bans(request: Request):
+    logged_in_admin(request)
+    return ban_list()
+
+
+class AdminChange(BaseModel):
+    user_id: int
+    admin: bool
+
+
+@app.post("/admin/admins")
+async def set_admin(data: AdminChange, request: Request):
+    """The owner makes someone an admin, or takes it away (Settings → Admin → Admins)."""
+    owner_id = logged_in_admin(request)
+    if not is_owner(owner_id):
+        raise HTTPException(403, "Only the owner can make or remove admins.")
+    row = db.execute(f"SELECT is_bot, {BANNED_NOW} FROM users WHERE id = ?", (data.user_id,)).fetchone()
+    if row is None:
+        raise HTTPException(404, "There's no such account.")
+    if data.user_id == owner_id:
+        raise HTTPException(400, "The owner is always an admin.")
+    if row[0]:
+        raise HTTPException(400, "Bots can't be admins.")
+    if row[1] and data.admin:
+        raise HTTPException(400, "Unban them first.")
+    with db:
+        db.execute("UPDATE users SET is_admin = ? WHERE id = ?", (int(data.admin), data.user_id))
+    await send_to_everyone(users_message())  # every page knows who's an admin (badges, menus, Settings)
+    return {"ok": True}
 
 
 @app.get("/invite/{code}")
@@ -3358,8 +3559,9 @@ def users_message():
     [{"id": 3, "name": "axel", "presence": "idle", "online": True, "avatar": "Xk9...webp", "status": "...", ...}]
     ("status" is the line people write about themselves, "playing Minecraft"; "online" is "not offline".)"""
     rows = db.execute(
-        "SELECT id, username, avatar_id, banner_id, status, bio, is_admin, is_bot, presence FROM users"
+        "SELECT id, username, avatar_id, banner_id, status, bio, is_admin, is_bot, presence, is_owner FROM users"
         " WHERE email_verified = 1"  # (a new account joins the lists once its email is verified)
+        f" AND NOT {BANNED_NOW}"     # (and a banned one leaves them)
         " ORDER BY username COLLATE NOCASE"
     ).fetchall()
     # Everyone's roles, in one query: the top one first (the list's order), so the page takes roles[0].
@@ -3370,12 +3572,13 @@ def users_message():
     ):
         roles_of.setdefault(user_id, []).append(role_id)
     users = []
-    for user_id, name, avatar, banner, status, bio, admin, bot, chosen in rows:
+    for user_id, name, avatar, banner, status, bio, admin, bot, chosen, owner in rows:
         presence = shown_presence(user_id, chosen, bool(bot))
         users.append({
             "id": user_id, "name": name, "presence": presence, "online": presence != "offline",
             "avatar": avatar, "banner": banner, "status": status, "bio": bio, "admin": bool(admin),
             "bot": bool(bot),  # the AI bot: the page offers it in DMs' @ suggestions too
+            "owner": bool(owner),  # the server's owner (see "Bans and admins")
             "roles": roles_of.get(user_id, []),  # role ids, the top one first (see "roles")
         })
     return {"type": "users", "users": users}

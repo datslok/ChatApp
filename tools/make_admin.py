@@ -1,8 +1,9 @@
 """Make someone an admin (or take it away), by changing the database directly.
 
-Admins can edit and delete anyone's messages and custom emoji. There's no button for this on the
-website on purpose: only someone with access to this PC can run this script, which is exactly
-the right permission. The server checks is_admin on every action, so no restart is needed.
+Admins can edit and delete anyone's messages and custom emoji, manage channels and roles, and ban
+people. The owner (the first account) can also do this in the chat: Settings → Admin → Admins. This
+script is for everything else: an admin on a server without an owner, or fixing things by hand.
+The server checks is_admin on every action, so no restart is needed.
 
 Run it from the project folder:
     python tools/make_admin.py alex                    # make alex an admin (in the real chat.db)
@@ -25,7 +26,8 @@ args = parser.parse_args()
 db = sqlite3.connect(args.db)
 
 if args.list or not args.username:
-    admins = [name for (name,) in db.execute("SELECT username FROM users WHERE is_admin = 1 ORDER BY username")]
+    admins = [name + (" (owner)" if owner else "") for name, owner in
+              db.execute("SELECT username, is_owner FROM users WHERE is_admin = 1 ORDER BY username")]
     print(f"Admins in {args.db}: {', '.join(admins) if admins else '(none)'}")
     sys.exit()
 

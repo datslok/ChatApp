@@ -777,10 +777,16 @@ function showAdmin() {
     if (settingsPage === "admin") showSettingsPage("account");  // (no longer an admin)
     return;
   }
+  if (!adminPickersReady) setUpAdminPickers();
+  // Admins (making and removing them): the owner's alone.
+  document.getElementById("admins-tab").hidden = !amOwner();
+  if (!amOwner() && adminSection === "admins") showAdminSection("inbox");
   loadInbox();
   showChannelAdmin();
   showRoleAdmin();
   loadAdminInvites();
+  loadBans();
+  renderAdmins();
 }
 
 function showAdminSection(name) {
@@ -850,12 +856,134 @@ function makeJoinedRow(entry) {
   return row;
 }
 
+// The rows on the Bans and Admins pages: a person (their picture while they're in the lists, else
+// just the name), a line about them, and a button at the end.
+function makeAdminPersonRow(userId, name, details, buttonText, onClick) {
+  const row = document.createElement("div");
+  row.className = "admin-person-row";
+  const person = people.get(userId);
+  if (person) {
+    row.appendChild(makePerson(person));
+  } else {
+    const strong = document.createElement("strong");
+    strong.textContent = name;  // (banned people aren't in the lists: the server's name for them)
+    row.appendChild(strong);
+  }
+  const line = document.createElement("span");
+  line.className = "joined-details";
+  line.textContent = details;
+  row.appendChild(line);
+  if (buttonText) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = buttonText;
+    button.addEventListener("click", onClick);
+    row.appendChild(button);
+  }
+  return row;
+}
+
 async function adminCancelInvite(code) {
   adminInvitesStatus.textContent = "";
   const result = await postJson(`/admin/invites/${encodeURIComponent(code)}/cancel`, {})
     .catch(() => ({ ok: false, error: "No connection. Try again in a moment." }));
   if (result.ok) showAdminInvites(result.data);
   else showStatus(adminInvitesStatus, result.error, "error");
+}
+
+// ---------- Settings: Admin → Bans ----------
+//
+// Everyone banned right now (from /admin/bans), with Unban, and a search box to ban someone, which
+// opens the ban popup (people.js, "Banning").
+
+const banList = document.getElementById("ban-list");
+const banStatus = document.getElementById("ban-status");
+const banPicker = document.getElementById("ban-picker");
+
+async function loadBans() {
+  banStatus.textContent = "";
+  const response = await fetch("/admin/bans").catch(() => null);
+  if (!response?.ok) {
+    showStatus(banStatus, "Couldn't load the bans.", "error");
+    return;
+  }
+  showBans(await response.json());
+}
+
+// The server's answer: {bans: [{user_id, name, by, at, until (null = for good), reason}]}.
+function showBans(data) {
+  const day = (iso) => new Date(iso).toLocaleDateString([], { dateStyle: "medium" });
+  banList.replaceChildren(...data.bans.map((ban) => {
+    const details = [
+      `by ${ban.by ?? "someone"} on ${day(ban.at)}`,
+      ban.until ? `until ${day(ban.until)}` : "for good",
+      ban.reason ? `"${ban.reason}"` : "",  // (as text: textContent in makeAdminPersonRow)
+    ].filter(Boolean).join(" · ");
+    return makeAdminPersonRow(ban.user_id, ban.name, details, "Unban", () => unbanUser(ban));
+  }));
+  if (data.bans.length === 0) banList.appendChild(makeEmptyNote("Nobody is banned."));
+}
+
+async function unbanUser(ban) {
+  if (!confirm(`Unban ${ban.name}? They can log in again straight away.`)) return;
+  const result = await postJson("/admin/unban", { user_id: ban.user_id })
+    .catch(() => ({ ok: false, error: "No connection. Try again in a moment." }));
+  if (result.ok) showBans(result.data);
+  else showStatus(banStatus, result.error, "error");
+}
+
+
+// ---------- Settings: Admin → Admins (the owner only) ----------
+//
+// Everyone who's an admin, with Remove admin (not for the owner), and a search box to make someone
+// one. Drawn from the users list (people), which says who's an admin; the server sends a fresh one
+// to everybody after each change, and showUsers (people.js) then draws this again.
+
+const adminList = document.getElementById("admin-list");
+const adminsStatus = document.getElementById("admins-status");
+const makeAdminPicker = document.getElementById("make-admin-picker");
+
+function renderAdmins() {
+  if (!amOwner()) return;
+  const admins = [...people.values()].filter((person) => person.admin && !person.bot);
+  adminList.replaceChildren(...admins.map((person) => person.owner
+    ? makeAdminPersonRow(person.id, person.name, "owner", null)
+    : makeAdminPersonRow(person.id, person.name, "admin", "Remove admin", () => setAdmin(person, false))));
+}
+
+async function setAdmin(person, admin) {
+  const question = admin
+    ? `Make ${person.name} an admin? They can edit and delete anyone's messages, manage channels and roles, read the inbox and ban people.`
+    : `Remove ${person.name} as an admin?`;
+  if (!confirm(question)) return;
+  adminsStatus.textContent = "";
+  const result = await postJson("/admin/admins", { user_id: person.id, admin })
+    .catch(() => ({ ok: false, error: "No connection. Try again in a moment." }));
+  if (!result.ok) showStatus(adminsStatus, result.error, "error");
+  // (On success the server's new users list redraws the list: see above.)
+}
+
+// The two search boxes (Ban someone, Make someone an admin). Set up the first time the Admin tab is
+// prepared (showAdmin), not while this file loads: usePersonPicker is in people.js, which loads after
+// this file, so it doesn't exist yet at that moment.
+let adminPickersReady = false;
+
+function setUpAdminPickers() {
+  usePersonPicker(banPicker, document.getElementById("ban-picker-list"), {
+    candidates: () => [...people.values()].filter(mayBan),  // (people.js: whom we may ban)
+    onPick: (person) => {
+      banPicker.value = "";
+      openBanDialog(person);
+    },
+  });
+  usePersonPicker(makeAdminPicker, document.getElementById("make-admin-list"), {
+    candidates: () => [...people.values()].filter((person) => !person.admin && !person.bot),
+    onPick: (person) => {
+      makeAdminPicker.value = "";
+      setAdmin(person, true);
+    },
+  });
+  adminPickersReady = true;
 }
 
 // ---------- Settings: Channels (admins only) ----------
