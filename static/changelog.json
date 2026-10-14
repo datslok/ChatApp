@@ -9,6 +9,7 @@
         "Hover a message to react 😀, reply ↩, edit ✏️ or delete 🗑️ (hold Shift to skip the question). Esc cancels a reply or an edit",
         "↑ in an empty text box edits your last message",
         "Click a reply's quote to jump to the original message (older ones load by themselves)",
+        "A red line marked NEW shows where you stopped reading in a chat (also for messages that came while you were away from the window). Lots of new ones? The chat opens at the line. It goes away when you write something",
         "Pin a message: hover over it and click 📌. The 📌 at the top of a channel, DM or group lists its pinned messages (up to 100), with Jump and Unpin. Anyone can pin and unpin",
         "@name mentions someone, @everyone mentions everybody: they get a notification and a red count",
         "Type :name for emoji suggestions (↑↓ to choose, Enter or Tab to pick), or use the 😀 button. Messages with only emoji show them big",
@@ -104,6 +105,7 @@
     {
       "date": "2026-10-14",
       "items": [
+        "A red NEW line shows where you stopped reading in a chat, and opening a chat with lots of new messages starts there",
         "New channels and headings can show up in the sidebar: admins now manage them from the app (Settings → Channels)",
         "Group DMs 👥: click the + next to \"Direct messages\" to start a private chat with up to 9 friends, with group calls 📞. Chattus is in every group: @Chattus to ask him something",
         "Chattus shows pictures 📷: ask him for photos of a place, an animal or a thing, and he posts a few real ones from Wikimedia Commons",

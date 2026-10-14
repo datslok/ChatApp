@@ -974,6 +974,49 @@ function dayName(date) {
 const GROUP_MINUTES = 5;
 let lastShown = null;
 
+// ----- The "New messages" divider
+//
+// A red line above the first message we hadn't seen. The server sends where we stopped reading
+// (the history's "last_read", a message id); every message after that id is new. Kept as a
+// threshold rather than one message's id, so redraws and older batches put the line in the
+// right place by themselves: showMessage draws it above the first new message it meets.
+let newMessagesAfter = null;  // a message id, or null: no divider
+let newDividerDrawn = false;  // drawn already in this pass over the messages (one line, not one per message)
+let newWhileAway = false;     // this time away already has its divider (see "message" in core.js)
+
+function makeNewDivider() {
+  const divider = document.createElement("div");
+  divider.className = "new-divider";
+  const tag = document.createElement("span");
+  tag.textContent = "NEW";
+  divider.appendChild(tag);
+  return divider;
+}
+
+// After the history is drawn: is the line above what's in view (more new messages than fit)?
+// Then scroll so it's at the top, to start reading where we left off. jumpTarget keeps it there
+// while pictures load (showMessage).
+function scrollToNewDivider() {
+  const divider = messages.querySelector(".new-divider");
+  if (!divider || divider.getBoundingClientRect().top >= messages.getBoundingClientRect().top) return;
+  divider.scrollIntoView({ block: "start" });
+  jumpTarget = divider;
+}
+
+// Caught up (we wrote something): the line goes.
+function removeNewDivider() {
+  newMessagesAfter = null;
+  newDividerDrawn = false;
+  messages.querySelector(".new-divider")?.remove();
+}
+
+// Back at the chat: the next time we're away, a new line marks where that began.
+function lookingAgain() {
+  if (isLooking()) newWhileAway = false;
+}
+document.addEventListener("visibilitychange", lookingAgain);
+window.addEventListener("focus", lookingAgain);
+
 // ---------- Replies ----------
 
 let replyingTo = null;  // {id, name} of the message we're replying to, or null
@@ -1293,6 +1336,7 @@ function redrawMessages() {
 function drawAllMessages(follow) {
   messages.replaceChildren();
   lastShown = null;
+  newDividerDrawn = false;
   if (reachedStart) messages.appendChild(makeChannelStart());
   for (const message of shownMessages) showMessage(message, follow);
 }
@@ -1470,9 +1514,17 @@ function showMessage(message, follow = true) {
   const newDay = lastShown === null || !isSameDay(lastShown.time, time);
   if (newDay) messages.appendChild(makeDateDivider(time));
 
+  // The first message we hadn't seen? Then the "New messages" line (under the date, if both).
+  const firstNew = newMessagesAfter !== null && !newDividerDrawn && message.id > newMessagesAfter;
+  if (firstNew) {
+    messages.appendChild(makeNewDivider());
+    newDividerDrawn = true;
+  }
+
   // Part of the previous message's group? (time - time gives milliseconds.)
   // A reply always starts a new group, so its quote line sits above a name, not mid-group.
-  const grouped = !newDay && !message.reply && lastShown.sender === sender &&
+  // So does the first new message, so the line has a name and picture under it.
+  const grouped = !newDay && !firstNew && !message.reply && lastShown.sender === sender &&
     time - lastShown.time < GROUP_MINUTES * 60 * 1000;
   lastShown = { sender: sender, time: time };
 
@@ -1629,7 +1681,8 @@ function showMessage(message, follow = true) {
   const img = div.querySelector(".attachment-image, .preview-image");
   if (img && wasAtBottom) {
     img.addEventListener("load", () => {
-      if (jumpTarget) jumpTarget.scrollIntoView({ block: "center" });
+      // (The "New messages" line goes back to the top, like scrollToNewDivider put it.)
+      if (jumpTarget) jumpTarget.scrollIntoView({ block: jumpTarget.matches(".new-divider") ? "start" : "center" });
       else messages.scrollTop = messages.scrollHeight;
     });
   }

@@ -3776,10 +3776,18 @@ async def chat(websocket: WebSocket):
                 # so no message can slip through the gap.
                 clients[websocket]["channel"] = new_channel
                 history = recent_messages(new_channel)
+                # Where they stopped reading (read before mark_read moves it): the page draws a
+                # "New messages" divider above the first message after it. None: never opened.
+                seen = db.execute(
+                    "SELECT message_id FROM last_read WHERE user_id = ? AND channel = ?", (user_id, new_channel)
+                ).fetchone()
                 mark_read(user_id, new_channel)  # opening a channel means you've seen it
                 # "more": a full batch, so there may be older messages to load by scrolling up.
                 more = len(history) == HISTORY_LIMIT
-                await send(websocket, {"type": "history", "channel": new_channel, "messages": history, "more": more})
+                await send(websocket, {
+                    "type": "history", "channel": new_channel, "messages": history, "more": more,
+                    "last_read": seen[0] if seen else None,
+                })
 
             elif kind == "older" and channel is not None:
                 # {"type": "older", "before": 1234}: scrolled to the top, so send the messages just

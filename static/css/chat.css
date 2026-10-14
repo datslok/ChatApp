@@ -2774,6 +2774,31 @@ button.download-button {
   background: var(--line);
 }
 
+/* "New messages": a red line above the first message we hadn't seen, with NEW at its right end. */
+.new-divider {
+  display: flex;
+  align-items: center;
+  margin: 12px 0 4px;
+  scroll-margin-top: 12px;  /* scrolled to the top (scrollToNewDivider): a little room above it */
+}
+
+.new-divider::before {
+  content: "";
+  flex: 1;  /* the line fills the space up to the tag */
+  height: 1px;
+  background: var(--red);
+}
+
+.new-divider span {
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--red);
+  color: #fff;
+  font-size: 0.65rem;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
 /* "This is the beginning of #general", above a channel's first message. */
 .channel-start {
   margin: 8px 0 16px;

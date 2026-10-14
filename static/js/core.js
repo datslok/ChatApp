@@ -436,10 +436,15 @@ function handleServerMessage(event) {
   if (data.type === "history") {
     shownMessages = data.messages;  // remembered, so we can redraw after edits and deletes
     reachedStart = !data.more;      // not a full batch: this is the whole channel
+    // Where we stopped reading (messages.js, "New messages" divider). Only if something newer
+    // is here: otherwise the next message to arrive would get the line. (Never opened: none.)
+    const newest = shownMessages.at(-1)?.id ?? 0;
+    newMessagesAfter = data.last_read !== null && newest > data.last_read ? data.last_read : null;
     if (reachedStart) messages.appendChild(makeChannelStart());
     for (const message of shownMessages) {
       showMessage(message);
     }
+    scrollToNewDivider();  // lots of new ones: start at the line, not the bottom
     // Opened from a notification: now that its message is on the page, go to it.
     if (pendingJump !== null) {
       jumpToMessage(pendingJump);
@@ -453,6 +458,16 @@ function handleServerMessage(event) {
   } else if (data.type === "message") {
     stopTyping(data.name);  // their message arrived, so they're done typing
     shownMessages.push(data);
+    if (data.user_id === myId) {
+      removeNewDivider();  // we wrote something (here or on another device): caught up
+    } else if (!isLooking() && !newWhileAway) {
+      // The first message while we're away (tab hidden, window not focused): the line moves
+      // above it, so coming back shows where we left off. (ids only grow, so "after id - 1"
+      // is this message and everything after it.)
+      removeNewDivider();
+      newMessagesAfter = data.id - 1;
+      newWhileAway = true;
+    }
     showMessage(data);
     // In the channel we're in, but the tab is hidden or the window isn't focused:
     // a DM or a mention still notifies, and counts in the tab title until we're back.
@@ -562,6 +577,9 @@ function joinCurrentChannel() {
   shownMessages = [];
   editingId = null;
   lastShown = null;            // so the first message starts a fresh group (and date divider)
+  newMessagesAfter = null;     // (messages.js: the history brings where we stopped reading)
+  newDividerDrawn = false;
+  newWhileAway = false;
   jumpTarget = null;           // a fresh channel starts at the bottom
   loadingOlder = false;        // an answer still on its way belongs to what we just cleared
   reachedStart = false;        // (the history says whether there's more)
