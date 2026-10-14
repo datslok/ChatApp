@@ -404,7 +404,7 @@ let speakingIds = new Set();  // identities (user ids as text) talking right now
 // look at the latest samples. 20 times a second we work out how loud each one is (the same RMS in
 // decibels as our gate) and compare it with a low line, so whispers count. Our own ring follows our
 // gate: lit exactly while our microphone gets through (also with push to talk).
-const SPEAKING_LINE = -55;        // dB: quieter than this is silence (a whisper is around -45)
+const SPEAKING_LINE = -50;        // dB: quieter than this is silence (a whisper is around -45)
 const SPEAKING_HOLD_MS = 300;     // stay lit this long after the last sound: no flicker between words
 const voiceAnalysers = new Map(); // identity -> the AnalyserNode on their voice
 const lastHeard = new Map();      // identity -> when they were last louder than the line (performance.now())
