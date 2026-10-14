@@ -318,6 +318,15 @@ db.execute("""
         PRIMARY KEY (group_key, user_id)  -- each person once per group
     )
 """)
+# Blocked people: one row per person someone blocked (see "Blocking").
+db.execute("""
+    CREATE TABLE IF NOT EXISTS blocks (
+        blocker_id INTEGER NOT NULL REFERENCES users(id),  -- who blocked
+        blocked_id INTEGER NOT NULL REFERENCES users(id),  -- whom
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (blocker_id, blocked_id)
+    )
+""")
 # Muted chats: one row per person per chat they muted (the 🔔 at the top of a chat; see "Muting").
 db.execute("""
     CREATE TABLE IF NOT EXISTS chat_mutes (
@@ -826,8 +835,11 @@ def search_messages(user_id, text, chat=None, author=None):
         chats = [chat] if chat in chats else []
     if not chats or (not words and author is None):
         return []
-    conditions = [f"messages.channel IN ({','.join('?' * len(chats))})", "messages.kind IS NULL"]  # (no notes)
-    params = list(chats)
+    conditions = [f"messages.channel IN ({','.join('?' * len(chats))})", "messages.kind IS NULL",  # (no notes)
+                  # nor anything from someone we blocked (the page hides those too). "IS NULL OR": in SQL,
+                  # NULL NOT IN (...) isn't true, so messages from before accounts existed would vanish.
+                  "(messages.user_id IS NULL OR messages.user_id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = ?))"]
+    params = [*chats, user_id]
     if words:
         # '"pizza"* "fred"*': every word must be there ("..." keeps it a plain word, * = or longer).
         conditions.append("messages.id IN (SELECT rowid FROM messages_fts WHERE messages_fts MATCH ?)")
@@ -2000,6 +2012,8 @@ def save_mentions(message_id, channel, sender_id, mentioned, everyone):
     if not is_admin(sender_id):
         muted = {user_id for (user_id,) in db.execute("SELECT user_id FROM chat_mutes WHERE channel = ?", (channel,))}
         people = [user_id for user_id in people if user_id not in muted or user_id in named]
+    blockers = blockers_of(sender_id)  # who blocked the sender never hears from them
+    people = [user_id for user_id in people if user_id not in blockers]
     with db:
         db.execute("DELETE FROM mentions WHERE message_id = ?", (message_id,))
         db.executemany(  # executemany: the same INSERT once for each item in the list
@@ -2189,6 +2203,10 @@ def other_person(data, request):
 @app.post("/friends/request")
 async def friend_request(data: FriendAction, request: Request):
     me, other = other_person(data, request)
+    if has_blocked(me, other):
+        raise HTTPException(400, "You've blocked them: unblock them first.")
+    if has_blocked(other, me):  # (said plainly, without telling them they're blocked)
+        raise HTTPException(400, "You can't send a friend request to this person.")
     row = friendship(me, other)
     user_a, user_b = pair(me, other)
     if row is None:
@@ -2231,6 +2249,54 @@ async def friend_remove(data: FriendAction, request: Request):
     with db:
         db.execute("DELETE FROM friendships WHERE user_a = ? AND user_b = ?", pair(me, other))
     await send_friends_update(me, other)
+    return {"ok": True}
+
+
+# ---------- Blocking ----------
+#
+# Blocking someone ends the friendship (and any request), so DMs, group invites and DM calls stop:
+# all of those need friends. They can't send a new request; they never count as mentioning us
+# (save_mentions: no notifications, counts or pushes) and their calls don't ring us; their messages in
+# chats we share are hidden on our page, and left out of our searches. They aren't told. Admins
+# can't be blocked (the chat's rule), nor bots (they're everyone's friend, at every start).
+
+def has_blocked(blocker, blocked):
+    return db.execute("SELECT 1 FROM blocks WHERE blocker_id = ? AND blocked_id = ?", (blocker, blocked)).fetchone() is not None
+
+
+def blockers_of(user_id):
+    """Everyone who blocked this person (they don't hear from them)."""
+    return {blocker for (blocker,) in db.execute("SELECT blocker_id FROM blocks WHERE blocked_id = ?", (user_id,))}
+
+
+def blocks_message(user_id):
+    """The people someone blocked, for their own pages: {"type": "blocks", "blocked": [7, 12]}."""
+    rows = db.execute("SELECT blocked_id FROM blocks WHERE blocker_id = ? ORDER BY created_at", (user_id,))
+    return {"type": "blocks", "blocked": [blocked for (blocked,) in rows]}
+
+
+@app.post("/friends/block")
+async def block(data: FriendAction, request: Request):
+    me, other = other_person(data, request)
+    if is_admin(other):
+        raise HTTPException(400, "Admins can't be blocked.")
+    if is_bot(other):
+        raise HTTPException(400, "Bots can't be blocked. To quiet one, mute its channel (🔔).")
+    with db:
+        db.execute("INSERT OR IGNORE INTO blocks (blocker_id, blocked_id) VALUES (?, ?)", (me, other))
+        db.execute("DELETE FROM friendships WHERE user_a = ? AND user_b = ?", pair(me, other))
+    await send_friends_update(me, other)  # (they see the friendship gone, as if it had been removed)
+    await send_to_user(me, blocks_message(me))
+    return {"ok": True}
+
+
+@app.post("/friends/unblock")
+async def unblock(data: FriendAction, request: Request):
+    """Unblocking doesn't make them a friend again: that takes a new request."""
+    me, other = other_person(data, request)
+    with db:
+        db.execute("DELETE FROM blocks WHERE blocker_id = ? AND blocked_id = ?", (me, other))
+    await send_to_user(me, blocks_message(me))
     return {"ok": True}
 
 
@@ -3014,6 +3080,7 @@ async def start_call(channel, caller):
         return  # already ringing or going on: the page just joins the room
     # Ring everyone else who could join (in a group: not its bots).
     others = {person for person in call_people(channel) if person != caller and is_call_member(channel, person)}
+    others -= blockers_of(caller)  # (in a group: who blocked the caller isn't rung)
     calls[channel] = {
         "caller": caller, "ringing": others, "started": None, "caller_joined": False,
         # A background task that ends the call if nobody answers in time. (asyncio runs it while
@@ -3521,6 +3588,7 @@ async def chat(websocket: WebSocket):
         await send(websocket, friends_message(user_id))
         await send(websocket, groups_message(user_id))
         await send(websocket, mutes_message(user_id))
+        await send(websocket, blocks_message(user_id))
         await send(websocket, custom_emoji_message())
         await send(websocket, {
             "type": "unread", "channels": unread_channels(user_id), "mentions": unread_mentions(user_id),

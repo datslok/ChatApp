@@ -314,6 +314,13 @@ function handleServerMessage(event) {
     channelsChanged(data.channels);
     return;
   }
+  if (data.type === "blocks") {
+    // The people we blocked (at the start, and after blocking or unblocking here or elsewhere).
+    setAll(blockedIds, data.blocked);
+    friendsChanged();  // (the Friends page's Blocked tab, and a profile that's open)
+    if (shownMessages.length) redrawMessages();  // their messages hidden, or shown again
+    return;
+  }
   if (data.type === "mutes") {
     // Our muted chats (at the start, and after muting or unmuting here or on another device).
     setAll(mutedChats, data.channels);
@@ -428,7 +435,7 @@ function handleServerMessage(event) {
     // In the channel we're in, but the tab is hidden or the window isn't focused:
     // a DM or a mention still notifies, and counts in the tab title until we're back.
     // In a muted chat only when we're named in it, or an admin wrote it (like the server's save_mentions).
-    const forMe = data.user_id !== myId && (mutedChats.has(currentChannel)
+    const forMe = data.user_id !== myId && !blockedIds.has(data.user_id) && (mutedChats.has(currentChannel)
       ? data.text.includes(`<@${myId}>`) || people.get(data.user_id)?.admin === true
       : dmPartner(currentChannel) !== null || isGroup(currentChannel) || mentionsMe(data.text));
     if (forMe && !isLooking()) {

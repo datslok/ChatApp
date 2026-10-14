@@ -75,7 +75,7 @@
 - [ ] **17.** Social and presence
     - [x] Statuses: Online, Idle (automatic when away), Do Not Disturb (no notifications), Invisible
     - [x] Muting a channel or DM (and groups; admins can't be muted: their messages always get through)
-    - [ ] Blocking someone (admins can't be blocked)
+    - [x] Blocking someone (admins can't be blocked, nor bots)
     - [ ] Roles with colours (coloured names and headings in the member list)
 - [ ] **18.** Smaller polish
     - [x] Clicking a reply's quote jumps to the original message (was already there)

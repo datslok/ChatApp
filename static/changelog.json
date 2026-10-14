@@ -22,6 +22,7 @@
       "topic": "👥 People",
       "items": [
         "Friends: send requests and accept them on the Friends page. DMs are between friends",
+        "Block someone: Block in their profile (click their name or picture). You stop being friends, they can't send you requests or reach you, and their messages are hidden for you (\"Show\" to see one). They aren't told. Unblock them in their profile or on the Friends page's Blocked tab. Admins and bots can't be blocked",
         "Group DMs: the + next to \"Direct messages\" starts a private chat with 2 to 9 friends. At the top of a group: Add people (your own friends), Rename and Leave. Every message there notifies the others, like a DM. 📞 Call rings everyone in the group; whoever answers joins, and the rest can join later from the call banner. Chattus is in every group: write @Chattus to ask him something there",
         "Online and offline people on the right, and \"is typing…\" under the messages",
         "Your status: click your name at the bottom left and pick Online, Idle, Do Not Disturb (no notifications or sounds, on any device) or Invisible (you look offline but can chat as usual). After 10 minutes away from the chat you show as Idle by yourself. The dot on a picture shows it: green, yellow, red or grey",
@@ -111,7 +112,8 @@
         "Pinned messages 📌: hover over a message and click 📌 to pin it, and click 📌 at the top of the chat to see them all",
         "Search 🔍: find messages by their words, in one chat or everywhere, from anyone or one person. The 🔍 is at the top of every chat",
         "Statuses: click your name at the bottom left for Online, Idle, Do Not Disturb or Invisible. You also turn Idle by yourself after 10 minutes away",
-        "Mute a chat 🔕: the 🔔 at the top of a channel, DM or group. You still hear about @mentions of you, and anything from an admin"
+        "Mute a chat 🔕: the 🔔 at the top of a channel, DM or group. You still hear about @mentions of you, and anything from an admin",
+        "Blocking 🚫: Block in someone's profile hides their messages and stops them reaching you. Unblock on the Friends page's Blocked tab"
       ]
     },
     {

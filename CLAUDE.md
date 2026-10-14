@@ -144,6 +144,13 @@ the point is for me to understand how it works, not just to have it done.
   or push. **Admins can't be muted or blocked** (the user's rule): `can_mute` refuses a DM with an admin, and the
   page hides 🔔 there. Page: `mutedChats` (core.js) fades sidebar items (`.channel.muted`) without unread dots;
   🔔/🔕 in the top bar (rooms.js).
+- Blocking (server.py, "Blocking"): `blocks` (blocker_id, blocked_id); `POST /friends/block` (refused for
+  admins and bots; deletes the friendship row, so DMs, group invites and DM calls stop) and `/friends/unblock`
+  (not friends again: that takes a new request); "blocks" to the blocker's pages (also at connect). Neither
+  side can send a request (the blocked one gets a neutral message). `save_mentions` drops the sender's
+  blockers, `start_call` doesn't ring them, `search_messages` skips blocked senders. Page: `blockedIds`
+  (people.js); their messages drawn as "🚫 A message from someone you blocked · Show" (`shownBlocked`);
+  Block / Unblock in `makeFriendButtons` (profile, Friends page), and a Blocked tab on the Friends page.
 - Pinned messages: `messages.pinned_at` / `pinned_by` (NULL = not pinned); anyone who can see a message
   (`can_join`) may pin or unpin it over the WebSocket (`{"type": "pin", "message_id", "pinned"}`), never a
   note (`kind` set); `MAX_PINS` 100 per chat (else "pins_full"). Everyone in the chat gets "pinned"; a pin also

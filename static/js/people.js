@@ -196,6 +196,7 @@ function renderDmList() {
 const friendIds = new Set();
 const incomingIds = new Set();  // they asked us
 const outgoingIds = new Set();  // we asked them
+const blockedIds = new Set();   // people we blocked (the server's "blocks"): their messages are hidden for us
 let peopleTab = "friends";      // which tab of the Friends page is showing
 
 function setAll(set, ids) {
@@ -256,6 +257,10 @@ function makeFriendButtons(userId, statusElement) {
     buttons.push(button);
   }
 
+  if (blockedIds.has(userId)) {
+    add("Unblock", () => friendAction("unblock", userId, statusElement), true);
+    return buttons;  // (nothing else until they're unblocked: no friend request, no DM)
+  }
   if (friendIds.has(userId)) {
     add("Message", () => openDm(userId));
     // Bots are everyone's friend (the server adds and keeps those friendships): no Remove.
@@ -267,6 +272,14 @@ function makeFriendButtons(userId, statusElement) {
     add("Cancel request", () => friendAction("remove", userId, statusElement), true);
   } else {
     add("Add friend", () => friendAction("request", userId, statusElement));
+  }
+  // Block: not admins (the chat's rule) or bots (everyone's friend). The server checks too.
+  const person = people.get(userId);
+  if (person && !person.admin && !person.bot) {
+    add("Block", () => {
+      const question = `Block ${person.name}? You stop being friends, and their messages are hidden for you. They aren't told.`;
+      if (confirm(question)) friendAction("block", userId, statusElement);
+    }, true);
   }
   return buttons;
 }
@@ -307,6 +320,8 @@ function renderPeopleList() {
   if (peopleTab === "friends") {
     section("", everyone.filter((user) => friendIds.has(user.id)),
       "No friends yet. Click someone's name or picture in a channel to add them.");
+  } else if (peopleTab === "blocked") {
+    section("", everyone.filter((user) => blockedIds.has(user.id)), "You haven't blocked anyone.");
   } else {
     section("Received", everyone.filter((user) => incomingIds.has(user.id)), "No requests waiting.");
     section("Sent", everyone.filter((user) => outgoingIds.has(user.id)), "You haven't sent any requests.");

@@ -319,6 +319,25 @@ body {
   font-weight: 600;  /* bold */
 }
 
+/* A message from someone we blocked: one muted line, with "Show" as a link-like button. */
+.message.blocked-message {
+  display: block;  /* one line of text, not the picture-and-text row of a message */
+  padding: 4px 0 4px 52px;  /* lined up with the messages' text: their picture (40px) and gap (12px) */
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+.blocked-message button {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--link, var(--accent));
+  font: inherit;
+  cursor: pointer;
+}
+.blocked-message button:hover {
+  text-decoration: underline;
+}
+
 /* A muted chat: faded (and never bold or dotted: core.js leaves "unread" off). Not while it's open. */
 .channel.muted:not(.active) {
   opacity: 0.5;

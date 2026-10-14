@@ -1319,6 +1319,7 @@ document.getElementById("search-close").addEventListener("click", () => searchDi
 // Deleting one can change its neighbours (if the first of a group goes, the next needs its
 // picture and name), so instead of patching the screen, we redraw everything from this list.
 let shownMessages = [];
+const shownBlocked = new Set();  // messages from blocked people we chose to see anyway ("Show")
 let editingId = null;  // the message being edited right now, if any
 let editDraft = "";    // what's typed in its edit box (kept here, so a redraw doesn't lose it)
 
@@ -1527,6 +1528,25 @@ function showMessage(message, follow = true) {
   const grouped = !newDay && !message.reply && lastShown.sender === sender &&
     time - lastShown.time < GROUP_MINUTES * 60 * 1000;
   lastShown = { sender: sender, time: time };
+
+  // From someone we blocked: a line instead of the message, until "Show" (then it's drawn as usual).
+  if (blockedIds.has(message.user_id) && !shownBlocked.has(message.id)) {
+    lastShown = { sender: "blocked", time: time };  // (the next message starts a new group)
+    const hidden = document.createElement("div");
+    hidden.className = "message blocked-message";
+    hidden.dataset.id = message.id;  // (so a jump to it still finds it)
+    const show = document.createElement("button");
+    show.type = "button";
+    show.textContent = "Show";
+    show.addEventListener("click", () => {
+      shownBlocked.add(message.id);
+      redrawMessages();
+    });
+    hidden.append("🚫 A message from someone you blocked · ", show);
+    messages.appendChild(hidden);
+    if (wasAtBottom) messages.scrollTop = messages.scrollHeight;
+    return;
+  }
 
   const div = document.createElement("div");
   div.className = grouped ? "message grouped" : "message";
