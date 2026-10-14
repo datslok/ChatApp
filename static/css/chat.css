@@ -2653,6 +2653,12 @@ button.download-button {
   color: var(--text-muted);
 }
 
+/* At the top of a Settings → Admin section: room before the box or list under it. (">": only the
+   help text right inside a section, not one further down.) */
+.admin-section > .settings-help {
+  margin-bottom: 12px;
+}
+
 /* Settings → Channels: one row per channel or heading, with its name in a text box (edit it and
    press Enter or Save to rename), ↑ ↓ to move it and 🗑 to delete it. Each row is a small form of
    its own, laid out as a row instead of the usual column. */
