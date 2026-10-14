@@ -205,33 +205,9 @@ function renderMembers() {
   membersElement.hidden = openMembersButton.hidden = users === null;
   if (users === null) return;
 
-  // A DM: just the two of you. A heading for each one's top role (online or not), and whoever has no
-  // role under Online or Offline; a heading with nobody under it isn't shown ("Offline — 0" says
-  // nothing about two people). Groups and channels keep all their sections, empty ones included.
-  const inDm = dmPartner(currentChannel) !== null;
-  if (inDm) {
-    botsHeading.hidden = botsList.hidden = true;
-    roleSections.replaceChildren();
-    for (const role of roles) {
-      const members = users.filter((user) => topRole(user.id) === role);
-      if (members.length > 0) roleSections.append(...makeRoleSection(role, members));
-    }
-    const noRole = users.filter((user) => !topRole(user.id));
-    const dmOnline = noRole.filter((user) => user.online);
-    const dmOffline = noRole.filter((user) => !user.online);
-    onlineHeading.hidden = onlineList.hidden = dmOnline.length === 0;
-    offlineHeading.hidden = offlineList.hidden = dmOffline.length === 0;
-    onlineHeading.textContent = `Online — ${dmOnline.length}`;
-    offlineHeading.textContent = `Offline — ${dmOffline.length}`;
-    fillPeopleList(onlineList, dmOnline);
-    fillPeopleList(offlineList, dmOffline);
-    return;
-  }
-  onlineHeading.hidden = onlineList.hidden = offlineHeading.hidden = offlineList.hidden = false;
-
   // Bots in a section of their own at the top, then a section for each role with its online people
   // (by their top role, like Discord), then the online people without a role, and everyone offline
-  // at the bottom. Click someone for their profile.
+  // at the bottom (someone Invisible too: the others see them offline). Click someone for their profile.
   const bots = users.filter((user) => user.bot);
   const humans = users.filter((user) => !user.bot);  // ! means "not"
   const online = humans.filter((user) => user.online && !topRole(user.id));
@@ -249,6 +225,11 @@ function renderMembers() {
   offlineHeading.textContent = `Offline — ${offline.length}`;
   fillPeopleList(onlineList, online);
   fillPeopleList(offlineList, offline);
+  // In a DM (two people), an empty Online or Offline section isn't shown: "Offline — 0" says nothing
+  // there. Groups and channels keep both, empty or not.
+  const inDm = dmPartner(currentChannel) !== null;
+  onlineHeading.hidden = onlineList.hidden = inDm && online.length === 0;
+  offlineHeading.hidden = offlineList.hidden = inDm && offline.length === 0;
 }
 
 // A role's heading ("Moderator — 2") and the list of its people, for the right column.

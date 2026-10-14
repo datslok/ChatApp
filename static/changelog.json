@@ -114,7 +114,7 @@
     {
       "date": "2026-10-14",
       "items": [
-        "In a DM, the column on the right just shows the two of you, under your roles or Online/Offline, without empty headings like \"Offline — 0\"",
+        "In a DM, the column on the right has no empty headings like \"Offline — 0\"",
         "⏰ Chattus can now set a reminder for a date that came up in the chat, like \"remind me when it releases\" after he told you the release date",
         "Fixed: Invite someone showed no links once you had one, so New link seemed to do nothing. Now your links show, and New link copies the new one for you and highlights it",
         "Fixed: the icons at the bottom left and at the top of a chat were dark and hard to see in dark themes. Icons now always stand out, also with colours you picked yourself",
