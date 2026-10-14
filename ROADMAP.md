@@ -86,6 +86,7 @@
     - [x] Mobile online icon (a little phone instead of the dot when someone is only on phones)
     - [x] Seasonal easter egg video (🎃 on your own picture in October; seasonal/ on the server), and a bigger picture at the bottom left
     - [ ] Push-to-talk, as an alternative to the noise gate
+    - [ ] detect user activity (toggle in settings) games, apps running, what they are doing, listening to spotify, and so on.
     - [x] Bug: after scrolling up, sending a message doesn't scroll back down to it (sending should always jump to the bottom)
 - [x] **19.** Watching together in calls
     - [x] A small floating window with the call's participants (who's talking), also while a share is in fullscreen
