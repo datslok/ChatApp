@@ -651,7 +651,10 @@ is the phone app for now. To work on it:
    `C:\Program Files\Microsoft\`), and add `%LOCALAPPDATA%\Android\Sdk\platform-tools` to `Path`.
 3. On the phone: turn on Developer options (Settings, About phone, Software information, tap
    "Build number" seven times), then USB debugging in them. Plug it in and allow the PC.
-   `adb devices` should list it.
+   `adb devices` should list it. If it lists nothing on a Samsung phone, Windows is missing Samsung's
+   ADB driver: install "SAMSUNG Electronics Co., Ltd. USB Driver Update" from Windows Update (Settings,
+   Windows Update, Advanced options, Optional updates; when it isn't listed there, take the driver from
+   [Samsung's site](https://developer.samsung.com/android-usb-driver)), then plug the phone in again.
 4. In PowerShell:
 
 ```powershell
