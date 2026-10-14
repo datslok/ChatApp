@@ -52,8 +52,9 @@ try {
   else if (saved) mutedUntil = Number(saved);
 } catch {}
 
+// Muted on this device (Settings → Notifications), or Do Not Disturb (our status, on every device).
 function isMuted() {
-  return Date.now() < mutedUntil;
+  return Date.now() < mutedUntil || myPresence === "dnd";
 }
 
 muteSelect.addEventListener("change", () => {

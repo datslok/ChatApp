@@ -118,6 +118,7 @@ let channels = [];
 const FRIENDS = "friends";
 const LOUNGE = "voice:lounge";  // the Lounge page (a "channel" name like FRIENDS, so switching works the same)
 let myId = null;            // our own user id; the server tells us in its "welcome"
+let myPresence = "online";  // the status we chose: online, idle, dnd or invisible ("welcome", "my_presence")
 let pendingJump = null;     // a message id to go to once its channel's history arrives (from a notification)
 let jumpTarget = null;      // the message we last jumped to: pictures loading keep it in view (messages.js)
 let loadingOlder = false;   // asked the server for older messages, and waiting for them (messages.js)
@@ -294,6 +295,7 @@ function handleServerMessage(event) {
 
   if (data.type === "welcome") {
     myId = data.id;
+    myPresence = data.presence || "online";
     maxTextLength = data.max_text_length;
     input.maxLength = maxTextLength;  // the textarea's maxlength, from the server's limit
     applyAppearance(data.appearance || {});  // the account's (appearance.js); null: the defaults
@@ -309,6 +311,11 @@ function handleServerMessage(event) {
   }
   if (data.type === "channels") {
     channelsChanged(data.channels);
+    return;
+  }
+  if (data.type === "my_presence") {
+    myPresence = data.presence;  // chosen here or on another device (people.js, the status picker)
+    renderUserPanel();
     return;
   }
   if (data.type === "search_results") {

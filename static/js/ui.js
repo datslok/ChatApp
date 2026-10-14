@@ -209,7 +209,7 @@ function findPeople(query) {
     icon: () => makeAvatar(person.id, person.name, "tiny"),
     insert: "@" + person.name + " ",
     label: person.name,
-    detail: person.status || (person.online ? "online" : ""),
+    detail: person.status || (person.online ? PRESENCE_NAMES[person.presence]?.toLowerCase() ?? "online" : ""),
   }));
   if ("everyone".startsWith(query)) {
     results.push({

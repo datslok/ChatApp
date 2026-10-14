@@ -181,7 +181,8 @@ db.execute("""
         status        TEXT,  -- a short line like "playing Minecraft"; NULL = none
         bio           TEXT,  -- a few lines about yourself; NULL = none
         is_admin      INTEGER NOT NULL DEFAULT 0, -- 1 = may edit and delete anyone's messages (tools/make_admin.py)
-        appearance    TEXT  -- Settings → Appearance as JSON, like {"theme": "light", ...}; NULL = the defaults
+        appearance    TEXT,  -- Settings → Appearance as JSON, like {"theme": "light", ...}; NULL = the defaults
+        presence      TEXT NOT NULL DEFAULT 'online'  -- the status they chose: online, idle, dnd or invisible
     )
 """)
 db.execute("""
@@ -509,6 +510,11 @@ if "kind" not in table_columns("messages"):
     # From before call notes existed: every message is a normal one (NULL).
     with db:
         db.execute("ALTER TABLE messages ADD COLUMN kind TEXT")
+
+if "presence" not in table_columns("users"):
+    # From before statuses existed: everyone is Online (the status they'd have chosen anyway).
+    with db:
+        db.execute("ALTER TABLE users ADD COLUMN presence TEXT NOT NULL DEFAULT 'online'")
 
 if "pinned_at" not in table_columns("messages"):
     # From before pinned messages existed: nothing is pinned (NULL).
@@ -1740,10 +1746,12 @@ def has_app_open(user_id):
 
 async def send_push(user_ids, payload, ttl=24 * 60 * 60, urgency="normal"):
     """Push this to every device of these people that turned push on and isn't muted, unless they're
-    looking at the chat somewhere right now or have the Windows app open (then they get it there).
-    ttl: how many seconds the push service keeps trying a phone that's off or offline. Run it as a
-    background task: each push service takes a moment to answer, and the chat mustn't wait for that."""
-    user_ids = [user_id for user_id in user_ids if not is_looking(user_id) and not has_app_open(user_id)]
+    looking at the chat somewhere right now or have the Windows app open (then they get it there), or
+    chose Do Not Disturb. ttl: how many seconds the push service keeps trying a phone that's off or
+    offline. Run it as a background task: each push service takes a moment to answer, and the chat
+    mustn't wait for that."""
+    user_ids = [user_id for user_id in user_ids
+                if not is_looking(user_id) and not has_app_open(user_id) and presence_of(user_id) != "dnd"]
     if not VAPID_PRIVATE_KEY or not user_ids:
         return
     marks = ",".join("?" * len(user_ids))  # "?,?,?": one placeholder per person
@@ -2710,24 +2718,81 @@ def online_user_ids():
     return {client["user_id"] for client in clients.values()}
 
 
+# ---------- Statuses ----------
+#
+# Each person chooses Online, Idle, Do Not Disturb or Invisible (users.presence; the popup at the bottom
+# left). What the others see: "offline" without an open tab, and when Invisible; "dnd" and "idle" as
+# chosen; and Online turns "idle" by itself when none of their pages has been looked at for IDLE_AFTER
+# (each page says when it's in sight: "looking"). Do Not Disturb also stops every notification.
+
+PRESENCES = ["online", "idle", "dnd", "invisible"]
+IDLE_AFTER = 10 * 60  # seconds without looking at the chat anywhere
+
+
+def shown_presence(user_id, chosen, bot=False):
+    """What the others see of this person: "online", "idle", "dnd" or "offline"."""
+    tabs = [client for client in clients.values() if client["user_id"] == user_id]
+    if not tabs or chosen == "invisible":
+        return "offline"
+    if chosen in ("idle", "dnd"):
+        return chosen
+    now = time.time()
+    # Every page out of sight for a while (away_since: when it stopped being looked at). Not bots:
+    # they never "look", and are always there.
+    if not bot and all(client["away_since"] is not None and now - client["away_since"] >= IDLE_AFTER for client in tabs):
+        return "idle"
+    return "online"
+
+
+def presence_of(user_id):
+    """The status this person chose (for their own pages, and for notifications)."""
+    row = db.execute("SELECT presence FROM users WHERE id = ?", (user_id,)).fetchone()
+    return row[0] if row else "online"
+
+
 def users_message():
-    """Every account with its profile, each marked online or not:
-    [{"id": 3, "name": "axel", "online": True, "avatar": "Xk9...webp", "status": "...", "bio": "..."}, ...]"""
-    online = online_user_ids()
+    """Every account with its profile and what the others see of their status:
+    [{"id": 3, "name": "axel", "presence": "idle", "online": True, "avatar": "Xk9...webp", "status": "...", ...}]
+    ("status" is the line people write about themselves, "playing Minecraft"; "online" is "not offline".)"""
     rows = db.execute(
-        "SELECT id, username, avatar_id, banner_id, status, bio, is_admin, is_bot FROM users ORDER BY username COLLATE NOCASE"
+        "SELECT id, username, avatar_id, banner_id, status, bio, is_admin, is_bot, presence FROM users"
+        " ORDER BY username COLLATE NOCASE"
     ).fetchall()
-    return {
-        "type": "users",
-        "users": [
-            {
-                "id": user_id, "name": name, "online": user_id in online,
-                "avatar": avatar, "banner": banner, "status": status, "bio": bio, "admin": bool(admin),
-                "bot": bool(bot),  # the AI bot: the page offers it in DMs' @ suggestions too
-            }
-            for user_id, name, avatar, banner, status, bio, admin, bot in rows
-        ],
-    }
+    users = []
+    for user_id, name, avatar, banner, status, bio, admin, bot, chosen in rows:
+        presence = shown_presence(user_id, chosen, bool(bot))
+        users.append({
+            "id": user_id, "name": name, "presence": presence, "online": presence != "offline",
+            "avatar": avatar, "banner": banner, "status": status, "bio": bio, "admin": bool(admin),
+            "bot": bool(bot),  # the AI bot: the page offers it in DMs' @ suggestions too
+        })
+    return {"type": "users", "users": users}
+
+
+shown_presences = {}  # what everyone was last told: {user_id: "idle", ...} (see announce_presences)
+
+
+async def announce_presences():
+    """Send everyone the users list again, if anyone's status looks different from last time."""
+    global shown_presences  # (this function gives the name a new dict, so it must say it means the global one)
+    message = users_message()
+    now = {user["id"]: user["presence"] for user in message["users"]}
+    if now != shown_presences:
+        shown_presences = now
+        await send_to_everyone(message)
+
+
+async def watch_presences():
+    """Going idle isn't an event, it's time passing: so look every 30 seconds. Runs as long as the server."""
+    while True:
+        await asyncio.sleep(30)
+        try:
+            await announce_presences()
+        except Exception as error:  # (one bad round must not stop it for good)
+            print(f"Couldn't update statuses: {error!r}", flush=True)
+
+
+presence_watcher = None  # the task above, started by the first connection (it needs the running loop)
 
 
 BOT_INVITE_TIME = "-1 hour"  # how long a mention lets a bot into a DM (SQLite's way of writing it)
@@ -3398,10 +3463,13 @@ async def chat(websocket: WebSocket):
         return
 
     await websocket.accept()
-    was_online = user_id in online_user_ids()  # already open in another tab?
+    global presence_watcher
+    if presence_watcher is None:  # the first connection since the server started: start watching for idle
+        presence_watcher = asyncio.create_task(watch_presences())
     # No channel until they "join", no voice room until they say they joined one.
     clients[websocket] = {"user_id": user_id, "channel": None, "voice": None, "muted": False, "deafened": False,
                           "looking": False,  # looking at it right now (the page says, see "looking")
+                          "away_since": time.time(),  # since when it isn't (None while it is): for "idle"
                           "app": False}      # the Windows app (the page says so in "looking" too)
     try:
         # Tell the page who it is (the id is for building DM names).
@@ -3410,6 +3478,7 @@ async def chat(websocket: WebSocket):
             "max_text_length": MAX_TEXT_LENGTH,  # so the page's text box uses the same limit
             "page_version": PAGE_VERSION,  # a different one than it was loaded with: it reloads
             "appearance": appearance_of(user_id),  # Settings → Appearance (None: the defaults)
+            "presence": presence_of(user_id),  # the status they chose (the others may see another: users)
             "vapid_public_key": VAPID_PUBLIC_KEY or None,  # for subscribing to push (None: not set up)
         })
         await send(websocket, {"type": "channels", "channels": channel_list()})  # (they may have changed while away)
@@ -3419,10 +3488,8 @@ async def chat(websocket: WebSocket):
         await send(websocket, {
             "type": "unread", "channels": unread_channels(user_id), "mentions": unread_mentions(user_id),
         })
-        if was_online:
-            await send(websocket, users_message())  # just this tab
-        else:
-            await send_to_everyone(users_message())  # they came online
+        await send(websocket, users_message())  # this tab
+        await announce_presences()  # and everyone, if this changed what they see (they came online)
         await send(websocket, voice_members_message())  # who's in the voice channels right now
         # Their DM and group calls that someone is in right now (so the banner can offer "Join call").
         private_rooms = {c["voice"] for c in clients.values() if is_private_room(c["voice"])}
@@ -3682,8 +3749,24 @@ async def chat(websocket: WebSocket):
             elif kind == "looking":
                 # {"type": "looking", "looking": true}: the page is in sight and has the focus (or
                 # not any more). Nobody gets a push while they're looking at the chat somewhere.
-                clients[websocket]["looking"] = data.get("looking") is True
+                looking = data.get("looking") is True
+                if looking != clients[websocket]["looking"]:
+                    clients[websocket]["away_since"] = None if looking else time.time()
+                clients[websocket]["looking"] = looking
                 clients[websocket]["app"] = data.get("app") is True  # (then no pushes at all: has_app_open)
+                if looking:
+                    await announce_presences()  # back from idle: at once, not at the next half minute
+
+            elif kind == "presence":
+                # {"type": "presence", "presence": "dnd"}: the status they choose. All their pages hear it,
+                # and everyone sees the new one.
+                presence = data.get("presence")
+                if presence not in PRESENCES:
+                    continue
+                with db:
+                    db.execute("UPDATE users SET presence = ? WHERE id = ?", (presence, user_id))
+                await send_to_user(user_id, {"type": "my_presence", "presence": presence})
+                await announce_presences()
 
             elif kind == "call":
                 await start_call(data.get("channel"), user_id)
@@ -3701,8 +3784,7 @@ async def chat(websocket: WebSocket):
     finally:
         voice_room = clients[websocket]["voice"]
         del clients[websocket]
-        if user_id not in online_user_ids():  # that was their last tab: they went offline
-            await send_to_everyone(users_message())
+        await announce_presences()  # their last tab: they went offline (or another tab of theirs decides now)
         if voice_room in VOICE_ROOMS:  # closed the tab while in voice: they're out
             await send_to_everyone(voice_members_message())
         if is_private_room(voice_room):  # ...or out of a DM's or group's call

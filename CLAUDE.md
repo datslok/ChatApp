@@ -129,6 +129,15 @@ the point is for me to understand how it works, not just to have it done.
   it) and aren't offered in the page's friend picker.
   Page: + next to "Direct messages" (#group-dialog with friend checkboxes), groups first in the DM list,
   #dm-header shows members and Add people / Rename (prompt()) / Leave (confirm()) / 📞 Call.
+- Statuses (server.py, "Statuses"): `users.presence` is the chosen one (online, idle, dnd, invisible), set over
+  the WebSocket (`{"type": "presence"}` -> "my_presence" to all their pages; also in "welcome"). "users" has
+  each one's shown `presence` (online, idle, dnd, offline; invisible shows offline) and `online` (not offline).
+  Online turns idle after `IDLE_AFTER` (10 min) with every page out of sight (`away_since`, from "looking";
+  never for bots); `watch_presences` (every 30 s, started by the first connection) and connects, disconnects,
+  "looking" true and status changes call `announce_presences`, which sends "users" only when a shown status
+  changed. dnd: `isMuted()` on every page and no pushes (`send_push`). Page: the picker in #me-popup
+  (people.js, `renderPresencePicker`), dots `.dot.online/.idle/.dnd/.invisible` (our own Invisible as a ring).
+  The users' "status" field is still the line they write about themselves.
 - Pinned messages: `messages.pinned_at` / `pinned_by` (NULL = not pinned); anyone who can see a message
   (`can_join`) may pin or unpin it over the WebSocket (`{"type": "pin", "message_id", "pinned"}`), never a
   note (`kind` set); `MAX_PINS` 100 per chat (else "pins_full"). Everyone in the chat gets "pinned"; a pin also

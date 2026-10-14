@@ -5,9 +5,15 @@
 
 // ---------- People: DM list and online list ----------
 
-function makeDot(online) {
+// The statuses, by their names on the server (users.presence; "offline" is only ever shown).
+const PRESENCE_NAMES = { online: "Online", idle: "Idle", dnd: "Do Not Disturb", invisible: "Invisible", offline: "Offline" };
+
+// The little dot on someone's picture: green, a yellow moon (idle), red (do not disturb), or grey
+// (offline; a grey ring for our own Invisible). Its colour comes from the CSS class.
+function makeDot(presence) {
   const dot = document.createElement("span");
-  dot.className = online ? "dot online" : "dot";
+  dot.className = "dot " + presence;
+  dot.title = PRESENCE_NAMES[presence] ?? "";
   return dot;
 }
 
@@ -92,7 +98,10 @@ function makePerson(user) {
   const picture = document.createElement("span");
   picture.className = "person-picture";
   picture.appendChild(makeAvatar(user.id, user.name, "small"));
-  picture.appendChild(makeDot(user.online));
+  // What the others see; but we see our own Invisible as such (they see us offline).
+  const presence = user.id === myId && myPresence === "invisible" ? "invisible"
+    : user.presence ?? (user.online ? "online" : "offline");
+  picture.appendChild(makeDot(presence));
   row.appendChild(picture);
 
   const text = document.createElement("span");
@@ -591,6 +600,7 @@ function renderMePopup() {
   document.getElementById("me-avatar").replaceChildren(makeAvatar(myId, me.name, "large"));
   document.getElementById("me-name").textContent = me.name;
   document.getElementById("me-status").textContent = me.status || "";
+  renderPresencePicker();
 
   // In voice: where ("Lounge", "@alex") and the pictures of who's there (the server's lists:
   // voiceMembers for Lounge, dmCalls for a DM's call).
@@ -603,6 +613,42 @@ function renderMePopup() {
   document.getElementById("me-call-pictures").replaceChildren(
     ...members.slice(0, 5).map(({ id }) => makeAvatar(id, people.get(id)?.name, "small")),
   );
+}
+
+// Our status: a row for each, with its dot and what it means; the chosen one highlighted. Picking
+// one tells the server, which tells all our pages ("my_presence") and everyone else ("users").
+const PRESENCES_CHOSEN = ["online", "idle", "dnd", "invisible"];  // the ones you can choose (server.py, PRESENCES)
+const PRESENCE_HELP = {
+  online: "",
+  idle: "Shown as away",
+  dnd: "No notifications or sounds, on any device",
+  invisible: "You look offline, but can chat as usual",
+};
+
+function renderPresencePicker() {
+  document.getElementById("me-presence-options").replaceChildren(...PRESENCES_CHOSEN.map((presence) => {
+    const row = document.createElement("button");
+    row.type = "button";
+    row.className = "presence-option";
+    row.setAttribute("aria-pressed", presence === myPresence ? "true" : "false");
+    const text = document.createElement("span");
+    text.className = "presence-text";
+    const name = document.createElement("span");
+    name.textContent = PRESENCE_NAMES[presence];
+    text.appendChild(name);
+    if (PRESENCE_HELP[presence]) {
+      const help = document.createElement("span");
+      help.className = "presence-help";
+      help.textContent = PRESENCE_HELP[presence];
+      text.appendChild(help);
+    }
+    row.append(makeDot(presence), text);
+    row.addEventListener("click", () => {
+      if (presence !== myPresence) sendToServer({ type: "presence", presence });
+      mePopup.close();
+    });
+    return row;
+  }));
 }
 
 // Open it just above the panel, at the panel's left edge (like the connection popup, voice.js).

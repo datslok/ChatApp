@@ -1628,7 +1628,59 @@ body.mini-hidden :fullscreen .tile-strip {
   background: var(--bg-hover);
 }
 
-/* A small round status dot: grey for offline, green for online. */
+/* Your status in your popup: one row per status, the chosen one highlighted (aria-pressed). */
+#me-presence {
+  margin-top: 12px;
+  padding: 4px;
+  border-radius: 8px;
+  background: var(--bg-panel);
+}
+#me-presence h3 {
+  margin: 4px 6px 4px;
+  font-size: 0.75rem;
+  color: var(--text-soft);
+}
+#me-presence-options {
+  display: flex;
+  flex-direction: column;
+}
+.presence-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.9rem;
+  text-align: left;
+  cursor: pointer;
+}
+.presence-option:hover {
+  background: var(--bg-hover);
+}
+.presence-option[aria-pressed="true"] {
+  background: var(--bg-active);
+}
+.presence-option .dot {
+  flex-shrink: 0;
+  width: 10px;
+  height: 10px;
+  margin: 0;
+}
+.presence-text {
+  display: flex;
+  flex-direction: column;
+}
+.presence-help {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+/* A small round status dot: grey for offline, green for online, yellow for idle, red for do not
+   disturb, and a grey ring (hollow) for your own Invisible. */
 .dot {
   display: inline-block;
   width: 8px;
@@ -1640,6 +1692,20 @@ body.mini-hidden :fullscreen .tile-strip {
 
 .dot.online {
   background: var(--green);
+}
+
+.dot.idle {
+  background: var(--yellow);
+}
+
+.dot.dnd {
+  background: var(--red);
+}
+
+/* A ring: the dot's own colour shows only at the edge (an "inset" shadow drawn inside it). */
+.dot.invisible {
+  background: transparent;
+  box-shadow: inset 0 0 0 2.5px var(--text-faint);
 }
 
 #chat {

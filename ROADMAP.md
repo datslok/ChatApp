@@ -73,7 +73,7 @@
     - [x] Open on startup: the Windows app can start with Windows (Settings → App behaviour; app 0.1.16)
     - [x] Search messages (by text, person or channel; SQLite's FTS5; the 🔍 at the top of a chat)
 - [ ] **17.** Social and presence
-    - [ ] Statuses: Online, Idle (automatic when away), Do Not Disturb (no notifications), Invisible
+    - [x] Statuses: Online, Idle (automatic when away), Do Not Disturb (no notifications), Invisible
     - [ ] Muting a channel or DM
     - [ ] Blocking someone
     - [ ] Roles with colours (coloured names and headings in the member list)

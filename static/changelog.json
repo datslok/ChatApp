@@ -24,6 +24,7 @@
         "Friends: send requests and accept them on the Friends page. DMs are between friends",
         "Group DMs: the + next to \"Direct messages\" starts a private chat with 2 to 9 friends. At the top of a group: Add people (your own friends), Rename and Leave. Every message there notifies the others, like a DM. 📞 Call rings everyone in the group; whoever answers joins, and the rest can join later from the call banner. Chattus is in every group: write @Chattus to ask him something there",
         "Online and offline people on the right, and \"is typing…\" under the messages",
+        "Your status: click your name at the bottom left and pick Online, Idle, Do Not Disturb (no notifications or sounds, on any device) or Invisible (you look offline but can chat as usual). After 10 minutes away from the chat you show as Idle by yourself. The dot on a picture shows it: green, yellow, red or grey",
         "Click someone's picture or name for their profile: picture, banner, status and bio",
         "Your own in Settings → Profile. Pictures and banners can be animated GIFs, and you can move and zoom them",
         "Up to 12 custom emoji of your own (also animated) in Settings → Emoji, for messages and reactions"
@@ -107,7 +108,8 @@
         "Settings → Voice & audio lists your microphones and speakers straight away, without pressing Test microphone first",
         "Windows app 0.1.18: fixes the app forgetting your audio settings (and showing the What's new dot again) every time it starts. After this update, set your audio settings once more and they'll stick",
         "Pinned messages 📌: hover over a message and click 📌 to pin it, and click 📌 at the top of the chat to see them all",
-        "Search 🔍: find messages by their words, in one chat or everywhere, from anyone or one person. The 🔍 is at the top of every chat"
+        "Search 🔍: find messages by their words, in one chat or everywhere, from anyone or one person. The 🔍 is at the top of every chat",
+        "Statuses: click your name at the bottom left for Online, Idle, Do Not Disturb or Invisible. You also turn Idle by yourself after 10 minutes away"
       ]
     },
     {
