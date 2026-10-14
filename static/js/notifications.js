@@ -168,7 +168,7 @@ if (canPush) currentSubscription().then((subscription) => { pushOn = Boolean(sub
 // each new connection (core.js). "blur": the window lost the focus. "app": this is the Windows
 // app, which notifies by itself: while it's open at all, our phones get no pushes either.
 function sendLooking() {
-  if (socket) sendToServer({ type: "looking", looking: isLooking(), app: inDesktopApp });  // (no connection yet: on "open")
+  if (socket) sendToServer({ type: "looking", looking: isLooking(), app: inDesktopApp, mobile: onPhone });  // (no connection yet: on "open")
   clearSeenNotifications();
 }
 
@@ -289,6 +289,9 @@ const phoneBanner = document.getElementById("phone-banner");
 const phoneBannerTitle = document.getElementById("phone-banner-title");
 const phoneBannerText = document.getElementById("phone-banner-text");
 const phoneBannerAction = document.getElementById("phone-banner-action");
+// A phone (the browser's description of itself names one; never the Windows app). For the banner, and
+// sent in "looking" (sendLooking): others see a little phone for our dot while we're only here on
+// phones (server.py, on_phone_only).
 const onPhone = /Android|iPhone|iPad/.test(navigator.userAgent);
 const onIPhone = /iPhone|iPad/.test(navigator.userAgent);
 // Running as the installed app? It has no address bar ("standalone"); iPhones say it their own way.

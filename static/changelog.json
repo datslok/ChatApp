@@ -31,7 +31,7 @@
         "Online and offline people on the right, and \"is typing…\" under the messages",
         "Roles: admins make roles with a colour in Settings → Admin → Roles and give them to people. A role colours its people's names and gives them a section in the member list; the roles show in their profile",
         "The member list on the right shows who's in the chat you're in: everyone in a channel, the two of you in a DM, the members of a group",
-        "Your status: click your name at the bottom left and pick Online, Idle, Do Not Disturb (no notifications or sounds, on any device) or Invisible (you look offline but can chat as usual). After 10 minutes away from the chat you show as Idle by yourself. The dot on a picture shows it: green, yellow, red or grey",
+        "Your status: click your name at the bottom left and pick Online, Idle, Do Not Disturb (no notifications or sounds, on any device) or Invisible (you look offline but can chat as usual). After 10 minutes away from the chat you show as Idle by yourself. The dot on a picture shows it: green, yellow, red or grey. Someone with a little phone instead of a dot is only here on their phone",
         "Click someone's picture or name for their profile: picture, banner, status and bio",
         "Right-click someone (a long press on a phone): above their messages, in the member list, the DM list, the People page or a call. A menu with Profile, Mention, Message, Call, Add or Remove friend, Mute DM and Block",
         "Your own in Settings → Profile. Pictures and banners can be animated GIFs, and you can move and zoom them",
@@ -111,6 +111,7 @@
     {
       "date": "2026-10-14",
       "items": [
+        "📱 Someone who's only here on their phone has a little phone instead of a dot, in their status's colour",
         "Your picture at the bottom left is a little bigger now. And something spooky is hiding in the chat this October… 🎃",
         "Invite friends with a link 💌: People → Invite someone (each link works once, for a week). New accounts confirm their email address first, and so does a new address in Settings",
         "GIFs 🎞️: the new GIF button next to the text box searches GIPHY. Click one to send it",

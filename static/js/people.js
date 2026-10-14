@@ -9,11 +9,13 @@
 const PRESENCE_NAMES = { online: "Online", idle: "Idle", dnd: "Do Not Disturb", invisible: "Invisible", offline: "Offline" };
 
 // The little dot on someone's picture: green, a yellow moon (idle), red (do not disturb), or grey
-// (offline; a grey ring for our own Invisible). Its colour comes from the CSS class.
-function makeDot(presence) {
+// (offline; a grey ring for our own Invisible). Its colour comes from the CSS class. `mobile`: they're
+// only here on a phone (the server's "users"), so it's a little phone in the same colour instead.
+function makeDot(presence, mobile = false) {
   const dot = document.createElement("span");
-  dot.className = "dot " + presence;
-  dot.title = PRESENCE_NAMES[presence] ?? "";
+  const phone = mobile && presence !== "offline" && presence !== "invisible";
+  dot.className = "dot " + presence + (phone ? " mobile" : "");
+  dot.title = (PRESENCE_NAMES[presence] ?? "") + (phone ? " on a phone" : "");
   return dot;
 }
 
@@ -117,7 +119,7 @@ function makePerson(user) {
   // What the others see; but we see our own Invisible as such (they see us offline).
   const presence = user.id === myId && myPresence === "invisible" ? "invisible"
     : user.presence ?? (user.online ? "online" : "offline");
-  picture.appendChild(makeDot(presence));
+  picture.appendChild(makeDot(presence, user.mobile));
   row.appendChild(picture);
 
   const text = document.createElement("span");

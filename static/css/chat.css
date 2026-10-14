@@ -3113,6 +3113,26 @@ button.download-button {
   border: 2px solid var(--bg-panel);  /* a ring in the sidebar's colour, to separate it from the picture */
 }
 
+/* Only here on a phone: the dot becomes a little phone in its colour, taller than wide, with a dark
+   screen (::after, a box of its own drawn inside it) and a thicker edge at the bottom, like a home
+   button. The ring around it stays. */
+.person-picture .dot.mobile {
+  width: 8px;
+  height: 12px;
+  border-radius: 2px;
+}
+.dot.mobile::after {
+  content: "";
+  position: absolute;
+  inset: 1.5px 1.5px 3px;  /* (top, left and right, bottom) */
+  border-radius: 1px;
+  background: var(--bg-panel);
+}
+#user-panel-me .person-picture .dot.mobile {
+  width: 10px;
+  height: 15px;
+}
+
 .person-text {
   display: flex;
   flex-direction: column;

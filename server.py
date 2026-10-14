@@ -3592,6 +3592,13 @@ def shown_presence(user_id, chosen, bot=False):
     return "online"
 
 
+def on_phone_only(user_id, presence):
+    """Is this person only here on a phone (every open page of theirs says it's one)? Then the others
+    see a little phone instead of their dot. Not when they show as offline (Invisible gives nothing away)."""
+    tabs = [client for client in clients.values() if client["user_id"] == user_id]
+    return presence != "offline" and bool(tabs) and all(client["mobile"] for client in tabs)
+
+
 def presence_of(user_id):
     """The status this person chose (for their own pages, and for notifications)."""
     row = db.execute("SELECT presence FROM users WHERE id = ?", (user_id,)).fetchone()
@@ -3620,6 +3627,7 @@ def users_message():
         presence = shown_presence(user_id, chosen, bool(bot))
         users.append({
             "id": user_id, "name": name, "presence": presence, "online": presence != "offline",
+            "mobile": on_phone_only(user_id, presence),  # only on a phone: a little phone for a dot
             "avatar": avatar, "banner": banner, "status": status, "bio": bio, "admin": bool(admin),
             "bot": bool(bot),  # the AI bot: the page offers it in DMs' @ suggestions too
             "owner": bool(owner),  # the server's owner (see "Bans and admins")
@@ -3628,14 +3636,14 @@ def users_message():
     return {"type": "users", "users": users}
 
 
-shown_presences = {}  # what everyone was last told: {user_id: "idle", ...} (see announce_presences)
+shown_presences = {}  # what everyone was last told: {user_id: ("idle", False), ...} (see announce_presences)
 
 
 async def announce_presences():
-    """Send everyone the users list again, if anyone's status looks different from last time."""
+    """Send everyone the users list again, if anyone's status (or phone) looks different from last time."""
     global shown_presences  # (this function gives the name a new dict, so it must say it means the global one)
     message = users_message()
-    now = {user["id"]: user["presence"] for user in message["users"]}
+    now = {user["id"]: (user["presence"], user["mobile"]) for user in message["users"]}
     if now != shown_presences:
         shown_presences = now
         await send_to_everyone(message)
@@ -4517,7 +4525,8 @@ async def chat(websocket: WebSocket):
     clients[websocket] = {"user_id": user_id, "channel": None, "voice": None, "muted": False, "deafened": False,
                           "looking": False,  # looking at it right now (the page says, see "looking")
                           "away_since": time.time(),  # since when it isn't (None while it is): for "idle"
-                          "app": False}      # the Windows app (the page says so in "looking" too)
+                          "app": False,      # the Windows app (the page says so in "looking" too)
+                          "mobile": False}   # a phone (in "looking" too): see on_phone_only
     try:
         # Tell the page who it is (the id is for building DM names).
         await send(websocket, {
@@ -4813,8 +4822,11 @@ async def chat(websocket: WebSocket):
                     clients[websocket]["away_since"] = None if looking else time.time()
                 clients[websocket]["looking"] = looking
                 clients[websocket]["app"] = data.get("app") is True  # (then no pushes at all: has_app_open)
-                if looking:
-                    await announce_presences()  # back from idle: at once, not at the next half minute
+                mobile = data.get("mobile") is True
+                phone_changed = mobile != clients[websocket]["mobile"]
+                clients[websocket]["mobile"] = mobile
+                if looking or phone_changed:
+                    await announce_presences()  # back from idle, or now known to be a phone: at once
 
             elif kind == "mute":
                 # {"type": "mute", "channel": "memes", "muted": true}: mute a chat for ourselves (or unmute).
