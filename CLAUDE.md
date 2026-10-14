@@ -111,6 +111,10 @@ the point is for me to understand how it works, not just to have it done.
   and fills every `data-icon="name"` in index.html at load. `.icon` in chat.css: 1.2em, stroke currentColor 1.8.
   Toggles swap icons (mic/mic-off, headphones/headphone-off, bell/bell-off, maximize/minimize). Emoji stay in
   OS notifications, server notes, What's new and anything people write. The smiley (`makeSmileyIcon`) is our own.
+  Plain icon buttons use `--icon` / `--icon-strong` (hover), defaulting to --text-muted / --text-strong (a button
+  doesn't inherit the text colour by itself: without one they were the browser's dark ButtonText). appearance.js
+  `guardIconColours` (in every applyAppearance) measures WCAG contrast against bg-panel-alt, bg-panel, bg-main and
+  bg-input and, below 3:1, sets them to the first readable of text-soft/text, else white or black.
 - `static/emoji.json`: every emoji for the reaction picker (and the server's list of allowed reactions),
   made from Unicode's `emoji-test.txt` by `tools/make_emoji_json.py`. The page only offers the ones the
   device can draw (messages.js `makeEmojiTester`: drawn on a canvas in black and in white, a colour emoji

@@ -37,6 +37,10 @@
   --text: #dbdee1;           /* messages and most text */
   --text-soft: #b5bac1;      /* labels, secondary text */
   --text-muted: #949ba4;     /* times, hints, headings of sections */
+  /* Icons on plain buttons, and under the mouse. appearance.js replaces them when colours picked by
+     hand would make them hard to see (guardIconColours). */
+  --icon: var(--text-muted);
+  --icon-strong: var(--text-strong);
   --text-faint: #80848e;     /* the offline dot */
   --text-disabled: #6d6f78;
   /* Colours with a meaning. */
@@ -322,6 +326,15 @@ body {
   color: var(--text-strong);
 }
 
+/* A channel's icon (People, Lounge): always readable, even when the names' colour was picked too faint. */
+.channel > .icon {
+  color: var(--icon);
+}
+.channel:hover > .icon,
+.channel.active > .icon {
+  color: var(--icon-strong);
+}
+
 .channel {
   position: relative;  /* so the unread dot can be placed against its left edge */
 }
@@ -503,11 +516,13 @@ body {
   border: none;
   border-radius: 6px;
   background: none;
+  color: var(--icon);  /* (a button doesn't take the page's text colour by itself) */
   font-size: 1rem;
   cursor: pointer;
 }
 .header-icon:hover {
   background: var(--bg-hover);
+  color: var(--icon-strong);
 }
 
 /* A message's 📌 while it's pinned (aria-pressed="true"): highlighted, as "Unpin". */
@@ -1582,11 +1597,13 @@ body.mini-hidden :fullscreen .tile-strip {
   border: none;
   border-radius: 6px;
   background: none;
+  color: var(--icon);
   font-size: 1rem;
   cursor: pointer;
 }
 .voice-button:hover {
   background: var(--bg-hover);
+  color: var(--icon-strong);
 }
 /* You, at the very bottom of the sidebar, in two rows:
      [picture● name/status]
@@ -1716,15 +1733,18 @@ body.mini-hidden :fullscreen .tile-strip {
   border: none;
   border-radius: 6px;
   background: none;
+  color: var(--icon);
   font-size: 0.95rem;
   cursor: pointer;
 }
 .user-panel-button:hover {
   background: var(--bg-hover);
+  color: var(--icon-strong);
 }
-/* Muted or deafened: the button turns red. */
+/* Muted or deafened: the button turns red, with a white icon (like every coloured button). */
 .user-panel-button.off {
   background: var(--button-red);
+  color: white;
 }
 /* Notifications muted: a small 🔕 on the corner of ⚙️. */
 #muted-icon {
@@ -2158,14 +2178,14 @@ button.download-button {
   border: none;
   border-radius: 4px;
   background: none;
-  color: var(--text-soft);
+  color: var(--icon);
   font-size: 0.8rem;
   cursor: pointer;
 }
 
 .message-actions button:hover {
   background: var(--bg-active);
-  color: var(--text-strong);
+  color: var(--icon-strong);
 }
 
 /* Emoji are characters, drawn by the device's emoji font. Name the common ones explicitly,
@@ -3933,10 +3953,10 @@ button.download-button {
   margin-right: 0.4em;
 }
 #chat-form #compose-emoji {
-  color: var(--text-muted);  /* quieter until pointed at */
+  color: var(--icon);  /* quieter until pointed at */
 }
 #chat-form #compose-emoji:hover {
-  color: var(--text-strong);
+  color: var(--icon-strong);
 }
 
 /* The Emoji | GIF tabs at the top of the pickers: only on phones (see the @media rules below), where
