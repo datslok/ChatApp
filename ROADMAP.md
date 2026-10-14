@@ -83,7 +83,7 @@
     - [x] Up arrow in an empty text box edits your last message (was already there)
     - [x] A "New messages" divider where you stopped reading (also for messages that came while away)
     - [x] GIF search (GIPHY; Tenor's API was shut down in June 2026): the GIF button, saved on our server when sent
-    - [ ] Mobile online icon
+    - [x] Mobile online icon (a little phone instead of the dot when someone is only on phones)
     - [x] Seasonal easter egg video (🎃 on your own picture in October; seasonal/ on the server), and a bigger picture at the bottom left
     - [ ] Soundboard in voice
     - [ ] Push-to-talk, as an alternative to the noise gate
