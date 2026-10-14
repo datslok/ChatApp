@@ -428,9 +428,9 @@ function isLooking() {
   return !document.hidden && document.hasFocus();
 }
 
-// How a channel is called: "#memes", "@kari" for a DM, a group's name (or "Friends" for that page).
+// How a channel is called: "#memes", "@kari" for a DM, a group's name (or "People" for that page).
 function channelLabel(channel) {
-  if (channel === FRIENDS) return "Friends";
+  if (channel === FRIENDS) return "People";
   if (channel === LOUNGE) return "Lounge";
   if (isGroup(channel)) return groupLabel(channel);
   const partner = dmPartner(channel);

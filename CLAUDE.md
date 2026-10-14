@@ -158,6 +158,10 @@ the point is for me to understand how it works, not just to have it done.
   in messages and lists; `showUsers` gives each role with people online a member list section (#role-sections,
   after Bots); role tags in the profile. Settings → Roles (settings.js, admins): colour picker, name, ↑ ↓ 🗑,
   members with × and "+ Add someone". core.js redraws messages when the roles or anyone's roles change.
+- The right column (#members, people.js `renderMembers` / `chatMembers`) shows the chat's members: everyone in
+  a channel (all channels are open to everyone), the two people in a DM, a group's members (bots too); hidden
+  on the People page and the Lounge. Everyone is on the People page's Everyone tab (with a filter box). The
+  People page was the Friends page: its key (`FRIENDS`, "friends") and ids (#friends-view) keep the old name.
 - Picking people: anywhere you choose from what could be everyone (or many), a type-to-search picker,
   never a drop-down (the user's rule): `usePersonPicker(input, list, {candidates, onPick, onType})` in people.js
   (search's "From", Settings → Roles "+ Add someone"); a multi-pick list (the group popup's friends) gets a

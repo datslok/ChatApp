@@ -143,11 +143,42 @@ function showUsers(users) {
   for (const user of users) people.set(user.id, user);
 
   renderDmList();
+  renderMembers();
 
-  // The right column: bots in a section of their own at the top, then a section for each role with
-  // its online people (by their top role, like Discord), then the online people without a role, and
-  // everyone offline at the bottom (all alphabetical, as the server sent them). Click someone for
-  // their profile.
+  redrawAvatars();  // messages, the profile popup and Settings
+  renderUserPanel();  // you, at the bottom left
+  // Banners only appear in two places, so those are simply redrawn if they're open.
+  if (profileDialog.open) renderProfile(profileUserId);
+  if (settingsDialog.open) settingsBanner.replaceChildren(makeBanner(myId));
+  if (currentChannel === FRIENDS) renderPeopleList();  // names, pictures, online dots
+}
+
+// Who's in the chat we're looking at, alphabetical (the order the server sent everyone in): a DM's
+// two people, a group's members (bots too: they're in every group), everyone for a channel (every
+// channel is open to everyone). null: no right column (the People page and the Lounge).
+function chatMembers() {
+  if (currentChannel === FRIENDS || currentChannel === LOUNGE) return null;
+  const everyone = [...people.values()];
+  const partner = dmPartner(currentChannel);
+  if (partner !== null) return everyone.filter((user) => user.id === myId || user.id === partner);
+  if (isGroup(currentChannel)) {
+    const members = groups.get(currentChannel)?.members ?? [];
+    return everyone.filter((user) => members.includes(user.id));
+  }
+  return everyone;
+}
+
+// The right column, for the chat we're in (chatMembers): redrawn when people change (showUsers),
+// when we switch chats (core.js, joinCurrentChannel) and when a group's members change (setGroups).
+function renderMembers() {
+  const users = chatMembers();
+  // No column on the People page and in the Lounge (nor its 👥 button on phones).
+  membersElement.hidden = openMembersButton.hidden = users === null;
+  if (users === null) return;
+
+  // Bots in a section of their own at the top, then a section for each role with its online people
+  // (by their top role, like Discord), then the online people without a role, and everyone offline
+  // at the bottom. Click someone for their profile.
   const bots = users.filter((user) => user.bot);
   const humans = users.filter((user) => !user.bot);  // ! means "not"
   const online = humans.filter((user) => user.online && !topRole(user.id));
@@ -170,13 +201,6 @@ function showUsers(users) {
   offlineHeading.textContent = `Offline — ${offline.length}`;
   fillPeopleList(onlineList, online);
   fillPeopleList(offlineList, offline);
-
-  redrawAvatars();  // messages, the profile popup and Settings
-  renderUserPanel();  // you, at the bottom left
-  // Banners only appear in two places, so those are simply redrawn if they're open.
-  if (profileDialog.open) renderProfile(profileUserId);
-  if (settingsDialog.open) settingsBanner.replaceChildren(makeBanner(myId));
-  if (currentChannel === FRIENDS) renderPeopleList();  // names, pictures, online dots
 }
 
 function fillPeopleList(list, users) {
@@ -349,9 +373,20 @@ function renderPeopleList() {
     }
   }
 
+  // The search box is only for Everyone (the other tabs are short).
+  peopleFilter.hidden = peopleTab !== "everyone";
+
   if (peopleTab === "friends") {
     section("", everyone.filter((user) => friendIds.has(user.id)),
-      "No friends yet. Click someone's name or picture in a channel to add them.");
+      "No friends yet. Find people in the Everyone tab and add them.");
+  } else if (peopleTab === "everyone") {
+    // Everyone on the chat (but us), online first: whose names contain what's typed in the box.
+    const typed = peopleFilter.value.trim().toLowerCase();
+    const found = everyone.filter((user) => user.name.toLowerCase().includes(typed));
+    const online = found.filter((user) => user.online);
+    const offline = found.filter((user) => !user.online);
+    section(`Online — ${online.length}`, online, typed ? "Nobody online by that name." : "Nobody else is online.");
+    section(`Offline — ${offline.length}`, offline, typed ? "Nobody offline by that name." : "Nobody is offline.");
   } else if (peopleTab === "blocked") {
     section("", everyone.filter((user) => blockedIds.has(user.id)), "You haven't blocked anyone.");
   } else {
@@ -360,7 +395,8 @@ function renderPeopleList() {
   }
 }
 
-friendsButton.addEventListener("click", () => switchChannel(FRIENDS, "Friends"));
+friendsButton.addEventListener("click", () => switchChannel(FRIENDS, "People"));
+peopleFilter.addEventListener("input", renderPeopleList);  // (the box is outside the list: typing goes on)
 
 for (const tab of document.querySelectorAll(".tab")) {
   tab.addEventListener("click", () => {
@@ -420,6 +456,7 @@ function setGroups(list) {
   groups.clear();
   for (const group of list) groups.set(group.key, group);
   renderDmList();
+  renderMembers();  // (in a group whose people changed: the right column)
   if (isGroup(voiceRoomName) && !groups.has(voiceRoomName)) leaveVoice();  // left a group while in its call
   if (isGroup(currentChannel)) {
     if (groups.has(currentChannel)) {

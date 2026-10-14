@@ -20,7 +20,7 @@
   <nav id="sidebar">
     <div id="sidebar-lists">
       <button id="friends-button" class="channel" data-channel="friends">
-        Friends <span id="request-badge" class="badge" hidden></span>
+        👥 People <span id="request-badge" class="badge" hidden></span>
       </button>
       <div id="channel-list"></div>
       <h2 class="section-heading">Voice</h2>
@@ -75,7 +75,7 @@
     <header id="topbar">
       <button type="button" id="open-sidebar" title="Channels">☰</button>
       <span id="topbar-title"></span>
-      <button type="button" id="open-members" title="Online">👥</button>
+      <button type="button" id="open-members" title="Members">👥</button>
     </header>
     <div id="banner" hidden>Connection lost, reconnecting…</div>
     <!-- "Get the app", for people using a browser on Windows, until they close it (notifications.js). -->
@@ -117,16 +117,20 @@
       </div>
     </section>
 
-    <!-- The Friends page: shown instead of a channel when "Friends" is picked in the sidebar. -->
+    <!-- The People page: shown instead of a channel when "People" is picked in the sidebar.
+         (Its ids still say friends: it was the Friends page before it got the Everyone tab.) -->
     <section id="friends-view" hidden>
       <header class="friends-header">
-        <h2>Friends</h2>
+        <h2>People</h2>
         <div class="tabs">
           <button type="button" class="tab active" data-tab="friends">Friends</button>
+          <button type="button" class="tab" data-tab="everyone">Everyone</button>
           <button type="button" class="tab" data-tab="requests">Requests <span id="requests-tab-count"></span></button>
           <button type="button" class="tab" data-tab="blocked">Blocked</button>
         </div>
       </header>
+      <!-- Only on the Everyone tab (people.js, renderPeopleList): filters it by name. -->
+      <input id="people-filter" type="search" placeholder="Search everyone" autocomplete="off" aria-label="Search everyone" hidden>
       <div id="people-list"></div>
       <p id="people-status" class="action-status"></p>
     </section>

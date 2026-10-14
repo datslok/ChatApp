@@ -763,7 +763,8 @@ body {
 .group-choice[hidden] {
   display: none;
 }
-#group-filter {
+#group-filter,
+#people-filter {
   padding: 8px 10px;
   border: none;
   border-radius: 6px;
@@ -3844,6 +3845,13 @@ button.download-button {
 .tab.active {
   background: var(--bg-active);
   color: var(--text-strong);
+}
+
+/* The Everyone tab's search box: as wide as the rows below it. */
+#people-filter {
+  max-width: 720px;
+  margin-top: 12px;
+  box-sizing: border-box;
 }
 
 #people-list {

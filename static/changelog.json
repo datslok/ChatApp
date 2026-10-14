@@ -22,14 +22,16 @@
     {
       "topic": "👥 People",
       "items": [
-        "Friends: send requests and accept them on the Friends page. DMs are between friends. A new request pings you (and your phone, with notifications on)",
-        "Block someone: Block in their profile (click their name or picture). You stop being friends, they can't send you requests or reach you, and their messages are hidden for you (\"Show\" to see one). They aren't told. Unblock them in their profile or on the Friends page's Blocked tab. Admins and bots can't be blocked",
+        "People (at the top of the sidebar): your Friends, Everyone on the chat (with a search box, to find someone and add them), friend Requests and the people you Blocked",
+        "Friends: send requests and accept them on the People page. DMs are between friends. A new request pings you (and your phone, with notifications on)",
+        "Block someone: Block in their profile (click their name or picture). You stop being friends, they can't send you requests or reach you, and their messages are hidden for you (\"Show\" to see one). They aren't told. Unblock them in their profile or on the People page's Blocked tab. Admins and bots can't be blocked",
         "Group DMs: the + next to \"Direct messages\" starts a private chat with 2 to 9 friends. At the top of a group: Add people (your own friends), Rename and Leave. Every message there notifies the others, like a DM. 📞 Call rings everyone in the group; whoever answers joins, and the rest can join later from the call banner. Chattus is in every group: write @Chattus to ask him something there",
         "Online and offline people on the right, and \"is typing…\" under the messages",
         "Roles: admins make roles with a colour in Settings → Roles and give them to people. A role colours its people's names and gives them a section in the member list; the roles show in their profile",
+        "The member list on the right shows who's in the chat you're in: everyone in a channel, the two of you in a DM, the members of a group",
         "Your status: click your name at the bottom left and pick Online, Idle, Do Not Disturb (no notifications or sounds, on any device) or Invisible (you look offline but can chat as usual). After 10 minutes away from the chat you show as Idle by yourself. The dot on a picture shows it: green, yellow, red or grey",
         "Click someone's picture or name for their profile: picture, banner, status and bio",
-        "Right-click someone (a long press on a phone): above their messages, in the member list, the DM list, the Friends page or a call. A menu with Profile, Mention, Message, Call, Add or Remove friend, Mute DM and Block",
+        "Right-click someone (a long press on a phone): above their messages, in the member list, the DM list, the People page or a call. A menu with Profile, Mention, Message, Call, Add or Remove friend, Mute DM and Block",
         "Your own in Settings → Profile. Pictures and banners can be animated GIFs, and you can move and zoom them",
         "Up to 12 custom emoji of your own (also animated) in Settings → Emoji, for messages and reactions"
       ]
@@ -105,6 +107,7 @@
     {
       "date": "2026-10-14",
       "items": [
+        "The member list on the right now shows who's in the chat you're in (a DM: the two of you, a group: its members). Everyone is on the new Everyone tab of the People page (the old Friends page), with a search box",
         "A red NEW line shows where you stopped reading in a chat, and opening a chat with lots of new messages starts there",
         "New channels and headings can show up in the sidebar: admins now manage them from the app (Settings → Channels)",
         "Group DMs 👥: click the + next to \"Direct messages\" to start a private chat with up to 9 friends, with group calls 📞. Chattus is in every group: @Chattus to ask him something",

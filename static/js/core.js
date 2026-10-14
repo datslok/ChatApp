@@ -58,6 +58,7 @@ const requestBadge = document.getElementById("request-badge");
 const friendsView = document.getElementById("friends-view");
 const channelView = document.getElementById("channel-view");
 const peopleList = document.getElementById("people-list");
+const peopleFilter = document.getElementById("people-filter");
 const peopleStatus = document.getElementById("people-status");
 const requestsTabCount = document.getElementById("requests-tab-count");
 const usernameForm = document.getElementById("username-form");
@@ -113,8 +114,9 @@ let firstChannel = null;    // where to start: the first channel in the list
 // [{key: "general", name: "general", heading: false}, {key: "h:9c1e...", name: "Games", heading: true}, ...]
 // A channel's key never changes (messages point to it); its name is what we show.
 let channels = [];
-// The Friends page counts as a "channel" of its own here: it's highlighted in the sidebar
-// and is a step for the back button like any channel. (The server never hears this name.)
+// The People page (called Friends before it got its Everyone tab, hence the name) counts as a
+// "channel" of its own here: it's highlighted in the sidebar and is a step for the back button like
+// any channel. (The server never hears this name.)
 const FRIENDS = "friends";
 const LOUNGE = "voice:lounge";  // the Lounge page (a "channel" name like FRIENDS, so switching works the same)
 let myId = null;            // our own user id; the server tells us in its "welcome"
@@ -587,12 +589,13 @@ function joinCurrentChannel() {
   jumpLoading = null;          // (messages.js: loading older messages to reach one, in the old channel)
   clearReply();                // a reply belongs to the channel we just left
   clearTyping();
-  // Show the Friends page, the Lounge page or the channel: one of them.
+  // Show the People page (FRIENDS), the Lounge page or the channel: one of them.
   const inFriends = currentChannel === FRIENDS;
   const inLounge = currentChannel === LOUNGE;
   friendsView.hidden = !inFriends;
   loungeView.hidden = !inLounge;
   channelView.hidden = inFriends || inLounge;
+  renderMembers();  // the right column shows who's in this chat (people.js)
   if (inLounge) {
     renderLoungeView();
     sendToServer({ type: "join", channel: null });  // no text channel here either
