@@ -86,6 +86,7 @@ async function joinVoice(roomName, label) {
       },
     });
     voiceRoom = room;
+    watchSpeaking();  // the speaking rings (voice.js)
 
     // Someone else's audio has reached us: track.attach() starts playing it. Their camera: the
     // call banner shows it (renderCallPanel attaches it to a <video> there).
@@ -96,12 +97,17 @@ async function joinVoice(roomName, label) {
       }
       voiceAudio.appendChild(track.attach());
       applyVolume(participant);
+      // Their voice (not a shared screen's sound): measure it for their speaking ring (voice.js).
+      if (publication.source === LivekitClient.Track.Source.Microphone) {
+        listenForSpeaking(participant.identity, track, context);
+      }
       // A shared screen's sound: its tile gets a volume slider.
       if (publication.source === LivekitClient.Track.Source.ScreenShareAudio) renderCallPanel();
     });
     // ...and when they leave or stop sending, stop it again.
-    room.on(LivekitClient.RoomEvent.TrackUnsubscribed, (track) => {
+    room.on(LivekitClient.RoomEvent.TrackUnsubscribed, (track, publication, participant) => {
       for (const element of track.detach()) element.remove();
+      if (publication.source === LivekitClient.Track.Source.Microphone) stopListeningForSpeaking(participant.identity);
       renderCallPanel();
     });
     // A camera turned off or on (LiveKit "mutes" a camera that's off), ours or theirs.
@@ -128,11 +134,6 @@ async function joinVoice(roomName, label) {
     room.on(LivekitClient.RoomEvent.ParticipantDisconnected, () => {
       renderCallPanel();
       if (roomName !== "lounge") playVoiceCue("leave");
-    });
-    // Who's talking: LiveKit measures it on the server and tells everyone in the room.
-    room.on(LivekitClient.RoomEvent.ActiveSpeakersChanged, (speakers) => {
-      speakingIds = new Set(speakers.map((participant) => participant.identity));
-      showSpeaking();
     });
     // Disconnected for good (gave up reconnecting, or joined from another tab with the same account).
     room.on(LivekitClient.RoomEvent.Disconnected, () => {
@@ -215,6 +216,8 @@ function leaveVoice() {
   voiceStatus.title = "";
   stopConnectionStats();
   markVoiceChannel();
+  voiceAnalysers.clear();  // (voice.js: the speaking rings)
+  lastHeard.clear();
   speakingIds.clear();
   showSpeaking();
   sendVoiceState();  // we're out

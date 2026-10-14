@@ -192,9 +192,11 @@ function closeMicIfUnused() {
 
 // The level meter in Settings: how loud the microphone is, green while the gate lets it through.
 let micLevel = -100;      // the latest level from the gate, in dB
+let gateOpen = false;     // ...and whether it lets the microphone through right now
 let readoutShownAt = 0;   // when the numbers were last updated (performance.now(), in ms)
 
 function showMicLevel({ level, open }) {
+  gateOpen = open;  // (our own speaking ring, see "Who's talking")
   voiceMeterLevel.style.width = (level + 100) + "%";  // -100 dB = empty, 0 dB = full
   voiceMeterLevel.classList.toggle("open", open);
   micLevel = level;
@@ -394,7 +396,65 @@ function applyVolume(participant) {
 // ----- Who's in voice (in the sidebar, for everyone) and who's talking (only while you're in there)
 
 let voiceMembers = {};        // from the server: {"lounge": [{id: 3, muted: false}, ...]}
-let speakingIds = new Set();  // identities (user ids as text) talking right now, from LiveKit
+let speakingIds = new Set();  // identities (user ids as text) talking right now (see just below)
+
+// Who's talking, measured here instead of by the LiveKit server (which only counted fairly loud
+// voices and told us every half second). Each other person's voice passes through an AnalyserNode
+// on its way to their volume (rooms.js plugs it in): it lets the sound through unchanged and lets us
+// look at the latest samples. 20 times a second we work out how loud each one is (the same RMS in
+// decibels as our gate) and compare it with a low line, so whispers count. Our own ring follows our
+// gate: lit exactly while our microphone gets through (also with push to talk).
+const SPEAKING_LINE = -55;        // dB: quieter than this is silence (a whisper is around -45)
+const SPEAKING_HOLD_MS = 300;     // stay lit this long after the last sound: no flicker between words
+const voiceAnalysers = new Map(); // identity -> the AnalyserNode on their voice
+const lastHeard = new Map();      // identity -> when they were last louder than the line (performance.now())
+let speakingTimer = null;
+
+// rooms.js, when someone's microphone reaches us: an AnalyserNode for it, plugged in before their volume.
+function listenForSpeaking(identity, track, context) {
+  const analyser = context.createAnalyser();
+  analyser.fftSize = 2048;  // looks at the last 2048 samples: 43 ms, about what passes between two looks
+  track.setWebAudioPlugins([analyser]);  // LiveKit: their sound → our nodes → their volume → speakers
+  voiceAnalysers.set(identity, analyser);
+  watchSpeaking();
+}
+
+// Start looking (rooms.js, on joining: our own ring needs it before anyone else is there too).
+function watchSpeaking() {
+  if (!speakingTimer) speakingTimer = setInterval(checkSpeaking, 50);
+}
+
+function stopListeningForSpeaking(identity) {
+  voiceAnalysers.delete(identity);
+  lastHeard.delete(identity);
+}
+
+const speakingSamples = new Float32Array(2048);
+
+function checkSpeaking() {
+  if (!voiceRoom) {  // left the call (leaveVoice has cleared the rest): stop looking
+    clearInterval(speakingTimer);
+    speakingTimer = null;
+    return;
+  }
+  const now = performance.now();
+  const talking = new Set();
+  for (const [identity, analyser] of voiceAnalysers) {
+    analyser.getFloatTimeDomainData(speakingSamples);  // copies the latest samples into our array
+    let sum = 0;
+    for (const sample of speakingSamples) sum += sample * sample;
+    const level = 10 * Math.log10(sum / speakingSamples.length + 1e-10);
+    if (level > SPEAKING_LINE) lastHeard.set(identity, now);
+    if (now - (lastHeard.get(identity) ?? -Infinity) < SPEAKING_HOLD_MS) talking.add(identity);
+  }
+  if (micPublication && !micMuted && gateOpen) talking.add(String(myId));
+  // Only redraw when someone started or stopped (most of the time nothing changed).
+  const changed = talking.size !== speakingIds.size || [...talking].some((id) => !speakingIds.has(id));
+  if (changed) {
+    speakingIds = talking;
+    showSpeaking();
+  }
+}
 
 // Tell our server where we are in voice and whether we're muted or deafened, so everyone's
 // sidebar shows it. Only once really connected: "Connecting…" doesn't count.

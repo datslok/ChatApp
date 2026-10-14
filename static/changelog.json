@@ -113,6 +113,7 @@
     {
       "date": "2026-10-14",
       "items": [
+        "🟢 The green ring around whoever's talking reacts straight away now, and also lights up for quiet voices and whispers",
         "🎙️ Push to talk: Settings → Voice & audio → Input mode. Hold your key (or a mouse button) to talk. In the Windows app it works in games too, after the app updates itself",
         "Fixed: the emoji picker no longer shows empty boxes for emoji your device can't draw yet (brand-new ones)",
         "🇳🇴 Country flags show as real flags on Windows too (Windows itself only has letters for them)",

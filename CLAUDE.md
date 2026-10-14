@@ -350,6 +350,10 @@ the point is for me to understand how it works, not just to have it done.
   without, the Windows app's: `set_push_to_talk` (main.rs, since 0.1.19) and a thread polling `GetAsyncKeyState`
   (user32, declared by hand; never RegisterHotKey, which would steal the key) every 15 ms, calling
   `pushToTalkFromApp(down)` on changes.
+  Speaking rings (voice.js, "Who's talking"): measured in the page, not LiveKit's ActiveSpeakersChanged (only
+  loud voices, every 500 ms). rooms.js plugs an AnalyserNode into each remote microphone track
+  (`setWebAudioPlugins`, before their volume); `checkSpeaking` every 50 ms: RMS over `SPEAKING_LINE` (-55 dB),
+  held `SPEAKING_HOLD_MS`. Our own ring: the gate's `open` report (`gateOpen`), so it matches what we send.
 - Screen shares (video.js): H.264, no simulcast, `maintain-framerate` at 60 fps. Chromium on Windows only uses the
   graphics card (Media Foundation, e.g. NVENC) for H.264 profile `42001f`; for LiveKit's default `42e01f` it uses
   OpenH264 on the CPU. So `livekit.yaml`'s `enabled_codecs` adds the `42001f` fmtp line, and must keep plain
