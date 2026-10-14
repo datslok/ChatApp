@@ -465,18 +465,19 @@ function closeEmojiPicker() {
 
 // Put the picker next to the 😀 button: below it, or above if there's no room below,
 // and never off the edge of the window. (On phones, the CSS makes it a bottom panel instead.)
-function placePicker(button) {
-  emojiPicker.style.top = "";
-  emojiPicker.style.left = "";
+// `picker`: the emoji picker, or the GIF picker (next to the GIF button).
+function placePicker(button, picker = emojiPicker) {
+  picker.style.top = "";
+  picker.style.left = "";
   if (window.innerWidth <= 700) return;
   const spot = button.getBoundingClientRect();  // where the button is on screen
-  const height = emojiPicker.offsetHeight;
-  const width = emojiPicker.offsetWidth;
+  const height = picker.offsetHeight;
+  const width = picker.offsetWidth;
   let top = spot.bottom + 4;
   if (top + height > window.innerHeight - 8) top = Math.max(8, spot.top - height - 4);
   const left = Math.max(8, Math.min(spot.right - width, window.innerWidth - width - 8));
-  emojiPicker.style.top = top + "px";
-  emojiPicker.style.left = left + "px";
+  picker.style.top = top + "px";
+  picker.style.left = left + "px";
 }
 
 // One button per category (showing its first emoji) that scrolls the grid to that category.
@@ -597,6 +598,138 @@ document.addEventListener("pointerdown", (event) => {
 });
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && !emojiPicker.hidden) closeEmojiPicker();
+});
+
+// ---------- GIFs ----------
+//
+// The GIF button opens a picker that searches GIPHY through our server (/gifs/search, which keeps
+// the key and remembers answers for an hour). Clicking a GIF asks the server to save a copy
+// (/gifs/send), which answers with a file id just like an upload, and that's sent as a message
+// with the file. From there on it's an ordinary picture.
+
+const gifButton = document.getElementById("gif-button");
+const gifPicker = document.getElementById("gif-picker");
+const gifSearch = document.getElementById("gif-search");
+const gifGrid = document.getElementById("gif-grid");
+const gifNote = document.getElementById("gif-note");
+let gifSearchTimer = null;  // the wait after typing (a setTimeout number), so not every letter is a search
+let gifAsked = 0;           // counts the searches: an answer that isn't for the newest one is ignored
+
+function openGifPicker() {
+  gifSearch.value = "";
+  gifPicker.hidden = false;
+  placePicker(gifButton, gifPicker);
+  showGifs("");  // nothing typed: the trending ones
+  if (window.innerWidth > 700) gifSearch.focus();  // (on phones, focusing would pop up the keyboard)
+}
+
+function closeGifPicker() {
+  gifPicker.hidden = true;
+  clearTimeout(gifSearchTimer);
+  gifAsked += 1;              // an answer still on its way is no longer wanted
+  gifGrid.replaceChildren();  // (stops the GIFs playing and loading while it's closed)
+}
+
+// Ask our server for GIFs ("" = trending) and fill the grid.
+async function showGifs(query) {
+  gifAsked += 1;
+  const asked = gifAsked;
+  gifNote.textContent = "Loading…";
+  let gifs = null;
+  let problem = "Not connected, try again in a moment.";  // (if fetch itself fails)
+  try {
+    const response = await fetch("/gifs/search?q=" + encodeURIComponent(query));
+    const result = await response.json().catch(() => ({}));  // (an error page that isn't JSON: {})
+    if (response.ok) gifs = result.gifs;
+    else problem = typeof result.detail === "string" ? result.detail : "GIF search isn't working right now.";
+  } catch {
+    // (network trouble: the message above)
+  }
+  // Typed more (or closed the picker) while this one was on its way? Then a newer answer counts.
+  if (asked !== gifAsked) return;
+  if (gifs === null) {
+    gifGrid.replaceChildren();
+    gifNote.textContent = problem;
+    return;
+  }
+  gifNote.textContent = gifs.length ? "" : "No GIFs found. Try other words?";
+  const columns = document.createElement("div");
+  columns.className = "gif-columns";  // (see the CSS: why the columns are in a box of their own)
+  columns.append(...gifs.map(makeGifButton));
+  gifGrid.replaceChildren(columns);
+  gifGrid.scrollTop = 0;
+}
+
+// One GIF in the grid. Its preview comes straight from GIPHY's servers (our server checked the
+// address), so only the person searching loads anything from GIPHY.
+function makeGifButton(gif) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.title = gif.title;  // (a tooltip; title, alt and textContent never run as code)
+  const img = document.createElement("img");
+  img.src = gif.preview;
+  img.alt = gif.title;
+  // Its size before it has loaded, so the grid doesn't jump around as the pictures arrive
+  // (with the CSS's width: 100%, height: auto, the browser keeps this shape).
+  img.width = gif.width;
+  img.height = gif.height;
+  img.loading = "lazy";  // only load the ones scrolled into view
+  button.appendChild(img);
+  button.addEventListener("click", () => sendGif(gif));
+  return button;
+}
+
+// Clicked: the server saves a copy (a file id, like an upload), then it goes out like any file,
+// as a reply if we're replying. Whatever is in the text box stays there.
+async function sendGif(gif) {
+  closeGifPicker();
+  if (socket.readyState !== WebSocket.OPEN) {
+    showUploadError("Not connected, try again in a moment");
+    return;
+  }
+  sending = true;  // (a new version of the page waits: core.js, reloadIfOutdated)
+  uploadStatus.className = "";
+  uploadStatus.textContent = "Sending GIF…";
+  let result;
+  try {
+    result = await postJson("/gifs/send", { id: gif.id });
+  } catch {
+    result = { ok: false, error: "Couldn't send the GIF" };  // (network trouble)
+  }
+  sending = false;
+  if (!result.ok) {
+    showUploadError(result.error);
+    return;
+  }
+  uploadStatus.textContent = "";
+  sendToServer({ type: "message", text: "", file: result.data.id, reply_to: replyingTo?.id });
+  clearReply();
+}
+
+gifButton.addEventListener("click", () => {
+  if (gifPicker.hidden) openGifPicker();
+  else closeGifPicker();
+});
+
+// Search 400 ms after typing stops (each new letter restarts the wait), or straight away on Enter.
+gifSearch.addEventListener("input", () => {
+  clearTimeout(gifSearchTimer);
+  gifSearchTimer = setTimeout(() => showGifs(gifSearch.value), 400);
+});
+gifSearch.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter") return;
+  event.preventDefault();
+  clearTimeout(gifSearchTimer);
+  showGifs(gifSearch.value);
+});
+
+// Close it by clicking anywhere else (but the GIF button, which toggles it), or with Esc.
+document.addEventListener("pointerdown", (event) => {
+  if (gifPicker.hidden || gifPicker.contains(event.target) || gifButton.contains(event.target)) return;
+  closeGifPicker();
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && !gifPicker.hidden) closeGifPicker();
 });
 
 // The chips under a message: "👍 3", highlighted if we reacted too. Click to add/remove ours.

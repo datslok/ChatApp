@@ -200,6 +200,7 @@
         <!-- maxlength: the browser itself refuses typing or pasting beyond this. The page sets it to
              the server's limit when it connects; 2000 is just the starting value. -->
         <textarea id="message-input" rows="1" maxlength="2000" autocomplete="off"></textarea>
+        <button type="button" id="gif-button" title="GIFs">GIF</button>
         <button type="button" id="compose-emoji" class="emoji open-picker" title="Emoji">😀</button>
         <button>Send</button>
       </form>
@@ -814,6 +815,15 @@
     <input id="emoji-search" placeholder="Search emoji" autocomplete="off">
     <div id="emoji-categories"></div>
     <div id="emoji-grid"></div>
+  </div>
+
+  <!-- GIF search (messages.js, "GIFs"): opened by the GIF button by the text box. -->
+  <div id="gif-picker" hidden>
+    <input id="gif-search" type="search" placeholder="Search GIPHY" autocomplete="off" aria-label="Search GIFs">
+    <div id="gif-grid"></div>
+    <p id="gif-note"></p>
+    <!-- GIPHY asks every app using its search to say so. -->
+    <div id="gif-attribution">Powered by GIPHY</div>
   </div>
 
   <!-- The menu for a person (right-click, or a long press on a phone): people.js, "The user menu". -->

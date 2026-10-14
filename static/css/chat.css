@@ -2189,6 +2189,93 @@ button.download-button {
   background: var(--bg-active);
 }
 
+/* The GIF picker: like the emoji picker (placed by placePicker), a bit wider. */
+#gif-picker {
+  position: fixed;
+  z-index: 20;
+  width: 400px;
+  height: 440px;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-panel);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+#gif-picker[hidden] {
+  display: none;
+}
+
+#gif-search {
+  margin: 8px;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 6px;
+  background: var(--bg-darkest);
+  color: inherit;
+  font-size: 0.95rem;
+}
+
+#gif-grid {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 8px;
+}
+
+/* Two columns that GIFs of different heights fill like bricks ("columns": the browser pours
+   the list down the first column, then the second). In a box of its own inside the scrolling
+   one: a column box with a fixed height would add more columns sideways instead of growing. */
+.gif-columns {
+  columns: 2;
+  column-gap: 6px;
+}
+
+#gif-grid button {
+  display: block;
+  width: 100%;
+  margin-bottom: 6px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  overflow: hidden;  /* (rounds the picture's corners too) */
+  background: var(--bg-darkest);  /* shown while the picture loads */
+  cursor: pointer;
+  break-inside: avoid;  /* never split one GIF across the two columns */
+}
+
+#gif-grid button:hover,
+#gif-grid button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+#gif-grid img {
+  display: block;
+  width: 100%;
+  height: auto;  /* the width and height attributes give its shape before it loads */
+}
+
+#gif-note {
+  margin: 0;
+  padding: 0 12px;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+#gif-note:empty {
+  display: none;
+}
+
+#gif-attribution {
+  padding: 6px 8px;
+  border-top: 1px solid var(--border);
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-align: right;
+  color: var(--text-muted);
+}
+
 /* The quote above a reply. */
 .reply-line {
   display: flex;
@@ -3438,12 +3525,21 @@ button.download-button {
 }
 
 #chat-form #attach-button,
+#chat-form #gif-button,
 #chat-form #compose-emoji {
   padding: 10px 14px;
   background: var(--bg-input);
   color: var(--text);
   font-size: 1.2rem;
   line-height: 1;
+}
+
+/* The word GIF, as small bold letters, the same height as the + and 😀 next to it. */
+#chat-form #gif-button {
+  padding: 10px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  line-height: 1.5rem;  /* (1.2rem of emoji is about this tall) */
 }
 
 /* Message text keeps its line breaks (written with Shift+Enter). */
@@ -4101,7 +4197,8 @@ button.download-button {
   }
 
   /* The emoji picker becomes a panel along the bottom of the screen. */
-  #emoji-picker {
+  #emoji-picker,
+  #gif-picker {
     left: 0;
     right: 0;
     bottom: 0;
@@ -4127,7 +4224,22 @@ button.download-button {
   }
 
   #chat-form {
+    gap: 6px;
     padding: 8px;
+  }
+
+  /* Four buttons around the text box: a little slimmer, so the box keeps room to type in. */
+  #chat-form #attach-button,
+  #chat-form #compose-emoji {
+    padding: 10px;
+  }
+
+  #chat-form #gif-button {
+    padding: 10px 8px;
+  }
+
+  #chat-form > button:last-child {
+    padding: 10px 12px;  /* Send */
   }
 
   /* Settings: no room for a column of tabs next to the page, so the tabs become a row along

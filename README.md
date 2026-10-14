@@ -17,7 +17,8 @@ JavaScript for the page, no frameworks.
 - **Messages:** text channels and direct messages, replies, reactions (every emoji, plus 12 custom
   emoji per person, animated too), @mentions and @everyone, editing and deleting, formatting
   (`**bold**`, `*italic*`, `` `code` ``, code blocks, quotes, `||spoilers||`), link previews,
-  pictures and files (drag, drop or paste), unread dots, and history that loads as you scroll up.
+  pictures and files (drag, drop or paste), GIF search (GIPHY), unread dots, and history that loads
+  as you scroll up.
 - **People:** accounts with an invite code, friends and friend requests, profiles (picture, banner,
   status, bio; GIFs too), who's online and who's typing, admins who can tidy up.
 - **Voice and video:** a voice channel everyone can join and calls in DMs, with cameras, AI noise
@@ -65,7 +66,7 @@ the same PC, but the scripts assume two).
 | Script | Where | What it does |
 |--------|-------|--------------|
 | `setup.ps1` | your PC | makes a conda environment and installs the Python packages |
-| `start.ps1` | your PC | the chat for trying and developing (http://localhost:8001, its own `dev.db`) |
+| `start.ps1` | your PC | the chat for trying and developing (http://localhost:8001, its own `dev.db`; keys from `dev-secrets.env` if there is one) |
 | `voice.ps1 -Dev` | your PC | voice for development (only reachable from this PC) |
 | `scripts\server\install.ps1` | server (as admin) | installs and sets up everything; safe to run again (`-AI`: also the AI bot's model) |
 | `serve.ps1`, `voice.ps1` | server | the chat and voice; scheduled tasks start them at boot |
@@ -108,6 +109,10 @@ Open http://localhost:8001, click **Create one**, and make an account (no invite
 here). Open a second browser window (a private one, so it has its own login) to make a second account
 and chat between them. This uses its own database (`dev.db`) and upload folder (`dev-uploads/`), set in
 `dev.env`.
+
+**GIF search** needs a GIPHY key (see [Optional: GIF search](#optional-gif-search)). Put it in a file
+`dev-secrets.env` here, as a line `GIPHY_API_KEY=...`: start.ps1 reads it, and git ignores it, so the
+key is never committed. Without it the GIF button says GIF search isn't set up.
 
 To make your account an admin: `python tools\make_admin.py yourname --db dev.db` (with the `chatapp`
 environment active: `conda activate chatapp`).
@@ -288,6 +293,20 @@ name and **Log out** at the top (the page asks the chat's `/whoami`, which only 
 `LANDING_HOST`; this needs the main domain and the chat to be the same site, like `example.com` and
 `chat.example.com`). Its texts and pictures (`logo.png`,
 `screenshot.png`) are yours to change.
+
+### Optional: GIF search
+
+The **GIF** button next to the text box searches [GIPHY](https://giphy.com). It needs a key, which
+is free: make an account at [developers.giphy.com](https://developers.giphy.com), click **Create an
+App**, choose **API**, and give it a name and description. Put the key in `.env` as
+`GIPHY_API_KEY=...`, then restart the chat (`Stop-ScheduledTask ChatApp; Start-ScheduledTask ChatApp`).
+
+How it works: the page asks your server, and your server asks GIPHY, so the key stays on the server.
+The free key allows about 100 searches an hour for the whole site, which is plenty for a group of
+friends: the server remembers each search's answer for an hour, and each person can make 20 requests
+a minute. A GIF someone sends is downloaded by the server and saved like an uploaded picture (an
+animated WebP, usually a few hundred KB), so it stays even if GIPHY removes it, and only the person
+searching ever loads anything from GIPHY. The age rating is `pg-13` (`GIF_RATING` in server.py).
 
 ### Optional: an AI bot
 

@@ -19,7 +19,7 @@ from email.utils import formatdate, make_msgid, parseaddr
 from html.parser import HTMLParser
 from io import BytesIO
 from pathlib import Path
-from urllib.parse import urljoin, urlsplit
+from urllib.parse import urlencode, urljoin, urlsplit
 
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
@@ -3610,6 +3610,173 @@ async def get_preview_image(request: Request, name: str):
         media_type="image/webp",
         headers={"X-Content-Type-Options": "nosniff", "Cache-Control": "private, max-age=31536000, immutable"},
     )
+
+
+# ---------- GIFs ----------
+#
+# GIF search through GIPHY (developers.giphy.com). The page never talks to GIPHY's API: it asks
+# us, and we ask GIPHY with our key (GIPHY_API_KEY in .env), so the key stays secret. The free key
+# allows about 100 requests an hour for the whole site, so every answer is kept for an hour
+# (gif_cache: the same search twice costs one request) and each person has a limit.
+# Sending one: the server downloads it and saves it as an ordinary upload, so from then on it's a
+# picture like any other (the viewer, replies, Chattus, backups), friends' browsers never contact
+# GIPHY to see it, and it stays even if GIPHY removes it. Only from GIPHY's own addresses (no SSRF).
+
+GIPHY_API_KEY = os.environ.get("GIPHY_API_KEY", "")
+GIPHY_API = "https://api.giphy.com/v1/gifs"
+GIF_RATING = "pg-13"          # GIPHY's age ratings: g, pg, pg-13, r
+GIF_RESULTS = 30              # GIFs per search
+GIF_CACHE_TIME = 60 * 60      # seconds an answer is kept
+GIF_LIMIT = 20                # GIPHY requests per person (searches not in the cache, and sends)...
+GIF_WINDOW = 60               # ...within this many seconds
+MAX_GIPHY_ANSWER = 2 * 1024 * 1024  # bytes: 30 GIFs' details are well under 100 KB
+MAX_GIF_SIZE = 5 * 1024 * 1024      # the file we save (a few hundred KB as WebP, usually)
+MAX_GIF_QUERY = 50
+gif_cache = {}   # search ("" = trending) -> (when, the GIFs as the page gets them)
+gif_files = {}   # GIPHY id -> (address of the file to save, its title), from searches, for sending
+gif_times = {}   # user id -> times of their recent GIPHY requests (for the limit)
+
+
+def gif_allowed(user_id):
+    """At most GIF_LIMIT GIPHY requests per person per GIF_WINDOW seconds (like preview_allowed)."""
+    now = time.time()
+    recent = [t for t in gif_times.get(user_id, []) if t > now - GIF_WINDOW]
+    if len(recent) >= GIF_LIMIT:
+        gif_times[user_id] = recent
+        return False
+    gif_times[user_id] = recent + [now]
+    return True
+
+
+def is_giphy_url(url):
+    """An https address on GIPHY's own servers (media0.giphy.com, i.giphy.com, ...)."""
+    parts = urlsplit(url or "")
+    return parts.scheme == "https" and (parts.hostname or "").endswith(".giphy.com")
+
+
+def gif_file(item):
+    """Which of a GIF's versions to save: the full-size animated WebP if it isn't too big, else
+    the 200-pixel-high one. (A WebP is several times smaller than the same .gif.) None: neither."""
+    images = item.get("images", {})
+    for version in ("original", "fixed_height"):
+        image = images.get(version) or {}
+        if is_giphy_url(image.get("webp")) and int(image.get("webp_size") or 0) <= MAX_GIF_SIZE:
+            return image["webp"]
+    return None
+
+
+async def ask_giphy(path, **params):
+    """GET one of GIPHY's API addresses, with our key. Returns its "data", or None if it failed."""
+    query = urlencode({"api_key": GIPHY_API_KEY, **params})
+    # fetch_url (Link previews) blocks while it waits, so it runs in a thread.
+    result = await asyncio.to_thread(fetch_url, f"{GIPHY_API}/{path}?{query}", MAX_GIPHY_ANSWER, "application/json")
+    if result is None or len(result[2]) > MAX_GIPHY_ANSWER:
+        return None
+    try:
+        return json.loads(result[2])["data"]
+    except (ValueError, KeyError, TypeError):
+        return None
+
+
+@app.get("/gifs/search")
+async def search_gifs(request: Request, q: str = ""):
+    """GIFs for the picker: /gifs/search?q=cats, or the trending ones without q. Each with its id
+    and a small, low frame rate preview (fixed_width_downsampled, ~30 KB) for the grid."""
+    user_id = current_user(request)
+    if user_id is None:
+        raise HTTPException(401, "You're not logged in.")
+    if not GIPHY_API_KEY:
+        raise HTTPException(503, "GIF search isn't set up on this server.")
+    query = " ".join(q.lower().split())[:MAX_GIF_QUERY]  # "  Cats " and "cats" are the same search
+    cached = gif_cache.get(query)
+    if cached and time.time() - cached[0] < GIF_CACHE_TIME:
+        return {"gifs": cached[1]}
+    if not gif_allowed(user_id):
+        raise HTTPException(429, "That's a lot of GIFs: try again in a minute.")
+
+    # bundle=messaging_non_clips: only the versions a chat needs, so the answer is smaller.
+    params = {"limit": GIF_RESULTS, "rating": GIF_RATING, "bundle": "messaging_non_clips"}
+    items = await (ask_giphy("search", q=query, **params) if query else ask_giphy("trending", **params))
+    if items is None:
+        raise HTTPException(502, "GIF search isn't answering right now. Try again in a bit.")
+    gifs = []
+    for item in items:
+        try:
+            preview = item["images"].get("fixed_width_downsampled") or item["images"]["fixed_width"]
+            file = gif_file(item)
+            address = preview.get("webp") or preview["url"]
+            if file is None or not is_giphy_url(address) or not isinstance(item["id"], str):
+                continue
+            title = clean(item.get("title"), 100) or "GIF"
+            gifs.append({
+                "id": item["id"], "title": title, "preview": address,
+                "width": int(preview["width"]), "height": int(preview["height"]),
+            })
+            gif_files[item["id"]] = (file, title)
+        except (KeyError, TypeError, ValueError, AttributeError):
+            continue  # (a GIF with something missing: left out)
+
+    # Forget answers older than an hour, and (rarely) the remembered files: a send of a GIF that
+    # was forgotten asks GIPHY for it again.
+    now = time.time()
+    for old in [key for key, (when, _) in gif_cache.items() if now - when >= GIF_CACHE_TIME]:
+        del gif_cache[old]
+    if len(gif_files) > 5000:
+        gif_files.clear()
+    gif_cache[query] = (now, gifs)
+    return {"gifs": gifs}
+
+
+class GifChoice(BaseModel):
+    id: str  # GIPHY's id for the GIF, like "tphCApwvdtC1VJabZ1"
+
+
+@app.post("/gifs/send")
+async def save_gif(choice: GifChoice, request: Request):
+    """Download a GIF from GIPHY and save it as an upload of ours. Answers {"id": ...} like /upload,
+    and the page then sends it like any file (claim_attachment ties it to the chat)."""
+    user_id = current_user(request)
+    if user_id is None:
+        raise HTTPException(401, "You're not logged in.")
+    if not GIPHY_API_KEY:
+        raise HTTPException(503, "GIF search isn't set up on this server.")
+    if not re.fullmatch(r"[A-Za-z0-9]{1,64}", choice.id):  # (it goes into GIPHY's address below)
+        raise HTTPException(400, "That isn't a GIF.")
+    if not gif_allowed(user_id):
+        raise HTTPException(429, "That's a lot of GIFs: try again in a minute.")
+    known = gif_files.get(choice.id)
+    if known is None:  # (not from a search we remember: ask GIPHY about it)
+        item = await ask_giphy(choice.id)
+        file = isinstance(item, dict) and gif_file(item)
+        if not file:
+            raise HTTPException(404, "That GIF isn't there any more.")
+        known = (file, clean(item.get("title"), 100) or "GIF")
+    address, title = known
+
+    couldnt = HTTPException(502, "Couldn't get that GIF. Try another one.")
+    result = await asyncio.to_thread(fetch_url, address, MAX_GIF_SIZE, "image/webp,image/*")
+    if result is None or len(result[2]) > MAX_GIF_SIZE:
+        raise couldnt
+    body = result[2]
+    # Make sure it really is a picture (Pillow reads its header), and which kind.
+    try:
+        with Image.open(BytesIO(body)) as picture:
+            kind = picture.format  # "WEBP", "GIF", ...
+    except Exception:
+        raise couldnt
+    content_type = {"WEBP": "image/webp", "GIF": "image/gif"}.get(kind)
+    if content_type is None:
+        raise couldnt
+
+    file_id = secrets.token_urlsafe(16)  # a random name on disk, like /upload
+    (UPLOAD_DIR / file_id).write_bytes(body)
+    filename = title[:MAX_FILENAME_LENGTH - 5] + (".webp" if content_type == "image/webp" else ".gif")
+    with db:
+        db.execute(
+            "INSERT INTO attachments (id, filename, content_type, size, uploader_id) VALUES (?, ?, ?, ?, ?)",
+            (file_id, filename, content_type, len(body), user_id),
+        )
+    return {"id": file_id}
 
 
 # ---------- Unread ----------

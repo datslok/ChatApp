@@ -201,6 +201,14 @@ the point is for me to understand how it works, not just to have it done.
   `POST /feedback/{id}/done`, both admin-only on the server), or with `tools/feedback.py`
   (`--all`, `--done ID`, `--undo ID`, `--db dev.db`).
 - `uploads/`: uploaded files, saved under random names (git-ignored, like `chat.db`).
+- GIFs (server.py, "GIFs"; messages.js, "GIFs"): the GIF button by the text box opens #gif-picker. `/gifs/search?q=`
+  (trending without q) asks GIPHY's API with `GIPHY_API_KEY` (.env; on this PC in the git-ignored `dev-secrets.env`,
+  which start.ps1 loads) via `fetch_url`; answers kept an hour in `gif_cache` (the free key: ~100 requests an hour
+  for the site), 20 requests per person a minute (`gif_allowed`), rating pg-13, `bundle=messaging_non_clips`.
+  The grid shows `fixed_width_downsampled` previews straight from GIPHY's servers (`is_giphy_url`). `/gifs/send {id}`
+  downloads the original WebP (or the 200 px one if over 5 MB), checks it with Pillow and saves it as an ordinary
+  attachment; the page then sends it as a message with that file. "Powered by GIPHY" is required by GIPHY.
+  Tenor was the other option, but Google shut its API down on 2026-06-30.
 - Link previews (server.py, "Link previews"): after a message with a link goes out, a background task fetches
   the first link's page, reads its Open Graph tags and saves a card in `link_previews` (one per message) with a
   shrunk WebP copy of its picture in `uploads/previews/` (served at `/previews/<name>` to whoever can see the

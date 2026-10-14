@@ -6,6 +6,17 @@
 
 conda activate chatapp
 
+# Development keys that mustn't be committed (like GIPHY_API_KEY for GIF search) live in
+# dev-secrets.env, which git ignores. If it's there, each NAME=value line becomes an environment
+# variable for the server, alongside dev.env's settings below.
+if (Test-Path dev-secrets.env) {
+    foreach ($line in Get-Content dev-secrets.env) {
+        if ($line -match '^\s*([A-Z_][A-Z0-9_]*)=(.*)$') {
+            [Environment]::SetEnvironmentVariable($Matches[1], $Matches[2].Trim(), 'Process')
+        }
+    }
+}
+
 # --reload restarts the server automatically whenever you save a .py file.
 # --port 8001: NOT 8000, because the Cloudflare Tunnel sends the public site to port 8000.
 #   This way the internet can never reach the development server (which has no invite code).

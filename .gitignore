@@ -5,6 +5,7 @@ __pycache__/
 # Secrets: passwords, API keys, etc. Never commit these.
 .env
 dev-chattus.env
+dev-secrets.env
 
 # The AI bot's notes on what each custom emoji shows (remade by itself when missing)
 chattus-emoji.json
