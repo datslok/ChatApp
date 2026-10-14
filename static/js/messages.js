@@ -1223,86 +1223,32 @@ searchInput.addEventListener("input", () => {
 });
 searchWhere.addEventListener("change", runSearch);
 
-// ----- "From": a text box with suggestions (a "combobox"). Typing shows the people whose names
-// match, with their pictures; ↑ ↓ move, Enter or a click picks, Esc closes the list, × is anyone again.
+// ----- "From": the person picker (people.js, usePersonPicker), and × for anyone again.
 
-let fromMatches = [];  // the people in the list right now
-let fromIndex = 0;     // which of them is highlighted
+const searchFromPicker = usePersonPicker(searchFrom, searchFromList, {
+  candidates: () => [...people.values()],
+  onPick: (person) => {
+    setSearchFrom(person.id);
+    runSearch();
+  },
+  onType: (typed) => {
+    // Typing changes who it is: anyone again, unless the text is exactly someone's name.
+    const exact = [...people.values()].find((person) => person.name.toLowerCase() === typed.toLowerCase());
+    const before = searchFromId;
+    searchFromId = exact ? exact.id : null;
+    searchFromClear.hidden = searchFromId === null && !typed;
+    if (searchFromId !== before) runSearch();
+  },
+});
 
 // Pick a person (or null: anyone), show it in the box, and search again.
 function setSearchFrom(id) {
   searchFromId = id;
   searchFrom.value = id === null ? "" : people.get(id)?.name ?? "";
   searchFromClear.hidden = id === null;
-  closeFromList();
+  searchFromPicker.close();
 }
 
-// Names starting with what's typed first, then names containing it (like @ suggestions), at most 8.
-function matchPeople(typed) {
-  const query = typed.trim().toLowerCase();
-  const everyone = [...people.values()];
-  const name = (person) => person.name.toLowerCase();
-  return [
-    ...everyone.filter((person) => name(person).startsWith(query)),
-    ...everyone.filter((person) => !name(person).startsWith(query) && name(person).includes(query)),
-  ].slice(0, 8);
-}
-
-function renderFromList() {
-  searchFromList.replaceChildren(...fromMatches.map((person, index) => {
-    const row = document.createElement("button");
-    row.type = "button";
-    row.setAttribute("role", "option");
-    row.setAttribute("aria-selected", index === fromIndex ? "true" : "false");
-    row.append(makeAvatar(person.id, person.name, "tiny"), person.name);  // (append: the name as text)
-    // mousedown + preventDefault: clicking doesn't take the focus from the box (which would close the list).
-    row.addEventListener("mousedown", (event) => event.preventDefault());
-    row.addEventListener("click", () => {
-      setSearchFrom(person.id);
-      runSearch();
-    });
-    return row;
-  }));
-  searchFromList.hidden = fromMatches.length === 0;
-  searchFrom.setAttribute("aria-expanded", searchFromList.hidden ? "false" : "true");
-}
-
-function closeFromList() {
-  fromMatches = [];
-  renderFromList();
-}
-
-searchFrom.addEventListener("input", () => {
-  // Typing changes who it is: anyone again, unless the text is exactly someone's name.
-  const typed = searchFrom.value.trim().toLowerCase();
-  const exact = [...people.values()].find((person) => person.name.toLowerCase() === typed);
-  const before = searchFromId;
-  searchFromId = exact ? exact.id : null;
-  searchFromClear.hidden = searchFromId === null && !typed;
-  fromMatches = typed ? matchPeople(typed) : [];
-  fromIndex = 0;
-  renderFromList();
-  if (searchFromId !== before) runSearch();
-});
-
-searchFrom.addEventListener("keydown", (event) => {
-  if (searchFromList.hidden) return;
-  if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-    event.preventDefault();  // (don't move the cursor)
-    const step = event.key === "ArrowDown" ? 1 : -1;
-    fromIndex = (fromIndex + step + fromMatches.length) % fromMatches.length;  // % wraps around
-    renderFromList();
-  } else if (event.key === "Enter") {
-    event.preventDefault();  // (not the form's Enter: that searches with what's picked)
-    setSearchFrom(fromMatches[fromIndex].id);
-    runSearch();
-  } else if (event.key === "Escape") {
-    event.preventDefault();  // close just the list, not the whole popup
-    closeFromList();
-  }
-});
-
-searchFrom.addEventListener("blur", closeFromList);  // (clicked elsewhere)
 searchFromClear.addEventListener("click", () => {
   setSearchFrom(null);
   runSearch();

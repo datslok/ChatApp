@@ -940,14 +940,21 @@ function makeRoleAdminItem(role, index) {
     chip.append(makeAvatar(person.id, person.name, "tiny"), person.name, take);
     members.appendChild(chip);
   }
-  const add = document.createElement("select");
+  // "+ Add someone": type a name and pick (people.js, usePersonPicker), not a list of everyone.
+  const picker = document.createElement("div");
+  picker.className = "person-picker role-add";
+  const add = document.createElement("input");
+  add.placeholder = "+ Add someone";
+  add.autocomplete = "off";
   add.setAttribute("aria-label", `Give ${role.name} to someone`);
-  add.append(new Option("+ Add someone", ""),
-    ...everyone.filter((person) => !(person.roles ?? []).includes(role.id)).map((person) => new Option(person.name, person.id)));
-  add.addEventListener("change", () => {
-    if (add.value) roleAdminRequest(`/roles/${role.id}/members`, { user_id: Number(add.value), member: true });
+  const suggestions = document.createElement("div");
+  suggestions.hidden = true;
+  picker.append(add, suggestions);
+  usePersonPicker(add, suggestions, {
+    candidates: () => [...people.values()].filter((person) => !(person.roles ?? []).includes(role.id)),
+    onPick: (person) => roleAdminRequest(`/roles/${role.id}/members`, { user_id: person.id, member: true }),
   });
-  members.appendChild(add);
+  members.appendChild(picker);
   box.appendChild(members);
   return box;
 }

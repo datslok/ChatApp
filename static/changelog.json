@@ -118,7 +118,8 @@
         "Blocking 🚫: Block in someone's profile hides their messages and stops them reaching you. Unblock on the Friends page's Blocked tab",
         "Friend requests now ping you 👋, with a notification that opens your requests (on your phone too)",
         "Right-click anyone (or long press on a phone) for a menu: profile, mention, message, call, add or remove friend, mute and block",
-        "Roles 🎨: coloured names and member list sections, made by admins in Settings → Roles"
+        "Roles 🎨: coloured names and member list sections, made by admins in Settings → Roles",
+        "Picking people is a search now: type a name to add someone to a role, and the New group popup has a search box over your friends"
       ]
     },
     {

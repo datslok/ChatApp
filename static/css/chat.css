@@ -666,7 +666,8 @@ body {
 .person-suggestions[hidden] {
   display: none;
 }
-.person-suggestions button {
+.person-suggestions button,
+#settings .person-suggestions button {  /* (also in Settings, whose "#settings button" would make them blue) */
   display: flex;
   align-items: center;
   gap: 8px;
@@ -680,7 +681,9 @@ body {
   cursor: pointer;
 }
 .person-suggestions button:hover,
-.person-suggestions button[aria-selected="true"] {
+.person-suggestions button[aria-selected="true"],
+#settings .person-suggestions button:hover,
+#settings .person-suggestions button[aria-selected="true"] {
   background: var(--bg-active);  /* the highlighted one: Enter picks it */
 }
 #search-status:empty {
@@ -755,6 +758,18 @@ body {
 }
 .group-choice:hover {
   background: var(--bg-hover);
+}
+/* (display: flex above would beat the hidden attribute: a friend the search box filtered out) */
+.group-choice[hidden] {
+  display: none;
+}
+#group-filter {
+  padding: 8px 10px;
+  border: none;
+  border-radius: 6px;
+  background: var(--bg-darkest);
+  color: inherit;
+  font-size: 0.95rem;
 }
 /* A friend that can't be ticked any more (the group would be too big): faded. */
 .group-choice:has(input:disabled) {
@@ -3588,12 +3603,15 @@ button.download-button {
 #settings .role-member button:hover {
   color: var(--text);
 }
-.role-members select {
+/* "+ Add someone": the person picker (its list of suggestions opens under it, over what's below). */
+.role-add {
+  flex: 0 1 180px;
+}
+#settings .role-add input {
+  flex: 1;
+  min-width: 0;
   padding: 4px 8px;
-  border: none;
-  border-radius: 6px;
   background: var(--bg-panel);
-  color: inherit;
   font-size: 0.85rem;
 }
 #settings form.new-role {

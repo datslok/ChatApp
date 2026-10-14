@@ -393,6 +393,7 @@ const groupNameInput = document.getElementById("group-name");
 const groupStatus = document.getElementById("group-status");
 const groupSubmit = document.getElementById("group-submit");
 const groupMembersLine = document.getElementById("group-members");
+const groupFilter = document.getElementById("group-filter");
 const groupButtons = document.getElementById("group-buttons");
 let groupDialogKey = null;  // null: the popup starts a new group; a key: it adds people to that one
 
@@ -473,6 +474,7 @@ function openGroupDialog(key) {
     : `Pick 2 to ${MAX_GROUP_SIZE - 1} friends. Everyone in a group can read and write in it, add their own friends, and leave. Chattus is in every group: write @Chattus to ask him something.`;
   groupNameRow.hidden = key !== null;  // (renaming has its own button)
   groupNameInput.value = "";
+  groupFilter.value = "";
   groupStatus.textContent = "";
   groupSubmit.textContent = key ? "Add" : "Create group";
   // Friends not in it yet; never bots (they're in every group by themselves).
@@ -487,12 +489,25 @@ function openGroupDialog(key) {
   }
   updateGroupChoices();
   groupDialog.showModal();
+  groupFilter.focus();
+}
+
+// The search box over the friends: only those whose names contain what's typed. Ticked ones always
+// stay in sight (so you see who you've picked). Their rows are only hidden, never removed, so the
+// ticks are kept while you search for the next one.
+function filterGroupChoices() {
+  const typed = groupFilter.value.trim().toLowerCase();
+  for (const label of groupFriends.querySelectorAll(".group-choice")) {
+    const box = label.querySelector("input");
+    label.hidden = typed !== "" && !box.checked && !label.dataset.name.includes(typed);
+  }
 }
 
 // One friend to tick. Inside a <label>, a click anywhere on the row ticks the box.
 function makeGroupChoice(person) {
   const label = document.createElement("label");
   label.className = "group-choice";
+  label.dataset.name = person.name.toLowerCase();  // (for the search box: filterGroupChoices)
   const box = document.createElement("input");
   box.type = "checkbox";
   box.value = person.id;  // (a checkbox's value is text: Number() turns it back below)
@@ -535,6 +550,10 @@ groupForm.addEventListener("submit", async (event) => {
 });
 
 document.getElementById("group-cancel").addEventListener("click", () => groupDialog.close());
+groupFilter.addEventListener("input", filterGroupChoices);
+groupFilter.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") event.preventDefault();  // (Enter here would create the group: not yet)
+});
 document.getElementById("new-group").addEventListener("click", () => openGroupDialog(null));
 document.getElementById("group-add").addEventListener("click", () => openGroupDialog(currentChannel));
 
@@ -734,6 +753,84 @@ document.getElementById("me-edit-profile").addEventListener("click", () => {
   settingsButton.click();
   showSettingsPage("profile");
 });
+
+// ---------- Picking a person ----------
+//
+// Wherever we choose people from what could be everyone (search's "From", Settings → Roles, ...):
+// a text box that suggests people as you type (a "combobox"), never a long drop-down. Typing shows
+// those whose names match, with their pictures; ↑ ↓ move, Enter or a click picks, Esc closes the list.
+// usePersonPicker wires a text box and an (empty) list element together:
+//   candidates(): who may be suggested right now; onPick(person): one was picked;
+//   onType(typed): optional, after every change of the text (search's "From" uses it).
+
+// Names starting with what's typed first, then names containing it (like @ suggestions), at most 8.
+function matchPeople(typed, candidates) {
+  const query = typed.trim().toLowerCase();
+  const name = (person) => person.name.toLowerCase();
+  return [
+    ...candidates.filter((person) => name(person).startsWith(query)),
+    ...candidates.filter((person) => !name(person).startsWith(query) && name(person).includes(query)),
+  ].slice(0, 8);
+}
+
+function usePersonPicker(input, list, { candidates, onPick, onType = () => {} }) {
+  let matches = [];  // the people in the list right now
+  let index = 0;     // which of them is highlighted
+  input.setAttribute("role", "combobox");
+  input.setAttribute("aria-autocomplete", "list");
+  input.setAttribute("aria-expanded", "false");
+  list.setAttribute("role", "listbox");
+  list.classList.add("person-suggestions");
+
+  function render() {
+    list.replaceChildren(...matches.map((person, i) => {
+      const row = document.createElement("button");
+      row.type = "button";
+      row.setAttribute("role", "option");
+      row.setAttribute("aria-selected", i === index ? "true" : "false");
+      row.append(makeAvatar(person.id, person.name, "tiny"), person.name);  // (append: the name as text)
+      // mousedown + preventDefault: clicking doesn't take the focus from the box (which would close the list).
+      row.addEventListener("mousedown", (event) => event.preventDefault());
+      row.addEventListener("click", () => pick(person));
+      return row;
+    }));
+    list.hidden = matches.length === 0;
+    input.setAttribute("aria-expanded", list.hidden ? "false" : "true");
+  }
+  function close() {
+    matches = [];
+    render();
+  }
+  function pick(person) {
+    close();
+    onPick(person);
+  }
+
+  input.addEventListener("input", () => {
+    const typed = input.value.trim();
+    matches = typed ? matchPeople(typed, candidates()) : [];
+    index = 0;
+    render();
+    onType(typed);
+  });
+  input.addEventListener("keydown", (event) => {
+    if (list.hidden) return;
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();  // (don't move the cursor)
+      const step = event.key === "ArrowDown" ? 1 : -1;
+      index = (index + step + matches.length) % matches.length;  // % wraps around
+      render();
+    } else if (event.key === "Enter") {
+      event.preventDefault();  // (not the form's own Enter)
+      pick(matches[index]);
+    } else if (event.key === "Escape") {
+      event.preventDefault();  // close just the list, not a popup it's in
+      close();
+    }
+  });
+  input.addEventListener("blur", close);  // (clicked elsewhere)
+  return { close };
+}
 
 // ---------- The user menu ----------
 //

@@ -158,6 +158,10 @@ the point is for me to understand how it works, not just to have it done.
   in messages and lists; `showUsers` gives each role with people online a member list section (#role-sections,
   after Bots); role tags in the profile. Settings → Roles (settings.js, admins): colour picker, name, ↑ ↓ 🗑,
   members with × and "+ Add someone". core.js redraws messages when the roles or anyone's roles change.
+- Picking people: anywhere you choose from what could be everyone (or many), a type-to-search picker,
+  never a drop-down (the user's rule): `usePersonPicker(input, list, {candidates, onPick, onType})` in people.js
+  (search's "From", Settings → Roles "+ Add someone"); a multi-pick list (the group popup's friends) gets a
+  search box on top that filters it (`filterGroupChoices`; ticked ones stay visible).
 - The user menu (people.js, "The user menu"): right-click (a long press on phones) on anything with
   `data-user-menu="<id>"` (message picture and name, member list, DM list, Friends page rows, call tiles,
   pins/search card heads, our own panel) opens #context-menu, built by `userMenuItems` from how we stand
