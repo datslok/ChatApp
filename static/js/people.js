@@ -205,14 +205,19 @@ function renderMembers() {
   membersElement.hidden = openMembersButton.hidden = users === null;
   if (users === null) return;
 
-  // A DM: just the two of you, without Online/Offline or role headings (they say little about two
-  // people; each one's dot shows it). Groups and channels keep their sections.
+  // A DM: just the two of you, without Online/Offline headings (they say little about two people;
+  // each one's dot shows it). Your roles still show: a heading for each top role, online or not, and
+  // whoever has none under them without a heading. Groups and channels keep all their sections.
   const inDm = dmPartner(currentChannel) !== null;
   onlineHeading.hidden = offlineHeading.hidden = offlineList.hidden = inDm;
   if (inDm) {
     botsHeading.hidden = botsList.hidden = true;
     roleSections.replaceChildren();
-    fillPeopleList(onlineList, users);
+    for (const role of roles) {
+      const members = users.filter((user) => topRole(user.id) === role);
+      if (members.length > 0) roleSections.append(...makeRoleSection(role, members));
+    }
+    fillPeopleList(onlineList, users.filter((user) => !topRole(user.id)));
     return;
   }
 
@@ -230,17 +235,22 @@ function renderMembers() {
   for (const role of roles) {
     const members = humans.filter((user) => user.online && topRole(user.id) === role);
     if (members.length === 0) continue;  // (a role with nobody online: no empty heading)
-    const heading = document.createElement("h2");
-    heading.className = "section-heading";
-    heading.textContent = `${role.name} — ${members.length}`;  // (textContent: an admin typed the name)
-    const list = document.createElement("ul");
-    fillPeopleList(list, members);
-    roleSections.append(heading, list);
+    roleSections.append(...makeRoleSection(role, members));
   }
   onlineHeading.textContent = `Online — ${online.length}`;
   offlineHeading.textContent = `Offline — ${offline.length}`;
   fillPeopleList(onlineList, online);
   fillPeopleList(offlineList, offline);
+}
+
+// A role's heading ("Moderator — 2") and the list of its people, for the right column.
+function makeRoleSection(role, members) {
+  const heading = document.createElement("h2");
+  heading.className = "section-heading";
+  heading.textContent = `${role.name} — ${members.length}`;  // (textContent: an admin typed the name)
+  const list = document.createElement("ul");
+  fillPeopleList(list, members);
+  return [heading, list];
 }
 
 function fillPeopleList(list, users) {
