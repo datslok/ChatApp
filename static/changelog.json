@@ -112,7 +112,7 @@
     {
       "date": "2026-10-14",
       "items": [
-        "Fixed: the emoji picker no longer shows empty boxes for emoji your device can't draw yet (brand-new ones, and country flags on Windows, which only shows them as letters)",
+        "Fixed: the emoji picker no longer shows empty boxes for emoji your device can't draw yet (brand-new ones)",
         "On phones, the smiley next to the text box opens both emoji and GIFs (tabs at the top), so there's more room to type, and Back closes them. The smiley is a calmer line drawing now",
         "Chattus can look further back 🔍: ask him what someone said about something earlier, and he searches the chat (only the channels and the chat you ask in)",
         "📱 Someone who's only here on their phone has a little phone instead of a dot, in their status's colour",

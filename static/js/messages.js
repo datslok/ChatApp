@@ -483,6 +483,9 @@ function makeEmojiTester() {
   }
 
   return (emoji) => {
+    // Country flags (two "regional indicator" letters, 🇳 + 🇴 = 🇳🇴) always stay: Windows draws them
+    // as the two letters, which still says which country.
+    if (/^[\u{1F1E6}-\u{1F1FF}]{2}$/u.test(emoji)) return true;
     if (context.measureText(emoji).width > oneWidth * 1.5) return false;  // fell apart
     const black = pixels(emoji, "#000");
     const white = pixels(emoji, "#fff");
