@@ -85,7 +85,6 @@
     - [x] GIF search (GIPHY; Tenor's API was shut down in June 2026): the GIF button, saved on our server when sent
     - [x] Mobile online icon (a little phone instead of the dot when someone is only on phones)
     - [x] Seasonal easter egg video (🎃 on your own picture in October; seasonal/ on the server), and a bigger picture at the bottom left
-    - [ ] Soundboard in voice
     - [ ] Push-to-talk, as an alternative to the noise gate
     - [x] Bug: after scrolling up, sending a message doesn't scroll back down to it (sending should always jump to the bottom)
 - [x] **19.** Watching together in calls
@@ -122,3 +121,7 @@
     - [x] On Claude Haiku 5.5 instead of the local model (a switch in .env), with Claude's own web search
     - [x] Reminders, with Claude only (the 9B model too often got the time wrong)
     - [x] Searching the chat (with Claude: older messages he can't see; only the channels and the chat he's asked in), and a "bot" badge
+
+## Maybe later
+
+- [ ] Soundboard in voice (short clips anyone in a call can play for everyone; uploads like custom emoji, a few built-in ones, its own volume)
