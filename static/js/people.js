@@ -205,6 +205,17 @@ function renderMembers() {
   membersElement.hidden = openMembersButton.hidden = users === null;
   if (users === null) return;
 
+  // A DM: just the two of you, without Online/Offline or role headings (they say little about two
+  // people; each one's dot shows it). Groups and channels keep their sections.
+  const inDm = dmPartner(currentChannel) !== null;
+  onlineHeading.hidden = offlineHeading.hidden = offlineList.hidden = inDm;
+  if (inDm) {
+    botsHeading.hidden = botsList.hidden = true;
+    roleSections.replaceChildren();
+    fillPeopleList(onlineList, users);
+    return;
+  }
+
   // Bots in a section of their own at the top, then a section for each role with its online people
   // (by their top role, like Discord), then the online people without a role, and everyone offline
   // at the bottom. Click someone for their profile.
