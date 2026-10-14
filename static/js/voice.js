@@ -85,7 +85,10 @@ async function setUpAudio() {
   // 48 000 samples a second, because RNNoise only works at that rate. (The browser converts a
   // microphone that uses another rate.)
   const context = new AudioContext({ sampleRate: 48000 });
-  await context.audioWorklet.addModule("/voice-gate.js");  // load our gate into the audio engine
+  // Load our gate into the audio engine. "?v=": the page's version (core.js, from "welcome"), so every
+  // version has its own address: Cloudflare keeps .js files by their address, and once handed out an
+  // old gate for hours after a deploy (2026-10-14).
+  await context.audioWorklet.addModule("/voice-gate.js?v=" + (pageVersion ?? ""));
   const micGain = context.createGain();
   const gate = new AudioWorkletNode(context, "voice-gate");
   // The end of the chain: turns the sound back into a normal track, which LiveKit can send.
