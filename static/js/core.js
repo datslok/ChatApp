@@ -126,6 +126,7 @@ let reachedStart = false;   // the channel's very first message is on the page: 
 let reconnectDelay = 1000;  // milliseconds to wait before the next reconnect attempt
 const unread = new Set();   // channels and DMs with messages we haven't seen
 const mentionCounts = new Map();  // channel -> how many unread messages there mention us
+const mutedChats = new Set();  // chats we muted (the server's "mutes"): no unread dot, greyed out
 
 // ----- Reloading by itself after an update to the page (like pressing F5)
 //
@@ -313,6 +314,13 @@ function handleServerMessage(event) {
     channelsChanged(data.channels);
     return;
   }
+  if (data.type === "mutes") {
+    // Our muted chats (at the start, and after muting or unmuting here or on another device).
+    setAll(mutedChats, data.channels);
+    updateSidebar();
+    if (currentChannel !== null) showDmHeader();  // (the 🔔 / 🔕 button)
+    return;
+  }
   if (data.type === "my_presence") {
     myPresence = data.presence;  // chosen here or on another device (people.js, the status picker)
     renderUserPanel();
@@ -419,8 +427,10 @@ function handleServerMessage(event) {
     showMessage(data);
     // In the channel we're in, but the tab is hidden or the window isn't focused:
     // a DM or a mention still notifies, and counts in the tab title until we're back.
-    const forMe = data.user_id !== myId
-      && (dmPartner(currentChannel) !== null || isGroup(currentChannel) || mentionsMe(data.text));
+    // In a muted chat only when we're named in it, or an admin wrote it (like the server's save_mentions).
+    const forMe = data.user_id !== myId && (mutedChats.has(currentChannel)
+      ? data.text.includes(`<@${myId}>`) || people.get(data.user_id)?.admin === true
+      : dmPartner(currentChannel) !== null || isGroup(currentChannel) || mentionsMe(data.text));
     if (forMe && !isLooking()) {
       missedWhileAway += 1;
       updateTitle();
@@ -565,7 +575,10 @@ function updateSidebar() {
   // here, everything with a data-channel attribute (all channel and DM buttons).
   for (const button of document.querySelectorAll("[data-channel]")) {
     button.classList.toggle("active", button.dataset.channel === currentChannel);
-    button.classList.toggle("unread", unread.has(button.dataset.channel));
+    // A muted chat: greyed out, and no unread dot (a red count still shows, for a mention by name).
+    const muted = mutedChats.has(button.dataset.channel);
+    button.classList.toggle("muted", muted);
+    button.classList.toggle("unread", unread.has(button.dataset.channel) && !muted);
     // A red number for unread mentions there (stronger than the white dot).
     button.querySelector(".mention-badge")?.remove();
     const count = mentionCounts.get(button.dataset.channel);
@@ -578,7 +591,7 @@ function updateSidebar() {
   }
   // Phones: a dot on ☰ if anything is unread, since the sidebar is hidden there.
   openSidebarButton.classList.toggle(
-    "has-unread", unread.size > 0 || mentionCounts.size > 0 || incomingIds.size > 0
+    "has-unread", [...unread].some((channel) => !mutedChats.has(channel)) || mentionCounts.size > 0 || incomingIds.size > 0
   );
   updateTitle();  // "(3) ChatApp"
 }

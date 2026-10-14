@@ -305,6 +305,7 @@ voiceStatus.addEventListener("click", async () => {
 const dmHeader = document.getElementById("dm-header");
 const dmHeaderName = document.getElementById("dm-header-name");
 const callButton = document.getElementById("call-button");
+const muteButton = document.getElementById("mute-button");
 const incomingCallDialog = document.getElementById("incoming-call");
 const incomingCallAvatar = document.getElementById("incoming-call-avatar");
 const incomingCallName = document.getElementById("incoming-call-name");
@@ -415,10 +416,22 @@ function showDmHeader() {
   if (dmHeader.hidden) return;
   dmHeaderName.textContent = channelLabel(currentChannel);
   callButton.hidden = !inDm && !inGroup;  // (no calls in channels: that's what Lounge is for)
+  // 🔔 mute this chat, 🔕 unmute it. Not in a DM with an admin: admins can't be muted (server.py, can_mute).
+  const muted = mutedChats.has(currentChannel);
+  muteButton.hidden = !muted && people.get(dmPartner(currentChannel))?.admin === true;
+  muteButton.textContent = muted ? "🔕" : "🔔";
+  muteButton.title = muted ? "Unmute this chat" : "Mute this chat";
+  muteButton.setAttribute("aria-label", muteButton.title);
+  muteButton.setAttribute("aria-pressed", muted ? "true" : "false");
   const inThisCall = voiceRoomName === currentChannel;
   callButton.disabled = inThisCall;
   callButton.textContent = inThisCall ? "📞 In call" : "📞 Call";
 }
+
+// Mute or unmute the chat we're in. The server answers all our pages with the new list ("mutes").
+muteButton.addEventListener("click", () => {
+  sendToServer({ type: "mute", channel: currentChannel, muted: !mutedChats.has(currentChannel) });
+});
 
 callButton.addEventListener("click", async () => {
   const channel = currentChannel;

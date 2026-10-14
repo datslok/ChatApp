@@ -138,6 +138,12 @@ the point is for me to understand how it works, not just to have it done.
   changed. dnd: `isMuted()` on every page and no pushes (`send_push`). Page: the picker in #me-popup
   (people.js, `renderPresencePicker`), dots `.dot.online/.idle/.dnd/.invisible` (our own Invisible as a ring).
   The users' "status" field is still the line they write about themselves.
+- Muting (server.py, "Muting"): `chat_mutes` (user_id, channel), set over the WebSocket (`{"type": "mute",
+  "channel", "muted"}` -> "mutes" to all their pages; also at connect). `save_mentions` leaves out people who
+  muted the chat unless they're named in it (`<@id>`) or the sender is an admin, so no red count, notification
+  or push. **Admins can't be muted or blocked** (the user's rule): `can_mute` refuses a DM with an admin, and the
+  page hides 🔔 there. Page: `mutedChats` (core.js) fades sidebar items (`.channel.muted`) without unread dots;
+  🔔/🔕 in the top bar (rooms.js).
 - Pinned messages: `messages.pinned_at` / `pinned_by` (NULL = not pinned); anyone who can see a message
   (`can_join`) may pin or unpin it over the WebSocket (`{"type": "pin", "message_id", "pinned"}`), never a
   note (`kind` set); `MAX_PINS` 100 per chat (else "pins_full"). Everyone in the chat gets "pinned"; a pin also

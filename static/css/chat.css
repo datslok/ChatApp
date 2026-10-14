@@ -319,6 +319,11 @@ body {
   font-weight: 600;  /* bold */
 }
 
+/* A muted chat: faded (and never bold or dotted: core.js leaves "unread" off). Not while it's open. */
+.channel.muted:not(.active) {
+  opacity: 0.5;
+}
+
 /* The unread dot: a small white circle just left of the name. */
 .channel.unread::before {
   content: "";

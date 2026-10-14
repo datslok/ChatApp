@@ -74,8 +74,8 @@
     - [x] Search messages (by text, person or channel; SQLite's FTS5; the 🔍 at the top of a chat)
 - [ ] **17.** Social and presence
     - [x] Statuses: Online, Idle (automatic when away), Do Not Disturb (no notifications), Invisible
-    - [ ] Muting a channel or DM
-    - [ ] Blocking someone
+    - [x] Muting a channel or DM (and groups; admins can't be muted: their messages always get through)
+    - [ ] Blocking someone (admins can't be blocked)
     - [ ] Roles with colours (coloured names and headings in the member list)
 - [ ] **18.** Smaller polish
     - [x] Clicking a reply's quote jumps to the original message (was already there)

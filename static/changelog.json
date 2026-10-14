@@ -47,6 +47,7 @@
       "items": [
         "For DMs and mentions: a notification, a sound and a count in the tab's title. Click one to go to the message",
         "Unread channels get a dot, mentions a red count",
+        "Mute a chat: the 🔔 at the top of a channel, DM or group (🔕 when muted, click again to unmute). A muted chat is faded and gets no unread dot or notifications, except when someone @mentions you by name or an admin writes. DMs with an admin can't be muted",
         "Settings → Notifications: turn them on or off, the volume, and mute them for 1 hour, 8 hours, until morning, or until you turn them back on",
         "On your phone, also while the chat is closed: Settings → Notifications → \"Notifications on this device when the chat is closed\". For DMs, mentions and calls, and not while you're looking at the chat somewhere else or have the Windows app open (it notifies you itself)"
       ]
@@ -109,7 +110,8 @@
         "Windows app 0.1.18: fixes the app forgetting your audio settings (and showing the What's new dot again) every time it starts. After this update, set your audio settings once more and they'll stick",
         "Pinned messages 📌: hover over a message and click 📌 to pin it, and click 📌 at the top of the chat to see them all",
         "Search 🔍: find messages by their words, in one chat or everywhere, from anyone or one person. The 🔍 is at the top of every chat",
-        "Statuses: click your name at the bottom left for Online, Idle, Do Not Disturb or Invisible. You also turn Idle by yourself after 10 minutes away"
+        "Statuses: click your name at the bottom left for Online, Idle, Do Not Disturb or Invisible. You also turn Idle by yourself after 10 minutes away",
+        "Mute a chat 🔕: the 🔔 at the top of a channel, DM or group. You still hear about @mentions of you, and anything from an admin"
       ]
     },
     {

@@ -318,6 +318,14 @@ db.execute("""
         PRIMARY KEY (group_key, user_id)  -- each person once per group
     )
 """)
+# Muted chats: one row per person per chat they muted (the 🔔 at the top of a chat; see "Muting").
+db.execute("""
+    CREATE TABLE IF NOT EXISTS chat_mutes (
+        user_id INTEGER NOT NULL REFERENCES users(id),
+        channel TEXT NOT NULL,  -- a channel's key, a DM ("dm:3:7") or a group ("g:...")
+        PRIMARY KEY (user_id, channel)
+    )
+""")
 if db.execute("SELECT COUNT(*) FROM channels").fetchone()[0] == 0:
     # The first start with this table (or a brand new database): the channels that used to be
     # written in the code. Their keys are their old names, so every message stays where it was.
@@ -1975,6 +1983,7 @@ def save_mentions(message_id, channel, sender_id, mentioned, everyone):
     see the channel, and never the sender themselves. @everyone = everyone who can see it.
     A bot named in a DM counts too: its mention is what invites it in (see bot_invited)."""
     invited = {user_id for user_id in mentioned if channel.startswith("dm:") and is_bot(user_id)}  # (by name: not @everyone)
+    named = set(mentioned)  # the people named in it (@kari), before @everyone and DMs add the rest
     if everyone:
         mentioned = {user_id for (user_id,) in db.execute("SELECT id FROM users")}
     if channel.startswith("dm:"):
@@ -1986,6 +1995,11 @@ def save_mentions(message_id, channel, sender_id, mentioned, everyone):
         mentioned = set(mentioned) | {member for member in group_members(channel) if not is_bot(member)}
     people = [user_id for user_id in mentioned
               if user_id != sender_id and (can_join(channel, user_id) or user_id in invited)]
+    # Who muted this chat only hears about it when named in it, or when an admin wrote it (admins
+    # can't be muted). Leaving them out here means no red count, notification or push for them.
+    if not is_admin(sender_id):
+        muted = {user_id for (user_id,) in db.execute("SELECT user_id FROM chat_mutes WHERE channel = ?", (channel,))}
+        people = [user_id for user_id in people if user_id not in muted or user_id in named]
     with db:
         db.execute("DELETE FROM mentions WHERE message_id = ?", (message_id,))
         db.executemany(  # executemany: the same INSERT once for each item in the list
@@ -2544,6 +2558,7 @@ def delete_messages_in(key):
         db.execute("DELETE FROM messages WHERE channel = ?", (key,))
         db.execute("DELETE FROM attachments WHERE channel = ?", (key,))
         db.execute("DELETE FROM last_read WHERE channel = ?", (key,))
+        db.execute("DELETE FROM chat_mutes WHERE channel = ?", (key,))
     # The files on disk, only once the database change has been saved (as for one message).
     for file in files:
         (UPLOAD_DIR / file).unlink(missing_ok=True)
@@ -2698,6 +2713,7 @@ async def leave_group(request: Request, key: str):
     with db:
         db.execute("DELETE FROM group_members WHERE group_key = ? AND user_id = ?", (key, user_id))
         db.execute("DELETE FROM last_read WHERE user_id = ? AND channel = ?", (user_id, key))
+        db.execute("DELETE FROM chat_mutes WHERE user_id = ? AND channel = ?", (user_id, key))
     remaining = group_members(key)
     if not group_people(key):  # the last person out (only bots left): nobody will see it again, so it goes
         with db:
@@ -2793,6 +2809,26 @@ async def watch_presences():
 
 
 presence_watcher = None  # the task above, started by the first connection (it needs the running loop)
+
+
+# ---------- Muting ----------
+#
+# Anyone can mute a chat (channel, DM or group) for themselves: no unread dot (the page), and no
+# notifications, red counts or pushes, except when they're named in a message, or an admin wrote it
+# (save_mentions). Admins can't be muted: a DM with an admin can't be muted at all.
+
+def mutes_message(user_id):
+    """Someone's muted chats, for their pages: {"type": "mutes", "channels": ["memes", "dm:3:7"]}."""
+    rows = db.execute("SELECT channel FROM chat_mutes WHERE user_id = ?", (user_id,))
+    return {"type": "mutes", "channels": [channel for (channel,) in rows]}
+
+
+def can_mute(channel, user_id):
+    """May this person mute this chat? Any they can see, except a DM with an admin."""
+    if not can_join(channel, user_id):
+        return False
+    people = dm_people(channel)
+    return people is None or not any(is_admin(person) for person in people if person != user_id)
 
 
 BOT_INVITE_TIME = "-1 hour"  # how long a mention lets a bot into a DM (SQLite's way of writing it)
@@ -3484,6 +3520,7 @@ async def chat(websocket: WebSocket):
         await send(websocket, {"type": "channels", "channels": channel_list()})  # (they may have changed while away)
         await send(websocket, friends_message(user_id))
         await send(websocket, groups_message(user_id))
+        await send(websocket, mutes_message(user_id))
         await send(websocket, custom_emoji_message())
         await send(websocket, {
             "type": "unread", "channels": unread_channels(user_id), "mentions": unread_mentions(user_id),
@@ -3756,6 +3793,22 @@ async def chat(websocket: WebSocket):
                 clients[websocket]["app"] = data.get("app") is True  # (then no pushes at all: has_app_open)
                 if looking:
                     await announce_presences()  # back from idle: at once, not at the next half minute
+
+            elif kind == "mute":
+                # {"type": "mute", "channel": "memes", "muted": true}: mute a chat for ourselves (or unmute).
+                # All our pages hear the new list.
+                chat = data.get("channel")
+                if not isinstance(chat, str):
+                    continue
+                if data.get("muted") is True:
+                    if not can_mute(chat, user_id):
+                        continue  # not a chat of theirs, or a DM with an admin
+                    with db:
+                        db.execute("INSERT OR IGNORE INTO chat_mutes (user_id, channel) VALUES (?, ?)", (user_id, chat))
+                else:
+                    with db:
+                        db.execute("DELETE FROM chat_mutes WHERE user_id = ? AND channel = ?", (user_id, chat))
+                await send_to_user(user_id, mutes_message(user_id))
 
             elif kind == "presence":
                 # {"type": "presence", "presence": "dnd"}: the status they choose. All their pages hear it,
