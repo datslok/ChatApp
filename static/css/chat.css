@@ -319,6 +319,56 @@ body {
   font-weight: 600;  /* bold */
 }
 
+/* The user menu (right-click a person): a small panel at the pointer, its name on top, then rows. */
+#context-menu {
+  position: fixed;
+  z-index: 50;  /* over everything, the emoji picker and drawers included */
+  min-width: 180px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-panel-alt);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+#context-menu[hidden] {
+  display: none;
+}
+.context-title {
+  padding: 4px 8px 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-soft);
+}
+#context-menu button {
+  display: block;
+  width: 100%;
+  padding: 7px 8px;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.9rem;
+  text-align: left;
+  cursor: pointer;
+}
+#context-menu button:hover {
+  background: var(--accent);
+  color: white;
+}
+#context-menu button.danger {
+  color: var(--red);
+}
+#context-menu button.danger:hover {
+  background: var(--red);
+  color: white;
+}
+#context-menu hr {
+  margin: 4px 2px;
+  border: none;
+  border-top: 1px solid var(--border);
+}
+
 /* A message from someone we blocked: one muted line, with "Show" as a link-like button. */
 .message.blocked-message {
   display: block;  /* one line of text, not the picture-and-text row of a message */

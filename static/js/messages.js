@@ -1097,6 +1097,7 @@ function makeMessageCard(message, where = "") {
 
   const head = document.createElement("div");
   head.className = "card-head";
+  if (message.user_id) head.dataset.userMenu = message.user_id;  // (right-click: the user menu)
   head.appendChild(makeAvatar(message.user_id, message.name, "small"));
   const name = document.createElement("strong");
   name.textContent = message.name;  // (textContent: never as HTML)
@@ -1634,6 +1635,8 @@ function showMessage(message, follow = true) {
     if (message.user_id) {
       avatar.classList.add("clickable");
       nameElement.classList.add("clickable");
+      // Right-click: the user menu (people.js). (redrawAvatars carries this over to a fresh picture.)
+      avatar.dataset.userMenu = nameElement.dataset.userMenu = message.user_id;
       // The click handler goes on the message, not on the picture: pictures get swapped
       // for fresh ones when someone changes theirs, and a handler on the old one would be lost.
       div.addEventListener("click", (event) => {

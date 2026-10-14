@@ -668,11 +668,7 @@ function makeTile(id, { muted = false, deafened = false, video = null, away = fa
   label.append(note || name);  // (append adds text as plain text, like textContent)
   tile.append(label);
   tile.addEventListener("click", () => toggleFocus(tile));
-  // "contextmenu": a right-click. preventDefault: no browser menu on top of the profile.
-  tile.addEventListener("contextmenu", (event) => {
-    event.preventDefault();
-    openProfile(id);
-  });
+  tile.dataset.userMenu = id;  // right-click: the user menu, with Profile first (people.js)
   return tile;
 }
 

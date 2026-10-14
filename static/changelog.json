@@ -27,6 +27,7 @@
         "Online and offline people on the right, and \"is typing…\" under the messages",
         "Your status: click your name at the bottom left and pick Online, Idle, Do Not Disturb (no notifications or sounds, on any device) or Invisible (you look offline but can chat as usual). After 10 minutes away from the chat you show as Idle by yourself. The dot on a picture shows it: green, yellow, red or grey",
         "Click someone's picture or name for their profile: picture, banner, status and bio",
+        "Right-click someone (a long press on a phone): above their messages, in the member list, the DM list, the Friends page or a call. A menu with Profile, Mention, Message, Call, Add or Remove friend, Mute DM and Block",
         "Your own in Settings → Profile. Pictures and banners can be animated GIFs, and you can move and zoom them",
         "Up to 12 custom emoji of your own (also animated) in Settings → Emoji, for messages and reactions"
       ]
@@ -114,7 +115,8 @@
         "Statuses: click your name at the bottom left for Online, Idle, Do Not Disturb or Invisible. You also turn Idle by yourself after 10 minutes away",
         "Mute a chat 🔕: the 🔔 at the top of a channel, DM or group. You still hear about @mentions of you, and anything from an admin",
         "Blocking 🚫: Block in someone's profile hides their messages and stops them reaching you. Unblock on the Friends page's Blocked tab",
-        "Friend requests now ping you 👋, with a notification that opens your requests (on your phone too)"
+        "Friend requests now ping you 👋, with a notification that opens your requests (on your phone too)",
+        "Right-click anyone (or long press on a phone) for a menu: profile, mention, message, call, add or remove friend, mute and block"
       ]
     },
     {

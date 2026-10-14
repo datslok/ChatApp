@@ -151,6 +151,12 @@ the point is for me to understand how it works, not just to have it done.
   blockers, `start_call` doesn't ring them, `search_messages` skips blocked senders. Page: `blockedIds`
   (people.js); their messages drawn as "🚫 A message from someone you blocked · Show" (`shownBlocked`);
   Block / Unblock in `makeFriendButtons` (profile, Friends page), and a Blocked tab on the Friends page.
+- The user menu (people.js, "The user menu"): right-click (a long press on phones) on anything with
+  `data-user-menu="<id>"` (message picture and name, member list, DM list, Friends page rows, call tiles,
+  pins/search card heads, our own panel) opens #context-menu, built by `userMenuItems` from how we stand
+  with them (Profile, Mention, Message, Call, friend actions, Mute DM, Block; no Block or Mute DM for
+  admins, no Block for bots). One document-level "contextmenu" listener (event delegation). The menu moves
+  into an open modal dialog or the fullscreen element, or nothing outside those would show or be clickable.
 - Pinned messages: `messages.pinned_at` / `pinned_by` (NULL = not pinned); anyone who can see a message
   (`can_join`) may pin or unpin it over the WebSocket (`{"type": "pin", "message_id", "pinned"}`), never a
   note (`kind` set); `MAX_PINS` 100 per chat (else "pins_full"). Everyone in the chat gets "pinned"; a pin also

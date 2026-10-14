@@ -78,6 +78,7 @@ function redrawAvatars() {
     const userId = Number(old.dataset.avatarFor);
     const fresh = makeAvatar(userId, old.dataset.avatarName, old.dataset.avatarSize);
     if (old.classList.contains("clickable")) fresh.classList.add("clickable");
+    if (old.dataset.userMenu) fresh.dataset.userMenu = old.dataset.userMenu;  // (right-click: the user menu)
     old.replaceWith(fresh);
   }
 }
@@ -155,6 +156,7 @@ function fillPeopleList(list, users) {
   for (const user of users) {
     const item = document.createElement("li");
     item.classList.add("clickable");
+    item.dataset.userMenu = user.id;  // (right-click: the user menu)
     item.appendChild(makePerson(user));
     item.addEventListener("click", () => openProfile(user.id));
     list.appendChild(item);
@@ -177,6 +179,7 @@ function renderDmList() {
     const button = document.createElement("button");
     button.className = "channel";
     button.dataset.channel = dmChannel(user.id);
+    button.dataset.userMenu = user.id;  // (right-click: the user menu)
     button.appendChild(makePerson(user));
     button.addEventListener("click", () => switchChannel(dmChannel(user.id), "@" + user.name));
     dmList.appendChild(button);
@@ -288,6 +291,7 @@ function makeFriendButtons(userId, statusElement) {
 function makePeopleRow(user) {
   const row = document.createElement("div");
   row.className = "people-row clickable";
+  row.dataset.userMenu = user.id;  // (right-click: the user menu)
   row.appendChild(makePerson(user));
   const actions = document.createElement("div");
   actions.className = "friend-actions";
@@ -596,6 +600,7 @@ const mePopup = document.getElementById("me-popup");
 function renderUserPanel() {
   const me = people.get(myId);
   if (me) userPanelMe.replaceChildren(makePerson(me));  // (the same as in the online list)
+  userPanelMe.dataset.userMenu = myId;  // (right-click: Profile, Edit profile)
   userMuteButton.classList.toggle("off", micMuted);
   userMuteButton.title = micMuted ? "Unmute" : "Mute";
   userMuteButton.setAttribute("aria-label", userMuteButton.title);
@@ -688,6 +693,142 @@ document.getElementById("me-edit-profile").addEventListener("click", () => {
   settingsButton.click();
   showSettingsPage("profile");
 });
+
+// ---------- The user menu ----------
+//
+// Right-click a person (a long press on a phone: the browser turns it into the same "contextmenu"
+// event): their picture or name above a message, a row in the member list, the DM list or the
+// Friends page, a call tile. Each of those has data-user-menu="7" (the person's id), and one
+// listener on the whole page finds it ("event delegation": one listener for every such element,
+// also the ones drawn later). The menu is filled anew each time, for how we stand with them.
+
+const contextMenu = document.getElementById("context-menu");
+
+// Each item: [label, what it does], "-" for a line between groups, or [label, action, "danger"] in red.
+function userMenuItems(userId) {
+  const person = people.get(userId);
+  if (userId === myId) {
+    return [
+      ["Profile", () => openProfile(userId)],
+      ["Edit profile", () => {
+        settingsButton.click();
+        showSettingsPage("profile");
+      }],
+    ];
+  }
+  const items = [["Profile", () => openProfile(userId)]];
+  if (!channelView.hidden) {  // (in a chat, where there's a message box to type in)
+    items.push(["Mention", () => {
+      insertAtCursor("@" + person.name + " ");  // (ui.js)
+      input.focus();
+    }]);
+  }
+  if (blockedIds.has(userId)) {
+    items.push("-", ["Unblock", () => friendAction("unblock", userId, peopleStatus)]);
+    return items;
+  }
+  if (friendIds.has(userId)) {
+    items.push(["Message", () => openDm(userId)]);
+    if (!person.bot) {
+      items.push(["Call", () => {
+        openDm(userId);
+        callButton.click();  // (rooms.js: rings them, in the DM we just opened)
+      }]);
+    }
+  }
+  items.push("-");
+  if (friendIds.has(userId)) {
+    if (!person.bot) {
+      items.push(["Remove friend", () => {
+        if (confirm(`Remove ${person.name} as a friend? Your DM is kept, hidden, until you're friends again.`)) {
+          friendAction("remove", userId, peopleStatus);
+        }
+      }]);
+    }
+    // Mute or unmute our DM with them (rooms.js has the same as 🔔). Not with an admin: they can't be muted.
+    if (!person.admin) {
+      const dm = dmChannel(userId);
+      const muted = mutedChats.has(dm);
+      items.push([muted ? "Unmute DM" : "Mute DM", () => sendToServer({ type: "mute", channel: dm, muted: !muted })]);
+    }
+  } else if (incomingIds.has(userId)) {
+    items.push(["Accept friend request", () => friendAction("accept", userId, peopleStatus)]);
+    items.push(["Decline friend request", () => friendAction("remove", userId, peopleStatus)]);
+  } else if (outgoingIds.has(userId)) {
+    items.push(["Cancel friend request", () => friendAction("remove", userId, peopleStatus)]);
+  } else {
+    items.push(["Add friend", () => friendAction("request", userId, peopleStatus)]);
+  }
+  if (!person.admin && !person.bot) {  // (admins and bots can't be blocked)
+    items.push(["Block", () => {
+      if (confirm(`Block ${person.name}? You stop being friends, and their messages are hidden for you. They aren't told.`)) {
+        friendAction("block", userId, peopleStatus);
+      }
+    }, "danger"]);
+  }
+  return items;
+}
+
+// Show the menu at the pointer (kept inside the window), with the person's name on top.
+function openUserMenu(event, userId) {
+  const person = people.get(userId);
+  if (!person) return;  // (messages from before accounts existed have no one behind them)
+  event.preventDefault();  // instead of the browser's own menu
+  closeDrawers();  // (a phone's sidebar drawer: the menu goes over the chat)
+  // In fullscreen (a call or shared screen) only what's inside the fullscreen element is drawn, and
+  // while a popup (a modal dialog: pins, search) is open nothing outside it can be clicked: so put the
+  // menu in there, and back in the page's body otherwise. (appendChild moves an element.)
+  const home = event.target.closest("dialog") || document.fullscreenElement || document.body;
+  if (contextMenu.parentElement !== home) home.appendChild(contextMenu);
+  const title = document.createElement("div");
+  title.className = "context-title";
+  title.textContent = person.name;
+  contextMenu.replaceChildren(title);
+  for (const item of userMenuItems(userId)) {
+    if (item === "-") {
+      if (contextMenu.lastChild.tagName !== "HR") contextMenu.appendChild(document.createElement("hr"));
+      continue;
+    }
+    const [label, action, style] = item;  // (taking the list apart: "destructuring")
+    const button = document.createElement("button");
+    button.type = "button";
+    button.setAttribute("role", "menuitem");
+    button.textContent = label;
+    if (style === "danger") button.className = "danger";
+    button.addEventListener("click", () => {
+      closeContextMenu();
+      action();
+    });
+    contextMenu.appendChild(button);
+  }
+  if (contextMenu.lastChild.tagName === "HR") contextMenu.lastChild.remove();  // (no line at the very end)
+  contextMenu.hidden = false;
+  // Where the pointer is, but moved back in if it would stick out past the window's right or bottom edge.
+  const x = Math.min(event.clientX, innerWidth - contextMenu.offsetWidth - 8);
+  const y = Math.min(event.clientY, innerHeight - contextMenu.offsetHeight - 8);
+  contextMenu.style.left = Math.max(8, x) + "px";
+  contextMenu.style.top = Math.max(8, y) + "px";
+}
+
+function closeContextMenu() {
+  contextMenu.hidden = true;
+}
+
+// The one listener: a right-click (or long press) inside anything with data-user-menu opens the menu.
+document.addEventListener("contextmenu", (event) => {
+  const target = event.target.closest("[data-user-menu]");
+  if (target) openUserMenu(event, Number(target.dataset.userMenu));
+});
+// Closed by a press anywhere else, Esc, scrolling (the person moves away under it), or the window changing.
+document.addEventListener("pointerdown", (event) => {
+  if (!contextMenu.hidden && !contextMenu.contains(event.target)) closeContextMenu();
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") closeContextMenu();
+});
+document.addEventListener("scroll", closeContextMenu, true);  // (true: scrolling inside any box, like the messages)
+window.addEventListener("resize", closeContextMenu);
+window.addEventListener("blur", closeContextMenu);
 
 // ---------- "is typing…" ----------
 
