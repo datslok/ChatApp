@@ -331,7 +331,7 @@ the point is for me to understand how it works, not just to have it done.
   `.gitattributes`) clears Windows' icon cache when the taskbar or Start menu still shows an old icon.
 - `static/download.html`: the download page (`/download`, no login), linked from the login page, the landing
   page and the banner above the chat (only in browsers on Windows, notifications.js); not from Settings (removed
-  2026-10-15). On phones the login and landing pages remove their `.windows-app-link`s (the user's rule: no
+  2026-10-14). On phones the login and landing pages remove their `.windows-app-link`s (the user's rule: no
   Windows app on phones). `/download/windows` always redirects to the newest installer.
 - `static/landing/`: the landing page (`index.html`, `logo.png` from `icon/chattuschattus_square.png`,
   `screenshot.png`), served at `/` when the Host is `LANDING_HOST` (datslok.no) and always at `/welcome`;

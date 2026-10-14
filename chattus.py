@@ -96,7 +96,9 @@ CLAUDE_TOOLS_PROMPT = """
   when, copied from their words without calculating anything: either "day" and "time" for a day and a clock time,
   like "tomorrow at 9": "day" is "today", "tomorrow", a weekday like "friday", or a date as "MM-DD" like "12-24"
   (or "" if they named none), and "time" is like "09:00" (or "" if they named none); or "in" for a time from now,
-  like "in 20 minutes" or "in 2 days" (the number and the unit). Leave everything else empty: the reminder is saved,
+  like "in 20 minutes" or "in 2 days" (the number and the unit). When they point at something whose date is already
+  in the conversation ("when it releases", "on the day of the party"), use that date as "MM-DD" (a release on
+  20 October 2026: "10-20"). Leave everything else empty: the reminder is saved,
   and they get a message then. Otherwise leave "what", "day" and "time" "", and "in" {"amount": 0, "unit": ""}.
 - "pictures": when someone asks you to show, find or send pictures or photos of something real (a place, a building,
   an animal, a plant, a thing, a famous person, an event), write a short search for them here and leave everything
@@ -848,6 +850,7 @@ class Chattus:
         else:
             at = None
         if at is None:
+            log(f"Couldn't read when from the model's reminder: {remind}")
             return "⏰ I couldn't tell when. Try something like \"remind me tomorrow at 9 to call mum\"."
         if not what:
             return "⏰ What should I remind you of? Try something like \"remind me tomorrow at 9 to call mum\"."
