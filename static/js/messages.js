@@ -437,12 +437,62 @@ function ensureEmojiData() {
   // The first call starts loading; later calls get the same Promise, so it's only fetched once.
   emojiDataLoading ??= (async () => {  // ??= : "assign only if it's still null/undefined"
     const response = await fetch("/emoji.json");
-    emojiGroups = (await response.json()).groups;
+    const groups = (await response.json()).groups;
+    for (const group of groups) {
+      for (const [emoji, name] of group.emoji) emojiNames.set(emoji, name);  // (all: other people's reactions)
+    }
+    // Only offer what this device can draw: emoji.json follows the newest Unicode, fonts lag behind.
+    const canDraw = makeEmojiTester();
+    emojiGroups = groups
+      .map((group) => ({ name: group.name, emoji: group.emoji.filter(([emoji]) => canDraw(emoji)) }))
+      .filter((group) => group.emoji.length);  // (a category with nothing left goes)
     for (const group of emojiGroups) {
-      for (const [emoji, name] of group.emoji) emojiNames.set(emoji, name);
+      for (const [emoji] of group.emoji) drawableEmoji.add(emoji);
     }
   })();
   return emojiDataLoading;
+}
+
+const drawableEmoji = new Set();  // the emoji this device's font can draw (made by ensureEmojiData)
+
+// Returns a function that tells whether the font can draw an emoji, by drawing it on a hidden
+// canvas. Two tests:
+// - A colour emoji has its own colours and ignores the canvas's paint colour (fillStyle), so
+//   drawing it in black and in white gives the same pixels. A missing one is drawn as a plain box
+//   (or letters), which does take the paint colour, so the two drawings differ.
+// - An emoji made of several joined together (🙂‍↔️ is 🙂 + an invisible "join" + ↔️) that the font
+//   doesn't know falls apart into its pieces side by side: much wider than one emoji.
+function makeEmojiTester() {
+  const size = 20;
+  const canvas = document.createElement("canvas");
+  canvas.width = size * 3;  // room for a fallen-apart one too, so its pixels differ as well
+  canvas.height = size;
+  // willReadFrequently: we read the pixels back ~2000 times, so the browser keeps them in memory
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  if (!context) return () => true;  // (no canvas: offer everything, as before)
+  // The same fonts as .emoji in chat.css, so we test what the page will actually show.
+  context.font = `${size - 4}px "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif`;
+  context.textBaseline = "top";
+  const oneWidth = context.measureText("😀").width;
+
+  function pixels(emoji, colour) {
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    context.fillStyle = colour;
+    context.fillText(emoji, 0, 0);
+    return context.getImageData(0, 0, canvas.width, canvas.height).data;  // [r, g, b, a, r, g, b, a, ...]
+  }
+
+  return (emoji) => {
+    if (context.measureText(emoji).width > oneWidth * 1.5) return false;  // fell apart
+    const black = pixels(emoji, "#000");
+    const white = pixels(emoji, "#fff");
+    let drewSomething = false;
+    for (let i = 0; i < black.length; i++) {
+      if (black[i] !== white[i]) return false;  // took the paint colour: not a colour emoji
+      if (i % 4 === 3 && black[i] > 0) drewSomething = true;  // (every 4th number is the opacity)
+    }
+    return drewSomething;
+  };
 }
 
 async function openEmojiPicker(messageId, button, mode = "react") {
@@ -580,7 +630,8 @@ function renderEmojiGrid(query) {
     return;
   }
 
-  const recent = loadRecent().filter(emojiExists);
+  // (custom ones that still exist, normal ones this device can draw)
+  const recent = loadRecent().filter((e) => e.startsWith("custom:") ? emojiExists(e) : drawableEmoji.has(e));
   if (recent.length) section("Recently used", recent.map((emoji) => [emoji, emojiLabel(emoji)]));
   customSections().forEach(([title, list], index) => {
     section(title, list, index === 0 ? "emoji-group-custom" : null);  // the ⭐ button scrolls to the first

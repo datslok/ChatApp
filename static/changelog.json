@@ -12,7 +12,7 @@
         "A red line marked NEW shows where you stopped reading in a chat (also for messages that came while you were away from the window). Lots of new ones? The chat opens at the line. It goes away when you write something",
         "Pin a message: hover over it and click 📌. The 📌 at the top of a channel, DM or group lists its pinned messages (up to 100), with Jump and Unpin. Anyone can pin and unpin",
         "@name mentions someone, @everyone mentions everybody: they get a notification and a red count",
-        "Type :name for emoji suggestions (↑↓ to choose, Enter or Tab to pick), or use the 😀 button. Messages with only emoji show them big",
+        "Type :name for emoji suggestions (↑↓ to choose, Enter or Tab to pick), or use the 😀 button (it only offers emoji your device can draw). Messages with only emoji show them big",
         "Pictures and files up to 10 MB: the + button, drag and drop, or paste. Up to 10 at once, click a picture to see it big",
         "GIFs: the GIF button next to the text box (on phones: the smiley, then the GIF tab). Type to search (from GIPHY), or pick one of the trending ones, and click one to send it (as a reply, if you're replying). Esc closes it",
         "Links are clickable, and the first link in a message gets a preview card: the site, title, description and picture",
@@ -112,6 +112,7 @@
     {
       "date": "2026-10-14",
       "items": [
+        "Fixed: the emoji picker no longer shows empty boxes for emoji your device can't draw yet (brand-new ones, and country flags on Windows, which only shows them as letters)",
         "On phones, the smiley next to the text box opens both emoji and GIFs (tabs at the top), so there's more room to type, and Back closes them. The smiley is a calmer line drawing now",
         "Chattus can look further back 🔍: ask him what someone said about something earlier, and he searches the chat (only the channels and the chat you ask in)",
         "📱 Someone who's only here on their phone has a little phone instead of a dot, in their status's colour",
