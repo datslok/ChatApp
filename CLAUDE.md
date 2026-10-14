@@ -97,12 +97,13 @@ the point is for me to understand how it works, not just to have it done.
   `features`** (short, for friends, no technical details; say where things are, like "Settings → Notifications":
   Chattus reads `features` as the chat's manual, see below). Part of `PAGE_VERSION`, so a changelog-only
   deploy reloads open pages.
-- Seasons (server.py, "Seasons"; people.js, "The seasonal easter egg"): `SEASONS` (name, months, emoji, video);
+- Seasons (server.py, "Seasons"; people.js, "The seasonal easter egg"): `SEASONS` (name, months, emoji or image
+  (worn like a hat: `.season-hat`; Christmas, December: static/seasonal/santa-hat.svg, our own drawing), video);
   `current_season()` (this month's, only if `seasonal/<video>` exists) goes in "welcome" as `season`; the page
   puts its emoji on our own picture in #user-panel (`.season-badge`), which opens #season-dialog with the video
   (`/seasonal/<name>`, logged-in only, only names from SEASONS). The videos are git-ignored, copied to the server
   with `scripts/seasonal-upload.ps1`, and in backup.ps1/export/import/backup-fetch. Halloween's is "SpOwOky OwOky
-  Pumpkin Song" (the user's own copy in `external/`). The panel's own picture is 32px (24 elsewhere).
+  Pumpkin Song", Christmas's "padowo padowo" (the user's own copies in `external/`). The panel's own picture is 32px (24 elsewhere).
 - `static/emoji.json`: every emoji for the reaction picker (and the server's list of allowed reactions),
   made from Unicode's `emoji-test.txt` by `tools/make_emoji_json.py`.
 - Maths in messages (messages.js, `makeMath`): `$...$` inline and `$$...$$` on its own line, with Pandoc's

@@ -2954,18 +2954,23 @@ async def reset_page():
 
 SEASONAL_DIR = Path("seasonal")
 SEASONS = [
-    # Its name, the months it lasts (1-12), its emoji, and its video's file name in seasonal/.
+    # Its name, the months it lasts (1-12), what sits on your picture (an emoji, or "image": a picture in
+    # static/seasonal/, worn on top like a hat), and its video's file name in seasonal/.
     {"name": "halloween", "months": [10], "emoji": "🎃", "video": "halloween.mp4"},
+    {"name": "christmas", "months": [12], "image": "/static/seasonal/santa-hat.svg", "video": "christmas.mp4"},
 ]
 
 
 def current_season():
-    """The season it is now (by the server's clock), if its video is here: {name, emoji, video},
-    sent to each page in "welcome". None: no season (or no video for it)."""
+    """The season it is now (by the server's clock), if its video is here: {name, emoji or image,
+    video}, sent to each page in "welcome". None: no season (or no video for it)."""
     month = time.localtime().tm_mon
     for season in SEASONS:
         if month in season["months"] and (SEASONAL_DIR / season["video"]).is_file():
-            return {"name": season["name"], "emoji": season["emoji"], "video": "/seasonal/" + season["video"]}
+            return {
+                "name": season["name"], "emoji": season.get("emoji"), "image": season.get("image"),
+                "video": "/seasonal/" + season["video"],
+            }
     return None
 
 
@@ -3047,6 +3052,7 @@ app.mount("/static/css", FreshStaticFiles(directory="static/css"), name="css")
 app.mount("/static/js", FreshStaticFiles(directory="static/js"), name="js")
 app.mount("/landing", FreshStaticFiles(directory="static/landing"), name="landing")  # its pictures
 app.mount("/icons", FreshStaticFiles(directory="static/icons"), name="icons")  # the phone app's (manifest.json)
+app.mount("/static/seasonal", FreshStaticFiles(directory="static/seasonal"), name="seasonal")  # the seasons' pictures (the Santa hat)
 # KaTeX, which draws the $maths$ in messages (messages.js), one fixed version from npm (see CLAUDE.md).
 app.mount("/katex-0.18.9", LastingStaticFiles(directory="static/katex-0.18.9"), name="katex")
 

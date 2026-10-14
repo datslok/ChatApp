@@ -1650,6 +1650,17 @@ body.mini-hidden :fullscreen .tile-strip {
 .season-badge:hover {
   transform: rotate(-15deg) scale(1.25);
 }
+/* A picture worn like a hat (the Santa hat): bigger, on top of the picture, tilted as if it sits there.
+   Its hover keeps the tilt and adds a little more. */
+.season-badge.season-hat {
+  top: -17px;
+  left: -4px;
+  width: 34px;
+  transform: rotate(-20deg);
+}
+.season-badge.season-hat:hover {
+  transform: rotate(-30deg) scale(1.15);
+}
 
 /* The video's popup: black, the video as big as fits. */
 #season-dialog {

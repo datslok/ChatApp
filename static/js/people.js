@@ -845,9 +845,18 @@ const seasonDialog = document.getElementById("season-dialog");
 const seasonVideo = document.getElementById("season-video");
 
 function addSeasonBadge() {
-  const badge = document.createElement("span");
-  badge.className = "season-badge";
-  badge.textContent = season.emoji;
+  // An emoji in the corner (🎃), or a picture worn on top like a hat (Christmas: a Santa hat).
+  let badge;
+  if (season.image) {
+    badge = document.createElement("img");
+    badge.className = "season-badge season-hat";
+    badge.src = season.image;
+    badge.alt = "";
+  } else {
+    badge = document.createElement("span");
+    badge.className = "season-badge";
+    badge.textContent = season.emoji;
+  }
   badge.title = "?";  // (a hint, not an explanation)
   badge.addEventListener("click", (event) => {
     event.stopPropagation();  // not also a click on the panel (which would open our popup)

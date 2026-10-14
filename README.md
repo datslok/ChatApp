@@ -323,7 +323,7 @@ searching ever loads anything from GIPHY. The age rating is `pg-13` (`GIF_RATING
 
 During a season, a small emoji sits on the corner of everyone's own picture at the bottom left, and
 clicking it plays that season's video. The seasons are `SEASONS` in `server.py` (Halloween: October, 🎃,
-`halloween.mp4`); add one with a line there. The videos aren't in git: they go in a `seasonal\` folder on
+`halloween.mp4`; Christmas: December, a Santa hat, `christmas.mp4`); add one with a line there. The videos aren't in git: they go in a `seasonal\` folder on
 the server, from your PC with
 
 ```powershell
