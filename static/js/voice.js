@@ -469,7 +469,7 @@ function makeVoiceStateIcon({ muted, deafened }) {
   if (!muted && !deafened) return null;
   const icon = document.createElement("span");
   icon.className = deafened ? "voice-state deafened" : "voice-state";
-  icon.textContent = deafened ? "🎧" : "🔇";
+  icon.appendChild(makeIcon(deafened ? "headphone-off" : "mic-off"));
   icon.title = deafened ? "Deafened" : "Muted";
   return icon;
 }

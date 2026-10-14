@@ -63,7 +63,8 @@ function renderTray() {
       div.appendChild(img);
     } else {
       div.classList.add("file");
-      div.textContent = `📄 ${item.file.name} (${formatSize(item.file.size)})`;
+      div.textContent = `${item.file.name} (${formatSize(item.file.size)})`;
+      setIcon(div, "file");
     }
 
     const remove = document.createElement("button");
@@ -254,7 +255,8 @@ function makeAttachment(file, message) {
     link.appendChild(img);
   } else {
     link.className = "attachment-file";
-    link.textContent = `📄 ${file.filename} (${formatSize(file.size)})`;
+    link.textContent = `${file.filename} (${formatSize(file.size)})`;
+    setIcon(link, "file");
     // In the desktop app a plain download happens silently, so the page asks first, then downloads
     // it itself and shows how far along it is. (Browsers have their own: there, a normal link.)
     if (inDesktopApp) {
@@ -274,8 +276,9 @@ let pendingDownload = null;  // what Download would download: {link, url, file}
 function askToDownload(link, url, file, message) {
   if (link.querySelector("progress")) return;  // already downloading
   pendingDownload = { link, url, file };
-  document.getElementById("download-ask-file").textContent =
-    `📄 ${file.filename} (${formatSize(file.size)})`;
+  const askFile = document.getElementById("download-ask-file");
+  askFile.textContent = `${file.filename} (${formatSize(file.size)})`;
+  setIcon(askFile, "file");
   const mine = message.user_id === myId;
   document.getElementById("download-ask-sender").textContent = mine ? "Sent by you" : `Sent by ${message.name}`;
   document.getElementById("download-ask-warning").hidden = mine;  // no need to warn about your own
@@ -1273,16 +1276,17 @@ input.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && replyingTo) clearReply();
 });
 
-// The quote above a reply: "↪ (picture) kari: are you coming tonig…". Click it to jump there.
+// The quote above a reply: "(arrow) (picture) kari: are you coming tonig…". Click it to jump there.
 function makeReplyLine(reply) {
   const line = document.createElement("div");
   if (reply.deleted) {
     line.className = "reply-line deleted";
-    line.textContent = "↪ Original message was deleted";
+    line.textContent = "Original message was deleted";
+    setIcon(line, "reply");
     return line;
   }
   line.className = "reply-line clickable";
-  line.appendChild(document.createTextNode("↪ "));
+  line.appendChild(makeIcon("reply"));
   line.appendChild(makeAvatar(reply.user_id, reply.name, "tiny"));
   const name = document.createElement("strong");
   name.textContent = reply.name;
@@ -1292,7 +1296,8 @@ function makeReplyLine(reply) {
   if (reply.text) {
     fillWithEmoji(text, reply.text);
   } else {
-    text.textContent = reply.file ? "📎 Attachment" : "";
+    text.textContent = reply.file ? "Attachment" : "";
+    if (reply.file) setIcon(text, "paperclip");
   }
   line.appendChild(text);
   line.addEventListener("click", () => jumpToMessage(reply.id));
@@ -1363,7 +1368,7 @@ function showPins(list) {
   if (!pinsDialog.open) return;
   pinsList.replaceChildren(...list.map(makePinnedItem));
   pinsEmpty.hidden = list.length > 0;
-  pinsEmpty.textContent = "Nothing pinned here yet. Hover over a message and click 📌 to pin it.";
+  pinsEmpty.textContent = "Nothing pinned here yet. Hover over a message and click the pin to pin it.";
 }
 
 // A message on a card, for the pinned list and the search results: who and when (and where, if
@@ -1394,7 +1399,8 @@ function makeMessageCard(message, where = "") {
   if (message.file) {
     const file = document.createElement("div");
     file.className = "card-file";
-    file.textContent = (message.file.image ? "🖼️ " : "📎 ") + message.file.filename;
+    file.textContent = message.file.filename;
+    setIcon(file, message.file.image ? "image" : "paperclip");
     item.appendChild(file);
   }
 
@@ -1776,7 +1782,8 @@ function showMessage(message, follow = true) {
       shownBlocked.add(message.id);
       redrawMessages();
     });
-    hidden.append("🚫 A message from someone you blocked · ", show);
+    hidden.append("A message from someone you blocked · ", show);
+    setIcon(hidden, "ban");
     messages.appendChild(hidden);
     if (wasAtBottom) messages.scrollTop = messages.scrollHeight;
     return;
@@ -1794,7 +1801,8 @@ function showMessage(message, follow = true) {
   actions.className = "message-actions";
   const replyButton = document.createElement("button");
   replyButton.type = "button";
-  replyButton.textContent = "↩ Reply";
+  replyButton.textContent = "Reply";
+  setIcon(replyButton, "reply");
   replyButton.addEventListener("click", () => startReply(message.id, message.name));
   const reactButton = document.createElement("button");
   reactButton.type = "button";
@@ -1805,10 +1813,10 @@ function showMessage(message, follow = true) {
   reactButton.addEventListener("click", () => openEmojiPicker(message.id, reactButton));
   actions.append(reactButton, replyButton);
   if (!message.kind) {
-    // 📌 Pin, or Unpin (highlighted) when it's pinned. Anyone can, as on Discord in DMs; not the notes.
+    // Pin, or Unpin (highlighted) when it's pinned. Anyone can, as on Discord in DMs; not the notes.
     const pinButton = document.createElement("button");
     pinButton.type = "button";
-    pinButton.textContent = "📌";
+    setIcon(pinButton, "pin");
     pinButton.title = message.pinned ? "Unpin" : "Pin";
     pinButton.setAttribute("aria-pressed", message.pinned ? "true" : "false");
     pinButton.addEventListener("click", () => {
@@ -1819,13 +1827,13 @@ function showMessage(message, follow = true) {
   if (canModify(message)) {
     const editButton = document.createElement("button");
     editButton.type = "button";
-    editButton.textContent = "✏️";
+    setIcon(editButton, "pencil");
     editButton.title = "Edit";
     editButton.addEventListener("click", () => startEdit(message));
     if (message.kind) editButton.hidden = true;  // notes (call, pin) can be deleted, not edited
     const deleteButton = document.createElement("button");
     deleteButton.type = "button";
-    deleteButton.textContent = "🗑️";
+    setIcon(deleteButton, "trash-2");
     deleteButton.title = "Delete (hold Shift to skip the question)";
     deleteButton.addEventListener("click", (event) => deleteMessage(message, event.shiftKey));
     actions.append(editButton, deleteButton);

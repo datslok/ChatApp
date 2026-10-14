@@ -1116,16 +1116,16 @@ function renderChannelAdmin() {
 
 // A small grey button. type="button" matters: a button inside a form is a submit button unless
 // told otherwise, so ↑ would also "submit" the row (rename it).
-function makeChannelAdminButton(text, label) {
+function makeChannelAdminButton(icon, label) {
   const button = document.createElement("button");
   button.type = "button";
-  button.textContent = text;
+  setIcon(button, icon);                    // (icons.js)
   button.title = label;                     // shown when hovering
-  button.setAttribute("aria-label", label);  // read out by screen readers instead of "↑"
+  button.setAttribute("aria-label", label);  // read out by screen readers instead
   return button;
 }
 
-// A row: "#" (or ▾ for a heading), the name in a text box, Save (once it's been changed), ↑ ↓ 🗑.
+// A row: "#" (or an arrow for a heading), the name in a text box, Save (once it's been changed), up, down, delete.
 // The row is a form, so Enter in the text box saves too.
 function makeChannelAdminItem(item, index) {
   const row = document.createElement("form");
@@ -1133,7 +1133,8 @@ function makeChannelAdminItem(item, index) {
 
   const mark = document.createElement("span");
   mark.className = "channel-admin-mark";
-  mark.textContent = item.heading ? "▾" : "#";
+  if (item.heading) setIcon(mark, "chevron-down");
+  else mark.textContent = "#";
 
   const name = document.createElement("input");
   name.value = item.name;  // (.value, like textContent, is never read as HTML)
@@ -1156,13 +1157,13 @@ function makeChannelAdminItem(item, index) {
     channelAdminRequest(`/channels/${encodeURIComponent(item.key)}/rename`, { name: name.value });
   });
 
-  const up = makeChannelAdminButton("↑", "Move up");
+  const up = makeChannelAdminButton("arrow-up", "Move up");
   up.disabled = index === 0;
   up.addEventListener("click", () => moveChannel(index, -1));
-  const down = makeChannelAdminButton("↓", "Move down");
+  const down = makeChannelAdminButton("arrow-down", "Move down");
   down.disabled = index === channels.length - 1;
   down.addEventListener("click", () => moveChannel(index, 1));
-  const remove = makeChannelAdminButton("🗑", "Delete");
+  const remove = makeChannelAdminButton("trash-2", "Delete");
   remove.className = "delete";
   remove.addEventListener("click", () => deleteChannel(item));
 
@@ -1266,13 +1267,13 @@ function makeRoleAdminItem(role, index) {
   });
   colour.addEventListener("change", edit);  // ("change": once a colour is picked, not while dragging)
 
-  const up = makeChannelAdminButton("↑", "Move up");  // (the Channels page's small grey buttons)
+  const up = makeChannelAdminButton("arrow-up", "Move up");  // (the Channels page's small grey buttons)
   up.disabled = index === 0;
   up.addEventListener("click", () => moveRole(index, -1));
-  const down = makeChannelAdminButton("↓", "Move down");
+  const down = makeChannelAdminButton("arrow-down", "Move down");
   down.disabled = index === roles.length - 1;
   down.addEventListener("click", () => moveRole(index, 1));
-  const remove = makeChannelAdminButton("🗑", "Delete");
+  const remove = makeChannelAdminButton("trash-2", "Delete");
   remove.className = "delete";
   remove.addEventListener("click", () => {
     if (confirm(`Delete the role "${role.name}"? Everyone who has it loses it.`)) {
@@ -1289,7 +1290,7 @@ function makeRoleAdminItem(role, index) {
   for (const person of everyone.filter((person) => (person.roles ?? []).includes(role.id))) {
     const chip = document.createElement("span");
     chip.className = "role-member";
-    const take = makeChannelAdminButton("×", `Take ${role.name} from ${person.name}`);
+    const take = makeChannelAdminButton("x", `Take ${role.name} from ${person.name}`);
     take.addEventListener("click", () => roleAdminRequest(`/roles/${role.id}/members`, { user_id: person.id, member: false }));
     chip.append(makeAvatar(person.id, person.name, "tiny"), person.name, take);
     members.appendChild(chip);
@@ -1386,7 +1387,8 @@ function makeInboxItem(report) {
   head.appendChild(nameElement);
   const kind = document.createElement("span");
   kind.className = "inbox-kind " + report.kind;  // "bug" or "idea": its own colour (chat.css)
-  kind.textContent = report.kind === "bug" ? "🐛 Bug" : "💡 Idea";
+  kind.textContent = report.kind === "bug" ? "Bug" : "Idea";
+  setIcon(kind, report.kind === "bug" ? "bug" : "lightbulb");
   head.appendChild(kind);
   const time = document.createElement("time");
   const sent = new Date(report.created_at);

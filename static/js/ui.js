@@ -223,7 +223,7 @@ function findPeople(query) {
   }));
   if ("everyone".startsWith(query)) {
     results.push({
-      icon: () => document.createTextNode("📣"),
+      icon: () => makeIcon("megaphone"),
       insert: "@everyone ",
       label: "everyone",
       detail: "Notify everyone who can see this channel",

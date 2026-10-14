@@ -229,7 +229,7 @@ function leaveVoice() {
 // Clicking a voice channel opens its page, and joins it (unless we're in it already).
 for (const button of document.querySelectorAll(".voice-channel")) {
   button.addEventListener("click", () => {
-    const label = button.textContent.replace("🔊", "").trim();
+    const label = button.textContent.trim();  // (its icon is a drawing, not text)
     switchChannel(button.dataset.channel, label);
     if (voiceRoomName !== button.dataset.room) joinVoice(button.dataset.room, label);
   });
@@ -359,6 +359,7 @@ function renderCallPanel() {
   callPanelEnd.hidden = !inCall;
   callPanelJoin.hidden = inCall;
   callPanelMute.classList.toggle("off", micMuted);
+  setIcon(callPanelMute, micMuted ? "mic-off" : "mic");
   callPanelMute.title = micMuted ? "Unmute" : "Mute";
   callPanelMute.setAttribute("aria-label", callPanelMute.title);
   showSpeaking();  // the rings
@@ -419,16 +420,17 @@ function showDmHeader() {
   if (dmHeader.hidden) return;
   dmHeaderName.textContent = channelLabel(currentChannel);
   callButton.hidden = !inDm && !inGroup;  // (no calls in channels: that's what Lounge is for)
-  // 🔔 mute this chat, 🔕 unmute it. Not in a DM with an admin: admins can't be muted (server.py, can_mute).
+  // The bell mutes this chat, the crossed-out bell unmutes it. Not in a DM with an admin: admins can't be muted (server.py, can_mute).
   const muted = mutedChats.has(currentChannel);
   muteButton.hidden = !muted && people.get(dmPartner(currentChannel))?.admin === true;
-  muteButton.textContent = muted ? "🔕" : "🔔";
+  setIcon(muteButton, muted ? "bell-off" : "bell");
   muteButton.title = muted ? "Unmute this chat" : "Mute this chat";
   muteButton.setAttribute("aria-label", muteButton.title);
   muteButton.setAttribute("aria-pressed", muted ? "true" : "false");
   const inThisCall = voiceRoomName === currentChannel;
   callButton.disabled = inThisCall;
-  callButton.textContent = inThisCall ? "📞 In call" : "📞 Call";
+  callButton.textContent = inThisCall ? "In call" : "Call";
+  setIcon(callButton, "phone");
 }
 
 // Mute or unmute the chat we're in. The server answers all our pages with the new list ("mutes").
@@ -647,6 +649,7 @@ function renderLoungeView() {
   loungeLeave.hidden = !inLounge;
   loungeJoin.hidden = inLounge;
   loungeMute.classList.toggle("off", micMuted);
+  setIcon(loungeMute, micMuted ? "mic-off" : "mic");
   loungeMute.title = micMuted ? "Unmute" : "Mute";
   loungeMute.setAttribute("aria-label", loungeMute.title);
   showSpeaking();  // the rings
@@ -713,7 +716,7 @@ function makeScreenVolume(id) {
     setScreenVolume(id, Number(slider.value));
     value.textContent = slider.value + "%";
   });
-  box.append("🔊", slider, value);
+  box.append(makeIcon("volume-2"), slider, value);
   // Clicks and drags here are for the slider: stop them from going on up ("bubbling") to the
   // tile (focus) and its area (double-click for fullscreen).
   for (const type of ["click", "dblclick", "pointerdown"]) {
@@ -883,6 +886,7 @@ function snapStrip(strip) {
 document.addEventListener("fullscreenchange", () => {
   for (const button of document.querySelectorAll(".fullscreen-button")) {
     button.title = document.fullscreenElement ? "Exit fullscreen" : "Fullscreen";
+    setIcon(button, document.fullscreenElement ? "minimize" : "maximize");
     button.setAttribute("aria-label", button.title);
   }
 });

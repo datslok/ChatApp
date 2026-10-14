@@ -19,13 +19,13 @@
 <body>
   <nav id="sidebar">
     <div id="sidebar-lists">
-      <button id="friends-button" class="channel" data-channel="friends">
-        👥 People <span id="request-badge" class="badge" hidden></span>
+      <button id="friends-button" class="channel" data-channel="friends" data-icon="users">
+        People <span id="request-badge" class="badge" hidden></span>
       </button>
       <div id="channel-list"></div>
       <h2 class="section-heading">Voice</h2>
       <div id="voice-list">
-        <button class="channel voice-channel" data-room="lounge" data-channel="voice:lounge">🔊 Lounge</button>
+        <button class="channel voice-channel" data-room="lounge" data-channel="voice:lounge" data-icon="volume-2">Lounge</button>
         <div class="voice-members" data-room="lounge"></div>
       </div>
       <h2 class="section-heading dm-heading">
@@ -50,9 +50,9 @@
         </div>
         <span id="voice-where"></span>
       </div>
-      <button type="button" id="voice-camera" class="voice-button" title="Turn on camera" aria-label="Turn on camera">📷</button>
-      <button type="button" id="voice-share" class="voice-button share-button" title="Share your screen" aria-label="Share your screen">🖥️</button>
-      <button type="button" id="voice-leave" class="voice-button" title="Leave voice" aria-label="Leave voice">📞</button>
+      <button type="button" id="voice-camera" class="voice-button" title="Turn on camera" aria-label="Turn on camera" data-icon="video"></button>
+      <button type="button" id="voice-share" class="voice-button share-button" title="Share your screen" aria-label="Share your screen" data-icon="monitor-up"></button>
+      <button type="button" id="voice-leave" class="voice-button" title="Leave voice" aria-label="Leave voice" data-icon="phone-off"></button>
     </div>
     <!-- The other people's voices play through <audio> elements in here (never shown). -->
     <div id="voice-audio" hidden></div>
@@ -60,10 +60,10 @@
          mute, deafen and Settings. Filled in by people.js (renderUserPanel). -->
     <div id="user-panel">
       <button type="button" id="user-panel-me" title="Your profile"></button>
-      <button type="button" id="user-mute" class="user-panel-button" title="Mute" aria-label="Mute">🎤</button>
-      <button type="button" id="user-deafen" class="user-panel-button" title="Deafen" aria-label="Deafen">🎧</button>
-      <button type="button" id="settings-button" class="user-panel-button" title="Settings" aria-label="Settings">
-        ⚙️<span id="muted-icon" title="Notifications are muted" hidden>🔕</span>
+      <button type="button" id="user-mute" class="user-panel-button" title="Mute" aria-label="Mute" data-icon="mic"></button>
+      <button type="button" id="user-deafen" class="user-panel-button" title="Deafen" aria-label="Deafen" data-icon="headphones"></button>
+      <button type="button" id="settings-button" class="user-panel-button" title="Settings" aria-label="Settings" data-icon="settings">
+        <span id="muted-icon" title="Notifications are muted" data-icon="bell-off" hidden></span>
         <!-- Something new in "What's new" (settings.js). -->
         <span id="settings-new-dot" class="new-dot" title="Something new: see What's new" hidden></span>
       </button>
@@ -73,9 +73,9 @@
   <main id="chat">
     <!-- Only shown on phones (see the @media rules). -->
     <header id="topbar">
-      <button type="button" id="open-sidebar" title="Channels">☰</button>
+      <button type="button" id="open-sidebar" title="Channels" data-icon="menu"></button>
       <span id="topbar-title"></span>
-      <button type="button" id="open-members" title="Members">👥</button>
+      <button type="button" id="open-members" title="Members" data-icon="users"></button>
     </header>
     <div id="banner" hidden>Connection lost, reconnecting…</div>
     <!-- "Get the app", for people using a browser on Windows, until they close it (notifications.js). -->
@@ -107,13 +107,13 @@
     <section id="lounge-view" hidden>
       <div id="lounge-tiles"></div>
       <div class="lounge-buttons">
-        <button type="button" id="lounge-mute" class="call-round" title="Mute" aria-label="Mute">🎤</button>
-        <button type="button" id="lounge-camera" class="call-round" title="Turn on camera" aria-label="Turn on camera">📷</button>
-        <button type="button" id="lounge-share" class="call-round share-button" title="Share your screen" aria-label="Share your screen">🖥️</button>
-        <button type="button" id="lounge-fullscreen" class="call-round fullscreen-button" title="Fullscreen" aria-label="Fullscreen">⛶</button>
-        <button type="button" class="call-round mini-button" title="Hide participants" aria-label="Hide participants">👥</button>
-        <button type="button" id="lounge-leave" class="call-round end" title="Leave Lounge" aria-label="Leave Lounge">📞</button>
-        <button type="button" id="lounge-join">🔊 Join Lounge</button>
+        <button type="button" id="lounge-mute" class="call-round" title="Mute" aria-label="Mute" data-icon="mic"></button>
+        <button type="button" id="lounge-camera" class="call-round" title="Turn on camera" aria-label="Turn on camera" data-icon="video"></button>
+        <button type="button" id="lounge-share" class="call-round share-button" title="Share your screen" aria-label="Share your screen" data-icon="monitor-up"></button>
+        <button type="button" id="lounge-fullscreen" class="call-round fullscreen-button" title="Fullscreen" aria-label="Fullscreen" data-icon="maximize"></button>
+        <button type="button" class="call-round mini-button" title="Hide participants" aria-label="Hide participants" data-icon="users"></button>
+        <button type="button" id="lounge-leave" class="call-round end" title="Leave Lounge" aria-label="Leave Lounge" data-icon="phone-off"></button>
+        <button type="button" id="lounge-join" data-icon="volume-2">Join Lounge</button>
       </div>
     </section>
 
@@ -152,9 +152,9 @@
         </div>
         <div class="header-buttons">
           <button type="button" id="mute-button" class="header-icon"></button>
-          <button type="button" id="search-button" class="header-icon" title="Search" aria-label="Search">🔍</button>
-          <button type="button" id="pins-button" class="header-icon" title="Pinned messages" aria-label="Pinned messages">📌</button>
-          <button type="button" id="call-button">📞 Call</button>
+          <button type="button" id="search-button" class="header-icon" title="Search" aria-label="Search" data-icon="search"></button>
+          <button type="button" id="pins-button" class="header-icon" title="Pinned messages" aria-label="Pinned messages" data-icon="pin"></button>
+          <button type="button" id="call-button" data-icon="phone">Call</button>
         </div>
       </header>
       <!-- While this DM has a call: both pictures (a green ring for whoever talks), and the buttons. -->
@@ -162,13 +162,13 @@
         <!-- Shared screens and both people, as tiles sized to fit the banner (rooms.js, fitTiles). -->
         <div id="call-tiles"></div>
         <div id="call-buttons">
-          <button type="button" id="call-panel-mute" class="call-round" title="Mute" aria-label="Mute">🎤</button>
-          <button type="button" id="call-panel-camera" class="call-round" title="Turn on camera" aria-label="Turn on camera">📷</button>
-          <button type="button" id="call-panel-share" class="call-round share-button" title="Share your screen" aria-label="Share your screen">🖥️</button>
-          <button type="button" id="call-panel-fullscreen" class="call-round fullscreen-button" title="Fullscreen" aria-label="Fullscreen">⛶</button>
-          <button type="button" class="call-round mini-button" title="Hide participants" aria-label="Hide participants">👥</button>
-          <button type="button" id="call-panel-end" class="call-round end" title="End call" aria-label="End call">📞</button>
-          <button type="button" id="call-panel-join">📞 Join call</button>
+          <button type="button" id="call-panel-mute" class="call-round" title="Mute" aria-label="Mute" data-icon="mic"></button>
+          <button type="button" id="call-panel-camera" class="call-round" title="Turn on camera" aria-label="Turn on camera" data-icon="video"></button>
+          <button type="button" id="call-panel-share" class="call-round share-button" title="Share your screen" aria-label="Share your screen" data-icon="monitor-up"></button>
+          <button type="button" id="call-panel-fullscreen" class="call-round fullscreen-button" title="Fullscreen" aria-label="Fullscreen" data-icon="maximize"></button>
+          <button type="button" class="call-round mini-button" title="Hide participants" aria-label="Hide participants" data-icon="users"></button>
+          <button type="button" id="call-panel-end" class="call-round end" title="End call" aria-label="End call" data-icon="phone-off"></button>
+          <button type="button" id="call-panel-join" data-icon="phone">Join call</button>
         </div>
         <!-- Drag up or down to make the banner smaller or bigger (rooms.js). -->
         <div id="call-resize" title="Drag to resize"></div>
@@ -226,7 +226,7 @@
   <!-- The pinned messages of the chat we're in (messages.js, "Pinned messages"). -->
   <dialog id="pins-dialog">
     <header class="pins-top">
-      <h2>📌 Pinned messages</h2>
+      <h2 data-icon="pin">Pinned messages</h2>
       <button type="button" id="pins-close" title="Close" aria-label="Close">×</button>
     </header>
     <p id="pins-empty" class="pins-empty" hidden></p>
@@ -236,7 +236,7 @@
   <!-- Search (messages.js, "Search"): words, where (this chat or everywhere) and from whom. -->
   <dialog id="search-dialog">
     <header class="pins-top">
-      <h2>🔍 Search</h2>
+      <h2 data-icon="search">Search</h2>
       <button type="button" id="search-close" title="Close" aria-label="Close">×</button>
     </header>
     <form id="search-form">
@@ -343,8 +343,8 @@
         <button type="button" id="me-open-call">Open call</button>
       </section>
       <div class="me-menu">
-        <button type="button" id="me-edit-profile">✏️ Edit profile</button>
-        <button type="button" id="logout">↪️ Log out</button>
+        <button type="button" id="me-edit-profile" data-icon="pencil">Edit profile</button>
+        <button type="button" id="logout" data-icon="log-out">Log out</button>
       </div>
     </div>
   </dialog>
@@ -735,11 +735,11 @@
           <div id="feedback-kinds">
             <label class="checkbox">
               <input type="radio" name="feedback-kind" value="bug" checked>
-              🐛 Report a bug
+              <span data-icon="bug">Report a bug</span>
             </label>
             <label class="checkbox">
               <input type="radio" name="feedback-kind" value="idea">
-              💡 Suggest an idea
+              <span data-icon="lightbulb">Suggest an idea</span>
             </label>
           </div>
           <label>
@@ -926,7 +926,7 @@
     <div id="incoming-call-avatar"></div>
     <p><strong id="incoming-call-name"></strong> is calling…</p>
     <div class="incoming-call-buttons">
-      <button type="button" id="call-accept">📞 Accept</button>
+      <button type="button" id="call-accept" data-icon="phone">Accept</button>
       <button type="button" id="call-decline">Decline</button>
     </div>
   </dialog>
@@ -990,6 +990,8 @@
        messages.js needs it as soon as the first messages arrive. -->
   <script src="/katex-0.18.9/katex.min.js"></script>
   <!-- The chat's own scripts, in this order (see static/js/). -->
+  <script src="/static/js/icon-shapes.js"></script>
+  <script src="/static/js/icons.js"></script>
   <script src="/static/js/core.js"></script>
   <script src="/static/js/notifications.js"></script>
   <script src="/static/js/ui.js"></script>

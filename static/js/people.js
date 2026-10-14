@@ -109,13 +109,20 @@ function makeBotBadge() {
 }
 
 // What someone is doing (the Windows app sees it, settings.js "Activity"; the server sends it in
-// "users"): "🎮 Playing Hollow Knight", "🎵 Listening to Song by Artist", "🖥️ Using Visual Studio Code".
+// "users"): "Playing Hollow Knight", "Listening to Song by Artist", "Using Visual Studio Code".
 function activityText(activity) {
-  if (activity.kind === "playing") return "🎮 Playing " + activity.name;
+  if (activity.kind === "playing") return "Playing " + activity.name;
   if (activity.kind === "listening") {
-    return "🎵 Listening to " + activity.name + (activity.details ? " by " + activity.details : "");
+    return "Listening to " + activity.name + (activity.details ? " by " + activity.details : "");
   }
-  return "🖥️ Using " + activity.name;
+  return "Using " + activity.name;
+}
+
+// Fill an element with it: its icon (a gamepad, a note, a screen), then the words (`more`: " · for 23 min").
+const ACTIVITY_ICONS = { playing: "gamepad-2", listening: "music", using: "monitor" };
+function showActivity(element, activity, more = "") {
+  element.textContent = activityText(activity) + more;
+  setIcon(element, ACTIVITY_ICONS[activity.kind] ?? "monitor");
 }
 
 // How long it's been going on, from "since" (seconds): "for 23 min", "for 2 h 5 min".
@@ -150,7 +157,8 @@ function makePerson(user) {
   if (user.activity || user.status) {
     const status = document.createElement("span");
     status.className = "person-status";
-    status.textContent = user.activity ? activityText(user.activity) : user.status;
+    if (user.activity) showActivity(status, user.activity);
+    else status.textContent = user.status;
     text.appendChild(status);
   }
   row.appendChild(text);
@@ -622,7 +630,7 @@ function makeGroupRow(group) {
   picture.className = "person-picture";
   const circle = document.createElement("div");
   circle.className = "avatar small letter group-avatar";
-  circle.textContent = "👥";
+  circle.appendChild(makeIcon("users"));
   picture.appendChild(circle);
   row.appendChild(picture);
   const text = document.createElement("span");
@@ -808,7 +816,7 @@ function renderProfile(userId) {
   profileStatus.textContent = person.status || "";
   const profileActivity = document.getElementById("profile-activity");
   profileActivity.hidden = !person.activity;
-  if (person.activity) profileActivity.textContent = `${activityText(person.activity)} · ${activityDuration(person.activity)}`;
+  if (person.activity) showActivity(profileActivity, person.activity, " · " + activityDuration(person.activity));
   profileBio.textContent = person.bio || "";
   profileActionStatus.textContent = "";
   // Message / Add friend / Accept / ... (nothing on your own profile).
@@ -850,9 +858,11 @@ function renderUserPanel() {
   if (me && season) addSeasonBadge();
   userPanelMe.dataset.userMenu = myId;  // (right-click: Profile, Edit profile)
   userMuteButton.classList.toggle("off", micMuted);
+  setIcon(userMuteButton, micMuted ? "mic-off" : "mic");
   userMuteButton.title = micMuted ? "Unmute" : "Mute";
   userMuteButton.setAttribute("aria-label", userMuteButton.title);
   userDeafenButton.classList.toggle("off", deafened);
+  setIcon(userDeafenButton, deafened ? "headphone-off" : "headphones");
   userDeafenButton.title = deafened ? "Undeafen" : "Deafen";
   userDeafenButton.setAttribute("aria-label", userDeafenButton.title);
   if (mePopup.open) renderMePopup();
@@ -917,8 +927,9 @@ function renderMePopup() {
   document.getElementById("me-name").textContent = me.name;
   document.getElementById("me-status").textContent = me.status || "";
   // (Empty while there's none, or while we're Invisible: then the others don't see it either.)
-  document.getElementById("me-activity").textContent =
-    me.activity ? `${activityText(me.activity)} · ${activityDuration(me.activity)}` : "";
+  const meActivity = document.getElementById("me-activity");
+  meActivity.textContent = "";
+  if (me.activity) showActivity(meActivity, me.activity, " · " + activityDuration(me.activity));
   renderPresencePicker();
 
   // In voice: where ("Lounge", "@alex") and the pictures of who's there (the server's lists:

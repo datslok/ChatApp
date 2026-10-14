@@ -1754,19 +1754,9 @@ body.mini-hidden :fullscreen .tile-strip {
   right: calc(50% - 13px);  /* (next to the ⚙️ in the middle of the wide button) */
 }
 
-/* Next to someone in voice. Deafened: the 🎧 with a red line through it. */
-.voice-state.deafened {
-  position: relative;
-}
-.voice-state.deafened::after {
-  content: "";
-  position: absolute;
-  left: -1px;
-  right: -1px;
-  top: 50%;
-  height: 2px;
-  background: var(--red);
-  transform: rotate(-45deg);  /* a diagonal stroke */
+/* Next to someone in voice: a crossed-out microphone (muted) or headphones (deafened), in red. */
+.voice-state {
+  color: var(--red);
 }
 
 /* Your own popup, above the panel (people.js sets left and bottom), like the connection popup. */
@@ -3922,6 +3912,25 @@ button.download-button {
 .smiley-icon .eye {
   fill: currentColor;
   stroke: none;
+}
+
+/* Every other icon (icons.js; Lucide's shapes): drawn the same way as the smiley, lines in the text's
+   colour, so they follow the theme, hover colours and the red of a muted microphone. About the size of
+   the emoji they replaced; lowered a little so they sit on a line of text like a letter. */
+.icon {
+  width: 1.2em;
+  height: 1.2em;
+  flex-shrink: 0;  /* never squeezed in a row that's short of room */
+  vertical-align: -0.25em;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+/* An icon with words after it ("[icon] Join call"): a little room in between. */
+.has-label > .icon {
+  margin-right: 0.4em;
 }
 #chat-form #compose-emoji {
   color: var(--text-muted);  /* quieter until pointed at */

@@ -38,7 +38,7 @@ the point is for me to understand how it works, not just to have it done.
 - `server.py`: FastAPI app. Serves the page and the `/ws` WebSocket endpoint that broadcasts messages.
 - `static/index.html`: the chat page's markup. Its styles are in `static/css/chat.css`, its script in
   `static/js/`: plain scripts (not ES modules) sharing one global scope, loaded in this order:
-  `core.js` (elements, connecting, server messages, channels, sidebar), `notifications.js` (and every
+  `icon-shapes.js` and `icons.js` (the line icons, see "Icons"), `core.js` (elements, connecting, server messages, channels, sidebar), `notifications.js` (and every
   generated sound), `ui.js` (drawers, back button, popups, text box, emoji autocomplete), `voice.js`
   (audio engine, mic, gate, volumes, who's in voice), `video.js` (camera, screen sharing), `rooms.js`
   (joining/leaving, DM calls, call banner, Lounge page), `voice-settings.js`, `settings.js`,
@@ -104,6 +104,13 @@ the point is for me to understand how it works, not just to have it done.
   (`/seasonal/<name>`, logged-in only, only names from SEASONS). The videos are git-ignored, copied to the server
   with `scripts/seasonal-upload.ps1`, and in backup.ps1/export/import/backup-fetch. Halloween's is "SpOwOky OwOky
   Pumpkin Song", Christmas's "padowo padowo" (the user's own copies in `external/`). The panel's own picture is 32px (24 elsewhere).
+- Icons (since 2026-10-14): the page's buttons use line icons, not emoji. `static/js/icon-shapes.js` holds Lucide's
+  shapes (lucide-static 1.48.0, ISC; written by `tools/make_icons.py`, which downloads the npm tarball, checks npm's
+  integrity hash and copies the icons in its ICONS list: add a name there and rerun); `static/js/icons.js` (loaded
+  before core.js) has `makeIcon(name)`, `setIcon(element, name)` (replaces its icon; "has-label" when there are words)
+  and fills every `data-icon="name"` in index.html at load. `.icon` in chat.css: 1.2em, stroke currentColor 1.8.
+  Toggles swap icons (mic/mic-off, headphones/headphone-off, bell/bell-off, maximize/minimize). Emoji stay in
+  OS notifications, server notes, What's new and anything people write. The smiley (`makeSmileyIcon`) is our own.
 - `static/emoji.json`: every emoji for the reaction picker (and the server's list of allowed reactions),
   made from Unicode's `emoji-test.txt` by `tools/make_emoji_json.py`. The page only offers the ones the
   device can draw (messages.js `makeEmojiTester`: drawn on a canvas in black and in white, a colour emoji
