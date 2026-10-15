@@ -274,6 +274,33 @@
       color: var(--muted);
     }
 
+    /* "Get the apps": a card per app, like the feature cards, side by side (one under the other on a
+       phone), with its button at the bottom. */
+    .apps {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr));
+      gap: 16px;
+      max-width: 760px;
+      margin: 0 auto;
+    }
+    .app-card {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .app-card .needs {
+      font-size: 0.9rem;
+      color: #949ba4;
+    }
+    .app-card .button {
+      align-self: flex-start;
+      margin-top: auto;  /* (at the bottom, also when the other card's text is longer) */
+    }
+    .apps-other {
+      margin: 20px 0 0;
+      color: var(--muted);
+      text-align: center;
+    }
     footer {
       padding: 24px 0 40px;
       font-size: 0.9rem;
@@ -311,7 +338,8 @@
       <p class="tagline">A lightweight app for chatting, inspired by Discord, that you can host yourself.</p>
       <div class="actions">
         <a class="button" href="{{CHAT}}">Open ChatApp</a>
-        <a class="button grey windows-app-link" href="{{CHAT}}/download" data-android="⬇ Get the Android app">⬇ Get the Windows app</a>
+        <a class="button grey" data-app="windows" href="{{CHAT}}/download#windows">⬇ Windows app</a>
+        <a class="button grey" data-app="android" href="{{CHAT}}/download#android">⬇ Android app</a>
       </div>
       <p class="register" id="register-line">New here? Ask someone in the chat for an invite link, and open it to make your account.</p>
       <img class="screenshot" src="/landing/screenshot.png" alt="ChatApp: channels on the left, messages in the middle, who's online on the right">
@@ -347,11 +375,36 @@
             <p>For DMs and mentions, with sounds and unread counts, and muting for when you need quiet.</p>
           </div>
           <div class="feature">
-            <span class="icon">💻</span>
-            <h3>Windows app</h3>
-            <p>Real Windows notifications and automatic updates. Or just use it in your browser, on your phone too.</p>
+            <span class="icon">📲</span>
+            <h3>Apps</h3>
+            <p>For Windows and Android, with real notifications, and they keep themselves up to date. Or just use it in your browser.</p>
           </div>
         </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <h2>Get the apps</h2>
+        <div class="apps">
+          <div class="feature app-card" data-app="windows">
+            <span class="icon">💻</span>
+            <h3>Windows</h3>
+            <p>Real Windows notifications, push to talk that works in games too, shows what you're playing,
+              starts with Windows and keeps itself up to date.</p>
+            <p class="needs">Windows 10 and 11</p>
+            <a class="button" href="{{CHAT}}/download#windows">Download for Windows</a>
+          </div>
+          <div class="feature app-card" data-app="android">
+            <span class="icon">📱</span>
+            <h3>Android</h3>
+            <p>Notifications for DMs and mentions, calls that ring with the phone locked and keep going in
+              your pocket, and it keeps itself up to date.</p>
+            <p class="needs">Android 7 and newer</p>
+            <a class="button" href="{{CHAT}}/download#android">Download for Android</a>
+          </div>
+        </div>
+        <p class="apps-other">Or just use ChatApp in your browser. On an iPhone: Safari → Share → Add to Home Screen.</p>
       </div>
     </section>
 
@@ -371,18 +424,17 @@
   <footer>
     Cat icon by Niamh Hannon ·
     <a href="{{CHAT}}/login">Log in</a> ·
-    <span class="windows-app-link"><a href="{{CHAT}}/download">Download</a> ·</span>
+    <span data-app="any"><a href="{{CHAT}}/download">Download</a> ·</span>
     <a href="https://github.com/datslok/ChatApp">GitHub</a>
   </footer>
   <script>
-    // Phones can't run the Windows app. Android phones get the Android app instead (a link with
-    // data-android says so; /download shows Android's on Android); iPhones, which have none, get nothing.
-    if (/Android/.test(navigator.userAgent)) {
-      for (const element of document.querySelectorAll(".windows-app-link[data-android]")) {
-        element.textContent = element.dataset.android;
-      }
-    } else if (/iPhone|iPad/.test(navigator.userAgent)) {
-      for (const element of document.querySelectorAll(".windows-app-link")) element.remove();
+    // Which apps to offer (everything with data-app="windows", "android" or "any"): both on a computer,
+    // only Android's on an Android phone (it can't run the Windows app), none on an iPhone (there is none:
+    // the line under the cards says how to add the chat to the home screen instead).
+    const onAndroid = /Android/.test(navigator.userAgent);
+    const onIPhone = /iPhone|iPad/.test(navigator.userAgent);
+    for (const element of document.querySelectorAll("[data-app]")) {
+      if (onIPhone || (onAndroid && element.dataset.app === "windows")) element.remove();
     }
 
     // Logged in to the chat in this browser? Then show who, and "Log out" instead of "Log in".
