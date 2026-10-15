@@ -1,7 +1,10 @@
 // Drawing a message the web page's way: its formatted text (format.js's tree), custom emoji as
 // pictures, link preview cards and attachments. The sizes and colours are chat.css's.
-import { useState } from 'react';
+import { useEventListener } from 'expo';
+import { useVideoPlayer, VideoView } from 'expo-video';
+import { useMemo, useRef, useState } from 'react';
 import { Alert, Image, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { getCookie } from '../modules/cookies';
 import ImageViewer from './ImageViewer';
 import Icon from './Icon';
 import MathView from './MathView';
@@ -264,11 +267,13 @@ export function FittedImage({ uri, maxWidth, maxHeight, style, onPress, onLongPr
 
 // ----- What comes after the text
 
-// An attached file: a picture is shown (at most 400 x 300) and a tap opens it full screen; any other
-// file shows its name and size, and a tap downloads it. sender: who sent it (their name), or null for us.
-// onLongPress: the message's menu (a tap target inside the message would otherwise take the touch).
+// An attached file: a picture is shown (at most 400 x 300) and a tap opens it full screen; a video gets
+// a player; any other file shows its name and size, and a tap downloads it. sender: who sent it (their
+// name), or null for us. onLongPress: the message's menu (a tap target inside the message would
+// otherwise take the touch).
 export function Attachment({ file, sender, onLongPress }) {
   const [viewing, setViewing] = useState(false);
+  if (file.video) return <VideoAttachment file={file} sender={sender} onLongPress={onLongPress} />;
   if (file.image) {
     return (
       <>
@@ -281,6 +286,66 @@ export function Attachment({ file, sender, onLongPress }) {
     );
   }
   return <FileAttachment file={file} sender={sender} onLongPress={onLongPress} />;
+}
+
+// A video: its first picture as big as a picture may be (at most 400 x 300) with a play button on it,
+// and the download link under it. A tap plays it full screen, with Android's own controls (pause,
+// the time bar); back or the button there returns, and pauses it. (Phone reason for not copying the
+// web page's player in the message: the message's long-press Pressable takes the touches, so the
+// player's own controls never got them; full screen is a window of its own, outside the list.)
+// expo-video's player (Android's ExoPlayer) downloads with its own HTTP client, which doesn't send
+// React Native's login cookie, so we give it the cookie as a header (modules/cookies). It fetches the
+// video in pieces as it plays; until play is pressed, only enough for the first picture.
+function VideoAttachment({ file, sender, onLongPress }) {
+  // useMemo: the same source object at every redraw (a new one would make a new player).
+  const source = useMemo(() => {
+    const cookie = getCookie(SERVER);
+    return { uri: `${SERVER}/uploads/${encodeURIComponent(file.id)}`, headers: cookie ? { Cookie: cookie } : undefined };
+  }, [file.id]);
+  const player = useVideoPlayer(source);  // one player per video message; it doesn't play by itself
+  const view = useRef(null);  // the VideoView itself, for enterFullscreen()
+  const [natural, setNatural] = useState(null);  // the video's own {width, height}, once it has loaded
+  const [room, setRoom] = useState(400);          // how wide it may be here
+  useEventListener(player, 'sourceLoad', ({ availableVideoTracks }) => {
+    const size = availableVideoTracks[0]?.size;
+    if (size?.width && size?.height) setNatural(size);
+  });
+  // Until we know the video's shape, a 16:9 box (most videos are).
+  const width = Math.min(room, 400);
+  let size = { width, height: Math.min(300, (width * 9) / 16) };
+  if (natural) {
+    const scale = Math.min(width / natural.width, 300 / natural.height);
+    size = { width: natural.width * scale, height: natural.height * scale };
+  }
+  return (
+    <View>
+      <View style={styles.fitted} onLayout={(event) => setRoom(event.nativeEvent.layout.width)}>
+        <View>
+          <VideoView
+            ref={view} player={player} style={[size, styles.attachmentImage, styles.video]}
+            nativeControls={false} contentFit="contain" fullscreenOptions={{ enable: true }}
+            onFullscreenExit={() => player.pause()}
+          />
+          {/* A see-through button over the whole video, with the play button in its middle. It has to lie
+              on top: Android's video view took taps on it for itself, so a Pressable around it never
+              heard of them. */}
+          <Pressable
+            style={[styles.videoCover, size]}
+            onPress={() => {
+              view.current?.enterFullscreen();
+              player.play();
+            }}
+            onLongPress={onLongPress}
+          >
+            <View style={styles.playButton}>
+              <Icon name="play" size={28} color="#ffffff" />
+            </View>
+          </Pressable>
+        </View>
+      </View>
+      <FileAttachment file={file} sender={sender} onLongPress={onLongPress} />
+    </View>
+  );
 }
 
 // A file that isn't a picture. Like the desktop app: a tap asks first ("Download this file?", with a
@@ -326,7 +391,7 @@ function FileAttachment({ file, sender, onLongPress }) {
   return (
     <Pressable onPress={ask} onLongPress={onLongPress} style={({ pressed }) => [styles.attachmentFile, pressed && styles.attachmentPressed]}>
       <View style={styles.attachmentRow}>
-        <Icon name="file" size={16} color={colors.link} />
+        <Icon name={file.video ? 'video' : 'file'} size={16} color={colors.link} />
         <Text style={styles.attachmentName}>{file.filename} ({formatSize(file.size)})</Text>
       </View>
       {progress !== null ? (
@@ -390,6 +455,13 @@ const styles = StyleSheet.create({
   wrapped: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center' },
   lineBreak: { width: '100%', height: 0 },
   attachmentImage: { marginTop: 4, borderRadius: 8 },
+  video: { backgroundColor: colors.bgDarkest, overflow: 'hidden' },  // dark until the first picture shows
+  // Over the video (marginTop: the video's own 4), the play button centred in it.
+  videoCover: { position: 'absolute', top: 4, left: 0, alignItems: 'center', justifyContent: 'center' },
+  playButton: {
+    width: 56, height: 56, borderRadius: 28, paddingLeft: 4,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)', alignItems: 'center', justifyContent: 'center',
+  },
   // .attachment-file: a box on the panel colour, the name in the link colour.
   attachmentFile: {
     alignSelf: 'flex-start', marginTop: 4, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8,

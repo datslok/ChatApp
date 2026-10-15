@@ -3260,6 +3260,16 @@ button.download-button {
   border-radius: 8px;
 }
 
+/* A video (messages.js, makeVideo): the browser's player, as big as a picture may be, with its
+   download link under it. A block, so the link starts on the next line. */
+.attachment-video video {
+  display: block;
+  max-width: min(400px, 100%);
+  max-height: 300px;
+  margin-top: 4px;
+  border-radius: 8px;
+}
+
 /* A link's preview (messages.js, makePreviewCard): a card with a bar on the left, like Discord's. */
 .link-preview {
   display: flex;

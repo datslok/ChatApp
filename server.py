@@ -120,6 +120,23 @@ MAX_FILENAME_LENGTH = 200
 # Only these are shown in the page. They're pure pictures and can't contain scripts.
 # Everything else (including SVG, which can) is only ever offered as a download.
 IMAGE_TYPES = {"image/png", "image/jpeg", "image/gif", "image/webp"}
+# Videos are played in the page too: the two formats every browser plays. Like pictures they can't run
+# scripts, and we only believe the type if the file's first bytes say so too (is_video).
+VIDEO_TYPES = {"video/mp4", "video/webm"}
+SHOWN_TYPES = IMAGE_TYPES | VIDEO_TYPES  # served "inline" (shown), not as a download
+
+
+def is_video(path, content_type):
+    """Does this file really start like a video of that type? Every file format begins with its own
+    few bytes, its "magic number": an MP4 has "ftyp" at byte 4, a WebM starts with 1A 45 DF A3.
+    So a file can't become a "video" just by being called one."""
+    with open(path, "rb") as file:
+        start = file.read(12)
+    if content_type == "video/mp4":
+        return start[4:8] == b"ftyp"
+    if content_type == "video/webm":
+        return start[:4] == b"\x1a\x45\xdf\xa3"
+    return False
 
 # Profiles. The page crops and shrinks pictures before uploading (a profile picture to 256x256,
 # a banner to 960x320: a few KB each), so these limits are only for anyone uploading around the page.
@@ -699,6 +716,25 @@ def add_bots_to_groups():
 add_bots_to_groups()
 
 
+def mark_old_videos():
+    """Videos sent before the page could play them were stored as plain downloads. At every start:
+    those with a video's name whose first bytes say so too become videos. (Only looks at .mp4 and
+    .webm downloads, so after the first time there's next to nothing to check.)"""
+    rows = db.execute(
+        "SELECT id, filename FROM attachments WHERE content_type = 'application/octet-stream'"
+        " AND (LOWER(filename) LIKE '%.mp4' OR LOWER(filename) LIKE '%.webm')"
+    ).fetchall()
+    for file_id, filename in rows:
+        content_type = "video/webm" if filename.lower().endswith(".webm") else "video/mp4"
+        path = UPLOAD_DIR / file_id
+        if path.exists() and is_video(path, content_type):
+            with db:
+                db.execute("UPDATE attachments SET content_type = ? WHERE id = ?", (content_type, file_id))
+
+
+mark_old_videos()
+
+
 def is_admin(user_id):
     """Checked fresh from the database every time, so tools/make_admin.py works straight away."""
     row = db.execute("SELECT is_admin FROM users WHERE id = ?", (user_id,)).fetchone()
@@ -736,7 +772,8 @@ def save_message(channel, user_id, text, file, reply_to, kind=None):
 
 def file_info(attachment_id, filename, size, content_type):
     """What the page needs to know about an attachment."""
-    return {"id": attachment_id, "filename": filename, "size": size, "image": content_type in IMAGE_TYPES}
+    return {"id": attachment_id, "filename": filename, "size": size,
+            "image": content_type in IMAGE_TYPES, "video": content_type in VIDEO_TYPES}
 
 
 REPLY_PREVIEW_LENGTH = 100
@@ -1956,16 +1993,19 @@ async def upload(request: Request, filename: str):
         raise HTTPException(401, "You're not logged in.")
 
     filename = filename.strip()[:MAX_FILENAME_LENGTH] or "file"
-    # The browser says what type the file is. We only believe it for our safe image types;
-    # anything else is stored as a generic download type.
+    # The browser says what type the file is. We only believe it for our safe picture and video types
+    # (a video also has to start like one, checked below); anything else is stored as a generic
+    # download type.
     content_type = request.headers.get("content-type", "")
-    if content_type not in IMAGE_TYPES:
+    if content_type not in SHOWN_TYPES:
         content_type = "application/octet-stream"
 
     # On disk the file gets a random name, never the one the user gave
     # (a name like "../../server.py" could otherwise overwrite our own files).
     file_id = secrets.token_urlsafe(16)
     size = await receive_file(request, UPLOAD_DIR / file_id, MAX_UPLOAD_SIZE)
+    if content_type in VIDEO_TYPES and not is_video(UPLOAD_DIR / file_id, content_type):
+        content_type = "application/octet-stream"
 
     with db:
         db.execute(
@@ -2016,8 +2056,10 @@ async def get_upload(request: Request, file_id: str):
         UPLOAD_DIR / file_id,  # safe: file_id was found in our own table above
         media_type=content_type,
         filename=filename,
-        # Images are shown in the page; everything else is downloaded, never opened on our site.
-        content_disposition_type="inline" if content_type in IMAGE_TYPES else "attachment",
+        # Pictures and videos are shown in the page; everything else is downloaded, never opened on our
+        # site. (A video player asks for a piece at a time, "bytes=1000000-": FileResponse answers
+        # those "range requests" by itself, so skipping ahead works.)
+        content_disposition_type="inline" if content_type in SHOWN_TYPES else "attachment",
         # Tell the browser to trust our type and never guess (so a fake "image" can't act as a page).
         headers={"X-Content-Type-Options": "nosniff"},
     )

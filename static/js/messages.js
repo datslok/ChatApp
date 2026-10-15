@@ -260,42 +260,64 @@ function formatSize(bytes) {
   return (bytes / (1024 * 1024)).toFixed(1) + " MB";
 }
 
-// The element showing an attached file: the picture itself, or a download link.
+// The element showing an attached file: the picture itself, a video player, or a download link.
 // message: the message it's in (who sent it, for "Download this file?").
 function makeAttachment(file, message) {
   const url = "/uploads/" + encodeURIComponent(file.id);
+  if (file.video) return makeVideo(url, file, message);
+  if (!file.image) return makeFileLink(url, file, message);
+
   const link = document.createElement("a");
   link.href = url;
+  link.className = "attachment-image-link";  // only as wide as the picture (chat.css)
+  // A normal click opens the popup instead of following the link. Middle-click or
+  // right-click > "Open in new tab" still work, since they don't fire "click".
+  link.target = "_blank";
+  link.rel = "noopener";  // a new tab gets no access back to ours
+  link.addEventListener("click", (event) => {
+    event.preventDefault();
+    openImage(url, file.filename);
+  });
+  const img = document.createElement("img");
+  img.className = "attachment-image";
+  img.src = url;
+  img.alt = file.filename;
+  link.appendChild(img);
+  return link;
+}
 
-  if (file.image) {
-    link.className = "attachment-image-link";  // only as wide as the picture (chat.css)
-    // A normal click opens the popup instead of following the link. Middle-click or
-    // right-click > "Open in new tab" still work, since they don't fire "click".
-    link.target = "_blank";
-    link.rel = "noopener";  // a new tab gets no access back to ours
+// A file to download: its name and size, as a link.
+function makeFileLink(url, file, message) {
+  const link = document.createElement("a");
+  link.href = url;
+  link.className = "attachment-file";
+  link.textContent = `${file.filename} (${formatSize(file.size)})`;
+  setIcon(link, file.video ? "video" : "file");
+  // In the desktop app a plain download happens silently, so the page asks first, then downloads
+  // it itself and shows how far along it is. (Browsers have their own: there, a normal link.)
+  if (inDesktopApp) {
     link.addEventListener("click", (event) => {
       event.preventDefault();
-      openImage(url, file.filename);
+      askToDownload(link, url, file, message);
     });
-    const img = document.createElement("img");
-    img.className = "attachment-image";
-    img.src = url;
-    img.alt = file.filename;
-    link.appendChild(img);
-  } else {
-    link.className = "attachment-file";
-    link.textContent = `${file.filename} (${formatSize(file.size)})`;
-    setIcon(link, "file");
-    // In the desktop app a plain download happens silently, so the page asks first, then downloads
-    // it itself and shows how far along it is. (Browsers have their own: there, a normal link.)
-    if (inDesktopApp) {
-      link.addEventListener("click", (event) => {
-        event.preventDefault();
-        askToDownload(link, url, file, message);
-      });
-    }
   }
   return link;
+}
+
+// A video: the browser's own player (play, pause, skipping, volume, fullscreen), with the download
+// link under it. preload="metadata": until play is pressed, only its size, length and first picture
+// load, not the whole video. The browser fetches the rest in pieces as it plays ("range requests",
+// which the server answers). A format this browser can't play leaves just the link.
+function makeVideo(url, file, message) {
+  const box = document.createElement("div");
+  box.className = "attachment-video";
+  const video = document.createElement("video");
+  video.src = url;
+  video.controls = true;
+  video.preload = "metadata";
+  video.addEventListener("error", () => video.remove());
+  box.append(video, makeFileLink(url, file, message));
+  return box;
 }
 
 // ----- "Download this file?" (desktop app only): one dialog, reused for every file.
@@ -1429,7 +1451,7 @@ function makeMessageCard(message, where = "") {
     const file = document.createElement("div");
     file.className = "card-file";
     file.textContent = message.file.filename;
-    setIcon(file, message.file.image ? "image" : "paperclip");
+    setIcon(file, message.file.image ? "image" : message.file.video ? "video" : "paperclip");
     item.appendChild(file);
   }
 
@@ -1950,10 +1972,11 @@ function showMessage(message, follow = true) {
   // messages up after we've scrolled. So scroll again when it finishes loading:
   // to the bottom, or back to the message we jumped to (a reply or a notification).
   // (Only the attached picture: profile pictures always have the same fixed size.)
+  // A video gets its height once its "metadata" (size and length) has loaded.
   if (wasAtBottom) jumpTarget = null;  // back at the bottom: follow new messages again
-  const img = div.querySelector(".attachment-image, .preview-image");
+  const img = div.querySelector(".attachment-image, .preview-image, .attachment-video video");
   if (img && wasAtBottom) {
-    img.addEventListener("load", () => {
+    img.addEventListener(img.tagName === "VIDEO" ? "loadedmetadata" : "load", () => {
       // (The "New messages" line goes back to the top, like scrollToNewDivider put it.)
       if (jumpTarget) jumpTarget.scrollIntoView({ block: jumpTarget.matches(".new-divider") ? "start" : "center" });
       else messages.scrollTop = messages.scrollHeight;

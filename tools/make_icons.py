@@ -25,7 +25,7 @@ ICONS = [
     "arrow-down", "arrow-up", "ban", "bell", "bell-off", "bug", "camera", "chevron-down",
     "download", "file", "gamepad-2", "headphone-off", "headphones", "image", "lightbulb", "log-out",
     "maximize", "megaphone", "menu", "mic", "mic-off", "minimize", "monitor", "monitor-up", "music",
-    "paperclip", "pencil", "phone", "phone-off", "pin", "plus", "reply", "search", "settings",
+    "paperclip", "pencil", "phone", "phone-off", "pin", "play", "plus", "reply", "search", "settings",
     "share-2", "trash-2", "users", "video", "volume-2", "x",
 ]
 

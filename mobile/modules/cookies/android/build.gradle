@@ -1,0 +1,16 @@
+// How Gradle builds this module: an Android library, with Expo's plugin adding the Expo Modules API.
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'no.datslok.cookies'
+version = '0.1.0'
+
+android {
+  namespace "no.datslok.cookies"
+  defaultConfig {
+    versionCode 1
+    versionName "0.1.0"
+  }
+}

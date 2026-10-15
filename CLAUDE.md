@@ -301,6 +301,15 @@ the point is for me to understand how it works, not just to have it done.
   `POST /feedback/{id}/done`, both admin-only on the server), or with `tools/feedback.py`
   (`--all`, `--done ID`, `--undo ID`, `--db dev.db`).
 - `uploads/`: uploaded files, saved under random names (git-ignored, like `chat.db`).
+  Videos (since 2026-10-15): `VIDEO_TYPES` (video/mp4, video/webm) are believed only if `is_video` finds the format's
+  first bytes ("ftyp" at byte 4; 1A 45 DF A3), served inline like pictures (`SHOWN_TYPES`; FileResponse answers range
+  requests for seeking), `file_info` has `"video"`; `mark_old_videos()` at every start turns earlier .mp4/.webm
+  downloads that pass into videos. Web: messages.js `makeVideo` (<video controls preload="metadata"> + the
+  `makeFileLink` under it; an unplayable format leaves the link). Phone: expo-video (`VideoAttachment` in
+  MessageText.js: the first frame with a play button; a tap `enterFullscreen()`s and plays, leaving pauses; a
+  see-through Pressable lies over the VideoView because the native view swallowed taps, so in-message controls never worked); its player downloads with its own OkHttp client without
+  React Native's cookies, so `mobile/modules/cookies` (Kotlin, CookieManager.getCookie) hands it the login cookie
+  as a header.
 - GIFs (server.py, "GIFs"; messages.js, "GIFs"): the GIF button by the text box opens #gif-picker. `/gifs/search?q=`
   (trending without q) asks GIPHY's API with `GIPHY_API_KEY` (.env; on this PC in the git-ignored `dev-secrets.env`,
   which start.ps1 loads) via `fetch_url`; answers kept an hour in `gif_cache` (the free key: ~100 requests an hour

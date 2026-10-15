@@ -13,7 +13,7 @@
         "Pin a message: hover over it and click 📌. The 📌 at the top of a channel, DM or group lists its pinned messages (up to 100), with Jump and Unpin. Anyone can pin and unpin",
         "@name mentions someone, @everyone mentions everybody: they get a notification and a red count",
         "Type :name for emoji suggestions (↑↓ to choose, Enter or Tab to pick), or use the 😀 button (it only offers emoji your device can draw). Messages with only emoji show them big",
-        "Pictures and files up to 10 MB: the + button, drag and drop, or paste. Up to 10 at once, click a picture to see it big",
+        "Pictures, videos and files up to 10 MB: the + button, drag and drop, or paste. Up to 10 at once, click a picture to see it big. Videos (MP4 and WebM) play right in the chat, with a button for fullscreen",
         "Each chat keeps its own half-written message and files: switch to another chat and back, and they're still waiting there",
         "GIFs: the GIF button next to the text box (on phones: the smiley, then the GIF tab). Type to search (from GIPHY), or pick one of the trending ones, and click one to send it (as a reply, if you're replying). Esc closes it",
         "Links are clickable, and the first link in a message gets a preview card: the site, title, description and picture",
@@ -115,6 +115,7 @@
     {
       "date": "2026-10-15",
       "items": [
+        "🎬 Videos play right in the chat: send an MP4 or WebM (up to 10 MB) and everyone can watch it there, fullscreen too. Videos sent before now play as well",
         "✍️ Each chat keeps its own half-written message and files: what you typed or added in a DM no longer follows you to #general, and it's still there when you come back"
       ]
     },
