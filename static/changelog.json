@@ -123,7 +123,8 @@
         "📎 Files can be up to 50 MB now (it was 10 MB): longer videos fit",
         "📷 Cameras in calls show the whole picture: a phone's upright camera is no longer zoomed in and cut off",
         "🪟 In a call and gone to another chat? The call now floats in a small window in a corner, showing whoever is talking. Click it to go back, drag it to the corner you like",
-        "Alone in the Lounge, your tile sits in the middle instead of on the left"
+        "Alone in the Lounge, your tile sits in the middle instead of on the left",
+        "While the chat loads (opening it, or after a refresh) you see the logo and a loading bar instead of an empty page"
       ]
     },
     {

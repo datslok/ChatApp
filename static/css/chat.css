@@ -219,6 +219,60 @@ body {
   color: var(--text);
 }
 
+/* The loading cover (index.html, #page-loading): the whole window, in the theme's colour, the logo and
+   a sliding bar in the middle, until core.js adds "done": then it fades out and lets clicks through. */
+#page-loading {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;  /* over everything, the call window and the banners too */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: var(--bg-main);
+  color: var(--text);
+  transition: opacity 0.25s;
+}
+#page-loading.done {
+  opacity: 0;
+  pointer-events: none;
+}
+#page-loading img {
+  width: 88px;
+  height: 88px;
+  border-radius: 20px;
+}
+#page-loading p {
+  margin: 4px 0 6px;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+/* A bar that keeps sliding across, like the Windows app's: we can't know how far along it is, only that
+   it's going. */
+.loading-track {
+  position: relative;
+  width: 200px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--bg-darkest);
+  overflow: hidden;
+}
+.loading-bar {
+  width: 40%;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--accent);
+  animation: loading-slide 1.2s ease-in-out infinite;
+}
+/* From just off the left edge to just off the right one, over and over. Moved with transform (in steps
+   of the bar's own width: 2.5 bars = the track), not left: the browser runs a transform animation on its
+   compositor, which keeps going while the page's scripts are still loading (left waited for them). */
+@keyframes loading-slide {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(250%); }
+}
+
 /* Scrollbars, like Discord's. "::-webkit-scrollbar" and friends are pseudo-elements: the parts
    of a scrollbar, which the browser draws, styled like boxes. Chromium (Chrome, Edge, the desktop
    app) and Safari understand them. The scrollbar itself sets the width, the track is the groove

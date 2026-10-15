@@ -17,6 +17,14 @@
   <script src="/static/js/appearance.js"></script>
 </head>
 <body>
+  <!-- Over everything while the chat loads (drawn at once, before any script), like the Windows app's
+       loading window: the logo and a sliding bar. core.js (tellAppReady) fades it out once the chat is
+       filled in, or after 10 seconds. -->
+  <div id="page-loading" aria-label="Loading">
+    <img src="/icons/icon-192.png" alt="">
+    <p>Loading ChatApp…</p>
+    <div class="loading-track"><div class="loading-bar"></div></div>
+  </div>
   <nav id="sidebar">
     <div id="sidebar-lists">
       <button id="friends-button" class="channel" data-channel="friends" data-icon="users">

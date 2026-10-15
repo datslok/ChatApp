@@ -295,7 +295,20 @@ function channelBeforeReload() {
 // reload does nothing; an app from before 0.1.21 doesn't know the command (it showed us at once).
 function tellAppReady() {
   if (inDesktopApp) window.__TAURI_INTERNALS__.invoke("page_ready").catch(() => {});
+  hidePageLoading();
 }
+
+// The loading cover (index.html, #page-loading): fades out once the chat is filled in (above), and after
+// 10 seconds at the latest, so a server that's down shows its "reconnecting" banner instead.
+const pageLoading = document.getElementById("page-loading");
+
+function hidePageLoading() {
+  if (pageLoading.classList.contains("done")) return;
+  pageLoading.classList.add("done");  // (chat.css: fades out in 0.25 s)
+  setTimeout(() => pageLoading.remove(), 300);
+}
+
+setTimeout(hidePageLoading, 10000);
 
 function sendToServer(data) {
   if (socket.readyState !== WebSocket.OPEN) return false;
