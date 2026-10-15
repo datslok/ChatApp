@@ -138,29 +138,30 @@ let friendsKnown = false;      // has the first "friends" list arrived? (after i
 // When a reconnect brings a different one, this page is running old code: reload, so everyone
 // gets fixes without being told to press F5. But not while something would be lost by it: a
 // call (it would drop), files waiting to be sent, a message being sent or edited. Until then,
-// try again every few seconds. The text box survives: saved in sessionStorage (kept by the
-// browser for this tab through a reload) and put back by restoreDraft.
+// try again every few seconds. What's typed survives, in every chat: saved in sessionStorage (kept
+// by the browser for this tab through a reload) and put back by restoreDraft.
 let pageVersion = null;  // the version this page was loaded with
 let outdated = false;    // true once the server has a newer one
 
 function reloadIfOutdated() {
-  if (!outdated || voiceRoomName || tray.length > 0 || sending || editingId !== null) return;
+  if (!outdated || voiceRoomName || anythingInTrays() || sending || editingId !== null) return;
   try {
-    sessionStorage.setItem("draft", input.value);
+    // Every chat's text (messages.js, drafts), the open one's from the text box, as JSON text.
+    sessionStorage.setItem("drafts", JSON.stringify({ ...drafts, [currentChannel]: input.value }));
   } catch {}
   location.reload();
 }
 setInterval(reloadIfOutdated, 5000);
 
-// After a reload: put back what was in the text box.
+// After a reload: put back what was typed in each chat (the first chat that opens shows its own).
 function restoreDraft() {
   try {
-    const draft = sessionStorage.getItem("draft");
+    Object.assign(drafts, JSON.parse(sessionStorage.getItem("drafts") ?? "{}"));
+    sessionStorage.removeItem("drafts");
+    // A page from before chats had their own text saved just the text box's, as "draft".
+    const old = sessionStorage.getItem("draft");
     sessionStorage.removeItem("draft");
-    if (draft) {
-      input.value = draft;
-      autoGrow();  // (ui.js) as tall as the text
-    }
+    if (old) input.value = old;
   } catch {}
 }
 
@@ -575,6 +576,7 @@ function switchChannel(channel, label, fromHistory = false) {
       history.pushState({ channel }, "");
     }
   }
+  switchDraft(currentChannel, channel);  // each chat keeps its own text and tray (messages.js)
   currentChannel = channel;
   setLabel(label);
   unread.delete(channel);  // opening it means we've seen it

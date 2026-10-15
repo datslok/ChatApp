@@ -11,8 +11,32 @@ const MAX_TRAY_FILES = 10;
 const IMAGE_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"];  // same as the server
 
 // Files waiting to be sent: [{file, previewUrl, failed}]. Nothing is uploaded until Enter.
-const tray = [];
+// Each chat has its own tray, and its own half-written text, like Discord: a picture added or words
+// typed in a DM stay there when you open another chat. `trays` and `drafts` hold them by the chat's
+// key; `tray` is the open chat's list (the very same list as in `trays`, not a copy), and the open
+// chat's text is simply what's in the text box.
+const trays = {};
+const drafts = {};
+let tray = [];
 let sending = false;  // true while the tray is being uploaded and sent
+
+// Another chat opens (core.js, switchChannel): put this chat's text away, and bring out the other
+// one's text and tray. `from` is null for the page's first chat: then the text box keeps what's in
+// it (restoreDraft's text after a reload) unless that chat has its own.
+function switchDraft(from, to) {
+  if (from !== null) drafts[from] = input.value;
+  if (from !== null || to in drafts) input.value = drafts[to] ?? "";
+  autoGrow();          // (ui.js) as tall as this chat's text
+  closeAutocomplete();
+  updateCharCount();
+  tray = trays[to] ??= [];  // ??= : "if it has none yet, give it an empty one", then use that
+  renderTray();
+}
+
+// Is anything waiting in any chat's tray? (core.js: don't reload the page then.)
+function anythingInTrays() {
+  return Object.values(trays).some((list) => list.length > 0);
+}
 
 // All three ways of adding files (+ button, drop, paste) end up here.
 function addToTray(files) {
@@ -38,10 +62,10 @@ function addToTray(files) {
   input.focus();  // put the cursor in the text box, ready for a caption or Enter
 }
 
-// Take a file out of the tray, and free its preview's memory.
-function takeFromTray(item) {
+// Take a file out of a tray (the open chat's, unless told which), and free its preview's memory.
+function takeFromTray(item, list = tray) {
   if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
-  tray.splice(tray.indexOf(item), 1);  // splice(position, 1) removes one element there
+  list.splice(list.indexOf(item), 1);  // splice(position, 1) removes one element there
   renderTray();
 }
 
@@ -89,16 +113,21 @@ async function sendTray(caption) {
     return;
   }
   sending = true;
+  // A message goes to the chat that's open when it's sent, so keep track of where we started:
+  // if another chat opens meanwhile, we stop, and the rest wait in their own tray.
+  const list = tray;
+  const channel = currentChannel;
 
-  for (const item of [...tray]) {  // a copy, since we take items out as we go
+  for (const item of [...list]) {  // a copy, since we take items out as we go
     const fileId = await uploadFile(item.file);
+    if (currentChannel !== channel) break;
     const sent = fileId !== null &&
       sendToServer({ type: "message", text: caption, file: fileId, reply_to: replyingTo?.id });
     if (!sent) {
       item.failed = true;  // keep it in the tray, outlined in red
       continue;
     }
-    takeFromTray(item);
+    takeFromTray(item, list);
     clearReply();  // the reply went with this first file
     if (caption) {
       caption = "";      // the caption went with this file, so it's used up
