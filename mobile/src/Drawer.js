@@ -8,9 +8,10 @@
 // even while our JavaScript is busy.
 import { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, Pressable, StyleSheet, useWindowDimensions } from 'react-native';
-import { colors } from './colors';
+import { useStyles } from './theme';
 
 export default function Drawer({ open, side, onClose, children }) {
+  const styles = useStyles(makeStyles);
   const { width } = useWindowDimensions();
   const drawerWidth = Math.min(width * 0.8, 280);
   const closed = useRef(new Animated.Value(open ? 0 : 1)).current;
@@ -54,7 +55,7 @@ export default function Drawer({ open, side, onClose, children }) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors, size) => StyleSheet.create({
   // Over everything: pinned to all four edges.
   backdrop: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: 'rgba(0, 0, 0, 0.5)' },
   fill: { flex: 1 },

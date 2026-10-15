@@ -6,12 +6,14 @@
 import { useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import Icon from './Icon';
-import { colors } from './colors';
+import { useStyles, useTheme } from './theme';
 import { dmKey, groupName } from './chats';
 import { GroupPicture, Person } from './people';
 
 // share: {files, text} (modules/shared-files). onPick(key): a chat was chosen; onCancel: the ×.
 export default function ShareScreen({ connection, share, onPick, onCancel }) {
+  const styles = useStyles(makeStyles);
+  const { colors } = useTheme();
   const { channels, groups, friends, users, roles, me, myPresence } = connection;
   const [query, setQuery] = useState('');
 
@@ -81,29 +83,29 @@ export default function ShareScreen({ connection, share, onPick, onCancel }) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors, size) => StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bgMain },
   topbar: {
     flexDirection: 'row', alignItems: 'center', gap: 4, padding: 4,
     borderBottomWidth: 1, borderBottomColor: colors.border,
   },
   topbarButton: { paddingHorizontal: 12, paddingVertical: 8, minWidth: 46 },
-  title: { flex: 1, fontSize: 16, fontWeight: '600', color: colors.textStrong },
+  title: { flex: 1, fontSize: size(16), fontWeight: '600', color: colors.textStrong },
   inside: { flex: 1, paddingHorizontal: 16, paddingTop: 12 },
-  what: { fontSize: 13.6, color: colors.textMuted, marginBottom: 4 },
+  what: { fontSize: size(13.6), color: colors.textMuted, marginBottom: 4 },
   // The People page's search box.
   search: {
     marginTop: 8, marginBottom: 8, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 6,
-    backgroundColor: colors.bgDarkest, color: colors.text, fontSize: 16,
+    backgroundColor: colors.bgDarkest, color: colors.text, fontSize: size(16),
   },
   // The sidebar's headings and rows.
   heading: {
-    color: colors.textMuted, fontSize: 12, fontWeight: '600', textTransform: 'uppercase',
+    color: colors.textMuted, fontSize: size(12), fontWeight: '600', textTransform: 'uppercase',
     marginTop: 16, marginBottom: 8, paddingHorizontal: 12,
   },
   row: { flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: 6 },
   pressed: { backgroundColor: colors.bgHover },
-  rowText: { flex: 1, color: colors.text, fontSize: 16 },
+  rowText: { flex: 1, color: colors.text, fontSize: size(16) },
   person: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 },
-  empty: { marginVertical: 4, marginHorizontal: 12, fontSize: 13.6, color: colors.textMuted },
+  empty: { marginVertical: 4, marginHorizontal: 12, fontSize: size(13.6), color: colors.textMuted },
 });

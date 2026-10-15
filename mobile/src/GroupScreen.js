@@ -6,11 +6,11 @@
 import { useRef, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import Icon from './Icon';
-import { DialogButton, DialogButtons, Popup, styles as popupStyles, useFocusSoon } from './MessageCard';
+import { DialogButton, DialogButtons, Popup, makeStyles as makePopupStyles, useFocusSoon } from './MessageCard';
 import { Sheet, SheetItem, SheetLine } from './Sheet';
 import { postJson } from './api';
 import { groupName, groupPeople } from './chats';
-import { colors } from './colors';
+import { useStyles, useTheme } from './theme';
 import { Person } from './people';
 
 const MAX_GROUP_SIZE = 10;  // as the server's
@@ -18,6 +18,7 @@ const MAX_NAME = 30;        // (the web page's maxlength; the server's MAX_CHANN
 
 // A checkbox: a rounded square, filled with a tick when ticked.
 function Checkbox({ checked }) {
+  const styles = useStyles(makeStyles);
   return (
     <View style={[styles.box, checked && styles.boxChecked]}>
       {checked ? <Icon name="check" size={14} color="#ffffff" /> : null}
@@ -28,6 +29,9 @@ function Checkbox({ checked }) {
 // groupKey: null starts a new group, a key adds people to that one. onCreated(key): the new group
 // is made (App.js opens it).
 export function GroupDialog({ connection, groupKey, onCreated, onClose }) {
+  const popupStyles = useStyles(makePopupStyles);
+  const styles = useStyles(makeStyles);
+  const { colors } = useTheme();
   const { users, roles, me, myPresence, friends, groups } = connection;
   const group = groups.find((g) => g.key === groupKey);
   const members = group ? groupPeople(group, users) : [me.id];
@@ -130,6 +134,9 @@ export function GroupDialog({ connection, groupKey, onCreated, onClose }) {
 
 // Renaming (the web page asks with the browser's prompt(); Android has no such box, so a small popup).
 export function RenameDialog({ connection, groupKey, onClose }) {
+  const popupStyles = useStyles(makePopupStyles);
+  const styles = useStyles(makeStyles);
+  const { colors } = useTheme();
   const group = connection.groups.find((g) => g.key === groupKey);
   const [name, setName] = useState(group?.name ?? '');
   const [problem, setProblem] = useState('');
@@ -210,10 +217,10 @@ export function GroupMenu({ connection, groupKey, onAdd, onRename, onClose }) {
 }
 
 // chat.css's #group-dialog.
-const styles = StyleSheet.create({
+const makeStyles = (colors, size) => StyleSheet.create({
   gap: { gap: 10 },  // #group-form: 10px between its parts
   list: { flexGrow: 0, flexShrink: 1, marginTop: 10 },
-  empty: { fontSize: 14.4, color: colors.textMuted, paddingVertical: 6 },
+  empty: { fontSize: size(14.4), color: colors.textMuted, paddingVertical: 6 },
   // .group-choice: the box and the person, padding 6px 8px.
   choice: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6, paddingHorizontal: 8, borderRadius: 6 },
   pressed: { backgroundColor: colors.bgHover },
@@ -225,7 +232,7 @@ const styles = StyleSheet.create({
   boxChecked: { backgroundColor: colors.accent, borderColor: colors.accent },
   // #group-name-row: the label (0.85rem, soft) over its box (padding 10px 12px, 1rem).
   nameRow: { gap: 6, marginTop: 10 },
-  label: { fontSize: 13.6, color: colors.textSoft },
-  nameInput: { paddingVertical: 10, paddingHorizontal: 12, fontSize: 16 },
+  label: { fontSize: size(13.6), color: colors.textSoft },
+  nameInput: { paddingVertical: 10, paddingHorizontal: 12, fontSize: size(16) },
   problem: { marginTop: 10 },
 });

@@ -2,7 +2,7 @@
 // the chat's name, the member list), the chat under it, and two drawers that slide over it: the
 // channels on the left, the chat's members on the right.
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, BackHandler, KeyboardAvoidingView, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { ChatButtons, ChatTitle } from './src/ChatHeader';
@@ -16,11 +16,12 @@ import MeScreen from './src/MeScreen';
 import Members from './src/Members';
 import PeopleScreen from './src/PeopleScreen';
 import ProfileScreen from './src/ProfileScreen';
+import SettingsScreen from './src/SettingsScreen';
 import ShareScreen from './src/ShareScreen';
 import Sidebar from './src/Sidebar';
 import UserMenu from './src/UserMenu';
 import { dmPartner } from './src/chats';
-import { colors } from './src/colors';
+import { ThemeContext, loadAppearance, makeTheme, saveAppearance, useStyles, useTheme } from './src/theme';
 import { useConnection } from './src/connection';
 import { clearOldCopies } from './src/files';
 import { addShareListener, getInitialShare } from './modules/shared-files';
@@ -30,6 +31,8 @@ const PEOPLE = 'people';  // the People page's name among the chats' keys (like 
 // share: something shared to the app from another one, waiting for "Share to…" (or null);
 // onShareDone: it's been dealt with (sent to a chat or cancelled).
 function Main({ connection, share, onShareDone }) {
+  const styles = useStyles(makeStyles);
+  const { colors } = useTheme();
   const { channels, unread, mentions, incoming } = connection;
   const [view, setView] = useState(null);      // the chat on screen (its key), or PEOPLE
   const [drawer, setDrawer] = useState(null);  // the open drawer: "left", "right" or null
@@ -38,7 +41,8 @@ function Main({ connection, share, onShareDone }) {
   const [popup, setPopup] = useState(null);
   // The popup or menu about people and groups that's open, drawn over everything here (each closes
   // itself with onClose): {type: "profile" or "userMenu", id}, {type: "me"}, {type: "group", key}
-  // (key null: a new group), {type: "rename" or "groupMenu", key}, {type: "invites"}; or null.
+  // (key null: a new group), {type: "rename" or "groupMenu", key}, {type: "invites"},
+  // {type: "settings", page} (page null: the tab from last time); or null.
   const [dialog, setDialog] = useState(null);
   const closeDialog = () => setDialog(null);
   const [focusTick, setFocusTick] = useState(0);  // a new number: the chat screen puts the cursor in its text box
@@ -203,6 +207,10 @@ function Main({ connection, share, onShareDone }) {
             setDialog({ type: 'group', key: null });
           }}
           onMe={() => setDialog({ type: 'me' })}
+          onSettings={() => {
+            setDrawer(null);  // (the web page closes the drawer too)
+            setDialog({ type: 'settings', page: null });
+          }}
         />
       </Drawer>
       <Drawer side="right" open={drawer === 'right'} onClose={() => setDrawer(null)}>
@@ -218,7 +226,16 @@ function Main({ connection, share, onShareDone }) {
           onMention={view === PEOPLE ? null : mention}  // (only in a chat, which has a text box)
         />
       ) : null}
-      {dialog?.type === 'me' ? <MeScreen connection={connection} onClose={closeDialog} /> : null}
+      {dialog?.type === 'me' ? (
+        <MeScreen
+          connection={connection} onClose={closeDialog}
+          onEditProfile={() => {
+            setDrawer(null);
+            setDialog({ type: 'settings', page: 'profile' });
+          }}
+        />
+      ) : null}
+      {dialog?.type === 'settings' ? <SettingsScreen connection={connection} page={dialog.page} onClose={closeDialog} /> : null}
       {dialog?.type === 'group' ? (
         <GroupDialog connection={connection} groupKey={dialog.key} onCreated={go} onClose={closeDialog} />
       ) : null}
@@ -236,6 +253,8 @@ function Main({ connection, share, onShareDone }) {
 }
 
 function Loading({ text }) {
+  const styles = useStyles(makeStyles);
+  const { colors } = useTheme();
   return (
     <View style={styles.loading}>
       <ActivityIndicator color={colors.textMuted} size="large" />
@@ -247,13 +266,42 @@ function Loading({ text }) {
 function Screen({ share, onShareDone }) {
   const connection = useConnection();
   const { status, me } = connection;
+  // The appearance kept with the account (in "welcome", and "appearance" after a change on any device).
+  const { setAppearance } = useTheme();
+  useEffect(() => {
+    if (connection.appearance) setAppearance(connection.appearance);
+  }, [connection.appearance]);
   if (status === 'logged-out') return <LoginScreen onLoggedIn={connection.reconnect} />;
   // Not connected yet (we don't know who we are until "welcome").
   if (me === null) return <Loading text={status === 'offline' ? "Can't reach the server, trying again…" : null} />;
   return <Main connection={connection} share={share} onShareDone={onShareDone} />;
 }
 
+// The frame around everything: the safe area (see App) and the phone's status bar, in the theme's
+// colours. (Its own component, inside the theme's provider, so it can read the theme.)
+function Frame({ children }) {
+  const styles = useStyles(makeStyles);
+  const { light } = useTheme();
+  return (
+    <SafeAreaView style={styles.app}>
+      {children}
+      {/* The bar's clock and icons: dark on a light theme, light on a dark one. */}
+      <StatusBar style={light ? 'dark' : 'light'} />
+    </SafeAreaView>
+  );
+}
+
 export default function App() {
+  // The appearance (Settings → Appearance), from the copy on the phone until the server sends ours.
+  // setAppearance changes it everywhere at once: everything that reads the theme draws again.
+  const [appearance, setAppearanceState] = useState(loadAppearance);
+  const theme = useMemo(() => ({
+    ...makeTheme(appearance),
+    setAppearance: (next) => {
+      setAppearanceState(next);
+      saveAppearance(next);  // (for the next start's first drawing)
+    },
+  }), [appearance]);
   // Something shared to the app (modules/shared-files): kept up here, so it waits through the
   // login screen and the connecting.
   const [share, setShare] = useState(null);
@@ -268,17 +316,19 @@ export default function App() {
   }, []);
   // Android draws apps "edge to edge", under the status bar and the navigation bar.
   // SafeAreaView adds padding the size of those bars, so nothing ends up behind them.
+  // ThemeContext.Provider hands the theme to every component inside it (useTheme, useStyles).
   return (
-    <SafeAreaProvider>
-      <SafeAreaView style={styles.app}>
-        <Screen share={share} onShareDone={() => setShare(null)} />
-        <StatusBar style="light" />
-      </SafeAreaView>
-    </SafeAreaProvider>
+    <ThemeContext.Provider value={theme}>
+      <SafeAreaProvider>
+        <Frame>
+          <Screen share={share} onShareDone={() => setShare(null)} />
+        </Frame>
+      </SafeAreaProvider>
+    </ThemeContext.Provider>
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors, size) => StyleSheet.create({
   app: { flex: 1, backgroundColor: colors.bgMain },
   main: { flex: 1 },
   // #topbar: gap 4px, padding 4px, a line under it.
@@ -288,7 +338,7 @@ const styles = StyleSheet.create({
   },
   topbarButton: { paddingHorizontal: 12, paddingVertical: 8, minWidth: 46 },
   newDot: { position: 'absolute', top: 8, right: 8, width: 8, height: 8, borderRadius: 4, backgroundColor: colors.red },
-  title: { flex: 1, fontSize: 16, fontWeight: '600', color: colors.textStrong },
+  title: { flex: 1, fontSize: size(16), fontWeight: '600', color: colors.textStrong },
   offline: { backgroundColor: colors.red, color: colors.textStrong, textAlign: 'center', paddingVertical: 4 },
   content: { flex: 1 },
   loading: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 16, backgroundColor: colors.bgMain },

@@ -3,7 +3,7 @@
 // row (picture, name, what they're doing) used in the sidebar's DMs and the member list.
 import { Image, StyleSheet, Text, View } from 'react-native';
 import Icon from './Icon';
-import { colors, letterColors, presenceColors } from './colors';
+import { letterColors, useStyles, useTheme } from './theme';
 import { SERVER } from './config';
 
 // Someone's top role (roles come top first, so the first of theirs found is the top one), or null.
@@ -31,6 +31,8 @@ export function activityText(activity) {
 // the login cookie along by itself, like fetch and the WebSocket. Without a picture: the first
 // letter of the name in a circle, in the person's own colour (picked by their id).
 export function Avatar({ user, name, size = 40 }) {
+  const styles = useStyles(makeStyles);
+  const { colors, size: textSize } = useTheme();
   const round = { width: size, height: size, borderRadius: size / 2 };
   if (user?.avatar) {
     return <Image source={{ uri: `${SERVER}/avatars/${encodeURIComponent(user.avatar)}` }} style={round} />;
@@ -42,16 +44,20 @@ export function Avatar({ user, name, size = 40 }) {
   const fontSize = size >= 80 ? size * 0.41 : size >= 40 ? 16 : size >= 24 ? 12 : 9;
   return (
     <View style={[round, styles.letter, { backgroundColor: background }]}>
-      <Text style={[styles.letterText, { fontSize }]}>{letter}</Text>
+      <Text style={[styles.letterText, { fontSize: textSize(fontSize) }]}>{letter}</Text>
     </View>
   );
 }
 
 // The status dot on a picture's bottom right corner, with a ring in the colour behind it so it
 // stands apart from the picture. Only on phones: a little phone shape instead of a dot. Our own
-// Invisible shows to us as a ring (the others just see us offline).
-export function StatusDot({ presence, mobile, ring = colors.bgPanel, size = 10 }) {
-  const color = presenceColors[presence] ?? presenceColors.offline;
+// Invisible shows to us as a ring (the others just see us offline). ring: the colour behind it (the
+// sidebar's, if none is given).
+export function StatusDot({ presence, mobile, ring, size = 10 }) {
+  const styles = useStyles(makeStyles);
+  const theme = useTheme();
+  ring = ring ?? theme.colors.bgPanel;
+  const color = theme.presence[presence] ?? theme.presence.offline;
   const border = { borderWidth: 2, borderColor: ring };
   if (mobile && presence !== 'offline' && presence !== 'invisible') {
     const width = size * 0.8;
@@ -76,6 +82,7 @@ export function StatusDot({ presence, mobile, ring = colors.bgPanel, size = 10 }
 // The little "BOT" tag after a bot's name. A box of its own (React Native can't pad text in the
 // middle of a line), so it goes next to the name's <Text>, not inside it.
 export function BotBadge() {
+  const styles = useStyles(makeStyles);
   return (
     <View style={styles.bot}>
       <Text style={styles.botText}>BOT</Text>
@@ -96,7 +103,11 @@ export function PersonPicture({ user, me, myPresence, size = 24, ring }) {
 }
 
 // One person: picture with dot, name (role colour, BOT tag), and what they're doing or their status.
-export function Person({ user, roles, me, myPresence, color = colors.textMuted, ring, bold }) {
+// color: the name's colour when they have no role colour (muted, if none is given).
+export function Person({ user, roles, me, myPresence, color, ring, bold }) {
+  const styles = useStyles(makeStyles);
+  const { colors } = useTheme();
+  color = color ?? colors.textMuted;
   const line = user.activity ? activityText(user.activity) : user.status;
   return (
     <View style={styles.person}>
@@ -116,6 +127,8 @@ export function Person({ user, roles, me, myPresence, color = colors.textMuted, 
 
 // A group DM's picture: a grey circle with the "users" icon (the web page's .group-avatar).
 export function GroupPicture({ size = 24 }) {
+  const styles = useStyles(makeStyles);
+  const { colors } = useTheme();
   return (
     <View style={[styles.letter, { width: size, height: size, borderRadius: size / 2, backgroundColor: colors.bgNeutral }]}>
       <Icon name="users" size={size * 0.6} color={colors.textStrong} />
@@ -123,18 +136,18 @@ export function GroupPicture({ size = 24 }) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors, size) => StyleSheet.create({
   letter: { alignItems: 'center', justifyContent: 'center' },
   letterText: { color: '#ffffff', fontWeight: '600' },
   corner: { position: 'absolute', right: -4, bottom: -4 },
   screen: { position: 'absolute', top: 1.5, left: 1.5, right: 1.5, bottom: 3, borderRadius: 1 },
   // .bot-badge: padding 1px 5px, radius 4px, 0.65rem, weight 600, 6px after the name.
   bot: { marginLeft: 6, paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4, backgroundColor: colors.botBadge, alignSelf: 'center' },
-  botText: { color: colors.botBadgeText, fontSize: 10.4, fontWeight: '600', letterSpacing: 0.3 },
+  botText: { color: colors.botBadgeText, fontSize: size(10.4), fontWeight: '600', letterSpacing: 0.3 },
   person: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 },
   personText: { flex: 1, minWidth: 0 },
   nameLine: { flexDirection: 'row', alignItems: 'center' },
-  personName: { flexShrink: 1, fontSize: 16 },
+  personName: { flexShrink: 1, fontSize: size(16) },
   bold: { fontWeight: '600' },
-  personStatus: { fontSize: 12, color: colors.textMuted },
+  personStatus: { fontSize: size(12), color: colors.textMuted },
 });

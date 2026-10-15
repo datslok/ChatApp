@@ -5,7 +5,7 @@ import { KeyboardAvoidingView, Modal, Pressable, StyleSheet, Text, View } from '
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from './Icon';
 import MessageText from './MessageText';
-import { colors } from './colors';
+import { useStyles, useTheme } from './theme';
 import { Avatar } from './people';
 import { clock, dayName } from './time';
 
@@ -23,6 +23,8 @@ export function useFocusSoon(ref) {
 // what's in it. Tapping the backdrop or Android's back button closes it too (onRequestClose).
 // KeyboardAvoidingView: when the keyboard opens (search), the popup moves up out of its way.
 export function Popup({ icon, title, onClose, children }) {
+  const styles = useStyles(makeStyles);
+  const { colors } = useTheme();
   // A Modal covers the whole screen, the status and navigation bars included: insets are their
   // heights, so the popup keeps 16px clear of them.
   const insets = useSafeAreaInsets();
@@ -51,6 +53,8 @@ export function Popup({ icon, title, onClose, children }) {
 // A message on a card: who and when (and where, if `where` is given, like "#memes"), its text
 // formatted like in the chat, its file's name, and the buttons (`children`, CardButtons).
 export function MessageCard({ message, where, connection, children }) {
+  const styles = useStyles(makeStyles);
+  const { colors } = useTheme();
   const { users, emoji } = connection;
   const sent = new Date(message.sent_at);
   const file = message.file;
@@ -77,10 +81,12 @@ export function MessageCard({ message, where, connection, children }) {
 // The popups' own buttons at the bottom right (the web page's .group-dialog-buttons): Cancel and
 // Create group, Close and New link. `secondary`: grey; `disabled`: faded and not pressable.
 export function DialogButtons({ children }) {
+  const styles = useStyles(makeStyles);
   return <View style={styles.dialogButtons}>{children}</View>;
 }
 
 export function DialogButton({ label, onPress, secondary, disabled }) {
+  const styles = useStyles(makeStyles);
   return (
     <Pressable
       onPress={onPress}
@@ -96,6 +102,7 @@ export function DialogButton({ label, onPress, secondary, disabled }) {
 
 // A small button for a card. `secondary`: grey instead of the accent colour.
 export function CardButton({ label, onPress, secondary }) {
+  const styles = useStyles(makeStyles);
   return (
     <Pressable
       onPress={onPress}
@@ -107,7 +114,7 @@ export function CardButton({ label, onPress, secondary }) {
 }
 
 // chat.css's sizes, rem as 16 px.
-export const styles = StyleSheet.create({
+export const makeStyles = (colors, size) => StyleSheet.create({
   // The backdrop: rgba(0, 0, 0, 0.6), the popup in the middle.
   backdropOuter: { flex: 1, justifyContent: 'center', backgroundColor: 'rgba(0, 0, 0, 0.6)' },
   // Taps beside the popup. (Its edges spelled out: StyleSheet.absoluteFill did nothing in RN 0.86, see Drawer.js.)
@@ -119,40 +126,40 @@ export const styles = StyleSheet.create({
   },
   // .pins-top: the title (1.1rem, bold) on the left, × on the right, 12px above the rest.
   top: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
-  title: { flex: 1, fontSize: 17.6, fontWeight: '700', color: colors.textStrong },
+  title: { flex: 1, fontSize: size(17.6), fontWeight: '700', color: colors.textStrong },
   // .card-list: 8px between the cards.
   list: { flexShrink: 1 },
   listInside: { gap: 8 },
   // .pins-empty: 0.9rem, muted.
-  empty: { fontSize: 14.4, color: colors.textMuted },
+  empty: { fontSize: size(14.4), color: colors.textMuted },
   // .message-card: padding 10px 12px, radius 8px, the darkest background.
   card: { paddingVertical: 10, paddingHorizontal: 12, borderRadius: 8, backgroundColor: colors.bgDarkest },
   // .card-head: 8px apart, 4px above the text; the time 0.75rem and muted.
   head: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
-  name: { flexShrink: 1, fontWeight: '700', color: colors.text, fontSize: 16 },
-  time: { flexShrink: 1, fontSize: 12, color: colors.textMuted },
+  name: { flexShrink: 1, fontWeight: '700', color: colors.text, fontSize: size(16) },
+  time: { flexShrink: 1, fontSize: size(12), color: colors.textMuted },
   // .card-file: 0.85rem, soft.
   file: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  fileName: { flexShrink: 1, fontSize: 13.6, color: colors.textSoft },
+  fileName: { flexShrink: 1, fontSize: size(13.6), color: colors.textSoft },
   // .card-buttons: at the right, 6px apart, 8px below; each padding 4px 12px, radius 6px, 0.85rem.
   buttons: { flexDirection: 'row', justifyContent: 'flex-end', gap: 6, marginTop: 8 },
   button: { paddingVertical: 4, paddingHorizontal: 12, borderRadius: 6, backgroundColor: colors.accent },
   secondary: { backgroundColor: colors.bgNeutral },
   pressed: { opacity: 0.8 },
-  buttonText: { fontSize: 13.6, color: '#ffffff' },
+  buttonText: { fontSize: size(13.6), color: '#ffffff' },
   // .group-dialog-buttons: at the right, 8px apart; each padding 10px 20px, radius 6px, 1rem.
   dialogButtons: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8, marginTop: 10 },
   dialogButton: { paddingVertical: 10, paddingHorizontal: 20, borderRadius: 6, backgroundColor: colors.accent },
   disabled: { opacity: 0.5 },
-  dialogButtonText: { fontSize: 16, color: '#ffffff' },
+  dialogButtonText: { fontSize: size(16), color: '#ffffff' },
   // .group-dialog-help: 0.85rem, muted.
-  help: { fontSize: 13.6, color: colors.textMuted },
+  help: { fontSize: size(13.6), color: colors.textMuted },
   // Text boxes in the popups (#group-filter): padding 8px 10px, radius 6px, the darkest background.
   input: {
     paddingVertical: 8, paddingHorizontal: 10, borderRadius: 6, backgroundColor: colors.bgDarkest,
-    color: colors.text, fontSize: 15.2,
+    color: colors.text, fontSize: size(15.2),
   },
   // .action-status: red; .success: green.
-  problem: { fontSize: 13.6, color: colors.red },
-  success: { fontSize: 13.6, color: colors.green },
+  problem: { fontSize: size(13.6), color: colors.red },
+  success: { fontSize: size(13.6), color: colors.green },
 });

@@ -5,9 +5,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import Icon from './Icon';
-import { CardButton, MessageCard, Popup, styles as cardStyles, useFocusSoon } from './MessageCard';
+import { CardButton, MessageCard, Popup, makeStyles as makeCardStyles, useFocusSoon } from './MessageCard';
 import { chatLabel } from './chats';
-import { colors } from './colors';
+import { useStyles, useTheme } from './theme';
 import { Avatar } from './people';
 
 // What was searched last time, so it's still there when the popup opens again (like the web page,
@@ -27,6 +27,9 @@ function matchPeople(typed, people) {
 
 // onJump(chat, messageId): close this and go to the message (in another chat, too).
 export default function SearchScreen({ connection, onJump, onClose }) {
+  const cardStyles = useStyles(makeCardStyles);
+  const styles = useStyles(makeStyles);
+  const { colors } = useTheme();
   const { users, current, searchResults } = connection;
   const [query, setQuery] = useState(last.query);
   const [where, setWhere] = useState(last.where);  // "here" or "all"
@@ -183,17 +186,17 @@ export default function SearchScreen({ connection, onJump, onClose }) {
 }
 
 // chat.css's #search-form and .person-suggestions.
-const styles = StyleSheet.create({
+const makeStyles = (colors, size) => StyleSheet.create({
   // The boxes: padding 8px 10px, radius 6px, the darkest background, 0.95rem.
   input: {
     paddingVertical: 8, paddingHorizontal: 10, borderRadius: 6, backgroundColor: colors.bgDarkest,
-    color: colors.text, fontSize: 15.2,
+    color: colors.text, fontSize: size(15.2),
   },
   filters: { flexDirection: 'row', gap: 8, marginTop: 8, marginBottom: 10 },
   where: { flexDirection: 'row', padding: 2, borderRadius: 6, backgroundColor: colors.bgDarkest },
   whereButton: { justifyContent: 'center', paddingHorizontal: 10, borderRadius: 5 },
   whereChosen: { backgroundColor: colors.bgActive },
-  whereText: { fontSize: 13.6, color: colors.textMuted },
+  whereText: { fontSize: size(13.6), color: colors.textMuted },
   whereTextChosen: { color: colors.textStrong },
   from: { flex: 1, minWidth: 0, justifyContent: 'center' },
   fromInput: { paddingRight: 28 },  // room for the ×
@@ -206,5 +209,5 @@ const styles = StyleSheet.create({
   },
   suggestion: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 6, paddingHorizontal: 8, borderRadius: 4 },
   suggestionPressed: { backgroundColor: colors.bgHover },
-  suggestionName: { flexShrink: 1, color: colors.text, fontSize: 14.4 },
+  suggestionName: { flexShrink: 1, color: colors.text, fontSize: size(14.4) },
 });

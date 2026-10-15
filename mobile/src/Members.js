@@ -4,11 +4,13 @@
 // people, and everyone offline at the bottom, dimmed. A tap opens someone's profile, a long press the
 // user menu.
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { colors } from './colors';
+import { useStyles, useTheme } from './theme';
 import { dmPartner } from './chats';
 import { Person, topRole } from './people';
 
 export default function Members({ connection, view, onProfile, onUserMenu }) {
+  const styles = useStyles(makeStyles);
+  const { colors } = useTheme();
   const { users, roles, groups, me, myPresence } = connection;
   const everyone = Object.values(users).sort((a, b) => a.name.localeCompare(b.name));
 
@@ -54,11 +56,11 @@ export default function Members({ connection, view, onProfile, onUserMenu }) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors, size) => StyleSheet.create({
   members: { flex: 1, backgroundColor: colors.bgPanel },
   inside: { padding: 16 },
   later: { marginTop: 20 },  // every section but the first: 20px above it
-  heading: { color: colors.textMuted, fontSize: 12, fontWeight: '600', textTransform: 'uppercase', marginBottom: 8 },
+  heading: { color: colors.textMuted, fontSize: size(12), fontWeight: '600', textTransform: 'uppercase', marginBottom: 8 },
   person: { paddingVertical: 4, paddingHorizontal: 4, marginHorizontal: -4, borderRadius: 6 },
   pressed: { backgroundColor: colors.bgHover },
   dim: { opacity: 0.5 },

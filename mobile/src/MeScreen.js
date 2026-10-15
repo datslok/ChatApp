@@ -1,11 +1,12 @@
 // Your own popup (the web page's #me-popup), from your panel at the bottom of the sidebar: your banner,
 // picture, name, status line and what you're doing, then your status to pick: Online, Idle, Do Not
 // Disturb, Invisible. Picking one tells the server, which tells all your devices ("my_presence") and
-// everyone else ("users"); nothing changes here until it answers. (The call you're in comes with
-// calls; Edit profile and Log out with Settings.)
+// everyone else ("users"); nothing changes here until it answers. Then Edit profile (Settings, on
+// its Profile tab) and Log out. (The call you're in comes with calls.)
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, presenceColors } from './colors';
+import { useStyles, useTheme } from './theme';
+import Icon from './Icon';
 import { Avatar } from './people';
 import { Activity, Banner } from './ProfileScreen';
 
@@ -19,13 +20,27 @@ const PRESENCES = [
 
 // A status dot on its own (not on a picture's corner): Invisible is a ring.
 function Dot({ presence }) {
-  const color = presenceColors[presence];
+  const styles = useStyles(makeStyles);
+  const color = useTheme().presence[presence];
   return presence === 'invisible'
     ? <View style={[styles.dot, { borderWidth: 2.5, borderColor: color }]} />
     : <View style={[styles.dot, { backgroundColor: color }]} />;
 }
 
-export default function MeScreen({ connection, onClose }) {
+// onEditProfile: open Settings on Profile.
+function MenuRow({ icon, label, onPress }) {
+  const styles = useStyles(makeStyles);
+  const { colors } = useTheme();
+  return (
+    <Pressable onPress={onPress} style={({ pressed }) => [styles.menuRow, pressed && styles.pressed]}>
+      <Icon name={icon} size={18} color={colors.icon} />
+      <Text style={styles.menuText}>{label}</Text>
+    </Pressable>
+  );
+}
+
+export default function MeScreen({ connection, onEditProfile, onClose }) {
+  const styles = useStyles(makeStyles);
   const { users, me, myPresence } = connection;
   const insets = useSafeAreaInsets();
   const mine = users[me.id];
@@ -67,6 +82,18 @@ export default function MeScreen({ connection, onClose }) {
               </Pressable>
             ))}
           </View>
+
+          {/* .me-menu: plain rows in a box. */}
+          <View style={styles.box}>
+            <MenuRow icon="pencil" label="Edit profile" onPress={() => {
+              onClose();
+              onEditProfile();
+            }} />
+            <MenuRow icon="log-out" label="Log out" onPress={() => {
+              onClose();
+              connection.logout();
+            }} />
+          </View>
         </View>
       </View>
     </Modal>
@@ -74,7 +101,7 @@ export default function MeScreen({ connection, onClose }) {
 }
 
 // chat.css's #me-popup, rem as 16 px.
-const styles = StyleSheet.create({
+const makeStyles = (colors, size) => StyleSheet.create({
   backdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
   // min(300px, 100vw - 16px) wide, a border, rounded, a shadow.
   popup: {
@@ -84,18 +111,21 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: 14, paddingBottom: 14 },
   // The picture overlaps the banner, on the left, with a 5px ring in the popup's colour.
   picture: { alignSelf: 'flex-start', marginTop: -45, marginBottom: 8, padding: 5, borderRadius: 45, backgroundColor: colors.bgPanelAlt },
-  name: { fontSize: 19.2, fontWeight: '700', color: colors.textStrong },
-  status: { marginTop: 2, fontSize: 13.6, color: colors.textSoft },
-  activityText: { fontSize: 13.6 },
+  name: { fontSize: size(19.2), fontWeight: '700', color: colors.textStrong },
+  status: { marginTop: 2, fontSize: size(13.6), color: colors.textSoft },
+  activityText: { fontSize: size(13.6) },
   // #me-presence: a box, 12px above, padding 4px; its heading 0.75rem, soft.
   box: { marginTop: 12, padding: 4, borderRadius: 8, backgroundColor: colors.bgPanel },
-  heading: { marginHorizontal: 6, marginVertical: 4, fontSize: 12, fontWeight: '700', color: colors.textSoft },
+  heading: { marginHorizontal: 6, marginVertical: 4, fontSize: size(12), fontWeight: '700', color: colors.textSoft },
   // .presence-option: the dot and the words, padding 6px 10px; the chosen one highlighted.
   option: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6, paddingHorizontal: 10, borderRadius: 6 },
   chosen: { backgroundColor: colors.bgActive },
   pressed: { backgroundColor: colors.bgHover },
   dot: { width: 10, height: 10, borderRadius: 5 },
   optionText: { flex: 1 },
-  optionName: { fontSize: 14.4, color: colors.text },
-  help: { fontSize: 12, color: colors.textMuted },
+  optionName: { fontSize: size(14.4), color: colors.text },
+  // .me-menu button: padding 8px 10px, 0.9rem.
+  menuRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 6 },
+  menuText: { fontSize: size(14.4), color: colors.text },
+  help: { fontSize: size(12), color: colors.textMuted },
 });

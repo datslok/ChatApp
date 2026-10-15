@@ -7,6 +7,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { AppState, Platform } from 'react-native';
 import { SERVER, SOCKET_URL } from './config';
+import { DEFAULT_APPEARANCE } from './theme';
 
 // The newest emoji version each Android draws (its API level -> Unicode's emoji version): newer
 // emoji would show as empty boxes, so the picker leaves them out. (The web page finds out by drawing
@@ -49,6 +50,8 @@ export function useConnection() {
   const [users, setUsers] = useState({});        // everyone, by id: {3: {id, name, ...}}
   const [roles, setRoles] = useState([]);        // the server's roles, top first: [{id, name, colour}]
   const [myPresence, setMyPresence] = useState('online');  // the status we chose (others may see another)
+  // Settings → Appearance as the server keeps it (null: not heard yet; App.js applies it).
+  const [appearance, setAppearance] = useState(null);
   const [emoji, setEmoji] = useState({});        // custom emoji by id: {17: {id, name, file, owner_id}}
   // Every Unicode emoji, for the picker and ":" suggestions: the server's /emoji.json, fetched once
   // ({groups: [{name, emoji: [["😀", "grinning face"], ...]}, ...]}). null until it has come.
@@ -108,6 +111,11 @@ export function useConnection() {
         // max_text_length: the server's limit on a message, so the text box can use the same.
         setMe({ id: data.id, username: data.username, maxTextLength: data.max_text_length });
         setMyPresence(data.presence);
+        setAppearance(data.appearance ?? DEFAULT_APPEARANCE);  // (null: never changed: the defaults)
+        break;
+      case 'appearance':
+        // Changed in Settings, here or on another device (the server sends it to all our devices).
+        setAppearance(data.appearance);
         break;
       case 'my_presence':
         setMyPresence(data.presence);
@@ -360,6 +368,22 @@ export function useConnection() {
     send({ type: 'join', channel: key });
   }
 
+  // Log out (your popup's Log out): the server forgets this login and tells Android to drop the cookie;
+  // then the connection closes for good and App.js shows the login screen. me goes back to null, so
+  // logging in as someone else shows nothing of this account while the new "welcome" is on its way.
+  async function logout() {
+    await fetch(`${SERVER}/logout`, { method: 'POST' }).catch(() => {});
+    loggedOut.current = true;
+    currentRef.current = null;
+    const ws = socket.current;
+    socket.current = null;  // (so its closing isn't taken for a dropped connection)
+    ws?.close();
+    setMe(null);
+    setCurrent(null);
+    setMessages(null);
+    setStatus('logged-out');
+  }
+
   // Back to the list: in no chat, so new messages anywhere count as unread again.
   function closeChat() {
     currentRef.current = null;
@@ -446,11 +470,11 @@ export function useConnection() {
   }
 
   return {
-    status, me, myPresence, channels, groups, friends, incoming, outgoing, blocked, users, roles, emoji,
+    status, me, myPresence, appearance, channels, groups, friends, incoming, outgoing, blocked, users, roles, emoji,
     emojiGroups, unread, mentions, current, messages, lastRead, more, typing, mutedChats, pins, pinsFull,
     searchResults,
     openChat, closeChat, loadOlder, sendMessage, sendTyping, react, pin, editMessage, deleteMessage,
-    friendAction, mute, openPins, closePins, search, setPresence,
+    friendAction, mute, openPins, closePins, search, setPresence, logout,
     reconnect: connect,  // after logging in
   };
 }

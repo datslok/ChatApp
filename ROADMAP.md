@@ -113,7 +113,7 @@
     - [x] Sharing to the app: ChatApp in Android's share sheet (from the gallery, other apps), into a chat's tray, with the files' real names (still to test with a release build: a share that starts the app, which development builds' launcher swallows)
     - [x] The chat's top bar: mute, search, pinned messages
     - [x] Profiles, the user menu (long press), your status, groups (create, add, rename, leave), invites
-    - [ ] Settings: my account, profile, appearance (themes, colours, text size), log out
+    - [x] Settings: my account, profile, appearance (themes, colours, text size), log out
     - [ ] The rest of Settings: Emoji, What's new, Bugs & ideas, Admin (with Ban and Make admin in the user menu), the seasonal easter egg
     - [ ] Voice and video calls (LiveKit's React Native library), also with the phone locked; the Lounge; Settings → Voice & audio and Video
     - [ ] Push notifications through Firebase Cloud Messaging, ringing calls; Settings → Notifications

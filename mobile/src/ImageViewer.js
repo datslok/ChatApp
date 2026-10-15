@@ -14,7 +14,7 @@ import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-g
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from './Icon';
-import { colors } from './colors';
+import { useStyles } from './theme';
 import { SERVER } from './config';
 import { downloadFile, saveFile, shareFile } from './files';
 
@@ -29,6 +29,7 @@ function clamp(value, low, high) {
 
 // file: the attachment ({id, filename, size}). onClose: closes the viewer.
 export default function ImageViewer({ file, onClose }) {
+  const styles = useStyles(makeStyles);
   // The area the picture has: the whole screen, measured once the viewer is laid out (onLayout).
   const [screen, setScreen] = useState(useWindowDimensions());
   const insets = useSafeAreaInsets();
@@ -214,7 +215,7 @@ export default function ImageViewer({ file, onClose }) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors, size) => StyleSheet.create({
   // The web page's #viewer: almost black behind the picture.
   backdrop: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.92)' },
   stage: { flex: 1, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
@@ -224,6 +225,6 @@ const styles = StyleSheet.create({
     position: 'absolute', top: 0, left: 0, right: 0, flexDirection: 'row', alignItems: 'center', gap: 4,
     paddingHorizontal: 8, paddingBottom: 4, backgroundColor: 'rgba(0, 0, 0, 0.4)',
   },
-  name: { flex: 1, color: '#ffffff', fontSize: 15, paddingHorizontal: 8 },
+  name: { flex: 1, color: '#ffffff', fontSize: size(15), paddingHorizontal: 8 },
   button: { padding: 10 },
 });

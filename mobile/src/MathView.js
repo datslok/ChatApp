@@ -9,10 +9,11 @@
 import { useState } from 'react';
 import { StyleSheet } from 'react-native';
 import { WebView } from 'react-native-webview';
-import { colors } from './colors';
+import { useStyles, useTheme } from './theme';
 import { SERVER } from './config';
 
-function page(tex, display) {
+// color and fontSize: the theme's text colour and size, as the page can't read the app's theme.
+function page(tex, display, color, fontSize) {
   // "<" written as <, so a "</script>" in the TeX can't end the script early.
   const texString = JSON.stringify(tex).replace(/</g, '\\u003c');
   return `<!doctype html>
@@ -20,7 +21,7 @@ function page(tex, display) {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="stylesheet" href="/katex-0.18.9/katex.min.css">
 <style>
-  html, body { margin: 0; padding: 0; background: transparent; color: ${colors.text}; font-size: 16px; }
+  html, body { margin: 0; padding: 0; background: transparent; color: ${color}; font-size: ${fontSize}px; }
   #math { display: ${display ? 'block' : 'inline-block'}; white-space: nowrap; }
   .katex-display { margin: 4px 0; padding: 2px 0; overflow-x: auto; }
 </style>
@@ -46,6 +47,8 @@ function page(tex, display) {
 }
 
 export default function MathView({ tex, display }) {
+  const styles = useStyles(makeStyles);
+  const theme = useTheme();
   const [size, setSize] = useState(null);  // {width, height} once the page has said
   const box = display
     ? { width: '100%', height: size?.height ?? 24 }
@@ -55,7 +58,7 @@ export default function MathView({ tex, display }) {
 
   return (
     <WebView
-      source={{ html: page(tex, display), baseUrl: SERVER }}  // (baseUrl: so "/katex-0.18.9/..." means our server)
+      source={{ html: page(tex, display, theme.colors.text, theme.size(16)), baseUrl: SERVER }}  // (baseUrl: so "/katex-0.18.9/..." means our server)
       originWhitelist={['*']}
       onMessage={(event) => setSize(JSON.parse(event.nativeEvent.data))}
       // Nothing in it is a link, and nothing may take it anywhere else.
@@ -72,7 +75,7 @@ export default function MathView({ tex, display }) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors, size) => StyleSheet.create({
   math: { backgroundColor: 'transparent' },
   container: { flex: 0 },
 });

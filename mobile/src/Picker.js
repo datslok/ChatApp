@@ -6,7 +6,7 @@ import {
   Image, Modal, Pressable, ScrollView, SectionList, StyleSheet, Text, TextInput, View, useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors } from './colors';
+import { useStyles, useTheme } from './theme';
 import { SERVER } from './config';
 import { CustomEmoji } from './MessageText';
 
@@ -22,6 +22,8 @@ function remember(value) {
 // ----- Emoji
 
 function EmojiTab({ connection, onPick }) {
+  const styles = useStyles(makeStyles);
+  const { colors } = useTheme();
   const { emoji, emojiGroups, users, me } = connection;
   const [query, setQuery] = useState('');
   const list = useRef(null);
@@ -139,6 +141,8 @@ function EmojiTab({ connection, onPick }) {
 // ----- GIFs (GIPHY, through our server's /gifs/search)
 
 function GifTab({ onPick }) {
+  const styles = useStyles(makeStyles);
+  const { colors } = useTheme();
   const [query, setQuery] = useState('');
   const [gifs, setGifs] = useState(null);       // the results; null while loading
   const [note, setNote] = useState('Loading…');
@@ -221,6 +225,7 @@ function GifTab({ onPick }) {
 // mode "insert" (writing: Emoji | GIF) or "react" (emoji only). onPickEmoji(value): a Unicode emoji
 // or "custom:17". onPickGif(gif): a GIPHY result. inline: a panel instead of a popup (see the end).
 export default function Picker({ connection, mode, inline, onPickEmoji, onPickGif, onClose }) {
+  const styles = useStyles(makeStyles);
   const [tab, setTab] = useState(mode === 'react' ? 'emoji' : lastTab);
   const insets = useSafeAreaInsets();
   const windowHeight = useWindowDimensions().height;
@@ -266,7 +271,7 @@ export default function Picker({ connection, mode, inline, onPickEmoji, onPickGi
 }
 
 // chat.css's pickers (rem as 16 px).
-const styles = StyleSheet.create({
+const makeStyles = (colors, size) => StyleSheet.create({
   outside: { flex: 1 },
   inline: { borderBottomWidth: 0, borderLeftWidth: 0, borderRightWidth: 0 },  // (only a line on top, like a keyboard)
   sheet: {
@@ -276,30 +281,30 @@ const styles = StyleSheet.create({
   tabs: { flexDirection: 'row', gap: 4, paddingTop: 8, paddingHorizontal: 8 },
   tab: { flex: 1, padding: 6, borderRadius: 6, alignItems: 'center' },
   tabActive: { backgroundColor: colors.bgActive },
-  tabText: { fontSize: 14.4, fontWeight: '600', color: colors.textMuted },
+  tabText: { fontSize: size(14.4), fontWeight: '600', color: colors.textMuted },
   tabTextActive: { color: colors.textStrong },
   search: {
     margin: 8, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 6,
-    backgroundColor: colors.bgDarkest, color: colors.text, fontSize: 15.2,
+    backgroundColor: colors.bgDarkest, color: colors.text, fontSize: size(15.2),
   },
   categories: { flexGrow: 0, borderBottomWidth: 1, borderBottomColor: colors.line },
   categoriesInside: { paddingHorizontal: 8, paddingBottom: 6, gap: 2 },
   category: { paddingHorizontal: 4, paddingVertical: 2 },
-  categoryText: { fontSize: 17.6 },
+  categoryText: { fontSize: size(17.6) },
   grid: { flex: 1, paddingHorizontal: 8 },
   sectionTitle: {
-    paddingTop: 8, paddingBottom: 4, fontSize: 11.2, textTransform: 'uppercase', color: colors.textMuted,
+    paddingTop: 8, paddingBottom: 4, fontSize: size(11.2), textTransform: 'uppercase', color: colors.textMuted,
     backgroundColor: colors.bgPanel,
   },
   row: { flexDirection: 'row' },
   cell: { alignItems: 'center', justifyContent: 'center', padding: 4, borderRadius: 4 },
   cellPressed: { backgroundColor: colors.bgActive },
-  cellText: { fontSize: 22.4, lineHeight: 27 },
+  cellText: { fontSize: size(22.4), lineHeight: size(27) },
   gifColumns: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', paddingBottom: 8 },
   gif: { marginBottom: 6, borderRadius: 6, overflow: 'hidden', backgroundColor: colors.bgDarkest },
-  note: { width: '100%', padding: 8, color: colors.textMuted, fontSize: 13.6 },
+  note: { width: '100%', padding: 8, color: colors.textMuted, fontSize: size(13.6) },
   attribution: {
-    textAlign: 'right', paddingHorizontal: 8, paddingVertical: 6, fontSize: 11.2, fontWeight: 'bold',
+    textAlign: 'right', paddingHorizontal: 8, paddingVertical: 6, fontSize: size(11.2), fontWeight: 'bold',
     color: colors.textMuted, borderTopWidth: 1, borderTopColor: colors.line,
   },
 });

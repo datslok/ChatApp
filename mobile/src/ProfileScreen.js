@@ -6,7 +6,7 @@ import { useState } from 'react';
 import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from './Icon';
-import { colors, letterColors } from './colors';
+import { letterColors, useStyles, useTheme } from './theme';
 import { SERVER } from './config';
 import { friendButtons } from './friends';
 import { Avatar, BotBadge, activityText } from './people';
@@ -23,6 +23,7 @@ export function activityDuration(activity) {
 
 // The banner along the top: their picture from /banners/, or a strip in their own colour (3 : 1).
 export function Banner({ user }) {
+  const styles = useStyles(makeStyles);
   if (user.banner) {
     return <Image source={{ uri: `${SERVER}/banners/${encodeURIComponent(user.banner)}` }} style={styles.banner} />;
   }
@@ -31,6 +32,8 @@ export function Banner({ user }) {
 
 // "🎮 Playing Hollow Knight · for 23 min"
 export function Activity({ activity, style }) {
+  const styles = useStyles(makeStyles);
+  const { colors } = useTheme();
   return (
     <View style={styles.activity}>
       <Icon name={ACTIVITY_ICONS[activity.kind] ?? 'monitor'} size={16} color={colors.text} />
@@ -41,6 +44,8 @@ export function Activity({ activity, style }) {
 
 // onOpen(key): open a chat (Message); onClose: close it.
 export default function ProfileScreen({ connection, userId, onOpen, onClose }) {
+  const styles = useStyles(makeStyles);
+  const { colors } = useTheme();
   const { users, roles, me } = connection;
   const insets = useSafeAreaInsets();
   const [error, setError] = useState('');  // what the server said no with (a request, a block)
@@ -117,7 +122,7 @@ export default function ProfileScreen({ connection, userId, onOpen, onClose }) {
 }
 
 // chat.css's #profile, rem as 16 px.
-const styles = StyleSheet.create({
+const makeStyles = (colors, size) => StyleSheet.create({
   backdrop: { flex: 1, justifyContent: 'center', backgroundColor: 'rgba(0, 0, 0, 0.6)' },
   backdropTap: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
   // min(500px, 100% - 32px) wide, the banner to the edges, rounded corners, everything centred.
@@ -129,10 +134,10 @@ const styles = StyleSheet.create({
   content: { alignItems: 'center', paddingHorizontal: 28, paddingBottom: 28 },
   picture: { marginTop: -54, marginBottom: 12, padding: 6, borderRadius: 54, backgroundColor: colors.bgPanel },
   nameLine: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center' },
-  name: { fontSize: 20.8, fontWeight: '700', color: colors.textStrong },
+  name: { fontSize: size(20.8), fontWeight: '700', color: colors.textStrong },
   // .admin-badge: 8px after the name, padding 2px 6px, radius 4px, the accent, 0.7rem.
   admin: { marginLeft: 8, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, backgroundColor: colors.accent },
-  adminText: { color: '#ffffff', fontSize: 11.2 },
+  adminText: { color: '#ffffff', fontSize: size(11.2) },
   // #profile-roles: centred tags, 6px apart; .role-tag: padding 2px 8px, radius 6px, 0.8rem.
   roles: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 6, marginVertical: 6 },
   role: {
@@ -140,20 +145,20 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bgDarkest,
   },
   roleDot: { width: 10, height: 10, borderRadius: 5 },
-  roleText: { fontSize: 12.8, color: colors.text },
+  roleText: { fontSize: size(12.8), color: colors.text },
   // #profile-activity: 8px above, 0.9rem.
   activity: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 },
-  activityText: { fontSize: 14.4, color: colors.text },
-  status: { marginTop: 4, fontSize: 16, color: colors.textMuted, textAlign: 'center' },
+  activityText: { fontSize: size(14.4), color: colors.text },
+  status: { marginTop: 4, fontSize: size(16), color: colors.textMuted, textAlign: 'center' },
   // #profile-bio: 16px above, left-aligned, the line breaks kept (Text keeps them by itself).
-  bio: { alignSelf: 'stretch', marginTop: 16, fontSize: 16, color: colors.text },
+  bio: { alignSelf: 'stretch', marginTop: 16, fontSize: size(16), color: colors.text },
   // #profile .friend-actions: 20px above, the buttons sharing the width, padding 10px, 1rem.
   buttons: { flexDirection: 'row', gap: 6, marginTop: 20, alignSelf: 'stretch' },
   button: { flex: 1, alignItems: 'center', padding: 10, borderRadius: 6, backgroundColor: colors.accent },
   secondary: { backgroundColor: colors.bgNeutral },
   pressed: { opacity: 0.8 },
-  buttonText: { color: '#ffffff', fontSize: 16 },
-  error: { marginTop: 8, fontSize: 13.6, color: colors.red },
+  buttonText: { color: '#ffffff', fontSize: size(16) },
+  error: { marginTop: 8, fontSize: size(13.6), color: colors.red },
   // #profile-close: a 32px circle at the top right, over the banner.
   close: {
     position: 'absolute', top: 12, right: 12, width: 32, height: 32, borderRadius: 16,

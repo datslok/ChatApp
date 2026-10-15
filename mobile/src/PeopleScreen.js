@@ -3,7 +3,7 @@
 // Requests has Received / Sent. Each person's row has the buttons that fit how we stand with them.
 import { useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { colors } from './colors';
+import { useStyles, useTheme } from './theme';
 import { friendButtons } from './friends';
 import { Person } from './people';
 
@@ -17,6 +17,8 @@ const TABS = [
 // onOpen(key): open that chat (App.js's go). onProfile(id), onUserMenu(id): a row's tap and long press.
 // onInvite: the Invite someone popup.
 export default function PeopleScreen({ connection, onOpen, onProfile, onUserMenu, onInvite }) {
+  const styles = useStyles(makeStyles);
+  const { colors } = useTheme();
   const { users, roles, me, myPresence, friends, incoming, outgoing, blocked, friendAction } = connection;
   const [tab, setTab] = useState('friends');
   const [query, setQuery] = useState('');   // the Everyone tab's search box
@@ -127,13 +129,13 @@ export default function PeopleScreen({ connection, onOpen, onProfile, onUserMenu
 }
 
 // chat.css's People page (#friends-view and friends), rem as 16 px.
-const styles = StyleSheet.create({
+const makeStyles = (colors, size) => StyleSheet.create({
   page: { flex: 1, paddingHorizontal: 24, paddingVertical: 16, backgroundColor: colors.bgMain },
   header: {
     flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 16, rowGap: 8,
     paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: colors.line,
   },
-  title: { fontSize: 17.6, fontWeight: 'bold', color: colors.textStrong },
+  title: { fontSize: size(17.6), fontWeight: 'bold', color: colors.textStrong },
   // #invite-button: margin-left auto (to the end), padding 6px 12px, the green button colour, 0.9rem.
   invite: { marginLeft: 'auto', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 6, backgroundColor: colors.buttonGreen },
   // On a phone the four tabs don't fit side by side at the web page's size (they wrapped, Blocked on a
@@ -141,14 +143,14 @@ const styles = StyleSheet.create({
   tabs: { flexDirection: 'row', gap: 4, width: '100%' },
   tab: { flex: 1, alignItems: 'center', paddingHorizontal: 4, paddingVertical: 6, borderRadius: 6 },
   tabActive: { backgroundColor: colors.bgActive },
-  tabText: { fontSize: 15.2, color: colors.textMuted },
+  tabText: { fontSize: size(15.2), color: colors.textMuted },
   tabTextActive: { color: colors.textStrong },
   search: {
     marginTop: 12, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 6,
-    backgroundColor: colors.bgDarkest, color: colors.text, fontSize: 16,
+    backgroundColor: colors.bgDarkest, color: colors.text, fontSize: size(16),
   },
-  subheading: { marginTop: 12, marginBottom: 4, fontSize: 12, textTransform: 'uppercase', color: colors.textMuted },
-  empty: { marginVertical: 4, marginHorizontal: 12, fontSize: 13.6, color: colors.textMuted },
+  subheading: { marginTop: 12, marginBottom: 4, fontSize: size(12), textTransform: 'uppercase', color: colors.textMuted },
+  empty: { marginVertical: 4, marginHorizontal: 12, fontSize: size(13.6), color: colors.textMuted },
   // .people-row: the person on the left, the buttons on the right, a line under each.
   row: {
     flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8, paddingHorizontal: 4,
@@ -159,6 +161,6 @@ const styles = StyleSheet.create({
   button: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6, backgroundColor: colors.accent },
   secondary: { backgroundColor: colors.bgNeutral },
   pressed: { opacity: 0.8 },
-  buttonText: { color: '#ffffff', fontSize: 13.6 },
-  status: { marginTop: 8, fontSize: 13.6, color: colors.red },
+  buttonText: { color: '#ffffff', fontSize: size(13.6) },
+  status: { marginTop: 8, fontSize: size(13.6), color: colors.red },
 });

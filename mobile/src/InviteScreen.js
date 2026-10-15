@@ -5,9 +5,9 @@
 import * as Clipboard from 'expo-clipboard';
 import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { DialogButton, DialogButtons, Popup, styles as popupStyles } from './MessageCard';
+import { DialogButton, DialogButtons, Popup, makeStyles as makePopupStyles } from './MessageCard';
 import { getJson, postJson } from './api';
-import { colors } from './colors';
+import { useStyles } from './theme';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -19,6 +19,8 @@ function untilText(iso) {
 }
 
 export default function InviteScreen({ onClose }) {
+  const popupStyles = useStyles(makePopupStyles);
+  const styles = useStyles(makeStyles);
   const [answer, setAnswer] = useState(null);  // the server's list (null: on its way)
   const [status, setStatus] = useState(null);  // {text, success} under the list, or null
   const [newCode, setNewCode] = useState(null);  // the link New link just made (framed)
@@ -104,10 +106,10 @@ export default function InviteScreen({ onClose }) {
 }
 
 // chat.css's #invite-dialog and .invite-row.
-const styles = StyleSheet.create({
+const makeStyles = (colors, size) => StyleSheet.create({
   help: { marginBottom: 10 },
   list: { flexGrow: 0, flexShrink: 1 },
-  empty: { fontSize: 14.4, color: colors.textMuted },
+  empty: { fontSize: size(14.4), color: colors.textMuted },
   row: { marginBottom: 6 },
   // The address (monospace, 0.85rem), Copy and ×, 6px apart.
   line: { flexDirection: 'row', alignItems: 'center', gap: 6 },
@@ -115,11 +117,11 @@ const styles = StyleSheet.create({
     flex: 1, minWidth: 0, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 6, borderWidth: 2,
     borderColor: 'transparent', backgroundColor: colors.bgDarkest,
   },
-  link: { color: colors.text, fontFamily: 'monospace', fontSize: 13.6 },
+  link: { color: colors.text, fontFamily: 'monospace', fontSize: size(13.6) },
   newLink: { borderColor: colors.accent },  // .invite-row.new: framed in the accent colour
   button: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 6, backgroundColor: colors.bgNeutral },
   pressed: { opacity: 0.8 },
-  buttonText: { color: colors.text, fontSize: 14.4 },
-  expires: { marginTop: 4, fontSize: 12, color: colors.textMuted },
+  buttonText: { color: colors.text, fontSize: size(14.4) },
+  expires: { marginTop: 4, fontSize: size(12), color: colors.textMuted },
   status: { marginTop: 10 },
 });

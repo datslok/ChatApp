@@ -5,10 +5,11 @@ import { useState } from 'react';
 import {
   ActivityIndicator, KeyboardAvoidingView, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View,
 } from 'react-native';
-import { colors } from './colors';
+import { useStyles } from './theme';
 import { SERVER } from './config';
 
 export default function LoginScreen({ onLoggedIn }) {
+  const styles = useStyles(makeStyles);
   // What's typed in the two boxes. A <TextInput> shows `value` and calls onChangeText with
   // every change; we store it, React redraws the box with it ("controlled input").
   const [username, setUsername] = useState('');
@@ -87,23 +88,23 @@ export default function LoginScreen({ onLoggedIn }) {
 }
 
 // login.html's sizes and colours.
-const styles = StyleSheet.create({
+const makeStyles = (colors, size) => StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bgMain },
   middle: { flexGrow: 1, justifyContent: 'center', alignItems: 'center', padding: 16 },
   // The card: 384px wide at most, padding 32px, radius 8px, 12px between its rows.
   card: { width: '100%', maxWidth: 384, padding: 32, borderRadius: 8, backgroundColor: colors.bgPanel, gap: 12 },
-  title: { marginBottom: 8, fontSize: 24, fontWeight: 'bold', color: '#ffffff', textAlign: 'center' },
+  title: { marginBottom: 8, fontSize: size(24), fontWeight: 'bold', color: '#ffffff', textAlign: 'center' },
   field: { gap: 6 },
-  label: { fontSize: 13.6, color: colors.textSoft },
+  label: { fontSize: size(13.6), color: colors.textSoft },
   input: {
     paddingHorizontal: 12, paddingVertical: 10, borderRadius: 6, backgroundColor: colors.bgDarkest,
-    color: colors.text, fontSize: 16,
+    color: colors.text, fontSize: size(16),
   },
-  error: { minHeight: 18, color: colors.red, fontSize: 14.4 },
+  error: { minHeight: 18, color: colors.red, fontSize: size(14.4) },
   button: { padding: 10, borderRadius: 6, backgroundColor: colors.accent, alignItems: 'center' },
   pressed: { opacity: 0.8 },
-  buttonText: { color: '#ffffff', fontSize: 16 },
-  link: { textAlign: 'center', fontSize: 14.4, color: colors.link },
-  switch: { textAlign: 'center', fontSize: 14.4, color: colors.textSoft },
+  buttonText: { color: '#ffffff', fontSize: size(16) },
+  link: { textAlign: 'center', fontSize: size(14.4), color: colors.link },
+  switch: { textAlign: 'center', fontSize: size(14.4), color: colors.textSoft },
   linkButton: { color: colors.link, textDecorationLine: 'underline' },
 });

@@ -172,11 +172,28 @@ the point is for me to understand how it works, not just to have it done.
   A tap on a message's picture or name, a member or a People row opens the profile, a long press the user menu (a
   nested Pressable takes the touch before the message's); a DM's long press in the sidebar the menu; + by "Direct
   messages" a new group; your panel your popup. `groupName` leaves bots out ("Just you"), like the web's groupLabel.
+  Themes (since 2026-10-15, the user's choice: instant, not an app restart): `src/theme.js` has chat.css's eight themes
+  by variable name (--bg-panel -> bgPanel), `makeTheme(appearance)` -> {colors (picked colours on top, accent15/30/35 and
+  yellow8 derived, icon/iconStrong by guardIconColours' WCAG 3:1 rule), size(n) (the text size: n * font_size/16),
+  presence, light}, and `ThemeContext`. **Every file's styles are `const makeStyles = (colors, size) =>
+  StyleSheet.create({...})` with `fontSize: size(16)`, read in each component with `useStyles(makeStyles)`**
+  (cached per theme in a WeakMap); colours in JSX come from `useTheme().colors`; never a module-level colour.
+  App.js holds the appearance (useMemo -> Provider; `Frame` draws the safe area and a dark/light StatusBar);
+  `appearance.json` in Paths.document is the first-paint copy (read with textSync); connection.js's `appearance`
+  comes from "welcome" and "appearance". Fonts and Scale aren't in the app (Windows fonts; the Windows app's zoom).
+  Settings (since 2026-10-15): `src/SettingsScreen.js` (full screen, the phone layout's tab row and ×; remembers the
+  last tab), `src/AccountSettings.js` (username, email with its pending link, password; /me), `src/ProfileSettings.js`
+  (expo-image-picker's own crop, then **expo-image-manipulator** to 256x256 / 960x320 WebP, `uploadPicture` in
+  files.js through expo/fetch; DELETE /settings/avatar|banner; status and bio), `src/AppearanceSettings.js` (swatches,
+  **reanimated-color-picker** in a popup with its own GestureHandlerRootView, live preview at most every 80 ms and
+  saved on Done, Cancel restores; text size with our `src/Slider.js`, a PanResponder slider), `src/SettingsParts.js`
+  (Title, Heading, Help, Field, Button, Status, Form). Opened by ⚙️ on your panel and Edit profile in your popup,
+  which also has Log out (`connection.logout`: POST /logout, close, me null, the login screen).
   `prebuild --clean` failing with EBUSY on `android/`: the adb server started by run:android stands in it (`adb kill-server`).
   `src/people.js` (Avatar with letter colours, StatusDot with the phone shape, BotBadge, Person, nameColor),
   `src/Icon.js` (react-native-svg's SvgXml with the web page's Lucide shapes from `src/icon-shapes.js`,
-  written by tools/make_icons.py too), `src/chats.js` (keys and labels), `src/colors.js` (chat.css's dark
-  theme by variable name; other themes later). dev.db has the test accounts "phone" and "phone2". Rules (from the template's AGENTS.md): check Expo's
+  written by tools/make_icons.py too), `src/chats.js` (keys and labels), `src/theme.js` (the theme, see below).
+  dev.db has the test accounts "phone", "phone2" and "tester" (phone's friends both). Rules (from the template's AGENTS.md): check Expo's
   docs for SDK 57 specifically, always `npx expo install` for packages, never edit the generated
   `android/` (git-ignored; `npx expo prebuild --clean` after changing `app.json`).
 - `static/login.html`: the login / create account page.

@@ -4,7 +4,7 @@
 // a red count on the right.
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Icon from './Icon';
-import { colors } from './colors';
+import { useStyles, useTheme } from './theme';
 import { dmKey, groupName } from './chats';
 import { GroupPicture, Person, PersonPicture } from './people';
 
@@ -15,6 +15,7 @@ import { GroupPicture, Person, PersonPicture } from './people';
 // redraw, so React would rebuild every row each time, pictures included.)
 // A muted chat is faded and has no unread dot (a red count still shows: a mention by name).
 function Row({ chatKey, active, unread, mentions, mutedChats, onPress, onLongPress, children }) {
+  const styles = useStyles(makeStyles);
   const muted = chatKey && mutedChats.has(chatKey);
   const isUnread = chatKey && unread.has(chatKey) && !active && !muted;
   const count = (chatKey && mentions[chatKey]) || 0;
@@ -33,8 +34,11 @@ function Row({ chatKey, active, unread, mentions, mutedChats, onPress, onLongPre
   );
 }
 
-// onUserMenu(id): a DM's long press. onNewGroup: the + by "Direct messages". onMe: your panel at the bottom.
-export default function Sidebar({ connection, view, onPick, onPeople, onUserMenu, onNewGroup, onMe }) {
+// onUserMenu(id): a DM's long press. onNewGroup: the + by "Direct messages". onMe: your panel at the
+// bottom. onSettings: its ⚙️.
+export default function Sidebar({ connection, view, onPick, onPeople, onUserMenu, onNewGroup, onMe, onSettings }) {
+  const styles = useStyles(makeStyles);
+  const { colors } = useTheme();
   const { channels, groups, friends, users, roles, me, myPresence, unread, mentions, mutedChats, incoming } = connection;
   const marks = { unread, mentions, mutedChats };  // every Row gets these: <Row {...marks} ...>
 
@@ -100,25 +104,33 @@ export default function Sidebar({ connection, view, onPick, onPeople, onUserMenu
         })}
       </ScrollView>
 
-      {/* You, at the bottom (the web page's #user-panel): your picture with your status, and your name. */}
-      {/* A tap opens your popup with your status (MeScreen). */}
+      {/* You, at the bottom (the web page's #user-panel): your picture with your status and your name
+          (a tap opens your popup, MeScreen), then ⚙️ Settings. (Mute and deafen come with calls.) */}
       {mine ? (
-        <Pressable onPress={onMe} style={({ pressed }) => [styles.userPanel, pressed && styles.panelPressed]}>
-          <PersonPicture user={mine} me={me} myPresence={myPresence} size={40} ring={colors.bgPanelAlt} />
-          <Text numberOfLines={1} style={styles.myName}>{mine.name}</Text>
-        </Pressable>
+        <View style={styles.userPanel}>
+          <Pressable onPress={onMe} style={({ pressed }) => [styles.me, pressed && styles.panelPressed]}>
+            <PersonPicture user={mine} me={me} myPresence={myPresence} size={40} ring={colors.bgPanelAlt} />
+            <Text numberOfLines={1} style={styles.myName}>{mine.name}</Text>
+          </Pressable>
+          <Pressable
+            onPress={onSettings} hitSlop={6} accessibilityLabel="Settings"
+            style={({ pressed }) => [styles.panelButton, pressed && styles.panelPressed]}
+          >
+            {({ pressed }) => <Icon name="settings" size={22} color={pressed ? colors.iconStrong : colors.icon} />}
+          </Pressable>
+        </View>
       ) : null}
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors, size) => StyleSheet.create({
   sidebar: { flex: 1, backgroundColor: colors.bgPanel },
   lists: { flex: 1 },
   listsInside: { paddingHorizontal: 8, paddingTop: 16, paddingBottom: 8, gap: 2 },
   // .section-heading: 0.75rem, uppercase, muted, margin 16px 0 8px, padding 0 12px.
   heading: {
-    color: colors.textMuted, fontSize: 12, fontWeight: '600', textTransform: 'uppercase',
+    color: colors.textMuted, fontSize: size(12), fontWeight: '600', textTransform: 'uppercase',
     marginTop: 16, marginBottom: 8, paddingHorizontal: 12,
   },
   // .channel on a phone: padding 12px, radius 6px.
@@ -127,7 +139,7 @@ const styles = StyleSheet.create({
   active: { backgroundColor: colors.bgActive },
   pressed: { backgroundColor: colors.bgHover },
   muted: { opacity: 0.5 },  // .channel.muted
-  rowText: { color: colors.textMuted, fontSize: 16 },
+  rowText: { color: colors.textMuted, fontSize: size(16) },
   rowTextStrong: { color: colors.textStrong },
   bold: { fontWeight: '600' },
   grow: { flex: 1 },
@@ -144,11 +156,13 @@ const styles = StyleSheet.create({
     minWidth: 18, height: 18, borderRadius: 9, paddingHorizontal: 5,
     backgroundColor: colors.red, alignItems: 'center', justifyContent: 'center',
   },
-  badgeText: { color: '#ffffff', fontSize: 11, fontWeight: '700' },
+  badgeText: { color: '#ffffff', fontSize: size(11), fontWeight: '700' },
   panelPressed: { backgroundColor: colors.bgHover },
   // The heading with the + at its right end (the + sits where the heading's text would end).
   headingRow: { flexDirection: 'row', alignItems: 'center' },
   newGroup: { marginTop: 16, marginBottom: 8, paddingHorizontal: 12 },
-  userPanel: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, backgroundColor: colors.bgPanelAlt },
-  myName: { flex: 1, color: colors.textStrong, fontSize: 13.6, fontWeight: '600' },
+  userPanel: { flexDirection: 'row', alignItems: 'center', gap: 4, padding: 8, backgroundColor: colors.bgPanelAlt },
+  me: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12, padding: 4, borderRadius: 6, minWidth: 0 },
+  panelButton: { padding: 10, borderRadius: 6 },
+  myName: { flex: 1, color: colors.textStrong, fontSize: size(13.6), fontWeight: '600' },
 });

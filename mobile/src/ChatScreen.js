@@ -14,7 +14,7 @@ import MessageText, { Attachment, CustomEmoji, LinkPreview, formatSize } from '.
 import PinsScreen from './PinsScreen';
 import Picker from './Picker';
 import SearchScreen from './SearchScreen';
-import { colors } from './colors';
+import { useStyles, useTheme } from './theme';
 import { chatLabel } from './chats';
 import { SERVER } from './config';
 import { IMAGE_TYPES, MAX_TRAY_FILES, MAX_UPLOAD_SIZE, uploadFile } from './files';
@@ -54,6 +54,7 @@ function mentionsMe(text, myId) {
 
 // A reaction's emoji: a Unicode one as itself, a custom one ("custom:17") as its picture, 18 px.
 function ReactionEmoji({ reaction, emoji }) {
+  const styles = useStyles(makeStyles);
   const custom = reaction.match(/^custom:(\d+)$/);
   return custom ? <CustomEmoji item={emoji[custom[1]]} size={18} /> : <Text style={styles.chipText}>{reaction}</Text>;
 }
@@ -132,6 +133,7 @@ function buildRows(messages, lastRead, blocked) {
 // A message we jumped to lights up and fades out over 2 seconds (chat.css's .message.flash).
 // Drawn behind the message; `key` gives every jump a new one, so it starts over.
 function Flash() {
+  const styles = useStyles(makeStyles);
   // An Animated.Value is a number React Native can change smoothly, frame by frame, without
   // redrawing the component: here the highlight's opacity, from 1 to 0.
   const fade = useRef(new Animated.Value(1)).current;
@@ -146,6 +148,8 @@ function Flash() {
 // onJump(messageId): go to a message in this chat (the reply's quote). onProfile(id), onUserMenu(id):
 // a tap on the picture or name opens their profile, a long press the user menu.
 function Message({ message, grouped, connection, isBlocked, flash, onShow, onLongPress, onJump, onProfile, onUserMenu }) {
+  const styles = useStyles(makeStyles);
+  const { colors } = useTheme();
   const { users, roles, emoji, me } = connection;
   const sender = users[message.user_id];
   const name = sender?.name ?? message.name;
@@ -234,6 +238,8 @@ function Message({ message, grouped, connection, isBlocked, flash, onShow, onLon
 // The quote above a reply: the reply icon, the original's sender (small picture, name) and its start.
 // A tap goes to the original (like a click on the web page).
 function ReplyLine({ reply, connection, onJump }) {
+  const styles = useStyles(makeStyles);
+  const { colors } = useTheme();
   const { users, emoji } = connection;
   if (reply.deleted) {
     return (
@@ -258,6 +264,7 @@ function ReplyLine({ reply, connection, onJump }) {
 // The long-press menu, a sheet from the bottom. The same choices, in the same order, as the web
 // page's bar on a message: reactions, Reply, Pin, Edit, Delete.
 function MessageMenu({ message, canChange, onClose, onReact, onMoreReactions, onReply, onPin, onEdit, onDelete }) {
+  const styles = useStyles(makeStyles);
   // A Modal covers the whole screen, navigation bar included, so the sheet leaves room for that
   // bar itself: insets.bottom is its height.
   const insets = useSafeAreaInsets();
@@ -292,6 +299,8 @@ function MessageMenu({ message, canChange, onClose, onReact, onMoreReactions, on
 }
 
 function MenuItem({ icon, label, onPress, danger }) {
+  const styles = useStyles(makeStyles);
+  const { colors } = useTheme();
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [styles.menuItem, pressed && styles.pressed]}>
       <Icon name={icon} color={danger ? colors.red : colors.icon} />
@@ -303,6 +312,7 @@ function MenuItem({ icon, label, onPress, danger }) {
 // The + button's sheet: where the files come from. (The web page's + opens the computer's file
 // picker; a phone has three places: the photos, the camera, and its files.)
 function AttachMenu({ onClose, onPhotos, onCamera, onFiles }) {
+  const styles = useStyles(makeStyles);
   const insets = useSafeAreaInsets();
   return (
     <Modal transparent animationType="fade" visible onRequestClose={onClose} navigationBarTranslucent statusBarTranslucent>
@@ -320,6 +330,8 @@ function AttachMenu({ onClose, onPhotos, onCamera, onFiles }) {
 // The tray above the text box (the web page's #tray): what's about to be sent, each with an ×.
 // A picture as a small square, any other file as its name and size; a failed one outlined in red.
 function Tray({ items, onRemove }) {
+  const styles = useStyles(makeStyles);
+  const { colors } = useTheme();
   return (
     <View style={styles.tray}>
       {items.map((item) => (
@@ -374,6 +386,8 @@ export default function ChatScreen({
   connection, backRef, shared, onSharedTaken, trays, setTrays, drafts, setDrafts, onOpenChat, popup, setPopup,
   onProfile, onUserMenu, focusTick,
 }) {
+  const styles = useStyles(makeStyles);
+  const { colors } = useTheme();
   const { current, messages, users, roles, me, lastRead, more, blocked } = connection;
   const [menuFor, setMenuFor] = useState(null);    // the message whose menu is open
   const [replyTo, setReplyTo] = useState(null);    // the message we're replying to
@@ -1033,7 +1047,7 @@ export default function ChatScreen({
 }
 
 // The web page's sizes (chat.css), with its rem as 16 px: 0.75rem = 12, 0.85rem = 13.6, and so on.
-const styles = StyleSheet.create({
+const makeStyles = (colors, size) => StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bgMain },
   // The light behind a message we jumped to: the accent at 35%, over the whole message.
   flash: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.accent35 },
@@ -1050,16 +1064,16 @@ const styles = StyleSheet.create({
   pictureTouch: { alignSelf: 'flex-start' },  // (only the picture itself, not the row's whole height)
   body: { flex: 1, minWidth: 0 },
   header: { flexDirection: 'row', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' },
-  name: { fontSize: 16, fontWeight: '600' },
-  time: { fontSize: 12, color: colors.textMuted },
+  name: { fontSize: size(16), fontWeight: '600' },
+  time: { fontSize: size(12), color: colors.textMuted },
   note: { color: colors.textMuted, fontStyle: 'italic' },
   blockedRow: { alignItems: 'center', gap: 8, marginTop: 8 },
-  blocked: { flex: 1, color: colors.textMuted, fontSize: 14 },
+  blocked: { flex: 1, color: colors.textMuted, fontSize: size(14) },
   show: { color: colors.link },
   // .reply-line: 0.8rem, muted, the name bold in --text-soft.
   replyLine: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 2 },
-  replyName: { fontSize: 12.8, fontWeight: '700', color: colors.textSoft },
-  replyText: { flex: 1, fontSize: 12.8, color: colors.textMuted },
+  replyName: { fontSize: size(12.8), fontWeight: '700', color: colors.textSoft },
+  replyText: { flex: 1, fontSize: size(12.8), color: colors.textMuted },
   // .reactions and .reaction-chip.
   reactions: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 4 },
   chip: {
@@ -1068,27 +1082,27 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bgPanel,
   },
   chipMine: { borderColor: colors.accent, backgroundColor: colors.accent15 },
-  chipText: { fontSize: 13.6, color: colors.text },
+  chipText: { fontSize: size(13.6), color: colors.text },
   // .date-divider: "──── Today ────".
   dateDivider: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 16, marginBottom: 4 },
   dateLine: { flex: 1, height: 1, backgroundColor: colors.line },
-  dateText: { fontSize: 12, fontWeight: '600', color: colors.textMuted },
+  dateText: { fontSize: size(12), fontWeight: '600', color: colors.textMuted },
   // .new-divider: a red line ending in a red NEW tag.
   newDivider: { flexDirection: 'row', alignItems: 'center', marginTop: 12, marginBottom: 4 },
   newLine: { flex: 1, height: 1, backgroundColor: colors.red },
   newTag: {
     paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4, overflow: 'hidden',
-    backgroundColor: colors.red, color: '#ffffff', fontSize: 10.4, fontWeight: '700',
+    backgroundColor: colors.red, color: '#ffffff', fontSize: size(10.4), fontWeight: '700',
   },
-  channelStart: { marginTop: 8, marginBottom: 16, fontSize: 13.6, color: colors.textMuted },
+  channelStart: { marginTop: 8, marginBottom: 16, fontSize: size(13.6), color: colors.textMuted },
   // The long-press sheet.
   backdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0, 0, 0, 0.5)' },
   sheet: { backgroundColor: colors.bgPanel, borderTopLeftRadius: 12, borderTopRightRadius: 12 },
   quickReactions: { flexDirection: 'row', justifyContent: 'space-around', paddingVertical: 12 },
   quickReaction: { padding: 8, borderRadius: 24 },
-  quickReactionText: { fontSize: 28 },
+  quickReactionText: { fontSize: size(28) },
   menuItem: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 20, paddingVertical: 14 },
-  menuText: { color: colors.text, fontSize: 16 },
+  menuText: { color: colors.text, fontSize: size(16) },
   danger: { color: colors.red },
   // #autocomplete.
   autocomplete: {
@@ -1097,13 +1111,13 @@ const styles = StyleSheet.create({
   },
   suggestion: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 8, paddingVertical: 6, borderRadius: 6 },
   suggestionPressed: { backgroundColor: colors.bgHover },
-  suggestionAt: { width: 24, textAlign: 'center', fontSize: 18, color: colors.textMuted },
-  suggestionName: { flexShrink: 1, fontSize: 15.2 },
-  suggestionEmoji: { width: 24, textAlign: 'center', fontSize: 20.8 },
-  suggestionDetail: { marginLeft: 'auto', fontSize: 12.8, color: colors.textMuted },  // pushed to the right
+  suggestionAt: { width: 24, textAlign: 'center', fontSize: size(18), color: colors.textMuted },
+  suggestionName: { flexShrink: 1, fontSize: size(15.2) },
+  suggestionEmoji: { width: 24, textAlign: 'center', fontSize: size(20.8) },
+  suggestionDetail: { marginLeft: 'auto', fontSize: size(12.8), color: colors.textMuted },  // pushed to the right
   // #status-line: always 1.2 lines tall, typing on the left, sending on the right.
   statusLine: { flexDirection: 'row', justifyContent: 'space-between', gap: 12, height: 17, paddingHorizontal: 16 },
-  statusText: { flexShrink: 1, fontSize: 13.6, lineHeight: 17, color: colors.textMuted },
+  statusText: { flexShrink: 1, fontSize: size(13.6), lineHeight: size(17), color: colors.textMuted },
   statusError: { color: colors.red },
   // The + and the smiley: like the web page's "+" and smiley buttons, on the message box's colour.
   smiley: { backgroundColor: colors.bgInput, borderRadius: 8, padding: 10 },
@@ -1114,7 +1128,7 @@ const styles = StyleSheet.create({
   trayFailed: { borderWidth: 2, borderColor: colors.red },
   trayImage: { width: '100%', height: '100%' },
   trayFileRow: { flexDirection: 'row', gap: 4 },
-  trayFileName: { flexShrink: 1, fontSize: 12.8, color: colors.text },
+  trayFileName: { flexShrink: 1, fontSize: size(12.8), color: colors.text },
   trayRemove: {
     position: 'absolute', top: 4, right: 4, width: 28, height: 28, borderRadius: 14,
     alignItems: 'center', justifyContent: 'center', backgroundColor: colors.red,
@@ -1124,15 +1138,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: 6, marginHorizontal: 8, paddingHorizontal: 12,
     paddingVertical: 6, borderTopLeftRadius: 8, borderTopRightRadius: 8, backgroundColor: colors.bgPanel,
   },
-  replyBarText: { flex: 1, fontSize: 13.6, color: colors.textSoft },
+  replyBarText: { flex: 1, fontSize: size(13.6), color: colors.textSoft },
   replyBarName: { color: colors.textStrong, fontWeight: '700' },
   // #chat-form on a phone: gap 6px, padding 8px; the box and Send as on the web page.
   form: { flexDirection: 'row', alignItems: 'flex-end', gap: 6, padding: 8 },
   input: {
-    flex: 1, maxHeight: 200, backgroundColor: colors.bgInput, color: colors.text, fontSize: 16,
-    lineHeight: 22, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10,
+    flex: 1, maxHeight: 200, backgroundColor: colors.bgInput, color: colors.text, fontSize: size(16),
+    lineHeight: size(22), borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10,
   },
   send: { backgroundColor: colors.accent, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 11 },
   sendPressed: { opacity: 0.8 },
-  sendText: { color: '#ffffff', fontSize: 16 },
+  sendText: { color: '#ffffff', fontSize: size(16) },
 });

@@ -4,7 +4,7 @@
 // which is exactly how icon-shapes.js keeps the shapes, so we wrap them in an <svg> like the web
 // page's icons.js does, with chat.css's .icon look: lines in one colour, 1.8 thick, round ends.
 import { SvgXml } from 'react-native-svg';
-import { colors } from './colors';
+import { useTheme } from './theme';
 import { ICON_SHAPES } from './icon-shapes';
 
 // The smiley on the emoji buttons is the web page's own drawing (messages.js, makeSmileyIcon), not
@@ -13,7 +13,10 @@ const SMILEY = `<circle cx="12" cy="12" r="9"/><path d="M8.5 14.5c.9 1.3 2.1 2 3
 const SMILEY_EYES = (color) => `<circle cx="9" cy="10" r="1.2" fill="${color}" stroke="none"/>` +
   `<circle cx="15" cy="10" r="1.2" fill="${color}" stroke="none"/>`;
 
-export default function Icon({ name, size = 20, color = colors.icon }) {
+// color: the lines' colour (the theme's icon colour if none is given).
+export default function Icon({ name, size = 20, color }) {
+  const { colors } = useTheme();
+  color = color ?? colors.icon;
   const shape = name === 'smiley' ? SMILEY + SMILEY_EYES(color) : ICON_SHAPES[name] ?? '';
   const xml = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="${color}"
     stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${shape}</svg>`;

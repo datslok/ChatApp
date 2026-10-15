@@ -41,6 +41,23 @@ export async function uploadFile(item) {
   return answer.id;
 }
 
+// A new profile picture or banner (Settings → Profile), already cropped and shrunk: a WebP file.
+// The server answers everyone with a fresh "users", which shows it. Returns null, or what went wrong.
+export async function uploadPicture(kind, uri) {
+  try {
+    const response = await fetch(`${SERVER}/settings/${kind}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'image/webp' },
+      body: new File(uri),
+    });
+    if (response.ok) return null;
+    const answer = await response.json().catch(() => ({}));
+    return typeof answer.detail === 'string' ? answer.detail : 'Upload failed.';
+  } catch {
+    return "Couldn't reach the server. Try again in a moment.";
+  }
+}
+
 // Where an attachment is kept once downloaded: the app's cache (Android may clear it when space
 // runs low), in a folder per file id so two files called "notes.pdf" don't overwrite each other.
 // It keeps its own name, so the app that opens it shows the right one.

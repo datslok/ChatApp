@@ -8,7 +8,7 @@ import { getCookie } from '../modules/cookies';
 import ImageViewer from './ImageViewer';
 import Icon from './Icon';
 import MathView from './MathView';
-import { colors } from './colors';
+import { useStyles, useTheme } from './theme';
 import { SERVER } from './config';
 import { downloadFile, openFile, saveFile } from './files';
 import { isOnlyEmoji, parseMessage, tokensToCodes } from './format';
@@ -48,6 +48,7 @@ export function formatSize(bytes) {
 // A ||spoiler||: a dark bar until tapped. While hidden it shows only blank text the same length
 // (so nothing inside it, links or mentions, can be tapped or read); once revealed, the real thing.
 function Spoiler({ parts, context }) {
+  const styles = useStyles(makeStyles);
   const [revealed, setRevealed] = useState(false);
   if (!revealed) {
     return <Text style={styles.spoilerHidden} onPress={() => setRevealed(true)}>{plainText(parts, context)}</Text>;
@@ -69,7 +70,7 @@ function plainText(parts, context) {
 // The inline pieces as React Native elements. A <Text> inside a <Text> carries on the same line
 // with its own style added, like a <span> in HTML; pictures and maths can sit in the line too.
 function renderInline(parts, context) {
-  const { users, emoji, jumbo } = context;
+  const { users, emoji, jumbo, styles } = context;
   return parts.map((part, index) => {
     switch (part.type) {
       case 'text':
@@ -107,6 +108,7 @@ function renderInline(parts, context) {
 // as big as KaTeX makes it. `atoms` flattens the pieces into those items: words (with the styles of
 // what they're inside: bold, a link...), formulas, emoji, and line breaks.
 function atoms(parts, context, styles_ = [], onPress = null) {
+  const { styles } = context;
   const result = [];
   for (const part of parts) {
     if (part.type === 'text') {
@@ -129,6 +131,7 @@ function atoms(parts, context, styles_ = [], onPress = null) {
 }
 
 function WrappedParagraph({ parts, context, textStyle, tail }) {
+  const styles = useStyles(makeStyles);
   const items = atoms(parts, context);
   return (
     <View style={styles.wrapped}>
@@ -188,6 +191,7 @@ const ONE_EMOJI = /\p{Regional_Indicator}{2}|[#*0-9]️?⃣|\p{Extended_Pictogra
 // pictures and the rest as text without a fixed line height. (In one line of text, Android sat the
 // emoji lower than the pictures and cut off their bottoms.) split() keeps the <:17> tokens' ids.
 function JumboEmoji({ text, emoji, editedLabel }) {
+  const styles = useStyles(makeStyles);
   return (
     <View style={styles.jumboRow}>
       {text.split(/<:(\d+)>/).map((part, index) => {
@@ -202,11 +206,12 @@ function JumboEmoji({ text, emoji, editedLabel }) {
 }
 
 export default function MessageText({ text, users, emoji, edited, note }) {
+  const styles = useStyles(makeStyles);
   const jumbo = isOnlyEmoji(text);
   if (jumbo) {
     return <JumboEmoji text={text} emoji={emoji} editedLabel={edited ? <Text style={styles.edited}>(edited)</Text> : null} />;
   }
-  const context = { users, emoji, jumbo };
+  const context = { users, emoji, jumbo, styles };  // (styles: for the helpers above, which aren't components)
   const textStyle = [styles.text, jumbo && styles.jumbo, note && styles.note];
   const blocks = parseMessage(text);
   const editedLabel = edited ? <Text style={styles.edited}> (edited)</Text> : null;
@@ -243,6 +248,7 @@ export default function MessageText({ text, users, emoji, edited, note }) {
 // A picture as big as fits in maxWidth x maxHeight without changing its shape (CSS max-width +
 // max-height). Its size is only known once loaded (onLoad), so until then it takes a small space.
 export function FittedImage({ uri, maxWidth, maxHeight, style, onPress, onLongPress }) {
+  const styles = useStyles(makeStyles);
   const [natural, setNatural] = useState(null);   // the picture's own {width, height}
   const [room, setRoom] = useState(maxWidth);      // how wide it may be here (the column may be narrower)
   let size = { width: Math.min(room, maxWidth), height: 120 };
@@ -272,6 +278,7 @@ export function FittedImage({ uri, maxWidth, maxHeight, style, onPress, onLongPr
 // name), or null for us. onLongPress: the message's menu (a tap target inside the message would
 // otherwise take the touch).
 export function Attachment({ file, sender, onLongPress }) {
+  const styles = useStyles(makeStyles);
   const [viewing, setViewing] = useState(false);
   if (file.video) return <VideoAttachment file={file} sender={sender} onLongPress={onLongPress} />;
   if (file.image) {
@@ -297,6 +304,7 @@ export function Attachment({ file, sender, onLongPress }) {
 // React Native's login cookie, so we give it the cookie as a header (modules/cookies). It fetches the
 // video in pieces as it plays; until play is pressed, only enough for the first picture.
 function VideoAttachment({ file, sender, onLongPress }) {
+  const styles = useStyles(makeStyles);
   // useMemo: the same source object at every redraw (a new one would make a new player).
   const source = useMemo(() => {
     const cookie = getCookie(SERVER);
@@ -352,6 +360,8 @@ function VideoAttachment({ file, sender, onLongPress }) {
 // warning when someone else sent it), then downloads it with a progress bar under the name, saves it
 // in the phone's Download folder (like a browser), and offers to open it (in an app that can).
 function FileAttachment({ file, sender, onLongPress }) {
+  const styles = useStyles(makeStyles);
+  const { colors } = useTheme();
   const [progress, setProgress] = useState(null);  // 0..1 while downloading, else null
 
   function ask() {
@@ -407,6 +417,7 @@ function FileAttachment({ file, sender, onLongPress }) {
 // A link's preview card (the web page's makePreviewCard): the site, the title (a link), a
 // description and a picture, all fetched by our server; the picture comes from our server too.
 export function LinkPreview({ preview }) {
+  const styles = useStyles(makeStyles);
   return (
     <View style={styles.preview}>
       {preview.site ? <Text style={styles.previewSite}>{preview.site}</Text> : null}
@@ -425,26 +436,26 @@ export function LinkPreview({ preview }) {
 }
 
 // chat.css's sizes (rem as 16 px).
-const styles = StyleSheet.create({
-  text: { fontSize: 16, lineHeight: 22, color: colors.text },
+const makeStyles = (colors, size) => StyleSheet.create({
+  text: { fontSize: size(16), lineHeight: size(22), color: colors.text },
   note: { color: colors.textMuted, fontStyle: 'italic' },
-  jumbo: { fontSize: 41.6, lineHeight: 50 },
+  jumbo: { fontSize: size(41.6), lineHeight: size(50) },
   // .jumbo: emoji at 2.6rem; pictures 48 px; all centred on one line, wrapping when there are many.
   jumboRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 4 },
-  jumboText: { fontSize: 41.6, color: colors.text },
-  edited: { fontSize: 11.2, color: colors.textMuted, fontStyle: 'normal' },
+  jumboText: { fontSize: size(41.6), color: colors.text },
+  edited: { fontSize: size(11.2), color: colors.textMuted, fontStyle: 'normal' },
   bold: { fontWeight: 'bold' },
   italic: { fontStyle: 'italic' },
   strike: { textDecorationLine: 'line-through' },
   link: { color: colors.link },
   mention: { backgroundColor: colors.accent30, color: colors.mentionText, fontWeight: '500' },
   // `code` and code blocks: monospace at 0.875em, on the panel colour.
-  code: { fontFamily: 'monospace', fontSize: 14, backgroundColor: colors.bgPanel },
+  code: { fontFamily: 'monospace', fontSize: size(14), backgroundColor: colors.bgPanel },
   codeBlock: {
     marginVertical: 4, padding: 8, borderRadius: 4, borderWidth: 1, borderColor: colors.border,
     backgroundColor: colors.bgPanel,
   },
-  codeBlockText: { fontFamily: 'monospace', fontSize: 14, lineHeight: 20, color: colors.text },
+  codeBlockText: { fontFamily: 'monospace', fontSize: size(14), lineHeight: size(20), color: colors.text },
   // > quotes: a 4px bar on the left.
   quote: { marginVertical: 2, paddingLeft: 12, borderLeftWidth: 4, borderLeftColor: colors.bgNeutral },
   // (The text in the bar's own colour: Android ignores "transparent" text inside a line.)
@@ -469,7 +480,7 @@ const styles = StyleSheet.create({
   },
   attachmentPressed: { opacity: 0.7 },
   attachmentRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  attachmentName: { flexShrink: 1, color: colors.link, fontSize: 16 },
+  attachmentName: { flexShrink: 1, color: colors.link, fontSize: size(16) },
   // Its progress bar: 4px, the link colour on the darkest one.
   progress: { height: 4, marginTop: 6, borderRadius: 2, backgroundColor: colors.bgDarkest, overflow: 'hidden' },
   progressFill: { height: 4, backgroundColor: colors.link },
@@ -478,8 +489,8 @@ const styles = StyleSheet.create({
     maxWidth: 432, marginTop: 6, paddingTop: 10, paddingHorizontal: 14, paddingBottom: 12, gap: 4,
     borderLeftWidth: 4, borderLeftColor: colors.border, borderRadius: 4, backgroundColor: colors.bgPanel,
   },
-  previewSite: { fontSize: 12, color: colors.textSoft },
-  previewTitle: { fontWeight: '600', color: colors.link, fontSize: 16 },
-  previewDescription: { fontSize: 13.6, color: colors.text },
+  previewSite: { fontSize: size(12), color: colors.textSoft },
+  previewTitle: { fontWeight: '600', color: colors.link, fontSize: size(16) },
+  previewDescription: { fontSize: size(13.6), color: colors.text },
   previewImage: { marginTop: 6, borderRadius: 4 },
 });

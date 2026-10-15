@@ -6,10 +6,11 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Icon from './Icon';
 import { chatLabel, dmPartner } from './chats';
-import { colors } from './colors';
+import { useStyles, useTheme } from './theme';
 
 // The name, and in a group its members underneath: "you, kari, ola".
 export function ChatTitle({ connection, chatKey }) {
+  const styles = useStyles(makeStyles);
   const { groups, users, me } = connection;
   const group = groups.find((g) => g.key === chatKey);
   const members = group?.members.map((id) => (id === me.id ? 'you' : users[id]?.name ?? 'someone')).join(', ');
@@ -22,6 +23,8 @@ export function ChatTitle({ connection, chatKey }) {
 }
 
 function HeaderIcon({ icon, label, onPress }) {
+  const styles = useStyles(makeStyles);
+  const { colors } = useTheme();
   return (
     <Pressable
       onPress={onPress}
@@ -59,11 +62,11 @@ export function ChatButtons({ connection, chatKey, onPopup, onGroupMenu }) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors, size) => StyleSheet.create({
   title: { flex: 1, minWidth: 0 },  // (minWidth 0: a long name shrinks and gets its "…")
-  name: { fontSize: 16, fontWeight: '600', color: colors.textStrong },
+  name: { fontSize: size(16), fontWeight: '600', color: colors.textStrong },
   // #group-members: 0.75rem, muted.
-  members: { fontSize: 12, color: colors.textMuted },
+  members: { fontSize: size(12), color: colors.textMuted },
   // A little narrower than the menu and members buttons, so all of them fit beside the name.
   icon: { paddingHorizontal: 6, paddingVertical: 8, borderRadius: 6 },
   iconPressed: { backgroundColor: colors.bgHover },

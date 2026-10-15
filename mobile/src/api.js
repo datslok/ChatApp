@@ -21,3 +21,4 @@ async function request(method, path, body) {
 
 export const getJson = (path) => request('GET', path);
 export const postJson = (path, body = {}) => request('POST', path, body);
+export const deleteJson = (path) => request('DELETE', path);
