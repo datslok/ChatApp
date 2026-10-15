@@ -295,16 +295,6 @@ export default function ChatScreen({ connection, backRef }) {
   const [sending, setSending] = useState('');      // "Sending GIF…", or what went wrong (the status line's right side)
   // A ref to the text box itself (not its text): input.current.focus() puts the cursor in it.
   const input = useRef(null);
-  // How much room the keyboard took last time (above the navigation bar), so the emoji panel can take
-  // exactly the same: the text box then stays where it was while typing. null: not opened yet.
-  // (Android reports the keyboard's height above the navigation bar already, so it's used as it is.)
-  const [keyboardRoom, setKeyboardRoom] = useState(null);
-
-  useEffect(() => {
-    const listener = Keyboard.addListener('keyboardDidShow', (event) => setKeyboardRoom(event.endCoordinates.height));
-    return () => listener.remove();
-  }, []);
-
   // Android's back button: App.js asks this first (backRef), and while the emoji panel is open, back
   // closes it. (Its own listener wouldn't do: Android asks the newest listener first, and App.js's
   // is registered again now and then, which made it newer.) True: handled.
@@ -604,7 +594,6 @@ export default function ChatScreen({ connection, backRef }) {
           connection={connection}
           mode="insert"
           inline
-          height={keyboardRoom}
           onPickEmoji={insertEmoji}  // (the panel stays open for more, like the web page's)
           onPickGif={sendGif}
           onClose={() => setPicker(null)}

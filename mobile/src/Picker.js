@@ -220,7 +220,7 @@ function GifTab({ onPick }) {
 
 // mode "insert" (writing: Emoji | GIF) or "react" (emoji only). onPickEmoji(value): a Unicode emoji
 // or "custom:17". onPickGif(gif): a GIPHY result. inline: a panel instead of a popup (see the end).
-export default function Picker({ connection, mode, inline, height, onPickEmoji, onPickGif, onClose }) {
+export default function Picker({ connection, mode, inline, onPickEmoji, onPickGif, onClose }) {
   const [tab, setTab] = useState(mode === 'react' ? 'emoji' : lastTab);
   const insets = useSafeAreaInsets();
   const windowHeight = useWindowDimensions().height;
@@ -248,9 +248,10 @@ export default function Picker({ connection, mode, inline, height, onPickEmoji, 
   );
 
   // Writing: a panel in the keyboard's place, under the text box (ChatScreen puts it there), so the
-  // box moves up above it like it does for the keyboard. `height`: the keyboard's, if we know it.
+  // box moves up above it like it does for the keyboard. Always 55% of the screen, like the web
+  // page's (copying the keyboard's height made it shorter after the keyboard had been open).
   if (inline) {
-    return <View style={[styles.sheet, styles.inline, { height: height ?? windowHeight * 0.55 }]}>{tabs}</View>;
+    return <View style={[styles.sheet, styles.inline, { height: windowHeight * 0.55 }]}>{tabs}</View>;
   }
 
   // A reaction: a sheet over the bottom 55% of the screen; tapping above it closes it.
