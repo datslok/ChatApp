@@ -9,6 +9,7 @@ import { RecordingPresets, requestRecordingPermissionsAsync, useAudioRecorder, u
 import { RTCView, mediaDevices } from '@livekit/react-native-webrtc';
 import { Button, Heading, Help, Title } from './SettingsParts';
 import Slider from './Slider';
+import { CAMERA_CAPTURE } from './voice';
 import { useStyles } from './theme';
 
 // A row of choices, one of them picked (like a <select>, but every choice in sight). It wraps onto
@@ -165,7 +166,9 @@ export function VideoSettings({ voice }) {
     stopPreview();
     setProblem('');
     try {
-      const next = await mediaDevices.getUserMedia({ video: { facingMode: which } });
+      // The same size as in calls (4:3, the sensor's shape), so the preview shows what the others will see.
+      const { width, height } = CAMERA_CAPTURE.resolution;
+      const next = await mediaDevices.getUserMedia({ video: { facingMode: which, width, height } });
       streamRef.current = next;
       setStream(next);
     } catch {
@@ -190,7 +193,8 @@ export function VideoSettings({ voice }) {
       <Choices choices={[['user', 'Front'], ['environment', 'Back']]} value={facing} onPick={pick} />
       <Help>The one that turns on in calls. In a call you can switch with the camera button.</Help>
       {stream ? (
-        <RTCView streamURL={stream.toURL()} style={styles.preview} objectFit="cover" mirror={facing === 'user'} />
+        // contain: all of the picture, nothing cut off (cover filled the box by cutting).
+        <RTCView streamURL={stream.toURL()} style={styles.preview} objectFit="contain" mirror={facing === 'user'} />
       ) : null}
       {inCall ? <Help>You're in a call: leave it to test the camera.</Help> : null}
       <View style={styles.buttonRow}>
@@ -219,7 +223,10 @@ const makeStyles = (colors, size) => StyleSheet.create({
   meterLevel: { height: '100%', backgroundColor: colors.textMuted },
   meterOpen: { backgroundColor: colors.green },
   buttonRow: { flexDirection: 'row', marginTop: 8 },
-  // #camera-preview: the camera's picture, 16:9, rounded.
-  preview: { width: '100%', aspectRatio: 16 / 9, borderRadius: 8, overflow: 'hidden', marginTop: 8, backgroundColor: '#000000' },
+  // The camera's picture, rounded: 3:4, the shape of a 4:3 camera with the phone held upright, in the middle.
+  preview: {
+    width: '70%', aspectRatio: 3 / 4, alignSelf: 'center', borderRadius: 8, overflow: 'hidden', marginTop: 8,
+    backgroundColor: '#000000',
+  },
   error: { marginTop: 8, color: colors.red, fontSize: size(13.6) },
 });

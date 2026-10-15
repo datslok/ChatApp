@@ -38,7 +38,7 @@ const SPEAKING_HOLD_MS = 300;
 // 960x720 (720x960 held upright). Sent as H.264, which the phone's own video chip encodes (VP8 was
 // done in software by libvpx, and went blurry now and then), up to 1.7 Mbit/s at 30 fps. LiveKit adds
 // two smaller copies (simulcast) for small tiles and slow connections.
-const CAMERA_CAPTURE = { resolution: VideoPresets43.h720.resolution };
+export const CAMERA_CAPTURE = { resolution: VideoPresets43.h720.resolution };
 const CAMERA_PUBLISH = { videoCodec: 'h264', videoEncoding: { maxBitrate: 1_700_000, maxFramerate: 30 } };
 
 // ----- Settings → Voice & audio and Video, kept on the phone (like the web page's localStorage
