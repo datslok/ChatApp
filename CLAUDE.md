@@ -51,7 +51,11 @@ the point is for me to understand how it works, not just to have it done.
   Every colour in chat.css is a variable in its `:root`, named by role. Both folders are served with `Cache-Control: no-cache` (FreshStaticFiles), as is
   `/`. The server hashes the page's files at startup (`PAGE_VERSION`, sent in "welcome"); a page that
   reconnects to a different one reloads itself (core.js, `reloadIfOutdated`; not in a call, with files
-  in the tray, or while sending or editing; the text box is kept through sessionStorage).
+  in any tray, or while sending or editing; every chat's text is kept through sessionStorage "drafts").
+  Each chat keeps its own tray and half-written text, like Discord (the user's wish, 2026-10-15): messages.js
+  `trays` / `drafts` by chat key, `tray` = the open chat's list, `switchDraft` (called by switchChannel) swaps
+  them; `sendTray` stops if the chat changes mid-upload (messages go to the open chat). The phone app: App.js's
+  `trays` / `drafts`, ChatScreen's `setTrayOf` / `setDraftOf`.
 - The phone app is a PWA: `static/manifest.json` (served at `/manifest.json`), `static/sw.js` (the service
   worker, at `/sw.js` so it covers the whole site; registered by notifications.js; deliberately no offline
   copies), icons in `static/icons/` (at `/icons/`, made by `tools/make_pwa_icons.py`). Linked from
@@ -135,7 +139,19 @@ the point is for me to understand how it works, not just to have it done.
   IS_PENDING, copies the bytes, and returns {name, uri}: the name MediaStore gave it (it adds " (1)", " (2)" from the clean name;
   after 32 it throws and we add the time). No permission (Android 10+; older ones get an error). expo-media-library
   was tried first and dropped: it only knows Pictures/DCIM. `saveFile` then deletes the app's own copy, and App.js
-  empties `Paths.cache/downloads` at every start (`clearDownloads`), so nothing stays twice.
+  empties `Paths.cache/downloads` (and `shared`) at every start (`clearOldCopies`), so nothing stays twice.
+  Sharing to the app (since 2026-10-15): `plugins/share-intent.js` adds SEND / SEND_MULTIPLE `*/*` intent filters to
+  MainActivity; our module `mobile/modules/shared-files` (Kotlin) reads the Intent: `getInitialShareAsync` (started by
+  a share) and an "onShare" event from `OnNewIntent` (already open; singleTask), each `{files: [{uri, name, size, type}],
+  text}` with names from OpenableColumns, marked handled (and LAUNCHED_FROM_HISTORY ignored) so it isn't shared twice;
+  `copyAsync` copies one into `cache/shared/<uuid>/<name>`. App.js keeps the share through login; a share while the
+  app runs (`fromStart` false) goes straight into the open chat (the user's wish), one that started it (or on the
+  People page) shows `src/ShareScreen.js` ("Share to…": the sidebar's chats with a search box; back or × cancels).
+  ChatScreen gets it as `shared`: text appended to the box, files that fit copied and passed to `addToTray`; until
+  it's sent (or another chat opens), back takes it out again and `BackHandler.exitApp()`s to the sending app.
+  Development builds can't test a share that starts the app: expo-dev-launcher swallows it (its launcher screen,
+  then a MainActivity Intent without action or extras); a release build has no launcher.
+  `prebuild --clean` failing with EBUSY on `android/`: the adb server started by run:android stands in it (`adb kill-server`).
   `src/people.js` (Avatar with letter colours, StatusDot with the phone shape, BotBadge, Person, nameColor),
   `src/Icon.js` (react-native-svg's SvgXml with the web page's Lucide shapes from `src/icon-shapes.js`,
   written by tools/make_icons.py too), `src/chats.js` (keys and labels), `src/colors.js` (chat.css's dark

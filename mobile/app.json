@@ -23,6 +23,7 @@
     },
     "plugins": [
       "./plugins/animated-webp",
+      "./plugins/share-intent",
       "expo-sharing"
     ]
   }

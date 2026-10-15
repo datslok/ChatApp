@@ -120,13 +120,16 @@ export async function saveFile(file, copy) {
   return { ...saved, type };
 }
 
-// Empty the app's download folder (at every start): what's left there was only needed for Open and
-// Share, and the other app has long since read it.
-export function clearDownloads() {
-  try {
-    const folder = new Directory(Paths.cache, 'downloads');
-    if (folder.exists) folder.delete();
-  } catch {
-    // Not worth bothering anyone about: Android empties the cache by itself when space runs low.
+// Empty the app's folders of copies (at every start): downloads/ was only needed for Open and Share,
+// and the other app has long since read it; shared/ holds files shared to the app (modules/shared-files)
+// for the tray, which doesn't outlive the app.
+export function clearOldCopies() {
+  for (const name of ['downloads', 'shared']) {
+    try {
+      const folder = new Directory(Paths.cache, name);
+      if (folder.exists) folder.delete();
+    } catch {
+      // Not worth bothering anyone about: Android empties the cache by itself when space runs low.
+    }
   }
 }

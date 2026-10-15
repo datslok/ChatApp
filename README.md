@@ -685,8 +685,11 @@ http://localhost:8001; the email verification link is printed in the server's wi
 Later, when only JavaScript changed, `npx expo start` is enough. Run `npx expo run:android` again
 after adding a package with native code. Add packages with `npx expo install <name>` (not
 `npm install`), so you get the version that matches Expo. The `android\` folder is generated from
-`app.json` (and not in git): never edit it by hand. After changing `app.json`, run
-`npx expo prebuild --clean` first, which makes it again, then `npx expo run:android`.
+`app.json` (and not in git): never edit it by hand. After changing `app.json` (or a plugin in
+`mobile\plugins\`, or a module in `mobile\modules\`), run `npx expo prebuild --clean` first, which makes
+it again, then `npx expo run:android`. If prebuild says `EBUSY: resource busy or locked` about
+`android`, the adb server that `run:android` started is still standing in that folder: run
+`adb kill-server` (and `adb reverse tcp:8001 tcp:8001` again afterwards).
 
 ---
 

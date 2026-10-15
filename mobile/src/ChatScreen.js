@@ -5,7 +5,7 @@ import { File } from 'expo-file-system';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import {
-  ActivityIndicator, Alert, FlatList, Image, Keyboard, Modal, Pressable, StyleSheet, Text,
+  ActivityIndicator, Alert, BackHandler, FlatList, Image, Keyboard, Modal, Pressable, StyleSheet, Text,
   TextInput, View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -16,6 +16,7 @@ import { colors } from './colors';
 import { chatLabel } from './chats';
 import { SERVER } from './config';
 import { IMAGE_TYPES, MAX_TRAY_FILES, MAX_UPLOAD_SIZE, uploadFile } from './files';
+import { copySharedFile } from '../modules/shared-files';
 import { Avatar, BotBadge, nameColor } from './people';
 
 // Quick reactions in the long-press menu, before its smiley (which opens the whole emoji picker).
@@ -351,9 +352,11 @@ function extension(asset) {
 }
 
 // backRef: App.js's; this fills in what the back button should do here first (see below).
-export default function ChatScreen({ connection, backRef }) {
+// shared: something shared to the app from another one, for the tray and the text box (App.js), or
+// null; onSharedTaken: say it's been taken. trays, drafts (and their setters): every chat's tray and
+// half-written text (App.js keeps them, so they stay while this screen is away, on the People page).
+export default function ChatScreen({ connection, backRef, shared, onSharedTaken, trays, setTrays, drafts, setDrafts }) {
   const { current, messages, users, roles, me, lastRead, more, blocked } = connection;
-  const [draft, setDraft] = useState('');          // what's in the text box
   const [menuFor, setMenuFor] = useState(null);    // the message whose menu is open
   const [replyTo, setReplyTo] = useState(null);    // the message we're replying to
   const [editing, setEditing] = useState(null);    // the message we're editing
@@ -362,19 +365,53 @@ export default function ChatScreen({ connection, backRef }) {
   const [picker, setPicker] = useState(null);      // the emoji/GIF picker: null, "insert", or {react: message}
   // The status line's right side: {text, error}, like "Uploading cat.jpg…", or what went wrong; or null.
   const [status, setStatus] = useState(null);
-  const [tray, setTray] = useState([]);            // files about to be sent: {key, uri, name, type, size, image, failed}
+  // Each chat keeps its own tray and text, like Discord: a picture picked or words typed in a DM stay
+  // there when you go elsewhere.
+  // Each chat's tray (trays, from App.js): files about to be sent there,
+  // {chatKey: [{key, uri, name, type, size, image, failed}]}.
+  const tray = trays[current] ?? [];  // the open chat's
+  // Change one chat's tray: change gets its list and returns the new one (like setState's function).
+  function setTrayOf(chat, change) {
+    setTrays((old) => ({ ...old, [chat]: change(old[chat] ?? []) }));
+  }
+  const setTray = (change) => setTrayOf(current, change);  // the open chat's
+  // The same for what's typed in the text box (drafts, from App.js: {chatKey: text}). setDraft takes the
+  // new text, or a function from the old text to the new, like a useState setter.
+  const draft = drafts[current] ?? '';
+  function setDraftOf(chat, text) {
+    setDrafts((old) => ({ ...old, [chat]: typeof text === 'function' ? text(old[chat] ?? '') : text }));
+  }
+  const setDraft = (text) => setDraftOf(current, text);
+  // The open chat at this very moment (the variable `current` is the one this drawing was made with;
+  // an upload that's still running needs to know whether we've moved on since).
+  const currentNow = useRef(current);
+  currentNow.current = current;
   const [attachMenu, setAttachMenu] = useState(false);  // the + button's sheet is open
   const [uploading, setUploading] = useState(false);    // the tray is being sent
   // A ref to the text box itself (not its text): input.current.focus() puts the cursor in it.
   const input = useRef(null);
-  // Android's back button: App.js asks this first (backRef), and while the emoji panel is open, back
-  // closes it. (Its own listener wouldn't do: Android asks the newest listener first, and App.js's
-  // is registered again now and then, which made it newer.) True: handled.
+  // What the latest share put here, until it's sent: {keys (its tray items), text}, or null.
+  const fromShare = useRef(null);
+  // Android's back button: App.js asks this first (backRef). While the emoji panel is open, back
+  // closes it. Right after a share, back cancels it: what it added comes out again, and Android goes
+  // back to the app we were shared from (exitApp: the default back, which puts our app behind it).
+  // (Its own listener wouldn't do: Android asks the newest listener first, and App.js's is
+  // registered again now and then, which made it newer.) True: handled.
   useEffect(() => {
     backRef.current = () => {
-      if (picker !== 'insert') return false;
-      setPicker(null);
-      return true;
+      if (picker === 'insert') {
+        setPicker(null);
+        return true;
+      }
+      if (fromShare.current) {
+        const { keys, text } = fromShare.current;
+        fromShare.current = null;
+        setTray((old) => old.filter((item) => !keys.includes(item.key)));
+        if (text) setDraft((old) => old.replace(text, '').trim());
+        BackHandler.exitApp();
+        return true;
+      }
+      return false;
     };
     return () => { backRef.current = null; };
   }, [picker]);
@@ -485,6 +522,49 @@ export default function ChatScreen({ connection, backRef }) {
       failed: false,
     }));
     setTray((old) => [...old, ...added]);
+    return added.map((item) => item.key);
+  }
+
+  // Something shared to the app (modules/shared-files). The text goes into the text box (after what's
+  // there already), the files into the tray: each copied into our own storage first, while we may still
+  // read it. Only the ones the tray will take are copied; the rest still go to addToTray, which leaves
+  // them out and says why (too big, too many).
+  // Another chat: back is ordinary back again. (Before the effect below: on the screen's first
+  // draw, effects run in order, so a share that comes with it isn't forgotten straight away.)
+  // (And the cursor goes to the end of that chat's own text.)
+  useEffect(() => {
+    fromShare.current = null;
+    setCursor(draft.length);
+  }, [current]);
+  useEffect(() => {
+    if (!shared) return;
+    onSharedTaken();
+    const added = { keys: [], text: shared.text };
+    fromShare.current = added;
+    if (shared.text) {
+      setDraft((old) => (old.trim() ? `${old} ${shared.text}` : shared.text).slice(0, me.maxTextLength));
+    }
+    if (shared.files.length > 0) takeSharedFiles(shared.files).then((keys) => { added.keys = keys; });
+  }, [shared]);
+
+  // Returns the new tray items' keys.
+  async function takeSharedFiles(files) {
+    let room = MAX_TRAY_FILES - tray.length;
+    const ready = [];
+    for (const file of files) {
+      if (file.size > MAX_UPLOAD_SIZE || room === 0) {
+        ready.push(file);
+        continue;
+      }
+      try {
+        const copy = await copySharedFile(file.uri, file.name);
+        ready.push({ ...file, uri: copy.uri, size: copy.size });  // size: now known for certain
+        room -= 1;
+      } catch {
+        showError(`Couldn't read ${file.name}`);
+      }
+    }
+    return addToTray(ready);
   }
 
   // Android's photo picker (several at once). Needs no permission: the picker is Android's own,
@@ -556,24 +636,27 @@ export default function ChatScreen({ connection, backRef }) {
   // going with the first one (and the reply). One that fails stays in the tray, in red (sendTray).
   async function sendTray(caption) {
     setUploading(true);
+    const chat = current;  // a message goes to the open chat, so we stop if that changes
     let reply = replyTo?.id;
     for (const item of tray) {
       setStatus({ text: `Uploading ${item.name}…` });
       let sent = false;
       try {
-        sent = connection.sendMessage(caption, reply, await uploadFile(item));
+        const id = await uploadFile(item);
+        if (currentNow.current !== chat) break;  // moved to another chat: the rest wait in their tray
+        sent = connection.sendMessage(caption, reply, id);
         if (!sent) showError('Not connected, try again in a moment');
       } catch (error) {
         showError(error.message);
       }
       if (!sent) {
-        setTray((old) => old.map((other) => (other.key === item.key ? { ...other, failed: true } : other)));
+        setTrayOf(chat, (old) => old.map((other) => (other.key === item.key ? { ...other, failed: true } : other)));
         continue;
       }
-      setTray((old) => old.filter((other) => other.key !== item.key));
+      setTrayOf(chat, (old) => old.filter((other) => other.key !== item.key));
       if (caption) {
         caption = '';  // used up by this file
-        setDraft('');
+        setDraftOf(chat, '');
       }
       reply = null;
       setReplyTo(null);
@@ -583,6 +666,7 @@ export default function ChatScreen({ connection, backRef }) {
   }
 
   function send() {
+    fromShare.current = null;  // sent: back is ordinary back again
     const text = draft.trim();
     if (tray.length > 0 && !editing) {
       if (!uploading) sendTray(text);

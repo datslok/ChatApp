@@ -11,21 +11,33 @@ import Icon from './src/Icon';
 import LoginScreen from './src/LoginScreen';
 import Members from './src/Members';
 import PeopleScreen from './src/PeopleScreen';
+import ShareScreen from './src/ShareScreen';
 import Sidebar from './src/Sidebar';
 import { chatLabel, dmPartner } from './src/chats';
 import { colors } from './src/colors';
 import { useConnection } from './src/connection';
-import { clearDownloads } from './src/files';
+import { clearOldCopies } from './src/files';
+import { addShareListener, getInitialShare } from './modules/shared-files';
 
 const PEOPLE = 'people';  // the People page's name among the chats' keys (like the web page's FRIENDS)
 
-function Main({ connection }) {
+// share: something shared to the app from another one, waiting for "Share to…" (or null);
+// onShareDone: it's been dealt with (sent to a chat or cancelled).
+function Main({ connection, share, onShareDone }) {
   const { channels, unread, mentions, incoming } = connection;
   const [view, setView] = useState(null);      // the chat on screen (its key), or PEOPLE
   const [drawer, setDrawer] = useState(null);  // the open drawer: "left", "right" or null
   // The chats we came from, for the back button (newest last). A ref: changing it redraws nothing.
   const history = useRef([]);
   const chatBack = useRef(null);  // what the chat screen wants the back button to do first, if anything
+  const [toTray, setToTray] = useState(null);  // a share on its way into the chat screen's tray
+  // Each chat's tray, {chatKey: [files]}, and half-written text, {chatKey: text}: each chat keeps its own,
+  // like Discord, so a picture picked or words typed in a DM stay there when you go elsewhere. Kept
+  // here, as the chat screen goes away on the People page.
+  const [trays, setTrays] = useState({});
+  const [drafts, setDrafts] = useState({});
+  // A share asks "Share to…" when it started the app, or when no chat is open (the People page).
+  const pickChat = !!share && (share.fromStart || view === PEOPLE);
 
   function go(key, remember = true) {
     if (remember && view !== null && view !== key) history.current.push(view);
@@ -58,6 +70,10 @@ function Main({ connection }) {
   // With nowhere left to go, returning false lets Android do its own thing (leave the app).
   useEffect(() => {
     const listener = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (pickChat) {  // back on "Share to…" cancels the share
+        onShareDone();
+        return true;
+      }
       if (chatBack.current?.()) return true;  // the chat screen had something to close (the emoji panel)
       if (drawer) {
         setDrawer(null);
@@ -71,9 +87,29 @@ function Main({ connection }) {
       return false;
     });
     return () => listener.remove();
-  }, [drawer, view]);
+  }, [drawer, view, pickChat]);
+
+  // Something shared to the app while it was open, in a chat: straight into that chat (the chat screen
+  // takes the files into its tray and the text into the text box).
+  useEffect(() => {
+    if (share && view !== null && !pickChat) {
+      setToTray(share);
+      onShareDone();
+    }
+  }, [share, view]);
 
   if (view === null) return <Loading />;
+
+  // Shared when the app wasn't open yet (or we're on the People page): first "Share to…", which then
+  // opens the chosen chat with it.
+  if (pickChat) {
+    const pick = (key) => {
+      setToTray(share);
+      onShareDone();
+      go(key);
+    };
+    return <ShareScreen connection={connection} share={share} onPick={pick} onCancel={onShareDone} />;
+  }
 
   // The red dot on the menu button: something unread somewhere else (a chat, a mention, a request).
   const elsewhere = (key) => key !== view;
@@ -105,7 +141,7 @@ function Main({ connection }) {
       <View style={styles.content}>
         {view === PEOPLE
           ? <PeopleScreen connection={connection} onOpen={go} />
-          : <ChatScreen connection={connection} backRef={chatBack} />}
+          : <ChatScreen connection={connection} backRef={chatBack} shared={toTray} onSharedTaken={() => setToTray(null)} trays={trays} setTrays={setTrays} drafts={drafts} setDrafts={setDrafts} />}
       </View>
 
       <Drawer side="left" open={drawer === 'left'} onClose={() => setDrawer(null)}>
@@ -127,24 +163,34 @@ function Loading({ text }) {
   );
 }
 
-function Screen() {
+function Screen({ share, onShareDone }) {
   const connection = useConnection();
   const { status, me } = connection;
   if (status === 'logged-out') return <LoginScreen onLoggedIn={connection.reconnect} />;
   // Not connected yet (we don't know who we are until "welcome").
   if (me === null) return <Loading text={status === 'offline' ? "Can't reach the server, trying again…" : null} />;
-  return <Main connection={connection} />;
+  return <Main connection={connection} share={share} onShareDone={onShareDone} />;
 }
 
 export default function App() {
-  // Once at the start: throw away files downloaded last time for Open and Share (files.js).
-  useEffect(clearDownloads, []);
+  // Something shared to the app (modules/shared-files): kept up here, so it waits through the
+  // login screen and the connecting.
+  const [share, setShare] = useState(null);
+  useEffect(() => {
+    // Once at the start: throw away last time's copies (files.js). Before anything new is shared.
+    clearOldCopies();
+    // Were we started by a share? (fromStart: then we ask which chat.) And from now on, a share while
+    // we're open goes into the open chat.
+    getInitialShare().then((first) => first && setShare({ ...first, fromStart: true })).catch(() => {});
+    const subscription = addShareListener((next) => setShare({ ...next, fromStart: false }));
+    return () => subscription.remove();
+  }, []);
   // Android draws apps "edge to edge", under the status bar and the navigation bar.
   // SafeAreaView adds padding the size of those bars, so nothing ends up behind them.
   return (
     <SafeAreaProvider>
       <SafeAreaView style={styles.app}>
-        <Screen />
+        <Screen share={share} onShareDone={() => setShare(null)} />
         <StatusBar style="light" />
       </SafeAreaView>
     </SafeAreaProvider>

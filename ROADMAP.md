@@ -110,7 +110,7 @@
     - [x] The People page like the web's: tabs (Friends, Everyone, Requests, Blocked), Online/Offline, its buttons
     - [x] Messages like the web: formatting (bold, code, links, maths), custom emoji, link previews, the emoji picker, GIFs, typing
     - [x] Pictures and files: viewing (pinch to zoom), uploading (photos, camera, any file), downloading (open or share)
-    - [ ] Sharing to the app: ChatApp in Android's share sheet (from the gallery, other apps), into a chat's tray, with the files' real names
+    - [x] Sharing to the app: ChatApp in Android's share sheet (from the gallery, other apps), into a chat's tray, with the files' real names (still to test with a release build: a share that starts the app, which development builds' launcher swallows)
     - [ ] The chat's top bar: mute, search, pinned messages
     - [ ] Profiles, the user menu (long press), your status, groups (create, add, rename, leave), invites
     - [ ] Voice and video calls (LiveKit's React Native library), also with the phone locked
