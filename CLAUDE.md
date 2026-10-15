@@ -567,8 +567,10 @@ the point is for me to understand how it works, not just to have it done.
   `.gitattributes`) clears Windows' icon cache when the taskbar or Start menu still shows an old icon.
 - `static/download.html`: the download page (`/download`, no login), linked from the login page, the landing
   page and the banner above the chat (only in browsers on Windows, notifications.js); not from Settings (removed
-  2026-10-14). On phones the login and landing pages remove their `.windows-app-link`s (the user's rule: no
-  Windows app on phones). `/download/windows` always redirects to the newest installer.
+  2026-10-14). No Windows app on phones (the user's rule): login.html's `.windows-app-link` says "Get the Android app"
+  on Android (`data-android`) and goes on iPhones; the landing page advertises both apps (the user's wish: buttons at
+  the top and a "Get the apps" section with a card each), `data-app="windows|android|any"`: Android phones keep only
+  Android's, iPhones none. `/download/windows` always redirects to the newest installer.
 - `static/landing/`: the landing page (`index.html`, `logo.png` from `icon/chattuschattus_square.png`,
   `screenshot.png`), served at `/` when the Host is `LANDING_HOST` (datslok.no) and always at `/welcome`;
   `{{CHAT}}` in it becomes PUBLIC_URL (server.py, `landing_page`). Its pictures are under `/landing/`.
