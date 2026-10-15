@@ -106,11 +106,16 @@
     - [x] Log in, the channel list, and reading messages live over the WebSocket
     - [x] Writing: sending, replies, reactions, editing and deleting
     - [x] DMs, friends, unread dots and mentions
+    - [x] The web chat's phone design: top bar with drawers (channels, members), messages grouped with pictures, Lucide icons
+    - [ ] The People page like the web's: tabs (Friends, Everyone, Requests, Blocked), Online/Offline, its buttons
+    - [ ] Messages like the web: formatting (bold, code, links, maths), custom emoji, link previews, the emoji picker, GIFs, typing
     - [ ] Pictures and files: viewing, uploading, downloading
+    - [ ] The chat's top bar: mute, search, pinned messages
+    - [ ] Profiles, the user menu (long press), your status, groups (create, add, rename, leave), invites
     - [ ] Voice and video calls (LiveKit's React Native library), also with the phone locked
     - [ ] Push notifications through Firebase Cloud Messaging, ringing calls
-    - [ ] Settings: profile, appearance, notifications
-    - [ ] Distribution: an APK on the download page, and updates
+    - [ ] Settings: profile, appearance (themes, colours, text size), notifications, log out
+    - [ ] Distribution: the app's icon, a release signing key, the real server, an APK on the download page, and updates (expo-updates)
 - [x] **23.** Chattus, an AI bot in the chat, with a language model on the server's graphics card
     - [x] A local model answering (llama.cpp's llama-server with Qwen 3.5 9B; Ollama couldn't find the GTX 1070), started at boot ("ChatApp AI", install.ps1 -AI)
     - [x] A bot account and a script that logs in and connects to the WebSocket: answers @Chattus anywhere, and everything in #chattus and in DMs to him
