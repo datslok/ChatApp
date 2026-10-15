@@ -1,8 +1,8 @@
 // One chat: its messages, drawn like the web page's (messages.js, showMessage), and writing.
 // The top bar is App.js's; this is everything under it.
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator, Alert, FlatList, Modal, Pressable, StyleSheet, Text,
+  ActivityIndicator, Alert, FlatList, Keyboard, Modal, Pressable, StyleSheet, Text,
   TextInput, View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -282,7 +282,8 @@ function MenuItem({ icon, label, onPress, danger }) {
   );
 }
 
-export default function ChatScreen({ connection }) {
+// backRef: App.js's; this fills in what the back button should do here first (see below).
+export default function ChatScreen({ connection, backRef }) {
   const { current, messages, users, roles, me, lastRead, more, blocked } = connection;
   const [draft, setDraft] = useState('');          // what's in the text box
   const [menuFor, setMenuFor] = useState(null);    // the message whose menu is open
@@ -294,6 +295,39 @@ export default function ChatScreen({ connection }) {
   const [sending, setSending] = useState('');      // "Sending GIF…", or what went wrong (the status line's right side)
   // A ref to the text box itself (not its text): input.current.focus() puts the cursor in it.
   const input = useRef(null);
+  // How much room the keyboard took last time (above the navigation bar), so the emoji panel can take
+  // exactly the same: the text box then stays where it was while typing. null: not opened yet.
+  // (Android reports the keyboard's height above the navigation bar already, so it's used as it is.)
+  const [keyboardRoom, setKeyboardRoom] = useState(null);
+
+  useEffect(() => {
+    const listener = Keyboard.addListener('keyboardDidShow', (event) => setKeyboardRoom(event.endCoordinates.height));
+    return () => listener.remove();
+  }, []);
+
+  // Android's back button: App.js asks this first (backRef), and while the emoji panel is open, back
+  // closes it. (Its own listener wouldn't do: Android asks the newest listener first, and App.js's
+  // is registered again now and then, which made it newer.) True: handled.
+  useEffect(() => {
+    backRef.current = () => {
+      if (picker !== 'insert') return false;
+      setPicker(null);
+      return true;
+    };
+    return () => { backRef.current = null; };
+  }, [picker]);
+
+  // The smiley: the emoji panel in the keyboard's place (the keyboard closes), or, when it's open,
+  // back to the keyboard. Like on Discord and in phones' own keyboards.
+  function toggleEmojiPanel() {
+    if (picker === 'insert') {
+      setPicker(null);
+      input.current?.focus();
+    } else {
+      Keyboard.dismiss();
+      setPicker('insert');
+    }
+  }
 
   const label = chatLabel(current, connection);
   const isAdmin = users[me.id]?.admin === true;
@@ -545,13 +579,14 @@ export default function ChatScreen({ connection }) {
           value={draft}
           onChangeText={onType}
           onSelectionChange={(event) => setCursor(event.nativeEvent.selection.end)}  // for the suggestions
+          onFocus={() => picker === 'insert' && setPicker(null)}  // the keyboard comes: the emoji panel goes
           placeholder={`Message ${label}`}
           placeholderTextColor={colors.textMuted}
           multiline                          // grows with the text, up to maxHeight
           maxLength={me.maxTextLength}       // the server's limit (from "welcome")
         />
         {/* The smiley: on a phone one button for both emoji and GIFs (the picker's tabs). */}
-        <Pressable onPress={() => setPicker('insert')} style={({ pressed }) => [styles.smiley, pressed && styles.sendPressed]}>
+        <Pressable onPress={toggleEmojiPanel} style={({ pressed }) => [styles.smiley, pressed && styles.sendPressed]}>
           <Icon name="smiley" size={24} />
         </Pressable>
         <Pressable
@@ -562,6 +597,19 @@ export default function ChatScreen({ connection }) {
           <Text style={styles.sendText}>{editing ? 'Save' : 'Send'}</Text>
         </Pressable>
       </View>
+
+      {/* Writing: the emoji/GIF panel under the text box, where the keyboard would be. */}
+      {picker === 'insert' ? (
+        <Picker
+          connection={connection}
+          mode="insert"
+          inline
+          height={keyboardRoom}
+          onPickEmoji={insertEmoji}  // (the panel stays open for more, like the web page's)
+          onPickGif={sendGif}
+          onClose={() => setPicker(null)}
+        />
+      ) : null}
 
       {menuFor ? (
         <MessageMenu
@@ -580,19 +628,15 @@ export default function ChatScreen({ connection }) {
         />
       ) : null}
 
-      {picker ? (
+      {/* A reaction (from a message's long-press menu): every emoji, in a popup sheet. */}
+      {picker?.react ? (
         <Picker
           connection={connection}
-          mode={picker === 'insert' ? 'insert' : 'react'}
+          mode="react"
           onPickEmoji={(value) => {
-            if (picker === 'insert') {
-              insertEmoji(value);  // (the picker stays open for more, like the web page's)
-            } else {
-              connection.react(picker.react.id, value);
-              setPicker(null);
-            }
+            connection.react(picker.react.id, value);
+            setPicker(null);
           }}
-          onPickGif={sendGif}
           onClose={() => setPicker(null)}
         />
       ) : null}

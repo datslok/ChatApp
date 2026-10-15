@@ -219,34 +219,46 @@ function GifTab({ onPick }) {
 // ----- The sheet
 
 // mode "insert" (writing: Emoji | GIF) or "react" (emoji only). onPickEmoji(value): a Unicode emoji
-// or "custom:17". onPickGif(gif): a GIPHY result.
-export default function Picker({ connection, mode, onPickEmoji, onPickGif, onClose }) {
+// or "custom:17". onPickGif(gif): a GIPHY result. inline: a panel instead of a popup (see the end).
+export default function Picker({ connection, mode, inline, height, onPickEmoji, onPickGif, onClose }) {
   const [tab, setTab] = useState(mode === 'react' ? 'emoji' : lastTab);
   const insets = useSafeAreaInsets();
-  const { height } = useWindowDimensions();
+  const windowHeight = useWindowDimensions().height;
 
   function switchTo(name) {
     setTab(name);
     lastTab = name;
   }
 
+  const tabs = (
+    <>
+      {mode === 'insert' ? (
+        <View style={styles.tabs}>
+          {['emoji', 'gif'].map((name) => (
+            <Pressable key={name} onPress={() => switchTo(name)} style={[styles.tab, tab === name && styles.tabActive]}>
+              <Text style={[styles.tabText, tab === name && styles.tabTextActive]}>{name === 'emoji' ? 'Emoji' : 'GIF'}</Text>
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
+      {tab === 'emoji'
+        ? <EmojiTab connection={connection} onPick={onPickEmoji} />
+        : <GifTab onPick={onPickGif} />}
+    </>
+  );
+
+  // Writing: a panel in the keyboard's place, under the text box (ChatScreen puts it there), so the
+  // box moves up above it like it does for the keyboard. `height`: the keyboard's, if we know it.
+  if (inline) {
+    return <View style={[styles.sheet, styles.inline, { height: height ?? windowHeight * 0.55 }]}>{tabs}</View>;
+  }
+
+  // A reaction: a sheet over the bottom 55% of the screen; tapping above it closes it.
   return (
     <Modal transparent animationType="slide" visible onRequestClose={onClose} navigationBarTranslucent statusBarTranslucent>
-      {/* Tapping above the sheet closes it. */}
       <Pressable style={styles.outside} onPress={onClose} />
-      <View style={[styles.sheet, { height: height * 0.55 + insets.bottom, paddingBottom: insets.bottom }]}>
-        {mode === 'insert' ? (
-          <View style={styles.tabs}>
-            {['emoji', 'gif'].map((name) => (
-              <Pressable key={name} onPress={() => switchTo(name)} style={[styles.tab, tab === name && styles.tabActive]}>
-                <Text style={[styles.tabText, tab === name && styles.tabTextActive]}>{name === 'emoji' ? 'Emoji' : 'GIF'}</Text>
-              </Pressable>
-            ))}
-          </View>
-        ) : null}
-        {tab === 'emoji'
-          ? <EmojiTab connection={connection} onPick={onPickEmoji} />
-          : <GifTab onPick={onPickGif} />}
+      <View style={[styles.sheet, { height: windowHeight * 0.55 + insets.bottom, paddingBottom: insets.bottom }]}>
+        {tabs}
       </View>
     </Modal>
   );
@@ -255,6 +267,7 @@ export default function Picker({ connection, mode, onPickEmoji, onPickGif, onClo
 // chat.css's pickers (rem as 16 px).
 const styles = StyleSheet.create({
   outside: { flex: 1 },
+  inline: { borderBottomWidth: 0, borderLeftWidth: 0, borderRightWidth: 0 },  // (only a line on top, like a keyboard)
   sheet: {
     backgroundColor: colors.bgPanel, borderTopLeftRadius: 12, borderTopRightRadius: 12,
     borderWidth: 1, borderColor: colors.border, overflow: 'hidden',

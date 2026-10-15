@@ -24,6 +24,7 @@ function Main({ connection }) {
   const [drawer, setDrawer] = useState(null);  // the open drawer: "left", "right" or null
   // The chats we came from, for the back button (newest last). A ref: changing it redraws nothing.
   const history = useRef([]);
+  const chatBack = useRef(null);  // what the chat screen wants the back button to do first, if anything
 
   function go(key, remember = true) {
     if (remember && view !== null && view !== key) history.current.push(view);
@@ -56,6 +57,7 @@ function Main({ connection }) {
   // With nowhere left to go, returning false lets Android do its own thing (leave the app).
   useEffect(() => {
     const listener = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (chatBack.current?.()) return true;  // the chat screen had something to close (the emoji panel)
       if (drawer) {
         setDrawer(null);
         return true;
@@ -100,7 +102,9 @@ function Main({ connection }) {
       {connection.status !== 'online' ? <Text style={styles.offline}>Reconnecting…</Text> : null}
 
       <View style={styles.content}>
-        {view === PEOPLE ? <PeopleScreen connection={connection} onOpen={go} /> : <ChatScreen connection={connection} />}
+        {view === PEOPLE
+          ? <PeopleScreen connection={connection} onOpen={go} />
+          : <ChatScreen connection={connection} backRef={chatBack} />}
       </View>
 
       <Drawer side="left" open={drawer === 'left'} onClose={() => setDrawer(null)}>
