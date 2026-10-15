@@ -133,5 +133,4 @@
 ## Maybe later
 
 - [ ] Discord-style photo picker in the phone app: our own grid of recent photos under the text box (needs photo access, "limited access" included), which also gives the photos' real names
-- [ ] The phone app's connection details in calls, like the web's signal icon in the voice bar (ping, loss, a screen share's stats)
 - [ ] Soundboard in voice (short clips anyone in a call can play for everyone; uploads like custom emoji, a few built-in ones, its own volume)
