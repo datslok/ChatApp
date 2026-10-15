@@ -82,6 +82,8 @@ the same PC, but the scripts assume two).
 | `scripts\usage.ps1` | your PC | runs `usage.ps1` on the server |
 | `scripts\backup-fetch.ps1` | your PC | copies the server's newest backup here (`-Install`: every day) |
 | `scripts\release-upload.ps1` | your PC | puts a new desktop app version on the server |
+| `scripts\app-release.ps1` | your PC | a new version of the phone app (the APK, when its native side changed): builds, signs, uploads; phones offer it at their next start |
+| `scripts\app-update.ps1` | your PC | the phone app's JavaScript only: phones fetch it by themselves, no new APK |
 | `scripts\seasonal-upload.ps1` | your PC | puts a seasonal easter egg's video on the server (see [Optional: a seasonal easter egg](#optional-a-seasonal-easter-egg)) |
 | `scripts\refresh-icons.bat` | any Windows PC | double-click: Windows shows programs' new icons (after a new app icon) |
 | `tools\make_admin.py` | either | make someone an admin, or take it away (the owner can also do it in Settings → Admin → Admins) |
@@ -91,6 +93,7 @@ the same PC, but the scripts assume two).
 | `tools\make_icons.py` | your PC | makes `static\js\icon-shapes.js`, the buttons' line icons (Lucide's), and the same for the phone app (`mobile\src\icon-shapes.js`); add an icon's name in it and run it again |
 | `tools\get_rnnoise.py` | your PC | puts RNNoise (the AI noise suppression, Xiph's C library) into the phone app's native code (`mobile\modules\call-service\android\src\main\cpp\rnnoise-0.2\`), checked against pinned hashes; only needed to change its version |
 | `tools\make_call_sounds.py` | your PC | makes the phone app's sounds from the web page's tones: the ringtone and message ping (`mobile\assets\sounds\`), the notifications' ping and ring (`mobile\modules\push\...\res\raw\`) and the in-call calling, join and leave sounds (`mobile\modules\call-service\...\res\raw\`); run it again after changing one |
+| `tools\make_app_update.py` | your PC | used by `app-update.ps1`: turns `npx expo export` into an update for the server |
 | `tools\make_vapid_keys.py` | either | once: the key pair for push notifications (the web page's), for `.env` |
 | `npx expo run:android` (in `mobile\`) | your PC | builds the native phone app, installs it on a phone over USB and starts Metro |
 | `npx expo start` (in `mobile\`) | your PC | only Metro, for an app already installed by `run:android` |
@@ -651,11 +654,11 @@ Calls keep going with the screen off on most Android phones. If a call stops whe
 pocket, set the browser's battery use to "Unrestricted" in Android's app settings. iPhones often stop
 web pages when they're locked, calls included.
 
-### The native app (in progress)
+### The native app
 
-A real Android app is being built in `mobile\` with [React Native](https://reactnative.dev/) and
-[Expo](https://expo.dev/), talking to the same server. It can't do anything useful yet; the PWA above
-is the phone app for now. To work on it:
+A real Android app in `mobile\`, made with [React Native](https://reactnative.dev/) and
+[Expo](https://expo.dev/), talking to the same server (the PWA above still works too). Friends install
+it from `/download` ("Releasing the phone app" below). To work on it:
 
 1. Install [Node.js](https://nodejs.org/) (LTS), [Android Studio](https://developer.android.com/studio)
    (`winget install Google.AndroidStudio`; open it once and let it install the Android SDK) and a
@@ -717,9 +720,11 @@ every Android phone with Google Play keeps a connection to. It's free. You need 
 
 1. At [console.firebase.google.com](https://console.firebase.google.com): **Create a project** (Google
    Analytics can be off).
-2. **Add app → Android**, with the app's package name (`android.package` in `mobile\app.json`). Download
-   **google-services.json** into `mobile\` (it says which project the app belongs to; git ignores it).
-   Skip the rest of that page's steps: Expo does them.
+2. **Add app → Android**, with the app's package name (`android.package` in `mobile\app.json`), and once
+   more with that name plus `.dev` (development builds are an app of their own, "ChatApp Dev", so they
+   can sit next to the real one: `mobile\plugins\dev-variant.js`). Then download **google-services.json**
+   (it covers both) into `mobile\` (it says which project the app belongs to; git ignores it). Skip the
+   rest of that page's steps: Expo does them.
 3. **Project settings → Service accounts → Generate new private key**. Save it as **firebase-key.json** in
    the chat's folder, on your PC (for `start.ps1`) and on the server, where the chat reads it at start:
 
@@ -740,6 +745,56 @@ calling, Decline, Accept; if Android allows "Full screen notifications": Setting
 That screen is all that ever shows over the lock screen, never the chat: Accept asks to unlock first.
 Like the web page's, notifications only come while you're not looking at the chat on any device, never
 on Do Not Disturb.
+
+#### Releasing the phone app
+
+Friends get the app from `/download` (on an Android phone it shows the Android app): an APK, the app's
+install file, straight from your server, no Play Store. After that it updates itself, in two ways:
+
+- **JavaScript** (most changes: screens, buttons, behaviour): `.\scripts\app-update.ps1`. Phones fetch
+  it by themselves at their next start ([expo-updates](https://docs.expo.dev/versions/latest/sdk/updates/),
+  from your server's `/app-update`) and use it from the start after that. Nothing to tap.
+- **Native code** (a module or package with native code, a permission, the icon, `app.json`): those need a
+  new APK. `.\scripts\app-release.ps1` raises the version, builds and signs the APK and puts it on the
+  server; the app then offers "A new version" at its next start, downloads it and opens Android's
+  installer. `app-update.ps1` refuses when native code changed since the last APK, and says so.
+
+New JavaScript only goes to phones whose APK it was made for (the app's version is its "runtime
+version"), so an update can never break an older app.
+
+Once, before the first release:
+
+1. Your server's address in `mobile\src\config.js` (`SERVER`, for release builds) and in `mobile\app.json`
+   (`updates.url`: the same address with `/app-update`).
+2. The **release signing key**. Android only installs an update over an app signed with the same key,
+   so every APK is signed with this one, kept for good: **losing it means everyone uninstalling the app
+   and installing it again.** Keep a copy of both files below somewhere safe outside your PC.
+
+```powershell
+New-Item -ItemType Directory $HOME\.chatapp-keys -Force
+$java = [Environment]::GetEnvironmentVariable('JAVA_HOME', 'User')
+& "$java\bin\keytool.exe" -genkeypair -storetype PKCS12 -keystore $HOME\.chatapp-keys\android-release.jks -alias chatapp -keyalg RSA -keysize 4096 -validity 36500 -dname "CN=ChatApp"
+```
+
+   It asks for a password. Then put these four lines in `%USERPROFILE%\.gradle\gradle.properties` (your
+   user folder, never in git), with your path and password; `mobile\plugins\release-signing.js` reads them:
+
+```
+CHATAPP_RELEASE_STORE_FILE=C:/Users/you/.chatapp-keys/android-release.jks
+CHATAPP_RELEASE_STORE_PASSWORD=the password
+CHATAPP_RELEASE_KEY_ALIAS=chatapp
+CHATAPP_RELEASE_KEY_PASSWORD=the password
+```
+
+Then, for each release (with everything in `mobile\` committed):
+
+```powershell
+.\scripts\app-release.ps1    # native changes: a new APK (also the very first release)
+.\scripts\app-update.ps1     # JavaScript only
+```
+
+Development builds (`npx expo run:android`) are "ChatApp Dev" on the phone, next to the real app, and
+talk to your development server; release builds talk to the real one.
 
 Later, when only JavaScript changed, `npx expo start` is enough. Run `npx expo run:android` again
 after adding a package with native code. Add packages with `npx expo install <name>` (not

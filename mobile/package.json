@@ -17,6 +17,7 @@
     "expo-intent-launcher": "~57.0.1",
     "expo-sharing": "~57.0.23",
     "expo-status-bar": "~57.0.1",
+    "expo-updates": "~57.0.26",
     "expo-video": "~57.0.5",
     "livekit-client": "^2.22.4",
     "react": "19.2.3",

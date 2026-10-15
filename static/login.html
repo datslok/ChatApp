@@ -142,12 +142,17 @@
     <p id="to-login" class="switch" hidden>
       Already have an account? <button type="button" class="link-button">Log in</button>
     </p>
-    <a id="get-app" class="windows-app-link" href="/download">Get the Windows app</a>
+    <a id="get-app" class="windows-app-link" href="/download" data-android="Get the Android app">Get the Windows app</a>
   </form>
 
   <script>
-    // Phones can't run the Windows app: don't offer it there.
-    if (/Android|iPhone|iPad/.test(navigator.userAgent)) {
+    // Phones can't run the Windows app. Android phones get the Android app instead (a link with
+    // data-android says so; /download shows Android's on Android); iPhones, which have none, get nothing.
+    if (/Android/.test(navigator.userAgent)) {
+      for (const element of document.querySelectorAll(".windows-app-link[data-android]")) {
+        element.textContent = element.dataset.android;
+      }
+    } else if (/iPhone|iPad/.test(navigator.userAgent)) {
       for (const element of document.querySelectorAll(".windows-app-link")) element.remove();
     }
 

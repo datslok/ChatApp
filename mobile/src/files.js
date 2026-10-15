@@ -148,7 +148,7 @@ export async function saveFile(file, copy) {
 // and the other app has long since read it; shared/ holds files shared to the app (modules/shared-files)
 // for the tray, which doesn't outlive the app.
 export function clearOldCopies() {
-  for (const name of ['downloads', 'shared']) {
+  for (const name of ['downloads', 'shared', 'apk']) {  // (apk: appUpdate.js's)
     try {
       const folder = new Directory(Paths.cache, name);
       if (folder.exists) folder.delete();

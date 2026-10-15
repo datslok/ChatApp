@@ -311,7 +311,7 @@
       <p class="tagline">A lightweight app for chatting, inspired by Discord, that you can host yourself.</p>
       <div class="actions">
         <a class="button" href="{{CHAT}}">Open ChatApp</a>
-        <a class="button grey windows-app-link" href="{{CHAT}}/download">⬇ Get the Windows app</a>
+        <a class="button grey windows-app-link" href="{{CHAT}}/download" data-android="⬇ Get the Android app">⬇ Get the Windows app</a>
       </div>
       <p class="register" id="register-line">New here? Ask someone in the chat for an invite link, and open it to make your account.</p>
       <img class="screenshot" src="/landing/screenshot.png" alt="ChatApp: channels on the left, messages in the middle, who's online on the right">
@@ -375,8 +375,13 @@
     <a href="https://github.com/datslok/ChatApp">GitHub</a>
   </footer>
   <script>
-    // Phones can't run the Windows app: don't offer it there.
-    if (/Android|iPhone|iPad/.test(navigator.userAgent)) {
+    // Phones can't run the Windows app. Android phones get the Android app instead (a link with
+    // data-android says so; /download shows Android's on Android); iPhones, which have none, get nothing.
+    if (/Android/.test(navigator.userAgent)) {
+      for (const element of document.querySelectorAll(".windows-app-link[data-android]")) {
+        element.textContent = element.dataset.android;
+      }
+    } else if (/iPhone|iPad/.test(navigator.userAgent)) {
       for (const element of document.querySelectorAll(".windows-app-link")) element.remove();
     }
 

@@ -25,6 +25,7 @@ import SettingsScreen from './src/SettingsScreen';
 import SeasonScreen from './src/SeasonScreen';
 import ShareScreen from './src/ShareScreen';
 import Sidebar from './src/Sidebar';
+import UpdateScreen from './src/UpdateScreen';
 import UserMenu from './src/UserMenu';
 import { useChangelog } from './src/changelog';
 import { dmPartner } from './src/chats';
@@ -429,6 +430,8 @@ export default function App() {
           <Screen
             share={share} onShareDone={() => setShare(null)} opened={opened} onOpenedDone={() => setOpened(null)}
           />
+          {/* A newer APK to install (release builds; the JavaScript updates itself, expo-updates). */}
+          <UpdateScreen />
         </Frame>
       </SafeAreaProvider>
     </ThemeContext.Provider>

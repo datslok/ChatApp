@@ -3,6 +3,14 @@
     "name": "ChatApp",
     "slug": "chatapp",
     "version": "1.0.0",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://chat.datslok.no/app-update",
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0
+    },
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -11,11 +19,12 @@
     },
     "android": {
       "package": "no.datslok.chat",
+      "versionCode": 1,
+      "permissions": ["android.permission.REQUEST_INSTALL_PACKAGES"],
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#0086D7",
         "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       }
     },
@@ -25,6 +34,8 @@
     "plugins": [
       "./plugins/animated-webp",
       "./plugins/share-intent",
+      "./plugins/release-signing",
+      "./plugins/dev-variant",
       "expo-sharing",
       "expo-video",
       [

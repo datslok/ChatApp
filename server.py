@@ -3406,6 +3406,59 @@ async def download_windows():
     return RedirectResponse(url, status_code=302)
 
 
+@app.get("/download/android")
+async def download_android():
+    # The same for the phone app: the newest APK, the one android.json names (scripts\app-release.ps1).
+    try:
+        latest = json.loads((RELEASES_DIR / "android.json").read_text())
+        apk = latest["apk"]
+    except (OSError, ValueError, KeyError):
+        raise HTTPException(404, "No Android version has been released yet.")
+    return RedirectResponse(f"/releases/{quote(apk)}", status_code=302)
+
+
+# ---------- The phone app's JavaScript updates (expo-updates) ----------
+#
+# Most changes to the phone app are JavaScript only: those reach the phones without a new APK. At each
+# start the app (expo-updates) asks GET /app-update "is there a newer bundle for my version?", saying
+# its "runtime version" (the app's version, which goes up with every APK, so new JavaScript only goes
+# to apps whose native code it was made for). scripts\app-update.ps1 puts each update here:
+#   releases/app-updates/<runtime version>/<time>.json   the manifest (tools/make_app_update.py)
+#   releases/app-assets/<md5>.<ext>                       the bundle and pictures it names, by content
+# We answer with the newest manifest for that version, its files' addresses filled in, or 204 (no
+# update). The app downloads it in the background and uses it from its next start. Expo's protocol:
+# docs.expo.dev/technical-specs/expo-updates-1. No login: it asks before anyone has logged in.
+
+APP_UPDATES_DIR = RELEASES_DIR / "app-updates"
+APP_ASSETS_DIR = RELEASES_DIR / "app-assets"
+RUNTIME_VERSION = re.compile(r"\d+(\.\d+){1,3}")  # "1.0.3"
+APP_ASSET = re.compile(r"[0-9a-f]{32}(\.[a-z0-9]{1,10})?")  # an MD5 and an extension: "5e8f...a1.png"
+EXPO_HEADERS = {"expo-protocol-version": "1", "expo-sfv-version": "0", "cache-control": "private, max-age=0"}
+
+
+@app.get("/app-update")
+async def app_update(request: Request):
+    runtime = request.headers.get("expo-runtime-version", "")
+    if request.headers.get("expo-platform") != "android" or not RUNTIME_VERSION.fullmatch(runtime):
+        raise HTTPException(400, "Not an update request we know.")
+    folder = APP_UPDATES_DIR / runtime
+    manifests = sorted(folder.glob("*.json")) if folder.is_dir() else []  # (named by time: the last is the newest)
+    if not manifests:
+        return Response(status_code=204, headers=EXPO_HEADERS)
+    manifest = json.loads(manifests[-1].read_text())
+    for asset in [manifest["launchAsset"], *manifest["assets"]]:
+        asset["url"] = f"{PUBLIC_URL}/app-update/assets/{asset.pop('file')}"
+    return Response(json.dumps(manifest), media_type="application/expo+json", headers=EXPO_HEADERS)
+
+
+@app.get("/app-update/assets/{name}")
+async def app_update_asset(name: str):
+    # Named by their content, so a file here never changes: phones may keep it for good.
+    if not APP_ASSET.fullmatch(name) or not (APP_ASSETS_DIR / name).is_file():
+        raise HTTPException(404, "Not found.")
+    return FileResponse(APP_ASSETS_DIR / name, headers={"Cache-Control": "public, max-age=31536000, immutable"})
+
+
 @app.get("/releases/{name}")
 async def release_file(name: str):
     # The desktop app's updates: latest.json (which version is newest) and the installers.
@@ -3413,8 +3466,10 @@ async def release_file(name: str):
     # Only plain file names straight inside releases/ ("..\chat.db" and the like don't match).
     if not re.fullmatch(r"[A-Za-z0-9_-][A-Za-z0-9._-]*", name) or not (RELEASES_DIR / name).is_file():
         raise HTTPException(404)
-    # latest.json changes with every release, so it must never come from a cache.
-    return FileResponse(RELEASES_DIR / name, headers={"Cache-Control": "no-cache"})
+    # latest.json changes with every release, so it must never come from a cache. An APK (the phone
+    # app) says what it is, so phones offer to install it (Python doesn't always know .apk).
+    media_type = "application/vnd.android.package-archive" if name.endswith(".apk") else None
+    return FileResponse(RELEASES_DIR / name, media_type=media_type, headers={"Cache-Control": "no-cache"})
 
 
 # ---------- Channels ----------
