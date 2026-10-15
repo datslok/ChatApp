@@ -33,7 +33,8 @@ function Swatch({ theme, label, chosen, onPress }) {
 
 // Picking one colour: the picker (a square for how light and how strong, a slider for which colour),
 // the old and new side by side, Cancel and Done. onPreview(hex) while dragging; onDone(hex).
-function ColourDialog({ label, value, onPreview, onDone, onCancel }) {
+// (Settings → Admin → Roles uses it too, for a role's colour.)
+export function ColourDialog({ label, value, onPreview, onDone, onCancel }) {
   const styles = useStyles(makeStyles);
   // The colour it opened with: `value` follows the preview while dragging, but the picker's "before"
   // half (and where it starts) should stay this one.

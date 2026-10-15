@@ -1,6 +1,7 @@
 # Sets up this PC as the chat's server (see README, "Host your own"):
 #
-#   1. Python, and a virtual environment (.venv) with the packages from requirements.txt
+#   1. Python, and a virtual environment (.venv) with the packages from requirements.txt; and ffmpeg,
+#      which re-packs uploaded videos so every player knows their length (server.py, "Re-packing videos")
 #   2. LiveKit (voice), downloaded into livekit/ and checked against its published checksums
 #   3. The Cloudflare Tunnel (cloudflared), as a Windows service, with your tunnel's token
 #   4. Windows Firewall rules for LiveKit's audio ports
@@ -73,6 +74,12 @@ Write-Host "Installing the packages from requirements.txt..."
 .venv\Scripts\python.exe -m pip install -r requirements.txt --quiet
 if ($LASTEXITCODE -ne 0) { throw "Installing the packages failed." }
 Write-Host "Python is ready."
+# ffmpeg: a program, not a Python package. --scope machine: on the PATH of every user, the tasks' too.
+if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue)) {
+    Write-Host "Installing ffmpeg (for videos)..."
+    winget install --exact --id Gyan.FFmpeg --scope machine --silent --accept-package-agreements --accept-source-agreements
+    Update-Path
+}
 
 # --- 2. LiveKit
 Step "2. LiveKit $LiveKitVersion"

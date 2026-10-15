@@ -8,22 +8,11 @@ import Icon from './Icon';
 import { CardButton, MessageCard, Popup, makeStyles as makeCardStyles, useFocusSoon } from './MessageCard';
 import { chatLabel } from './chats';
 import { useStyles, useTheme } from './theme';
-import { Avatar } from './people';
+import { Avatar, matchPeople } from './people';
 
 // What was searched last time, so it's still there when the popup opens again (like the web page,
 // whose popup keeps its words). Outside the component: the component itself goes when it closes.
 const last = { query: '', where: 'here', fromId: null };
-
-// The person picker's suggestions (the web page's matchPeople): names starting with what's typed
-// first, then names containing it; at most 8.
-function matchPeople(typed, people) {
-  const query = typed.trim().toLowerCase();
-  const name = (person) => person.name.toLowerCase();
-  return [
-    ...people.filter((person) => name(person).startsWith(query)),
-    ...people.filter((person) => !name(person).startsWith(query) && name(person).includes(query)),
-  ].slice(0, 8);
-}
 
 // onJump(chat, messageId): close this and go to the message (in another chat, too).
 export default function SearchScreen({ connection, onJump, onClose }) {

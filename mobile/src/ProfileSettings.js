@@ -1,27 +1,19 @@
 // Settings → Profile (the web page's settings.js): your picture, banner, status line and bio.
 //
-// A new picture or banner: the web page has its own editor to move and zoom it. On a phone, Android's
-// photo picker can crop by itself (allowsEditing: square for a picture, 3 : 1 for a banner), so the
-// app uses that, then shrinks it to the web editor's sizes as WebP (expo-image-manipulator: the server
-// takes at most 1 MB for a picture, 2 MB for a banner, and a phone's photos are far bigger). (Animated
-// GIFs can't be picked here: the crop would stop them moving. The web page keeps them animated.)
-// The server then sends everyone a fresh "users", which shows it here too.
-import * as ImagePicker from 'expo-image-picker';
-import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
+// A new picture or banner: chosen with Android's photo picker, then moved and zoomed in the picture
+// editor (PictureEditor.js, the web page's), which also keeps animated GIFs animated. Nothing is
+// uploaded until Save there. The server then sends everyone a fresh "users", which shows it here too.
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { deleteJson, postJson } from './api';
 import { uploadPicture } from './files';
 import { Avatar } from './people';
+import PictureEditor, { pickPicture } from './PictureEditor';
 import { Banner } from './ProfileScreen';
 import { Button, Field, Form, Status, Title } from './SettingsParts';
 import { useStyles } from './theme';
 
-// The crop's shape and the size it's saved at (the web page's CROP_SHAPES).
-const PICTURES = {
-  avatar: { aspect: [1, 1], width: 256, height: 256, done: 'Picture changed.' },
-  banner: { aspect: [3, 1], width: 960, height: 320, done: 'Banner changed.' },
-};
+const DONE = { avatar: 'Picture changed.', banner: 'Banner changed.' };
 
 const MAX_STATUS = 60;  // as the server's
 const MAX_BIO = 300;
@@ -36,25 +28,26 @@ export default function ProfileSettings({ connection }) {
   const [message, setMessage] = useState(null);  // the status line: {text, error}
   const [busy, setBusy] = useState(false);       // a picture is on its way
 
+  const [editing, setEditing] = useState(null);  // the picture in the editor: {picture, kind}
+
   async function changePicture(kind) {
-    const shape = PICTURES[kind];
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'], allowsEditing: true, aspect: shape.aspect, quality: 1,
-    });
-    if (result.canceled) return;
+    setMessage(null);
+    try {
+      const picture = await pickPicture();
+      if (picture) setEditing({ picture, kind });
+    } catch (error) {
+      setMessage({ text: error.message, error: true });
+    }
+  }
+
+  // Save in the editor: upload what it made.
+  async function upload(picture) {
+    const { kind } = editing;
+    setEditing(null);
     setBusy(true);
     setMessage({ text: 'Uploading…' });
-    try {
-      // Shrink the cropped picture to the size it's shown at (a little bigger, to stay sharp).
-      const image = await ImageManipulator.manipulate(result.assets[0].uri)
-        .resize({ width: shape.width, height: shape.height })
-        .renderAsync();
-      const saved = await image.saveAsync({ format: SaveFormat.WEBP, compress: 0.85 });
-      const problem = await uploadPicture(kind, saved.uri);
-      setMessage(problem ? { text: problem, error: true } : { text: shape.done });
-    } catch {
-      setMessage({ text: "Couldn't read that picture.", error: true });
-    }
+    const problem = await uploadPicture('/settings/' + kind, picture);
+    setMessage(problem ? { text: problem, error: true } : { text: DONE[kind] });
     setBusy(false);
   }
 
@@ -94,6 +87,9 @@ export default function ProfileSettings({ connection }) {
         <Status status={message} />
         <Button label="Save profile" onPress={save} />
       </Form>
+      {editing ? (
+        <PictureEditor picture={editing.picture} kind={editing.kind} onDone={upload} onCancel={() => setEditing(null)} />
+      ) : null}
     </View>
   );
 }

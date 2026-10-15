@@ -189,6 +189,19 @@ the point is for me to understand how it works, not just to have it done.
   saved on Done, Cancel restores; text size with our `src/Slider.js`, a PanResponder slider), `src/SettingsParts.js`
   (Title, Heading, Help, Field, Button, Status, Form). Opened by ⚙️ on your panel and Edit profile in your popup,
   which also has Log out (`connection.logout`: POST /logout, close, me null, the login screen).
+  The rest of Settings (since 2026-10-15): `src/PictureEditor.js` (the web's #cropper: `pickPicture()` (quality 1 = the
+  file as it is, so a GIF stays one; stills loaded through expo-image-manipulator, which turns EXIF-rotated photos
+  upright, and shown as a 2048px copy so what you see is what's cut), pan + pinch (gesture-handler/reanimated) and our
+  Slider; Save cuts a still into WebP, a GIF goes whole with ?left&top&width&height like the web), used by Profile and
+  `src/EmojiSettings.js`; files.js `uploadPicture(path, picture, extra)`. `src/changelog.js` (`useChangelog`, fetched
+  at every connect; the seen count in `changelog-seen.txt`; dots on ⚙️ and the tab) + `src/ChangelogSettings.js`;
+  `src/FeedbackSettings.js` (sends `phone: true`: the server marks it "ChatApp Android app", the inbox says Android
+  app); `src/AdminSettings.js` (sub-tabs like the web; the inbox fetched by SettingsScreen for "Admin (n)" and again
+  when the tab opens; `askToSetAdmin`), `src/BanDialog.js` (`mayBan`; lengths as buttons), `src/PersonPicker.js`
+  (type-to-search, suggestions in the flow under the box; `matchPeople` in people.js). The user menu has Edit
+  profile, Make/Remove admin and Ban…. `src/SeasonScreen.js`: `SeasonBadge` on your panel picture (a 4px-padded box
+  so more of it takes taps) and the video in `src/VideoScreen.js` at 30% volume (our own bar under the video: time
+  bar, play, time, mute, volume; Android's controls were a big overlay with no volume; chat videos use it too). dev.db's "phone" is admin and owner (password in my memory).
   `prebuild --clean` failing with EBUSY on `android/`: the adb server started by run:android stands in it (`adb kill-server`).
   `src/people.js` (Avatar with letter colours, StatusDot with the phone shape, BotBadge, Person, nameColor),
   `src/Icon.js` (react-native-svg's SvgXml with the web page's Lucide shapes from `src/icon-shapes.js`,
@@ -344,10 +357,18 @@ the point is for me to understand how it works, not just to have it done.
   requests for seeking), `file_info` has `"video"`; `mark_old_videos()` at every start turns earlier .mp4/.webm
   downloads that pass into videos. Web: messages.js `makeVideo` (<video controls preload="metadata"> + the
   `makeFileLink` under it; an unplayable format leaves the link). Phone: expo-video (`VideoAttachment` in
-  MessageText.js: the first frame with a play button; a tap `enterFullscreen()`s and plays, leaving pauses; a
+  MessageText.js: the first frame with a play button; a tap opens `src/VideoScreen.js`, the popup with our control bar
+  right under the video (the user's wish; Android's full screen had its controls at the screen's bottom); a
   see-through Pressable lies over the VideoView because the native view swallowed taps, so in-message controls never worked); its player downloads with its own OkHttp client without
   React Native's cookies, so `mobile/modules/cookies` (Kotlin, CookieManager.getCookie) hands it the login cookie
   as a header.
+- Re-packing videos (server.py, "Re-packing videos"; since 2026-10-15): fragmented MP4s (screen recorders, browser
+  recordings) say length 0 in their header; Android's player then shows no length and can't skip. Every uploaded
+  video is re-packed by ffmpeg (`-c copy`, `+faststart`, `-map 0:v -map 0:a?`, 60 s limit, in a thread; the original
+  stays if it fails) before /upload answers; `attachments.repacked`; `repack_old_videos` (started by the first
+  connection) does older ones and fragmented seasonal videos (`mp4_is_fragmented` reads the top-level boxes).
+  `find_ffmpeg` also reads PATH from the registry (a running server keeps its old PATH). ffmpeg: winget's
+  Gyan.FFmpeg (install.ps1 step 1, machine scope; this PC has it per user, its bin folder on the user PATH).
 - GIFs (server.py, "GIFs"; messages.js, "GIFs"): the GIF button by the text box opens #gif-picker. `/gifs/search?q=`
   (trending without q) asks GIPHY's API with `GIPHY_API_KEY` (.env; on this PC in the git-ignored `dev-secrets.env`,
   which start.ps1 loads) via `fetch_url`; answers kept an hour in `gif_cache` (the free key: ~100 requests an hour

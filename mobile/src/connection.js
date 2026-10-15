@@ -109,7 +109,8 @@ export function useConnection() {
     switch (data.type) {
       case 'welcome':
         // max_text_length: the server's limit on a message, so the text box can use the same.
-        setMe({ id: data.id, username: data.username, maxTextLength: data.max_text_length });
+        // season: the seasonal easter egg ({name, emoji or image, video}), or null (Sidebar.js).
+        setMe({ id: data.id, username: data.username, maxTextLength: data.max_text_length, season: data.season });
         setMyPresence(data.presence);
         setAppearance(data.appearance ?? DEFAULT_APPEARANCE);  // (null: never changed: the defaults)
         break;

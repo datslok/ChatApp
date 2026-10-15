@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, BackHandler, KeyboardAvoidingView, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { ChatButtons, ChatTitle } from './src/ChatHeader';
+import BanDialog from './src/BanDialog';
 import ChatScreen from './src/ChatScreen';
 import Drawer from './src/Drawer';
 import { GroupDialog, GroupMenu, RenameDialog } from './src/GroupScreen';
@@ -17,9 +18,11 @@ import Members from './src/Members';
 import PeopleScreen from './src/PeopleScreen';
 import ProfileScreen from './src/ProfileScreen';
 import SettingsScreen from './src/SettingsScreen';
+import SeasonScreen from './src/SeasonScreen';
 import ShareScreen from './src/ShareScreen';
 import Sidebar from './src/Sidebar';
 import UserMenu from './src/UserMenu';
+import { useChangelog } from './src/changelog';
 import { dmPartner } from './src/chats';
 import { ThemeContext, loadAppearance, makeTheme, saveAppearance, useStyles, useTheme } from './src/theme';
 import { useConnection } from './src/connection';
@@ -42,7 +45,7 @@ function Main({ connection, share, onShareDone }) {
   // The popup or menu about people and groups that's open, drawn over everything here (each closes
   // itself with onClose): {type: "profile" or "userMenu", id}, {type: "me"}, {type: "group", key}
   // (key null: a new group), {type: "rename" or "groupMenu", key}, {type: "invites"},
-  // {type: "settings", page} (page null: the tab from last time); or null.
+  // {type: "settings", page} (page null: the tab from last time), {type: "ban", id}, {type: "season"}; or null.
   const [dialog, setDialog] = useState(null);
   const closeDialog = () => setDialog(null);
   const [focusTick, setFocusTick] = useState(0);  // a new number: the chat screen puts the cursor in its text box
@@ -57,6 +60,8 @@ function Main({ connection, share, onShareDone }) {
   const [drafts, setDrafts] = useState({});
   // A share asks "Share to…" when it started the app, or when no chat is open (the People page).
   const pickChat = !!share && (share.fromStart || view === PEOPLE);
+  // What's new: fetched again at every connect (a new `me`), for the red dot on ⚙️ and Settings.
+  const changelog = useChangelog(connection.me);
 
   function go(key, remember = true) {
     if (remember && view !== null && view !== key) history.current.push(view);
@@ -207,6 +212,11 @@ function Main({ connection, share, onShareDone }) {
             setDialog({ type: 'group', key: null });
           }}
           onMe={() => setDialog({ type: 'me' })}
+          settingsDot={changelog.unseen}
+          onSeason={() => {
+            setDrawer(null);
+            setDialog({ type: 'season' });
+          }}
           onSettings={() => {
             setDrawer(null);  // (the web page closes the drawer too)
             setDialog({ type: 'settings', page: null });
@@ -224,6 +234,8 @@ function Main({ connection, share, onShareDone }) {
         <UserMenu
           connection={connection} userId={dialog.id} onProfile={openProfile} onOpen={go} onClose={closeDialog}
           onMention={view === PEOPLE ? null : mention}  // (only in a chat, which has a text box)
+          onEditProfile={() => setDialog({ type: 'settings', page: 'profile' })}
+          onBan={(id) => setDialog({ type: 'ban', id })}
         />
       ) : null}
       {dialog?.type === 'me' ? (
@@ -235,7 +247,15 @@ function Main({ connection, share, onShareDone }) {
           }}
         />
       ) : null}
-      {dialog?.type === 'settings' ? <SettingsScreen connection={connection} page={dialog.page} onClose={closeDialog} /> : null}
+      {dialog?.type === 'settings' ? (
+        <SettingsScreen connection={connection} changelog={changelog} page={dialog.page} onClose={closeDialog} />
+      ) : null}
+      {dialog?.type === 'season' && connection.me.season ? (
+        <SeasonScreen season={connection.me.season} onClose={closeDialog} />
+      ) : null}
+      {dialog?.type === 'ban' && connection.users[dialog.id] ? (
+        <BanDialog user={connection.users[dialog.id]} onClose={closeDialog} />
+      ) : null}
       {dialog?.type === 'group' ? (
         <GroupDialog connection={connection} groupKey={dialog.key} onCreated={go} onClose={closeDialog} />
       ) : null}

@@ -17,6 +17,17 @@ export function nameColor(user, roles) {
   return topRole(user, roles)?.colour;
 }
 
+// The person picker's suggestions (the web page's matchPeople): names starting with what's typed
+// first, then names containing it; at most 8.
+export function matchPeople(typed, people) {
+  const query = typed.trim().toLowerCase();
+  const name = (person) => person.name.toLowerCase();
+  return [
+    ...people.filter((person) => name(person).startsWith(query)),
+    ...people.filter((person) => !name(person).startsWith(query) && name(person).includes(query)),
+  ].slice(0, 8);
+}
+
 // "Playing Hollow Knight", "Listening to Song by Artist", "Using Visual Studio Code".
 export function activityText(activity) {
   if (activity.kind === 'playing') return 'Playing ' + activity.name;

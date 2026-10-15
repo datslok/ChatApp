@@ -2,7 +2,7 @@
 // pictures, link preview cards and attachments. The sizes and colours are chat.css's.
 import { useEventListener } from 'expo';
 import { useVideoPlayer, VideoView } from 'expo-video';
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Alert, Image, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { getCookie } from '../modules/cookies';
 import ImageViewer from './ImageViewer';
@@ -12,6 +12,7 @@ import { useStyles, useTheme } from './theme';
 import { SERVER } from './config';
 import { downloadFile, openFile, saveFile } from './files';
 import { isOnlyEmoji, parseMessage, tokensToCodes } from './format';
+import VideoScreen from './VideoScreen';
 
 // A custom emoji's picture. /custom-emoji/files/ only answers logged-in people; React Native's
 // <Image> sends the login cookie along like everything else. (Animated ones play: animated WebP is
@@ -296,10 +297,10 @@ export function Attachment({ file, sender, onLongPress }) {
 }
 
 // A video: its first picture as big as a picture may be (at most 400 x 300) with a play button on it,
-// and the download link under it. A tap plays it full screen, with Android's own controls (pause,
-// the time bar); back or the button there returns, and pauses it. (Phone reason for not copying the
-// web page's player in the message: the message's long-press Pressable takes the touches, so the
-// player's own controls never got them; full screen is a window of its own, outside the list.)
+// and the download link under it. A tap plays it in a popup with our control bar right under it
+// (VideoScreen.js; Android's own full screen had its controls at the bottom of the screen). (Phone reason
+// for not copying the web page's player in the message: the message's long-press Pressable takes the
+// touches, so the player's own controls never got them; the popup is a window of its own.)
 // expo-video's player (Android's ExoPlayer) downloads with its own HTTP client, which doesn't send
 // React Native's login cookie, so we give it the cookie as a header (modules/cookies). It fetches the
 // video in pieces as it plays; until play is pressed, only enough for the first picture.
@@ -310,8 +311,8 @@ function VideoAttachment({ file, sender, onLongPress }) {
     const cookie = getCookie(SERVER);
     return { uri: `${SERVER}/uploads/${encodeURIComponent(file.id)}`, headers: cookie ? { Cookie: cookie } : undefined };
   }, [file.id]);
-  const player = useVideoPlayer(source);  // one player per video message; it doesn't play by itself
-  const view = useRef(null);  // the VideoView itself, for enterFullscreen()
+  const player = useVideoPlayer(source);  // one player per video message, for its first picture; never plays
+  const [watching, setWatching] = useState(false);  // the popup is open (with a player of its own)
   const [natural, setNatural] = useState(null);  // the video's own {width, height}, once it has loaded
   const [room, setRoom] = useState(400);          // how wide it may be here
   useEventListener(player, 'sourceLoad', ({ availableVideoTracks }) => {
@@ -329,20 +330,18 @@ function VideoAttachment({ file, sender, onLongPress }) {
     <View>
       <View style={styles.fitted} onLayout={(event) => setRoom(event.nativeEvent.layout.width)}>
         <View>
+          {/* surfaceType "textureView": drawn as part of the screen like everything else. The default (a
+              SurfaceView) is a separate layer, which Android's stretch at the end of a list didn't move with. */}
           <VideoView
-            ref={view} player={player} style={[size, styles.attachmentImage, styles.video]}
-            nativeControls={false} contentFit="contain" fullscreenOptions={{ enable: true }}
-            onFullscreenExit={() => player.pause()}
+            player={player} style={[size, styles.attachmentImage, styles.video]} nativeControls={false} contentFit="contain"
+            surfaceType="textureView"
           />
           {/* A see-through button over the whole video, with the play button in its middle. It has to lie
               on top: Android's video view took taps on it for itself, so a Pressable around it never
               heard of them. */}
           <Pressable
             style={[styles.videoCover, size]}
-            onPress={() => {
-              view.current?.enterFullscreen();
-              player.play();
-            }}
+            onPress={() => setWatching(true)}
             onLongPress={onLongPress}
           >
             <View style={styles.playButton}>
@@ -352,6 +351,7 @@ function VideoAttachment({ file, sender, onLongPress }) {
         </View>
       </View>
       <FileAttachment file={file} sender={sender} onLongPress={onLongPress} />
+      {watching ? <VideoScreen path={`/uploads/${encodeURIComponent(file.id)}`} onClose={() => setWatching(false)} /> : null}
     </View>
   );
 }

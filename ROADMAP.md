@@ -114,7 +114,7 @@
     - [x] The chat's top bar: mute, search, pinned messages
     - [x] Profiles, the user menu (long press), your status, groups (create, add, rename, leave), invites
     - [x] Settings: my account, profile, appearance (themes, colours, text size), log out
-    - [ ] The rest of Settings: the web's picture editor (move and zoom; animated GIFs stay animated for pictures, banners and emoji), Emoji, What's new, Bugs & ideas, Admin (with Ban and Make admin in the user menu), the seasonal easter egg
+    - [x] The rest of Settings: the web's picture editor (move and zoom; animated GIFs stay animated for pictures, banners and emoji), Emoji, What's new, Bugs & ideas, Admin (with Ban and Make admin in the user menu), the seasonal easter egg
     - [ ] Voice and video calls (LiveKit's React Native library), also with the phone locked; the Lounge; Settings → Voice & audio and Video
     - [ ] Push notifications through Firebase Cloud Messaging, ringing calls; Settings → Notifications
     - [ ] Distribution: the app's icon, a release signing key, the real server, an APK on the download page, and updates (expo-updates)

@@ -18,13 +18,49 @@ function untilText(iso) {
   return `${date.getDate()} ${MONTHS[date.getMonth()]} ${date.getFullYear()}, ${two(date.getHours())}:${two(date.getMinutes())}`;
 }
 
+// One link (the web page's makeInviteRow): the address, Copy, × (onCancel), and until when it works
+// (and who made it, when the server says: Settings → Admin → Invites). isNew: framed (just made).
+export function InviteRow({ invite, isNew, onCancel }) {
+  const styles = useStyles(makeStyles);
+  const [copied, setCopied] = useState(false);  // Copy just said "Copied ✓"
+
+  async function copy() {
+    await Clipboard.setStringAsync(invite.link);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  return (
+    <View style={styles.row}>
+      <View style={styles.line}>
+        {/* One line, "…" in the middle. Not selectable (the web page's box is): on Android, selectable
+            text ignores numberOfLines and showed half a second line. Copy is the way to copy it. */}
+        <View style={[styles.linkBox, isNew && styles.newLink]}>
+          <Text numberOfLines={1} ellipsizeMode="middle" style={styles.link}>{invite.link}</Text>
+        </View>
+        <Pressable onPress={copy} style={({ pressed }) => [styles.button, pressed && styles.pressed]}>
+          <Text style={styles.buttonText}>{copied ? 'Copied ✓' : 'Copy'}</Text>
+        </Pressable>
+        <Pressable
+          onPress={onCancel} style={({ pressed }) => [styles.button, pressed && styles.pressed]}
+          accessibilityLabel="Cancel this link"
+        >
+          <Text style={styles.buttonText}>×</Text>
+        </Pressable>
+      </View>
+      <Text style={styles.expires}>
+        {invite.by ? `Made by ${invite.by} · works` : 'Works'} once, until {untilText(invite.expires)}
+      </Text>
+    </View>
+  );
+}
+
 export default function InviteScreen({ onClose }) {
   const popupStyles = useStyles(makePopupStyles);
   const styles = useStyles(makeStyles);
   const [answer, setAnswer] = useState(null);  // the server's list (null: on its way)
   const [status, setStatus] = useState(null);  // {text, success} under the list, or null
   const [newCode, setNewCode] = useState(null);  // the link New link just made (framed)
-  const [copied, setCopied] = useState(null);    // the link whose Copy just said "Copied ✓"
 
   // The list, when the popup opens.
   useEffect(() => {
@@ -44,12 +80,6 @@ export default function InviteScreen({ onClose }) {
     }
     setAnswer(result.data);
     return result.data;
-  }
-
-  async function copy(link) {
-    await Clipboard.setStringAsync(link);
-    setCopied(link);
-    setTimeout(() => setCopied((now) => (now === link ? null : now)), 2000);
   }
 
   // New link: the new one is the code that wasn't in the list before. It goes straight onto the
@@ -74,26 +104,10 @@ export default function InviteScreen({ onClose }) {
       <ScrollView style={styles.list}>
         {answer?.invites.length === 0 ? <Text style={styles.empty}>No unused links. Tap New link to make one.</Text> : null}
         {answer?.invites.map((invite) => (
-          <View key={invite.code} style={styles.row}>
-            <View style={styles.line}>
-              {/* One line, "…" in the middle. Not selectable (the web page's box is): on Android, selectable
-                  text ignores numberOfLines and showed half a second line. Copy is the way to copy it. */}
-              <View style={[styles.linkBox, invite.code === newCode && styles.newLink]}>
-                <Text numberOfLines={1} ellipsizeMode="middle" style={styles.link}>{invite.link}</Text>
-              </View>
-              <Pressable onPress={() => copy(invite.link)} style={({ pressed }) => [styles.button, pressed && styles.pressed]}>
-                <Text style={styles.buttonText}>{copied === invite.link ? 'Copied ✓' : 'Copy'}</Text>
-              </Pressable>
-              <Pressable
-                onPress={() => inviteAction(`/invites/${encodeURIComponent(invite.code)}/cancel`)}
-                style={({ pressed }) => [styles.button, pressed && styles.pressed]}
-                accessibilityLabel="Cancel this link"
-              >
-                <Text style={styles.buttonText}>×</Text>
-              </Pressable>
-            </View>
-            <Text style={styles.expires}>Works once, until {untilText(invite.expires)}</Text>
-          </View>
+          <InviteRow
+            key={invite.code} invite={invite} isNew={invite.code === newCode}
+            onCancel={() => inviteAction(`/invites/${encodeURIComponent(invite.code)}/cancel`)}
+          />
         ))}
       </ScrollView>
       {status ? <Text style={[status.success ? popupStyles.success : popupStyles.problem, styles.status]}>{status.text}</Text> : null}

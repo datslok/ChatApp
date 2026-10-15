@@ -41,14 +41,21 @@ export async function uploadFile(item) {
   return answer.id;
 }
 
-// A new profile picture or banner (Settings → Profile), already cropped and shrunk: a WebP file.
-// The server answers everyone with a fresh "users", which shows it. Returns null, or what went wrong.
-export async function uploadPicture(kind, uri) {
+// A picture from the picture editor (PictureEditor.js): a profile picture or banner ("/settings/avatar"),
+// a new custom emoji ("/custom-emoji", its name in params) or a new picture for one. `picture` is the
+// editor's {uri, type, params}: a WebP it cut out, or a whole GIF with its rectangle in params. The
+// server answers everyone with a fresh "users" or "custom_emoji", which shows it. Returns null, or
+// what went wrong.
+export async function uploadPicture(path, picture, extra = {}) {
+  // {name: "pog", left: 0, ...} -> "name=pog&left=0&..." (each part made safe for an address).
+  const query = Object.entries({ ...extra, ...picture.params })
+    .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+    .join('&');
   try {
-    const response = await fetch(`${SERVER}/settings/${kind}`, {
+    const response = await fetch(`${SERVER}${path}${query ? '?' + query : ''}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'image/webp' },
-      body: new File(uri),
+      headers: { 'Content-Type': picture.type },
+      body: new File(picture.uri),
     });
     if (response.ok) return null;
     const answer = await response.json().catch(() => ({}));

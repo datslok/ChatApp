@@ -119,6 +119,12 @@ between them. This uses its own database (`dev.db`) and upload folder (`dev-uplo
 `dev-secrets.env.example` to `dev-secrets.env` and put the key in it: start.ps1 reads it, and git
 ignores it, so the key is never committed. Without it the GIF button says GIF search isn't set up.
 
+**Videos** are re-packed by ffmpeg when they're uploaded (the same picture and sound, with their length
+and index at the start, so the phone app's player can show the length and skip). Without ffmpeg they're
+kept as they are and the server says so when it starts. To install it: `winget install Gyan.FFmpeg`
+(the server finds it without restarting PowerShell). Videos uploaded before are re-packed once, in the
+background, after the server starts; so are the seasonal videos.
+
 The first account in a new `dev.db` is the admin by itself. To make another one an admin:
 `python tools\make_admin.py theirname --db dev.db` (with the `chatapp` environment active: `conda activate chatapp`).
 
@@ -144,6 +150,8 @@ command.
   subdomain like `chat.example.com`, and voice at `voice.example.com`.
 - **Access to your router's settings**, to forward two ports for voice. Without that, everything
   except voice, video and screen sharing still works.
+- Nothing else to download by hand: `install.ps1` gets Python, LiveKit, `cloudflared` and **ffmpeg**
+  (which re-packs uploaded videos so phones can tell how long they are and skip in them).
 - **Optional: an email service with SMTP** (Resend, Brevo, Mailgun, or your own email provider), for
   "forgot password" emails and bug reports to admins. Without it, emails are only written to the log.
 
@@ -225,7 +233,7 @@ cd C:\ChatApp
 .\scripts\server\install.ps1
 ```
 
-It installs Python (with the packages, in `.venv`), LiveKit and `cloudflared`, adds firewall rules for
+It installs Python (with the packages, in `.venv`), ffmpeg, LiveKit and `cloudflared`, adds firewall rules for
 voice, sets the power options (never sleep while plugged in; closing the lid does nothing), switches
 on Windows' SSH server (only reachable from your home network, for updating from your other PC), and
 makes scheduled tasks that start the chat and voice at boot (and again within 5 minutes if they ever
@@ -332,7 +340,8 @@ the server, from your PC with
 .\scripts\seasonal-upload.ps1 path\to\video.mp4 halloween
 ```
 
-A season whose video isn't there shows nothing. The videos are only sent to people who are logged in,
+Any MP4 works: the server re-packs a fragmented one by itself (see **Videos** under
+[Try it on your own PC](#try-it-on-your-own-pc)), so the phone app can show its length. A season whose video isn't there shows nothing. The videos are only sent to people who are logged in,
 and the nightly backup and `export.ps1` include them.
 
 ### Optional: an AI bot

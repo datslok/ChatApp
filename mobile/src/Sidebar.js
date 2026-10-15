@@ -7,6 +7,7 @@ import Icon from './Icon';
 import { useStyles, useTheme } from './theme';
 import { dmKey, groupName } from './chats';
 import { GroupPicture, Person, PersonPicture } from './people';
+import { SeasonBadge } from './SeasonScreen';
 
 // One row of the list, like the web page's .channel buttons. `children` is a function that draws
 // what's in it, told whether the text should be white (`strong`) and bold (unread). onLongPress: a
@@ -35,8 +36,11 @@ function Row({ chatKey, active, unread, mentions, mutedChats, onPress, onLongPre
 }
 
 // onUserMenu(id): a DM's long press. onNewGroup: the + by "Direct messages". onMe: your panel at the
-// bottom. onSettings: its ⚙️.
-export default function Sidebar({ connection, view, onPick, onPeople, onUserMenu, onNewGroup, onMe, onSettings }) {
+// bottom. onSettings: its ⚙️ (settingsDot: a red dot on it, What's new has news). onSeason: the
+// seasonal easter egg on your picture.
+export default function Sidebar({
+  connection, view, onPick, onPeople, onUserMenu, onNewGroup, onMe, onSettings, settingsDot, onSeason,
+}) {
   const styles = useStyles(makeStyles);
   const { colors } = useTheme();
   const { channels, groups, friends, users, roles, me, myPresence, unread, mentions, mutedChats, incoming } = connection;
@@ -109,14 +113,23 @@ export default function Sidebar({ connection, view, onPick, onPeople, onUserMenu
       {mine ? (
         <View style={styles.userPanel}>
           <Pressable onPress={onMe} style={({ pressed }) => [styles.me, pressed && styles.panelPressed]}>
-            <PersonPicture user={mine} me={me} myPresence={myPresence} size={40} ring={colors.bgPanelAlt} />
+            {/* 4px of room around the picture (from the panel's own padding), for the seasonal badge. */}
+            <View style={styles.myPicture}>
+              <PersonPicture user={mine} me={me} myPresence={myPresence} size={40} ring={colors.bgPanelAlt} />
+              {me.season ? <SeasonBadge season={me.season} onPress={onSeason} /> : null}
+            </View>
             <Text numberOfLines={1} style={styles.myName}>{mine.name}</Text>
           </Pressable>
           <Pressable
             onPress={onSettings} hitSlop={6} accessibilityLabel="Settings"
             style={({ pressed }) => [styles.panelButton, pressed && styles.panelPressed]}
           >
-            {({ pressed }) => <Icon name="settings" size={22} color={pressed ? colors.iconStrong : colors.icon} />}
+            {({ pressed }) => (
+              <>
+                <Icon name="settings" size={22} color={pressed ? colors.iconStrong : colors.icon} />
+                {settingsDot ? <View style={styles.settingsDot} /> : null}
+              </>
+            )}
           </Pressable>
         </View>
       ) : null}
@@ -164,5 +177,8 @@ const makeStyles = (colors, size) => StyleSheet.create({
   userPanel: { flexDirection: 'row', alignItems: 'center', gap: 4, padding: 8, backgroundColor: colors.bgPanelAlt },
   me: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12, padding: 4, borderRadius: 6, minWidth: 0 },
   panelButton: { padding: 10, borderRadius: 6 },
+  myPicture: { padding: 4, margin: -4 },
+  // #settings-new-dot: the red dot in ⚙️'s top corner.
+  settingsDot: { position: 'absolute', top: 6, right: 6, width: 8, height: 8, borderRadius: 4, backgroundColor: colors.red },
   myName: { flex: 1, color: colors.textStrong, fontSize: size(13.6), fontWeight: '600' },
 });

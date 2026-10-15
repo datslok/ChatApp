@@ -8,10 +8,12 @@ import json
 import os
 import re
 import secrets
+import shutil
 import smtplib
 import socket
 import sqlite3
 import ssl
+import subprocess
 import time
 import urllib.request
 import warnings
@@ -733,6 +735,119 @@ def mark_old_videos():
 
 
 mark_old_videos()
+
+
+# ---------- Re-packing videos ----------
+#
+# A video file is a container (MP4, WebM) holding the picture and sound, plus an index: how long it is
+# and where each moment is in the file. Some programs (screen recorders, browsers' own recordings, video
+# downloaders) write "fragmented" files: many small pieces, with the header saying the length is 0 and
+# the real index at the very end. Browsers cope; Android's player (the phone app's) can't tell how long
+# such a video is or skip in it. So every uploaded video is re-packed once by ffmpeg: the same picture
+# and sound, copied as they are ("-c copy", nothing re-encoded: a second or two, no quality lost), into
+# an ordinary file with the length and index at the start ("+faststart", which also lets a video begin
+# playing before it's all downloaded). If ffmpeg isn't installed, or fails on a file, the original stays.
+
+def find_ffmpeg():
+    """ffmpeg's path, or None. On our PATH, or else on the PATH as Windows has it now: a program keeps
+    the PATH it started with, so a server (or scheduled task) started before ffmpeg was installed
+    wouldn't see it. Windows keeps the current one in the registry, for all users and for this one
+    (install.ps1's Update-Path reads the same two)."""
+    found = shutil.which("ffmpeg")
+    if found or os.name != "nt":
+        return found
+    import winreg  # (Windows only)
+    folders = []
+    for root, key in ((winreg.HKEY_LOCAL_MACHINE, r"SYSTEM\CurrentControlSet\Control\Session Manager\Environment"),
+                      (winreg.HKEY_CURRENT_USER, "Environment")):
+        try:
+            with winreg.OpenKey(root, key) as opened:
+                folders.append(winreg.QueryValueEx(opened, "Path")[0])
+        except OSError:
+            pass
+    return shutil.which("ffmpeg", path=os.path.expandvars(";".join(folders)))
+
+
+FFMPEG = find_ffmpeg()
+if FFMPEG is None:
+    print("ffmpeg isn't installed: uploaded videos are kept as they are (see README, \"Videos\").", flush=True)
+
+
+def repack_video(path, content_type):
+    """Re-pack the video at `path` in place (see above). True if it was replaced. Slow-ish (it runs a
+    program), so it's called in a background thread."""
+    if FFMPEG is None:
+        return False
+    container = "mp4" if content_type == "video/mp4" else "webm"
+    temporary = path.with_name(path.name + ".repack")
+    command = [FFMPEG, "-v", "error", "-y", "-i", str(path), "-map", "0:v", "-map", "0:a?", "-c", "copy"]
+    if container == "mp4":
+        command += ["-movflags", "+faststart"]
+    command += ["-f", container, str(temporary)]
+    try:
+        # A list, never one string through a shell: the path can't be read as a command. 60 s at most.
+        result = subprocess.run(command, capture_output=True, timeout=60)
+        if result.returncode == 0 and temporary.stat().st_size > 0 and is_video(temporary, content_type):
+            os.replace(temporary, path)  # swaps the file in one go: nobody ever gets half of one
+            return True
+        print(f"Couldn't re-pack {path.name}: {result.stderr.decode(errors='replace')[-300:]}", flush=True)
+    except (OSError, subprocess.TimeoutExpired) as error:
+        print(f"Couldn't re-pack {path.name}: {error}", flush=True)
+    temporary.unlink(missing_ok=True)
+    return False
+
+
+def mp4_is_fragmented(path):
+    """Does this MP4 need re-packing: is it in pieces ("moof" boxes), or is its index after the picture
+    and sound ("moov" after "mdat")? An MP4 is a row of boxes, each starting with its size (4 bytes) and
+    its kind (4 letters); this reads only those headers, skipping over each box."""
+    seen = []
+    with open(path, "rb") as file:
+        while len(seen) < 1000:
+            header = file.read(8)
+            if len(header) < 8:
+                break
+            size, kind = int.from_bytes(header[:4], "big"), header[4:8]
+            seen.append(kind)
+            if size == 1:  # a big box: its real size follows, in 8 bytes
+                size = int.from_bytes(file.read(8), "big") - 8
+            elif size == 0:  # "until the end of the file"
+                break
+            file.seek(size - 8, os.SEEK_CUR)
+    if b"moof" in seen:
+        return True
+    return b"mdat" in seen and b"moov" in seen and seen.index(b"mdat") < seen.index(b"moov")
+
+
+if "repacked" not in table_columns("attachments"):
+    # 1 once a video has been through repack_video (whether or not it needed it), so each is done once.
+    with db:
+        db.execute("ALTER TABLE attachments ADD COLUMN repacked INTEGER NOT NULL DEFAULT 0")
+
+
+async def repack_old_videos():
+    """Videos uploaded before re-packing existed, and the seasonal videos (seasonal/, see "Seasons"):
+    re-packed once, in the background, started by the first connection (like watch_presences).
+    The database is only touched here, in the server's own thread; ffmpeg runs in another."""
+    if FFMPEG is None:
+        return
+    rows = db.execute(
+        "SELECT id, content_type FROM attachments WHERE content_type IN ('video/mp4', 'video/webm') AND repacked = 0"
+    ).fetchall()
+    for file_id, content_type in rows:
+        path = UPLOAD_DIR / file_id
+        if path.exists() and await asyncio.to_thread(repack_video, path, content_type):
+            with db:
+                db.execute("UPDATE attachments SET size = ? WHERE id = ?", (path.stat().st_size, file_id))
+        with db:
+            db.execute("UPDATE attachments SET repacked = 1 WHERE id = ?", (file_id,))
+    for season in SEASONS:
+        path = SEASONAL_DIR / season["video"]
+        if path.is_file() and await asyncio.to_thread(mp4_is_fragmented, path):
+            if await asyncio.to_thread(repack_video, path, "video/mp4"):
+                print(f"Re-packed seasonal/{season['video']}.", flush=True)
+
+repacker = None  # the task above, started by the first connection (it needs the running loop)
 
 
 def is_admin(user_id):
@@ -2006,11 +2121,16 @@ async def upload(request: Request, filename: str):
     size = await receive_file(request, UPLOAD_DIR / file_id, MAX_UPLOAD_SIZE)
     if content_type in VIDEO_TYPES and not is_video(UPLOAD_DIR / file_id, content_type):
         content_type = "application/octet-stream"
+    # A video: re-packed before anyone sees it, so every player knows its length (see "Re-packing
+    # videos"). In a background thread: the chat keeps running meanwhile.
+    repacked = content_type in VIDEO_TYPES and FFMPEG is not None
+    if repacked and await asyncio.to_thread(repack_video, UPLOAD_DIR / file_id, content_type):
+        size = (UPLOAD_DIR / file_id).stat().st_size
 
     with db:
         db.execute(
-            "INSERT INTO attachments (id, filename, content_type, size, uploader_id) VALUES (?, ?, ?, ?, ?)",
-            (file_id, filename, content_type, size, user_id),
+            "INSERT INTO attachments (id, filename, content_type, size, uploader_id, repacked) VALUES (?, ?, ?, ?, ?, ?)",
+            (file_id, filename, content_type, size, user_id, int(repacked)),
         )
     return {"id": file_id}
 
@@ -2478,6 +2598,7 @@ class Feedback(BaseModel):
     kind: str
     text: str
     app: bool = False  # sent from the Windows app (whose window says it's Edge, so we're told)
+    phone: bool = False  # sent from the phone app (mobile/, which says it's "okhttp")
 
 
 @app.post("/feedback")
@@ -2500,8 +2621,10 @@ async def send_feedback(data: Feedback, request: Request, background_tasks: Back
     record_failure(key)
 
     # The browser says what it is in every request (the User-Agent header): which browser, which
-    # version, which system. The app's window (WebView2) says it's Edge, so the page tells us.
-    user_agent = ("ChatApp Windows app | " if data.app else "") + request.headers.get("user-agent", "")[:300]
+    # version, which system. The app's window (WebView2) says it's Edge, and the phone app's requests
+    # say "okhttp" (Android's web library), so the apps tell us.
+    marker = "ChatApp Windows app | " if data.app else "ChatApp Android app | " if data.phone else ""
+    user_agent = marker + request.headers.get("user-agent", "")[:300]
     with db:
         cursor = db.execute(
             "INSERT INTO feedback (user_id, kind, text, user_agent) VALUES (?, ?, ?, ?)",
@@ -4598,6 +4721,9 @@ async def chat(websocket: WebSocket):
     global presence_watcher
     if presence_watcher is None:  # the first connection since the server started: start watching for idle
         presence_watcher = asyncio.create_task(watch_presences())
+    global repacker
+    if repacker is None:  # and re-pack older videos once (see "Re-packing videos")
+        repacker = asyncio.create_task(repack_old_videos())
     # No channel until they "join", no voice room until they say they joined one.
     clients[websocket] = {"user_id": user_id, "channel": None, "voice": None, "muted": False, "deafened": False,
                           "looking": False,  # looking at it right now (the page says, see "looking")

@@ -79,20 +79,21 @@ export function MessageCard({ message, where, connection, children }) {
 }
 
 // The popups' own buttons at the bottom right (the web page's .group-dialog-buttons): Cancel and
-// Create group, Close and New link. `secondary`: grey; `disabled`: faded and not pressable.
+// Create group, Close and New link. `secondary`: grey; `danger`: red (Ban); `disabled`: faded and not pressable.
 export function DialogButtons({ children }) {
   const styles = useStyles(makeStyles);
   return <View style={styles.dialogButtons}>{children}</View>;
 }
 
-export function DialogButton({ label, onPress, secondary, disabled }) {
+export function DialogButton({ label, onPress, secondary, danger, disabled }) {
   const styles = useStyles(makeStyles);
   return (
     <Pressable
       onPress={onPress}
       disabled={disabled}
       style={({ pressed }) => [
-        styles.dialogButton, secondary && styles.secondary, disabled && styles.disabled, pressed && styles.pressed,
+        styles.dialogButton, secondary && styles.secondary, danger && styles.danger, disabled && styles.disabled,
+        pressed && styles.pressed,
       ]}
     >
       <Text style={styles.dialogButtonText}>{label}</Text>
@@ -145,6 +146,7 @@ export const makeStyles = (colors, size) => StyleSheet.create({
   buttons: { flexDirection: 'row', justifyContent: 'flex-end', gap: 6, marginTop: 8 },
   button: { paddingVertical: 4, paddingHorizontal: 12, borderRadius: 6, backgroundColor: colors.accent },
   secondary: { backgroundColor: colors.bgNeutral },
+  danger: { backgroundColor: colors.buttonRed },  // .group-dialog-buttons button.danger
   pressed: { opacity: 0.8 },
   buttonText: { fontSize: size(13.6), color: '#ffffff' },
   // .group-dialog-buttons: at the right, 8px apart; each padding 10px 20px, radius 6px, 1rem.

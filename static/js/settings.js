@@ -1358,6 +1358,7 @@ async function loadInbox() {
 function describeDevice(userAgent) {
   if (!userAgent) return "unknown device";
   if (userAgent.startsWith("ChatApp Windows app")) return "Windows app";
+  if (userAgent.startsWith("ChatApp Android app")) return "Android app";
   let browser = "a browser";
   if (userAgent.includes("Edg/")) browser = "Edge";
   else if (userAgent.includes("OPR/")) browser = "Opera";

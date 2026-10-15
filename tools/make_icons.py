@@ -25,8 +25,8 @@ ICONS = [
     "arrow-down", "arrow-up", "ban", "bell", "bell-off", "bug", "camera", "check", "chevron-down",
     "download", "ellipsis-vertical", "file", "gamepad-2", "headphone-off", "headphones", "image", "lightbulb", "log-out",
     "maximize", "megaphone", "menu", "mic", "mic-off", "minimize", "monitor", "monitor-up", "music",
-    "paperclip", "pencil", "phone", "phone-off", "pin", "play", "plus", "reply", "search", "settings",
-    "share-2", "trash-2", "user-plus", "users", "video", "volume-2", "x",
+    "paperclip", "pause", "pencil", "phone", "phone-off", "pin", "play", "plus", "reply", "search", "settings",
+    "share-2", "trash-2", "user-plus", "users", "video", "volume-2", "volume-x", "x",
 ]
 
 # npm's description of that version, with the package's address and its hash ("integrity").
