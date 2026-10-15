@@ -113,9 +113,9 @@
     - [x] Sharing to the app: ChatApp in Android's share sheet (from the gallery, other apps), into a chat's tray, with the files' real names (still to test with a release build: a share that starts the app, which development builds' launcher swallows)
     - [x] The chat's top bar: mute, search, pinned messages
     - [x] Profiles, the user menu (long press), your status, groups (create, add, rename, leave), invites
-    - [ ] Voice and video calls (LiveKit's React Native library), also with the phone locked
-    - [ ] Push notifications through Firebase Cloud Messaging, ringing calls
     - [ ] Settings: profile, appearance (themes, colours, text size), notifications, log out
+    - [ ] Push notifications through Firebase Cloud Messaging, ringing calls   
+    - [ ] Voice and video calls (LiveKit's React Native library), also with the phone locked
     - [ ] Distribution: the app's icon, a release signing key, the real server, an APK on the download page, and updates (expo-updates)
 - [x] **23.** Chattus, an AI bot in the chat, with a language model on the server's graphics card
     - [x] A local model answering (llama.cpp's llama-server with Qwen 3.5 9B; Ollama couldn't find the GTX 1070), started at boot ("ChatApp AI", install.ps1 -AI)
