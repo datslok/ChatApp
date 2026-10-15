@@ -5,6 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, BackHandler, KeyboardAvoidingView, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { ChatButtons, ChatTitle } from './src/ChatHeader';
 import ChatScreen from './src/ChatScreen';
 import Drawer from './src/Drawer';
 import Icon from './src/Icon';
@@ -13,7 +14,7 @@ import Members from './src/Members';
 import PeopleScreen from './src/PeopleScreen';
 import ShareScreen from './src/ShareScreen';
 import Sidebar from './src/Sidebar';
-import { chatLabel, dmPartner } from './src/chats';
+import { dmPartner } from './src/chats';
 import { colors } from './src/colors';
 import { useConnection } from './src/connection';
 import { clearOldCopies } from './src/files';
@@ -27,6 +28,9 @@ function Main({ connection, share, onShareDone }) {
   const { channels, unread, mentions, incoming } = connection;
   const [view, setView] = useState(null);      // the chat on screen (its key), or PEOPLE
   const [drawer, setDrawer] = useState(null);  // the open drawer: "left", "right" or null
+  // The chat's popup that's open ("search" or "pins", from the top bar's buttons), or null. The chat
+  // screen draws it: its Jump buttons go to messages there.
+  const [popup, setPopup] = useState(null);
   // The chats we came from, for the back button (newest last). A ref: changing it redraws nothing.
   const history = useRef([]);
   const chatBack = useRef(null);  // what the chat screen wants the back button to do first, if anything
@@ -130,7 +134,13 @@ function Main({ connection, share, onShareDone }) {
           <Icon name="menu" size={22} color={colors.text} />
           {somethingNew ? <View style={styles.newDot} /> : null}
         </Pressable>
-        <Text numberOfLines={1} style={styles.title}>{view === PEOPLE ? 'People' : chatLabel(view, connection)}</Text>
+        {view === PEOPLE ? <Text numberOfLines={1} style={styles.title}>People</Text> : (
+          <>
+            <ChatTitle connection={connection} chatKey={view} />
+            {/* Mute, search, pins: the web page's #dm-header buttons, here in the top bar itself. */}
+            <ChatButtons connection={connection} chatKey={view} onPopup={setPopup} />
+          </>
+        )}
         {view === PEOPLE ? <View style={styles.topbarButton} /> : (
           <Pressable onPress={() => setDrawer('right')} style={styles.topbarButton} hitSlop={4}>
             <Icon name="users" size={22} color={colors.text} />
@@ -142,7 +152,7 @@ function Main({ connection, share, onShareDone }) {
       <View style={styles.content}>
         {view === PEOPLE
           ? <PeopleScreen connection={connection} onOpen={go} />
-          : <ChatScreen connection={connection} backRef={chatBack} shared={toTray} onSharedTaken={() => setToTray(null)} trays={trays} setTrays={setTrays} drafts={drafts} setDrafts={setDrafts} onOpenChat={go} />}
+          : <ChatScreen connection={connection} backRef={chatBack} shared={toTray} onSharedTaken={() => setToTray(null)} trays={trays} setTrays={setTrays} drafts={drafts} setDrafts={setDrafts} onOpenChat={go} popup={popup} setPopup={setPopup} />}
       </View>
 
       <Drawer side="left" open={drawer === 'left'} onClose={() => setDrawer(null)}>

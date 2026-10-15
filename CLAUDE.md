@@ -151,15 +151,16 @@ the point is for me to understand how it works, not just to have it done.
   it's sent (or another chat opens), back takes it out again and `BackHandler.exitApp()`s to the sending app.
   Development builds can't test a share that starts the app: expo-dev-launcher swallows it (its launcher screen,
   then a MainActivity Intent without action or extras); a release build has no launcher.
-  The chat's bar (since 2026-10-15): `src/ChatHeader.js` (the web's #dm-header under the top bar: name, a group's
-  members, bell (`mutedChats` from "mutes"; muted chats faded, no unread dot, no red dot on the menu), search, pin);
+  The chat's buttons (since 2026-10-15): `src/ChatHeader.js` (`ChatTitle`: name, a group's members; `ChatButtons`: the
+  web's #dm-header buttons, bell (`mutedChats` from "mutes"; muted chats faded, no unread dot, no red dot on the menu),
+  search, pin) **in the top bar itself, not a second bar under it (the user's wish)**; App.js keeps `popup`, ChatScreen draws it;
   `src/MessageCard.js` (`Popup`, a Modal like the web's dialogs, and makeMessageCard's cards), `src/PinsScreen.js`
   (`openPins`/`closePins`: asked again on "pinned"/"deleted" while open), `src/SearchScreen.js` (300 ms after typing,
   `search()` returns its `ask`; This chat / Everywhere as two buttons; From is the type-to-search picker, its list a
   child of the popup since Android ignores taps outside a parent's edges). ChatScreen's `jumpTo(chat, id)` (pins,
   results, a reply's quote) opens the chat (App.js `go` as `onOpenChat`), loads older batches (40 at most) until the
   row is there, `scrollToIndex` (`onScrollToIndexFailed` scrolls to a guess and retries) and `Flash` fades it.
-  `src/time.js`: dayName, clock, headerTime. Expo's dev-menu gear covers the pin in development builds: drag it.
+  `src/time.js`: dayName, clock, headerTime. Expo's dev-menu gear can cover the top bar's buttons in development builds: drag it.
   `prebuild --clean` failing with EBUSY on `android/`: the adb server started by run:android stands in it (`adb kill-server`).
   `src/people.js` (Avatar with letter colours, StatusDot with the phone shape, BotBadge, Person, nameColor),
   `src/Icon.js` (react-native-svg's SvgXml with the web page's Lucide shapes from `src/icon-shapes.js`,

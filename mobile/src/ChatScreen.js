@@ -9,7 +9,6 @@ import {
   StyleSheet, Text, TextInput, View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import ChatHeader from './ChatHeader';
 import Icon from './Icon';
 import MessageText, { Attachment, CustomEmoji, LinkPreview, formatSize } from './MessageText';
 import PinsScreen from './PinsScreen';
@@ -352,9 +351,10 @@ function extension(asset) {
 // shared: something shared to the app from another one, for the tray and the text box (App.js), or
 // null; onSharedTaken: say it's been taken. trays, drafts (and their setters): every chat's tray and
 // half-written text (App.js keeps them, so they stay while this screen is away, on the People page).
-// onOpenChat(key): open another chat (App.js's go), for a search result there.
+// onOpenChat(key): open another chat (App.js's go), for a search result there. popup: the top bar's
+// popup that's open ("search", "pins" or null), drawn here; setPopup changes it.
 export default function ChatScreen({
-  connection, backRef, shared, onSharedTaken, trays, setTrays, drafts, setDrafts, onOpenChat,
+  connection, backRef, shared, onSharedTaken, trays, setTrays, drafts, setDrafts, onOpenChat, popup, setPopup,
 }) {
   const { current, messages, users, roles, me, lastRead, more, blocked } = connection;
   const [menuFor, setMenuFor] = useState(null);    // the message whose menu is open
@@ -365,7 +365,6 @@ export default function ChatScreen({
   const [picker, setPicker] = useState(null);      // the emoji/GIF picker: null, "insert", or {react: message}
   // The status line's right side: {text, error}, like "Uploading cat.jpg…", or what went wrong; or null.
   const [status, setStatus] = useState(null);
-  const [popup, setPopup] = useState(null);  // the bar's popup that's open: "pins", "search" or null
   // The message we're on our way to, {chat, id} (loading older batches until it's there), or null.
   const [jump, setJump] = useState(null);
   const jumpBatches = useRef({ count: 0, waitingFor: null });  // batches asked for, and our oldest id then
@@ -872,7 +871,6 @@ export default function ChatScreen({
   return (
     // (Room for the keyboard is made around the whole screen, in App.js.)
     <View style={styles.screen}>
-      <ChatHeader connection={connection} onSearch={() => setPopup('search')} onPins={() => setPopup('pins')} />
       {body}
 
       {/* The web page's #status-line, always there (so nothing jumps): who's typing on the left,
