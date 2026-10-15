@@ -1345,10 +1345,11 @@ body.mini-hidden :fullscreen .tile-strip {
   background: var(--button-green);
 }
 
-/* The camera buttons while the camera is on. */
+/* The camera buttons while the camera is on: green, with a white icon (like every coloured button). */
 #voice-camera.on,
 .call-round.on {
   background: var(--button-green);
+  color: white;
 }
 .call-tile.away .avatar {
   opacity: 0.35;  /* not in the call (yet) */
@@ -1367,17 +1368,27 @@ body.mini-hidden :fullscreen .tile-strip {
   border: none;
   border-radius: 50%;
   background: var(--bg-panel);
+  /* A button doesn't take the text colour by itself: without this the icon was the browser's dark
+     ButtonText. --icon is guarded for contrast in every theme (appearance.js, guardIconColours). */
+  color: var(--icon);
   font-size: 1.2rem;
   cursor: pointer;
 }
 .call-round:hover {
   background: var(--bg-hover);
+  color: var(--icon-strong);
 }
+/* Red (muted, end) or green (camera on): a white icon, like every coloured button. */
 .call-round.off {
   background: var(--button-red);  /* muted */
+  color: white;
 }
 .call-round.end {
   background: var(--button-red);
+  color: white;
+}
+.call-round.on:hover {
+  color: white;  /* (.call-round.on is further up: without this, hovering would win and grey it) */
 }
 .call-round.end:hover {
   background: var(--button-red-hover);
