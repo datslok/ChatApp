@@ -419,7 +419,9 @@ function showDmHeader() {
   dmHeader.hidden = !inDm && !inGroup && !isChannel(currentChannel);
   if (dmHeader.hidden) return;
   dmHeaderName.textContent = channelLabel(currentChannel);
-  callButton.hidden = !inDm && !inGroup;  // (no calls in channels: that's what Lounge is for)
+  // No calls in channels (that's what Lounge is for), nor with a bot (server.py's is_call_member says no).
+  const withBot = people.get(dmPartner(currentChannel))?.bot === true;
+  callButton.hidden = (!inDm && !inGroup) || withBot;
   // The bell mutes this chat, the crossed-out bell unmutes it. Not in a DM with an admin: admins can't be muted (server.py, can_mute).
   const muted = mutedChats.has(currentChannel);
   muteButton.hidden = !muted && people.get(dmPartner(currentChannel))?.admin === true;

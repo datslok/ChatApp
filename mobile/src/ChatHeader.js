@@ -44,8 +44,10 @@ export function ChatButtons({ connection, voice, chatKey, onPopup, onGroupMenu }
   const { users, me, mutedChats, groups } = connection;
   const isGroup = groups.some((group) => group.key === chatKey);
   // The call button (the web page's green 📞 Call): in DMs and groups, while we're not in this call
-  // already (then the banner has the buttons). With a call going on, it joins without ringing.
-  const canCall = (isGroup || dmPartner(chatKey, me.id) !== null) && voice.roomName !== chatKey;
+  // already (then the banner has the buttons). With a call going on, it joins without ringing. Never with
+  // a bot like Chattus (the server's is_call_member says no).
+  const partner = dmPartner(chatKey, me.id);
+  const canCall = (isGroup || (partner !== null && users[partner]?.bot !== true)) && voice.roomName !== chatKey;
   // The bell mutes this chat, the crossed-out bell unmutes it. Not in a DM with an admin: admins
   // can't be muted (the server's can_mute).
   const muted = mutedChats.has(chatKey);
