@@ -117,7 +117,7 @@ INVITE_DAYS = 7     # how long an invite link works (once)
 MAX_OPEN_INVITES = 10  # unused invite links per person
 
 UPLOAD_DIR.mkdir(exist_ok=True)  # create the folder if it isn't there yet
-MAX_UPLOAD_SIZE = 10 * 1024 * 1024  # 10 MB, in bytes
+MAX_UPLOAD_SIZE = 50 * 1024 * 1024  # 50 MB, in bytes
 MAX_FILENAME_LENGTH = 200
 # Only these are shown in the page. They're pure pictures and can't contain scripts.
 # Everything else (including SVG, which can) is only ever offered as a download.

@@ -618,7 +618,7 @@ export default function ChatScreen({
   function addToTray(files) {
     const room = MAX_TRAY_FILES - tray.length;
     const fitting = files.filter((file) => file.size <= MAX_UPLOAD_SIZE);
-    if (fitting.length < files.length) showError('Files can be at most 10 MB');
+    if (fitting.length < files.length) showError('Files can be at most 50 MB');
     else if (fitting.length > room) showError(`At most ${MAX_TRAY_FILES} files at a time`);
     const added = fitting.slice(0, room).map((file) => ({
       ...file,

@@ -12,7 +12,7 @@ import * as Sharing from 'expo-sharing';
 import { saveToDownloads } from '../modules/downloads';
 import { SERVER } from './config';
 
-export const MAX_UPLOAD_SIZE = 10 * 1024 * 1024;  // 10 MB, same as the server
+export const MAX_UPLOAD_SIZE = 50 * 1024 * 1024;  // 50 MB, same as the server
 export const MAX_TRAY_FILES = 10;                   // the web page's limit too
 
 // The types the server shows as pictures (server.py's IMAGE_TYPES); anything else is a download.
@@ -35,7 +35,7 @@ export async function uploadFile(item) {
   }
   const answer = await response.json().catch(() => ({}));
   if (!response.ok) {
-    // The server's reason if it gave one, like "Files can be at most 10 MB."
+    // The server's reason if it gave one, like "Files can be at most 50 MB."
     throw new Error(typeof answer.detail === 'string' ? answer.detail : `Couldn't upload ${item.name}`);
   }
   return answer.id;

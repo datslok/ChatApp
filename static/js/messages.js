@@ -6,7 +6,7 @@
 
 // ---------- Uploads: the tray, the + button, drag-and-drop and pasting ----------
 
-const MAX_UPLOAD_SIZE = 10 * 1024 * 1024;  // 10 MB, same as the server
+const MAX_UPLOAD_SIZE = 50 * 1024 * 1024;  // 50 MB, same as the server
 const MAX_TRAY_FILES = 10;
 const IMAGE_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"];  // same as the server
 
@@ -42,7 +42,7 @@ function anythingInTrays() {
 function addToTray(files) {
   for (const file of files) {
     if (file.size > MAX_UPLOAD_SIZE) {
-      showUploadError(`${file.name} is too big (max 10 MB)`);
+      showUploadError(`${file.name} is too big (max 50 MB)`);
       continue;
     }
     if (file.size === 0) {
@@ -158,7 +158,7 @@ async function uploadFile(file) {
     return null;
   }
   if (!response.ok) {
-    // Show the server's reason if it gave one, e.g. "Files can be at most 10 MB."
+    // Show the server's reason if it gave one, e.g. "Files can be at most 50 MB."
     const error = await response.json().catch(() => ({}));
     showUploadError(typeof error.detail === "string" ? error.detail : `Couldn't upload ${file.name}`);
     return null;
