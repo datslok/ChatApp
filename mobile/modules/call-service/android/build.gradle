@@ -1,0 +1,31 @@
+// How Gradle builds this module: an Android library, with Expo's plugin adding the Expo Modules API.
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'no.datslok.callservice'
+version = '0.1.0'
+
+android {
+  namespace "no.datslok.callservice"
+  // The NDK the app uses (React Native sets it), for our C code: RNNoise and its bridge (src/main/cpp).
+  if (rootProject.ext.has("ndkVersion")) ndkVersion rootProject.ext.ndkVersion
+  defaultConfig {
+    versionCode 1
+    versionName "0.1.0"
+  }
+  externalNativeBuild {
+    cmake {
+      path "src/main/cpp/CMakeLists.txt"
+    }
+  }
+}
+
+dependencies {
+  // React Native itself, for its headless JS tasks (CallServiceModule.kt). No version: React Native's
+  // Gradle plugin puts in the app's own.
+  implementation 'com.facebook.react:react-android'
+  // LiveKit's Android part, for plugging our microphone processing in (MicProcessor.kt).
+  implementation project(':livekit_react-native')
+}

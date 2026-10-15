@@ -115,7 +115,7 @@
     - [x] Profiles, the user menu (long press), your status, groups (create, add, rename, leave), invites
     - [x] Settings: my account, profile, appearance (themes, colours, text size), log out
     - [x] The rest of Settings: the web's picture editor (move and zoom; animated GIFs stay animated for pictures, banners and emoji), Emoji, What's new, Bugs & ideas, Admin (with Ban and Make admin in the user menu), the seasonal easter egg
-    - [ ] Voice and video calls (LiveKit's React Native library), also with the phone locked; the Lounge; Settings → Voice & audio and Video
+    - [x] Voice and video calls (LiveKit's React Native library), also with the phone locked; the Lounge; Settings → Voice & audio and Video (with RNNoise and the mic volume in our own native code); the floating call window (also on the web page)
     - [ ] Push notifications through Firebase Cloud Messaging, ringing calls; Settings → Notifications
     - [ ] Distribution: the app's icon, a release signing key, the real server, an APK on the download page, and updates (expo-updates)
 - [x] **23.** Chattus, an AI bot in the chat, with a language model on the server's graphics card
@@ -133,4 +133,5 @@
 ## Maybe later
 
 - [ ] Discord-style photo picker in the phone app: our own grid of recent photos under the text box (needs photo access, "limited access" included), which also gives the photos' real names
+- [ ] The phone app's connection details in calls, like the web's signal icon in the voice bar (ping, loss, a screen share's stats)
 - [ ] Soundboard in voice (short clips anyone in a call can play for everyone; uploads like custom emoji, a few built-in ones, its own volume)

@@ -1,8 +1,8 @@
 // What the top bar shows for a chat (App.js): its name (a group's members under it), and the web
 // page's #dm-header buttons: the bell (mute), search and the pinned messages. (On the web page these
 // are a second bar under the top one; in the app they share the top bar, the user's wish.) In a group
-// also ⋯, its menu (Add people, Rename, Leave: on the web page three buttons in that bar). The call
-// button comes with calls.
+// also ⋯, its menu (Add people, Rename, Leave: on the web page three buttons in that bar). In DMs and
+// groups the green phone: a call.
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Icon from './Icon';
 import { chatLabel, dmPartner } from './chats';
@@ -22,7 +22,7 @@ export function ChatTitle({ connection, chatKey }) {
   );
 }
 
-function HeaderIcon({ icon, label, onPress }) {
+function HeaderIcon({ icon, label, onPress, color }) {
   const styles = useStyles(makeStyles);
   const { colors } = useTheme();
   return (
@@ -32,16 +32,20 @@ function HeaderIcon({ icon, label, onPress }) {
       accessibilityLabel={label}
       style={({ pressed }) => [styles.icon, pressed && styles.iconPressed]}
     >
-      <Icon name={icon} size={22} color={colors.text} />
+      <Icon name={icon} size={22} color={color ?? colors.text} />
     </Pressable>
   );
 }
 
 // onPopup("search" or "pins"): open that popup (the chat screen draws it). onGroupMenu: open a
-// group's menu.
-export function ChatButtons({ connection, chatKey, onPopup, onGroupMenu }) {
+// group's menu. voice: useVoice()'s, for the call button.
+export function ChatButtons({ connection, voice, chatKey, onPopup, onGroupMenu }) {
+  const { colors } = useTheme();
   const { users, me, mutedChats, groups } = connection;
   const isGroup = groups.some((group) => group.key === chatKey);
+  // The call button (the web page's green 📞 Call): in DMs and groups, while we're not in this call
+  // already (then the banner has the buttons). With a call going on, it joins without ringing.
+  const canCall = (isGroup || dmPartner(chatKey, me.id) !== null) && voice.roomName !== chatKey;
   // The bell mutes this chat, the crossed-out bell unmutes it. Not in a DM with an admin: admins
   // can't be muted (the server's can_mute).
   const muted = mutedChats.has(chatKey);
@@ -57,6 +61,7 @@ export function ChatButtons({ connection, chatKey, onPopup, onGroupMenu }) {
       ) : null}
       <HeaderIcon icon="search" label="Search" onPress={() => onPopup('search')} />
       <HeaderIcon icon="pin" label="Pinned messages" onPress={() => onPopup('pins')} />
+      {canCall ? <HeaderIcon icon="phone" label="Call" color={colors.green} onPress={() => voice.startCall(chatKey)} /> : null}
       {isGroup ? <HeaderIcon icon="ellipsis-vertical" label="Group options" onPress={onGroupMenu} /> : null}
     </>
   );

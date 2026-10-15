@@ -7,12 +7,16 @@ import { ActivityIndicator, BackHandler, KeyboardAvoidingView, Pressable, StyleS
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { ChatButtons, ChatTitle } from './src/ChatHeader';
 import BanDialog from './src/BanDialog';
+import CallBanner, { hasCallBanner } from './src/CallBanner';
+import CallFloat from './src/CallFloat';
 import ChatScreen from './src/ChatScreen';
 import Drawer from './src/Drawer';
 import { GroupDialog, GroupMenu, RenameDialog } from './src/GroupScreen';
 import Icon from './src/Icon';
+import IncomingCall from './src/IncomingCall';
 import InviteScreen from './src/InviteScreen';
 import LoginScreen from './src/LoginScreen';
+import LoungeScreen from './src/LoungeScreen';
 import MeScreen from './src/MeScreen';
 import Members from './src/Members';
 import PeopleScreen from './src/PeopleScreen';
@@ -26,14 +30,16 @@ import { useChangelog } from './src/changelog';
 import { dmPartner } from './src/chats';
 import { ThemeContext, loadAppearance, makeTheme, saveAppearance, useStyles, useTheme } from './src/theme';
 import { useConnection } from './src/connection';
+import { LOUNGE, LOUNGE_ROOM, useVoice } from './src/voice';
 import { clearOldCopies } from './src/files';
 import { addShareListener, getInitialShare } from './modules/shared-files';
 
 const PEOPLE = 'people';  // the People page's name among the chats' keys (like the web page's FRIENDS)
 
 // share: something shared to the app from another one, waiting for "Share to…" (or null);
-// onShareDone: it's been dealt with (sent to a chat or cancelled).
-function Main({ connection, share, onShareDone }) {
+// onShareDone: it's been dealt with (sent to a chat or cancelled). voice: useVoice()'s (calls);
+// openChatRef: we put `go` in it, for the ringing popup's Accept.
+function Main({ connection, voice, openChatRef, share, onShareDone }) {
   const styles = useStyles(makeStyles);
   const { colors } = useTheme();
   const { channels, unread, mentions, incoming } = connection;
@@ -67,8 +73,16 @@ function Main({ connection, share, onShareDone }) {
     if (remember && view !== null && view !== key) history.current.push(view);
     setView(key);
     setDrawer(null);  // picking a chat closes the drawer, like the web page's switchChannel
-    if (key === PEOPLE) connection.closeChat();  // in no chat: new messages anywhere count as unread
+    // The People page and the Lounge are in no chat: new messages anywhere count as unread.
+    if (key === PEOPLE || key === LOUNGE) connection.closeChat();
     else connection.openChat(key);
+  }
+  openChatRef.current = go;
+
+  // A pick in the sidebar. The Lounge also joins it (like the web page's voice channel button).
+  function pick(key) {
+    go(key);
+    if (key === LOUNGE && voice.roomName !== LOUNGE_ROOM) voice.join(LOUNGE_ROOM);
   }
 
   // Someone's profile, or the user menu (a long press). Like the web page, these close the drawers:
@@ -175,17 +189,20 @@ function Main({ connection, share, onShareDone }) {
           <Icon name="menu" size={22} color={colors.text} />
           {somethingNew ? <View style={styles.newDot} /> : null}
         </Pressable>
-        {view === PEOPLE ? <Text numberOfLines={1} style={styles.title}>People</Text> : (
+        {view === PEOPLE || view === LOUNGE ? (
+          <Text numberOfLines={1} style={styles.title}>{view === PEOPLE ? 'People' : 'Lounge'}</Text>
+        ) : (
           <>
             <ChatTitle connection={connection} chatKey={view} />
-            {/* Mute, search, pins: the web page's #dm-header buttons, here in the top bar itself. */}
+            {/* Mute, search, pins (and call): the web page's #dm-header buttons, here in the top bar itself. */}
             <ChatButtons
-              connection={connection} chatKey={view} onPopup={setPopup}
+              connection={connection} voice={voice} chatKey={view} onPopup={setPopup}
               onGroupMenu={() => setDialog({ type: 'groupMenu', key: view })}
             />
           </>
         )}
-        {view === PEOPLE ? <View style={styles.topbarButton} /> : (
+        {/* (No member list on the People page and the Lounge, like the web page.) */}
+        {view === PEOPLE || view === LOUNGE ? <View style={styles.topbarButton} /> : (
           <Pressable onPress={() => setDrawer('right')} style={styles.topbarButton} hitSlop={4}>
             <Icon name="users" size={22} color={colors.text} />
           </Pressable>
@@ -194,7 +211,12 @@ function Main({ connection, share, onShareDone }) {
       {connection.status !== 'online' ? <Text style={styles.offline}>Reconnecting…</Text> : null}
 
       <View style={styles.content}>
-        {view === PEOPLE
+        {/* A DM's or group's call, above its messages. */}
+        {view !== PEOPLE && view !== LOUNGE && hasCallBanner(view, connection, voice)
+          ? <CallBanner chatKey={view} connection={connection} voice={voice} />
+          : null}
+        {view === LOUNGE ? <LoungeScreen connection={connection} voice={voice} /> : null}
+        {view === LOUNGE ? null : view === PEOPLE
           ? (
             <PeopleScreen
               connection={connection} onOpen={go} onProfile={openProfile} onUserMenu={openUserMenu}
@@ -202,11 +224,17 @@ function Main({ connection, share, onShareDone }) {
             />
           )
           : <ChatScreen connection={connection} backRef={chatBack} shared={toTray} onSharedTaken={() => setToTray(null)} trays={trays} setTrays={setTrays} drafts={drafts} setDrafts={setDrafts} onOpenChat={go} popup={popup} setPopup={setPopup} onProfile={openProfile} onUserMenu={openUserMenu} focusTick={focusTick} />}
+        {/* In a call but looking at something else: the call in a corner (above a chat's text box). */}
+        <CallFloat
+          connection={connection} voice={voice} view={view} onOpen={go}
+          bottomGap={view === PEOPLE || view === LOUNGE ? 0 : 72}
+        />
       </View>
 
       <Drawer side="left" open={drawer === 'left'} onClose={() => setDrawer(null)}>
         <Sidebar
-          connection={connection} view={view} onPick={go} onPeople={() => go(PEOPLE)} onUserMenu={openUserMenu}
+          connection={connection} voice={voice} view={view} onPick={pick} onPeople={() => go(PEOPLE)}
+          onUserMenu={openUserMenu} onProfile={openProfile}
           onNewGroup={() => {
             setDrawer(null);  // (the web page closes the drawer too)
             setDialog({ type: 'group', key: null });
@@ -228,7 +256,7 @@ function Main({ connection, share, onShareDone }) {
       </Drawer>
 
       {dialog?.type === 'profile' ? (
-        <ProfileScreen connection={connection} userId={dialog.id} onOpen={go} onClose={closeDialog} />
+        <ProfileScreen connection={connection} voice={voice} userId={dialog.id} onOpen={go} onClose={closeDialog} />
       ) : null}
       {dialog?.type === 'userMenu' ? (
         <UserMenu
@@ -236,11 +264,16 @@ function Main({ connection, share, onShareDone }) {
           onMention={view === PEOPLE ? null : mention}  // (only in a chat, which has a text box)
           onEditProfile={() => setDialog({ type: 'settings', page: 'profile' })}
           onBan={(id) => setDialog({ type: 'ban', id })}
+          onCall={(dm) => {
+            go(dm);
+            voice.startCall(dm);
+          }}
         />
       ) : null}
       {dialog?.type === 'me' ? (
         <MeScreen
-          connection={connection} onClose={closeDialog}
+          connection={connection} voice={voice} onClose={closeDialog}
+          onOpenCall={() => go(voice.roomName === LOUNGE_ROOM ? LOUNGE : voice.roomName)}
           onEditProfile={() => {
             setDrawer(null);
             setDialog({ type: 'settings', page: 'profile' });
@@ -248,7 +281,7 @@ function Main({ connection, share, onShareDone }) {
         />
       ) : null}
       {dialog?.type === 'settings' ? (
-        <SettingsScreen connection={connection} changelog={changelog} page={dialog.page} onClose={closeDialog} />
+        <SettingsScreen connection={connection} voice={voice} changelog={changelog} page={dialog.page} onClose={closeDialog} />
       ) : null}
       {dialog?.type === 'season' && connection.me.season ? (
         <SeasonScreen season={connection.me.season} onClose={closeDialog} />
@@ -268,6 +301,8 @@ function Main({ connection, share, onShareDone }) {
       ) : null}
       {dialog?.type === 'rename' ? <RenameDialog connection={connection} groupKey={dialog.key} onClose={closeDialog} /> : null}
       {dialog?.type === 'invites' ? <InviteScreen onClose={closeDialog} /> : null}
+      {/* Someone calling us: over everything, even another popup. */}
+      <IncomingCall connection={connection} voice={voice} />
     </KeyboardAvoidingView>
   );
 }
@@ -285,6 +320,9 @@ function Loading({ text }) {
 
 function Screen({ share, onShareDone }) {
   const connection = useConnection();
+  // Calls, kept up here: this stays while we're logged in, so a call goes on whatever the screens do.
+  const openChatRef = useRef(null);
+  const voice = useVoice(connection, openChatRef);
   const { status, me } = connection;
   // The appearance kept with the account (in "welcome", and "appearance" after a change on any device).
   const { setAppearance } = useTheme();
@@ -294,7 +332,7 @@ function Screen({ share, onShareDone }) {
   if (status === 'logged-out') return <LoginScreen onLoggedIn={connection.reconnect} />;
   // Not connected yet (we don't know who we are until "welcome").
   if (me === null) return <Loading text={status === 'offline' ? "Can't reach the server, trying again…" : null} />;
-  return <Main connection={connection} share={share} onShareDone={onShareDone} />;
+  return <Main connection={connection} voice={voice} openChatRef={openChatRef} share={share} onShareDone={onShareDone} />;
 }
 
 // The frame around everything: the safe area (see App) and the phone's status bar, in the theme's

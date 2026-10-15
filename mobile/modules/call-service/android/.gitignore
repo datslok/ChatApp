@@ -1,0 +1,4 @@
+# Made by Gradle (and CMake, for the C code in src/main/cpp) when the app is built.
+build/
+.gradle/
+.cxx/

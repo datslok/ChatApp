@@ -89,6 +89,8 @@ the same PC, but the scripts assume two).
 | `tools\make_pwa_icons.py` | your PC | makes the phone app's icons from the app icon |
 | `tools\make_emoji_json.py` | your PC | makes `static\emoji.json` (every emoji, for the pickers and the server's list of allowed reactions) from Unicode's `emoji-test.txt`: `curl.exe -L -o emoji-test.txt https://unicode.org/Public/emoji/latest/emoji-test.txt`, then `python tools\make_emoji_json.py emoji-test.txt`; run it when a new emoji version comes out |
 | `tools\make_icons.py` | your PC | makes `static\js\icon-shapes.js`, the buttons' line icons (Lucide's), and the same for the phone app (`mobile\src\icon-shapes.js`); add an icon's name in it and run it again |
+| `tools\get_rnnoise.py` | your PC | puts RNNoise (the AI noise suppression, Xiph's C library) into the phone app's native code (`mobile\modules\call-service\android\src\main\cpp\rnnoise-0.2\`), checked against pinned hashes; only needed to change its version |
+| `tools\make_call_sounds.py` | your PC | makes the phone app's call sounds (`mobile\assets\sounds\*.wav`: ringing, calling, joining, leaving) from the web page's tones; run it again after changing one |
 | `tools\make_vapid_keys.py` | either | once: the key pair for push notifications, for `.env` |
 | `npx expo run:android` (in `mobile\`) | your PC | builds the native phone app, installs it on a phone over USB and starts Metro |
 | `npx expo start` (in `mobile\`) | your PC | only Metro, for an app already installed by `run:android` |
@@ -690,6 +692,22 @@ adb reverse tcp:8001 tcp:8001
 
 Log in with an account on the development server (create one in the browser at
 http://localhost:8001; the email verification link is printed in the server's window).
+
+To try calls (the Lounge, DM and group calls) from the phone, start the development LiveKit too
+(`.\voice.ps1 -Dev`) and pass its signalling port through as well:
+
+```powershell
+adb reverse tcp:7880 tcp:7880
+```
+
+The sound itself goes over UDP straight to the PC's address on your home network (port 7882), so the
+phone must be on the same Wi-Fi, and Windows Firewall must let `livekit-server.exe` in (Windows asks
+the first time it runs; if you said no, allow it under "Allow an app through Windows Firewall"). A call
+keeps going with the phone locked: the app then shows an "In a call" notification with Hang up.
+The call sounds (ringing, joining, leaving) are WAV files in `mobile\assets\sounds\`, made from the web
+page's tones by `python tools\make_call_sounds.py`. The app's noise suppression ("On") is RNNoise, compiled
+into the app's own native code along with everything else; its source is in
+`mobile\modules\call-service\android\src\main\cpp\`, put there by `python tools\get_rnnoise.py`.
 
 Later, when only JavaScript changed, `npx expo start` is enough. Run `npx expo run:android` again
 after adding a package with native code. Add packages with `npx expo install <name>` (not

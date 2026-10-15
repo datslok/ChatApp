@@ -48,6 +48,8 @@ the point is for me to understand how it works, not just to have it done.
   Settings → Appearance (theme via `data-theme` on `<html>`, picked colours, `--font`, text size),
   kept with the account (`users.appearance`, `POST /settings/appearance`, checked against the lists in
   server.py, in "welcome" and sent to all the user's pages), with a copy in localStorage for the first paint.
+  While it loads, `#page-loading` (index.html's first element: the logo and a bar sliding by `transform`, which the compositor
+  runs while scripts load; `left` froze) covers the page until core.js `tellAppReady` (or 10 s) fades it out.
   Every colour in chat.css is a variable in its `:root`, named by role. Both folders are served with `Cache-Control: no-cache` (FreshStaticFiles), as is
   `/`. The server hashes the page's files at startup (`PAGE_VERSION`, sent in "welcome"); a page that
   reconnects to a different one reloads itself (core.js, `reloadIfOutdated`; not in a call, with files
@@ -130,7 +132,7 @@ the point is for me to understand how it works, not just to have it done.
   (expo-image-picker's photo picker and camera, which give no real names: named from the EXIF DateTimeOriginal like
   Samsung's camera, `20261014_182205.jpg`, else `photo-<time>.jpg`; real names would need photo access, see ROADMAP's Maybe;
   expo-document-picker for any file, as it asks Android for the real name: `File.pickFileAsync` gave "document:1000006562"),
-  the `Tray` above the box (the web's #tray: 10 files, 10 MB, one message per file, the caption with the first,
+  the `Tray` above the box (the web's #tray: 10 files, 50 MB each, one message per file, the caption with the first,
   failed ones in red), "Uploading x…" on the status line. A tapped picture opens `src/ImageViewer.js` (a Modal with
   its own GestureHandlerRootView: pinch, drag, double tap via react-native-gesture-handler + reanimated; zoom only
   there); a tapped file asks "Download this file?" like the desktop app, shows a bar, saves it in Download straight away (like a browser; the user's wish) and asks Close / Open (opens the
@@ -202,6 +204,46 @@ the point is for me to understand how it works, not just to have it done.
   profile, Make/Remove admin and Ban…. `src/SeasonScreen.js`: `SeasonBadge` on your panel picture (a 4px-padded box
   so more of it takes taps) and the video in `src/VideoScreen.js` at 30% volume (our own bar under the video: time
   bar, play, time, mute, volume; Android's controls were a big overlay with no volume; chat videos use it too). dev.db's "phone" is admin and owner (password in my memory).
+  Calls (since 2026-10-15): `livekit-client` + `@livekit/react-native` 3.0 + `@livekit/react-native-webrtc` 144 +
+  `@livekit/react-native-expo-plugin` 1.0.3 (1.0.2 breaks on SDK 57; audioType communication); `registerGlobals()` in
+  `src/livekit-setup.js`, imported first by index.js (imports run before code). `@config-plugins/react-native-webrtc` was
+  dropped: LiveKit's own manifest has the permissions, and it would add SYSTEM_ALERT_WINDOW. `src/voice.js` (`useVoice`, in
+  App.js's `Screen` so a call outlives Main): join (RECORD_AUDIO asked, `startCallService`, AudioSession communication with
+  preferredOutputList bluetooth/headset/speaker, /voice-token, `Room` with micOptions and the Settings camera), leave,
+  mute/deafen like the web, volumes (`participant.setVolume`, 0-2), speaking rings from LiveKit's native
+  `createVolumeProcessor` straight on `NativeModules.LivekitReactNativeModule` (LK_VOLUME_PROCESSED ~100/s per track,
+  checked every 50 ms, -50 dB, 0.3 s; -1 = our own mic), camera (`CAMERA_CAPTURE` 4:3 960x720, the sensor's shape: 16:9 cut the sides off; `CAMERA_PUBLISH` H.264 1.7 Mbit/s, which the phone encodes in hardware, c2.qti.avc.encoder: VP8 was libvpx in software and went blurry now and then; `facingMode`, flip with `restartTrack` passing the size too), screen share
+  (react-native-webrtc's MediaProjectionService; no sound), outputs (`AudioSession.getAudioOutputs`/`selectAudioOutput`),
+  ringing (`callListener` in connection.js; `outgoing`, `incoming`, `notice`; sounds + `Vibration`, none on dnd),
+  `voice-settings.json` in Paths.document (noiseSuppression on/light/off like the web, micVolume, outputVolume,
+  personVolumes, screenVolumes, camera user/environment, floatCorner). Mic processing (the user's wish, like the web):
+  `MicProcessor.kt` in the call-service module is LiveKit's `audioProcessingController.capturePostProcessor` (set in the
+  module's OnCreate; WebRTC hands it 480 floats per 10 ms at 48 kHz, the 16-bit range): RNNoise ("on"; "light" is the
+  `noiseSuppression` constraint, micOptions) then the gain; `setAiNoiseSuppression`/`setMicVolume` from voice.js.
+  RNNoise 0.2 is C in `src/main/cpp/rnnoise-0.2/` (committed; `tools/get_rnnoise.py`: Xiph's release tarball pinned by
+  SHA-256 after checking it against the signed v0.2 tag, plus five headers from commit 372f7b4, since 0.2's ARM code
+  includes a missing os_support.h), built by `src/main/cpp/CMakeLists.txt` into libchatappaudio.so (~1.4 MB per ABI,
+  16 KB pages) with the JNI bridge `denoiser.c` / `Denoiser.kt`. The mic test meter adds the mic volume in dB.
+  Notifications: the module's manifest has POST_NOTIFICATIONS, asked for at each join (Android 13+); without it even the
+  foreground service's notification is hidden. Its channel "ongoing_calls" is default importance with no sound and
+  VISIBILITY_PUBLIC (the first, low-importance "calls" one, which Samsung hid from the lock screen, is deleted). connection.js: `voiceMembers`, `dmCalls`, `sendVoice` (re-sent at every
+  reconnect), `ring`/`answerCall`/`cancelCall`. Screens: `src/CallParts.js` (RoundButton, `makeTiles`, CallTile with
+  `<VideoTrack>`, TileGrid = fitTiles, FocusView: a tap on a tile opens it over the screen, OutputButton's Sheet,
+  CallControls), `src/LoungeScreen.js` (the `voice:lounge` view; App.js `pick` joins it like the web), `src/CallBanner.js`
+  (40% of the height above a DM's/group's chat), `src/IncomingCall.js`, the Sidebar's Voice list + VoiceBar + mute/deafen
+  in your panel, the green phone in ChatButtons, Call in the user menu, Voice volume in profiles, In voice in MeScreen,
+  `src/VoiceSettings.js` (Voice & audio: Choices, Others' volume, the mic test via expo-audio's recorder metering, which
+  LiveKit's measuring can't do outside a call; Video: front/back + a preview with react-native-webrtc's RTCView).
+  Sounds: **expo-audio** (plugin with enableBackgroundPlayback false: no media service of its own) plays
+  `mobile/assets/sounds/*.wav` from `tools/make_call_sounds.py` (rooms.js's tones). Locked phone: our module
+  `mobile/modules/call-service` (Kotlin; its own AndroidManifest.xml is merged in: FOREGROUND_SERVICE_MICROPHONE/CAMERA/
+  MEDIA_PLAYBACK/MEDIA_PROJECTION, the service with those types): `CallService` (startForeground with the types we have
+  permission for, the "Ongoing calls" channel, Hang up -> "onHangUp", a partial wake lock, stops on onTaskRemoved) and a
+  **headless JS task** (`ChatAppCall`, registered in index.js of the module) for the call's length, because React Native
+  pauses every JS timer in the background unless one runs (JavaTimerManager), which would stop LiveKit's pings and
+  negotiation (livekit/client-sdk-react-native#437) and the chat socket's reconnecting. Dev: `voice.ps1 -Dev` listens on
+  127.0.0.1:7880 (`adb reverse tcp:7880 tcp:7880`) and UDP 7882 on the LAN address (same Wi-Fi; this PC's firewall allows
+  livekit-server.exe).
   `prebuild --clean` failing with EBUSY on `android/`: the adb server started by run:android stands in it (`adb kill-server`).
   `src/people.js` (Avatar with letter colours, StatusDot with the phone shape, BotBadge, Person, nameColor),
   `src/Icon.js` (react-native-svg's SvgXml with the web page's Lucide shapes from `src/icon-shapes.js`,
@@ -511,6 +553,13 @@ the point is for me to understand how it works, not just to have it done.
   without, the Windows app's: `set_push_to_talk` (main.rs, since 0.1.19) and a thread polling `GetAsyncKeyState`
   (user32, declared by hand; never RegisterHotKey, which would steal the key) every 15 ms, calling
   `pushToTalkFromApp(down)` on changes.
+  The floating call window (since 2026-10-15, the user's wish, everywhere): in a call but looking at something else,
+  `#call-float` (rooms.js, "The floating call window"; drawn from renderLoungeView, which every call or page change
+  reaches, and from showSpeaking when someone else talks) is makeTile's tile of whoever talked last (`lastSpeakerId`;
+  in a DM the other one), placed over #messages (or the page showing) in a corner, dragged with pointer events and
+  snapped to the nearest corner (localStorage "callFloatCorner"); a click (capture phase, before makeTile's toggleFocus)
+  opens the call. Phone: `mobile/src/CallFloat.js` (PanResponder + Animated, the capture variant so a tap stays the
+  tile's; 160px 16:9 like the web's phone size; the corner in voice settings' floatCorner; above the text box).
   Speaking rings (voice.js, "Who's talking"): measured in the page, not LiveKit's ActiveSpeakersChanged (only
   loud voices, every 500 ms). rooms.js plugs an AnalyserNode into each remote microphone track
   (`setWebAudioPlugins`, before their volume); `checkSpeaking` every 50 ms: RMS over `SPEAKING_LINE` (-50 dB),

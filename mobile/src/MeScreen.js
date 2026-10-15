@@ -2,13 +2,15 @@
 // picture, name, status line and what you're doing, then your status to pick: Online, Idle, Do Not
 // Disturb, Invisible. Picking one tells the server, which tells all your devices ("my_presence") and
 // everyone else ("users"); nothing changes here until it answers. Then Edit profile (Settings, on
-// its Profile tab) and Log out. (The call you're in comes with calls.)
+// its Profile tab) and Log out. While you're in voice, above them: where, who's there, Open call.
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useStyles, useTheme } from './theme';
 import Icon from './Icon';
 import { Avatar } from './people';
 import { Activity, Banner } from './ProfileScreen';
+import { chatLabel } from './chats';
+import { LOUNGE_ROOM } from './voice';
 
 // The ones you can choose (server.py, PRESENCES), with the web page's names and explanations.
 const PRESENCES = [
@@ -39,9 +41,14 @@ function MenuRow({ icon, label, onPress }) {
   );
 }
 
-export default function MeScreen({ connection, onEditProfile, onClose }) {
+// voice: useVoice()'s; onOpenCall: go to the call's page (the Lounge, or its DM or group).
+export default function MeScreen({ connection, voice, onEditProfile, onOpenCall, onClose }) {
   const styles = useStyles(makeStyles);
   const { users, me, myPresence } = connection;
+  // In voice (#me-call): where, and the pictures of who's there (the server's lists), at most 5.
+  const room = voice.roomName;
+  const inLounge = room === LOUNGE_ROOM;
+  const callMembers = room === null ? [] : (inLounge ? connection.voiceMembers[LOUNGE_ROOM] : connection.dmCalls[room]) ?? [];
   const insets = useSafeAreaInsets();
   const mine = users[me.id];
   if (!mine) return null;
@@ -82,6 +89,29 @@ export default function MeScreen({ connection, onEditProfile, onClose }) {
               </Pressable>
             ))}
           </View>
+
+          {room !== null ? (
+            <View style={styles.call}>
+              <Text style={styles.callHeading}>In voice</Text>
+              <View style={styles.callRow}>
+                <View style={styles.callPictures}>
+                  {callMembers.slice(0, 5).map(({ id }, index) => (
+                    <View key={id} style={index > 0 && styles.overlap}><Avatar user={users[id]} size={24} /></View>
+                  ))}
+                </View>
+                <Text numberOfLines={1} style={styles.callWhere}>{inLounge ? 'Lounge' : chatLabel(room, connection)}</Text>
+              </View>
+              <Pressable
+                onPress={() => {
+                  onClose();
+                  onOpenCall();
+                }}
+                style={({ pressed }) => [styles.callButton, pressed && styles.callButtonPressed]}
+              >
+                <Text style={styles.callButtonText}>Open call</Text>
+              </Pressable>
+            </View>
+          ) : null}
 
           {/* .me-menu: plain rows in a box. */}
           <View style={styles.box}>
@@ -127,5 +157,15 @@ const makeStyles = (colors, size) => StyleSheet.create({
   // .me-menu button: padding 8px 10px, 0.9rem.
   menuRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 6 },
   menuText: { fontSize: size(14.4), color: colors.text },
+  callButtonText: { fontSize: size(14.4), color: colors.text, textAlign: 'center' },
+  // #me-call: a box 12px above, padding 10px; its heading 0.75rem, soft; the pictures overlapping by 8px.
+  call: { marginTop: 12, padding: 10, borderRadius: 8, backgroundColor: colors.bgPanel },
+  callHeading: { marginBottom: 8, fontSize: size(12), fontWeight: '700', color: colors.textSoft },
+  callRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
+  callPictures: { flexDirection: 'row' },
+  overlap: { marginLeft: -8 },
+  callWhere: { flex: 1, fontWeight: '600', fontSize: size(14.4), color: colors.text },
+  callButton: { paddingVertical: 8, paddingHorizontal: 10, borderRadius: 6, backgroundColor: colors.bgHover },
+  callButtonPressed: { backgroundColor: colors.bgActive },
   help: { fontSize: size(12), color: colors.textMuted },
 });

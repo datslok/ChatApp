@@ -1,7 +1,6 @@
 // Settings (the web page's #settings popup, as it looks on a phone): the whole screen, a row of tabs
 // along the top that scrolls sideways, × at its right end, and the chosen page under it.
-// (The web page has more tabs: Notifications come with push notifications, Voice & audio and Video
-// with calls; see ROADMAP.md.)
+// (The web page has one more tab: Notifications come with push notifications, see ROADMAP.md.)
 import { useEffect, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -13,6 +12,7 @@ import EmojiSettings from './EmojiSettings';
 import FeedbackSettings from './FeedbackSettings';
 import Icon from './Icon';
 import ProfileSettings from './ProfileSettings';
+import { VideoSettings, VoiceSettings } from './VoiceSettings';
 import { getJson } from './api';
 import { useStyles, useTheme } from './theme';
 
@@ -21,6 +21,8 @@ const TABS = [
   { key: 'profile', label: 'Profile' },
   { key: 'appearance', label: 'Appearance' },
   { key: 'emoji', label: 'Emoji' },
+  { key: 'voice', label: 'Voice & audio' },
+  { key: 'video', label: 'Video' },
   { key: 'changelog', label: "What's new" },
   { key: 'feedback', label: 'Bugs & ideas' },
 ];
@@ -30,7 +32,8 @@ let lastPage = 'account';
 
 // page: open on this tab (Edit profile: "profile"), or null for the one from last time.
 // changelog: changelog.js's {changelog, unseen, markSeen} (App.js keeps it, for the dot on ⚙️ too).
-export default function SettingsScreen({ connection, changelog, page, onClose }) {
+// voice: useVoice()'s (Voice & audio, Video).
+export default function SettingsScreen({ connection, voice, changelog, page, onClose }) {
   const styles = useStyles(makeStyles);
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
@@ -112,6 +115,8 @@ export default function SettingsScreen({ connection, changelog, page, onClose })
             {tab === 'profile' ? <ProfileSettings connection={connection} /> : null}
             {tab === 'appearance' ? <AppearanceSettings /> : null}
             {tab === 'emoji' ? <EmojiSettings connection={connection} /> : null}
+            {tab === 'voice' ? <VoiceSettings voice={voice} /> : null}
+            {tab === 'video' ? <VideoSettings voice={voice} /> : null}
             {tab === 'changelog' ? <ChangelogSettings connection={connection} changelog={changelog} /> : null}
             {tab === 'feedback' ? <FeedbackSettings /> : null}
             {tab === 'admin' && amAdmin ? <AdminSettings connection={connection} reports={reports} setReports={setReports} /> : null}

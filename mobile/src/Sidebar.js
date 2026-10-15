@@ -5,9 +5,66 @@
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Icon from './Icon';
 import { useStyles, useTheme } from './theme';
-import { dmKey, groupName } from './chats';
-import { GroupPicture, Person, PersonPicture } from './people';
+import { chatLabel, dmKey, groupName } from './chats';
+import { Avatar, GroupPicture, Person, PersonPicture } from './people';
 import { SeasonBadge } from './SeasonScreen';
+import { LOUNGE, LOUNGE_ROOM } from './voice';
+
+// Who's in a voice channel, under it (.voice-members): picture (a green ring while they talk), name,
+// and the mic-off or headphone-off icon. A tap opens their profile.
+function VoiceMembers({ members, users, speaking, onProfile }) {
+  const styles = useStyles(makeStyles);
+  const { colors } = useTheme();
+  return (
+    <View style={styles.voiceMembers}>
+      {members.map((member) => {
+        const user = users[member.id];
+        const icon = member.deafened ? 'headphone-off' : member.muted ? 'mic-off' : null;
+        return (
+          <Pressable
+            key={member.id} onPress={() => onProfile(member.id)}
+            style={({ pressed }) => [styles.voiceMember, pressed && styles.pressed]}
+          >
+            <View style={[styles.voiceRing, speaking.has(member.id) && styles.voiceRingOn]}>
+              <Avatar user={user} size={24} />
+            </View>
+            <Text numberOfLines={1} style={styles.voiceName}>{user?.name ?? '?'}</Text>
+            {icon ? <Icon name={icon} size={16} color={colors.icon} /> : null}
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+// The voice bar (#voice-bar) above your panel while you're in voice or joining: how it's going ("Voice
+// connected" in green), where (a tap goes there), then camera, share and leave sharing a line.
+function VoiceBar({ voice, where, onOpen }) {
+  const styles = useStyles(makeStyles);
+  const { colors } = useTheme();
+  const statusColor = { ok: colors.green, waiting: colors.yellow, error: colors.red }[voice.status?.kind] ?? colors.green;
+  const button = (icon, label, onPress, on) => (
+    <Pressable
+      onPress={onPress} accessibilityLabel={label}
+      style={({ pressed }) => [styles.voiceButton, on && styles.voiceButtonOn, pressed && styles.panelPressed]}
+    >
+      <Icon name={icon} size={20} color={on ? '#ffffff' : colors.icon} />
+    </Pressable>
+  );
+  return (
+    <View style={styles.voiceBar}>
+      <Pressable onPress={onOpen} style={styles.voiceInfo}>
+        <Text numberOfLines={1} style={[styles.voiceStatus, { color: statusColor }]}>{voice.status?.text ?? ''}</Text>
+        <Text numberOfLines={1} style={styles.voiceWhere}>{where}</Text>
+      </Pressable>
+      <View style={styles.voiceButtons}>
+        {button('video', voice.camera ? 'Turn off camera' : 'Turn on camera', voice.toggleCamera, voice.camera)}
+        {button('monitor-up', voice.sharing ? 'Stop sharing' : 'Share your screen', voice.toggleShare, voice.sharing)}
+        {button('phone-off', 'Leave voice', voice.leave)}
+      </View>
+    </View>
+  );
+}
 
 // One row of the list, like the web page's .channel buttons. `children` is a function that draws
 // what's in it, told whether the text should be white (`strong`) and bold (unread). onLongPress: a
@@ -37,13 +94,27 @@ function Row({ chatKey, active, unread, mentions, mutedChats, onPress, onLongPre
 
 // onUserMenu(id): a DM's long press. onNewGroup: the + by "Direct messages". onMe: your panel at the
 // bottom. onSettings: its ⚙️ (settingsDot: a red dot on it, What's new has news). onSeason: the
-// seasonal easter egg on your picture.
+// seasonal easter egg on your picture. voice: useVoice()'s (the Voice list, the voice bar, mute and
+// deafen); onProfile(id): someone in voice was tapped.
 export default function Sidebar({
-  connection, view, onPick, onPeople, onUserMenu, onNewGroup, onMe, onSettings, settingsDot, onSeason,
+  connection, voice, view, onPick, onPeople, onUserMenu, onNewGroup, onMe, onSettings, settingsDot, onSeason, onProfile,
 }) {
   const styles = useStyles(makeStyles);
   const { colors } = useTheme();
   const { channels, groups, friends, users, roles, me, myPresence, unread, mentions, mutedChats, incoming } = connection;
+  const inLounge = voice.roomName === LOUNGE_ROOM;
+  // The voice bar's "where": Lounge, or the DM's or group's name. A tap there opens it.
+  const where = voice.roomName === null ? '' : inLounge ? 'Lounge' : chatLabel(voice.roomName, connection);
+  const openCall = () => onPick(inLounge ? LOUNGE : voice.roomName);
+  // A panel button (mute, deafen): red with a white icon while on (.user-panel-button.off).
+  const panelButton = (icon, label, onPress, off) => (
+    <Pressable
+      onPress={onPress} hitSlop={4} accessibilityLabel={label}
+      style={({ pressed }) => [styles.panelButton, off && styles.panelButtonOff, pressed && !off && styles.panelPressed]}
+    >
+      {({ pressed }) => <Icon name={icon} size={22} color={off ? '#ffffff' : pressed ? colors.iconStrong : colors.icon} />}
+    </Pressable>
+  );
   const marks = { unread, mentions, mutedChats };  // every Row gets these: <Row {...marks} ...>
 
   // The text colour of a row: white when it's the open chat or unread, else muted.
@@ -74,6 +145,20 @@ export default function Sidebar({
             {(strong, bold) => <Text numberOfLines={1} style={[textStyle(strong, bold), styles.grow]}># {channel.name}</Text>}
           </Row>
         )))}
+
+        {/* Voice: the Lounge (green while we're in it; a tap opens its page and joins), and who's in it. */}
+        <Text style={styles.heading}>Voice</Text>
+        <Row {...marks} active={view === LOUNGE} onPress={() => onPick(LOUNGE)}>
+          {(strong) => (
+            <>
+              <Icon name="volume-2" color={inLounge ? colors.green : strong ? colors.iconStrong : colors.icon} />
+              <Text numberOfLines={1} style={[textStyle(strong), styles.grow, inLounge && styles.inVoice]}>Lounge</Text>
+            </>
+          )}
+        </Row>
+        <VoiceMembers
+          members={connection.voiceMembers[LOUNGE_ROOM] ?? []} users={users} speaking={voice.speaking} onProfile={onProfile}
+        />
 
         {/* "Direct messages" and its + for a new group (the web page's #new-group). */}
         <View style={styles.headingRow}>
@@ -108,8 +193,11 @@ export default function Sidebar({
         })}
       </ScrollView>
 
+      {voice.roomName !== null ? <VoiceBar voice={voice} where={where} onOpen={openCall} /> : null}
+
       {/* You, at the bottom (the web page's #user-panel): your picture with your status and your name
-          (a tap opens your popup, MeScreen), then ⚙️ Settings. (Mute and deafen come with calls.) */}
+          (a tap opens your popup, MeScreen), then mute, deafen and ⚙️ Settings. (On the web page the
+          buttons are a second row; a phone's drawer has room for them beside the name.) */}
       {mine ? (
         <View style={styles.userPanel}>
           <Pressable onPress={onMe} style={({ pressed }) => [styles.me, pressed && styles.panelPressed]}>
@@ -120,6 +208,10 @@ export default function Sidebar({
             </View>
             <Text numberOfLines={1} style={styles.myName}>{mine.name}</Text>
           </Pressable>
+          {panelButton(voice.muted ? 'mic-off' : 'mic', voice.muted ? 'Unmute' : 'Mute', voice.toggleMute, voice.muted)}
+          {panelButton(
+            voice.deafened ? 'headphone-off' : 'headphones', voice.deafened ? 'Undeafen' : 'Deafen', voice.toggleDeafen, voice.deafened,
+          )}
           <Pressable
             onPress={onSettings} hitSlop={6} accessibilityLabel="Settings"
             style={({ pressed }) => [styles.panelButton, pressed && styles.panelPressed]}
@@ -181,4 +273,22 @@ const makeStyles = (colors, size) => StyleSheet.create({
   // #settings-new-dot: the red dot in ⚙️'s top corner.
   settingsDot: { position: 'absolute', top: 6, right: 6, width: 8, height: 8, borderRadius: 4, backgroundColor: colors.red },
   myName: { flex: 1, color: colors.textStrong, fontSize: size(13.6), fontWeight: '600' },
+  panelButtonOff: { backgroundColor: colors.buttonRed },
+  // .voice-channel.in-voice: green and bold.
+  inVoice: { color: colors.green, fontWeight: '600' },
+  // .voice-members: indented 24px; each row 3px 8px, a 24px picture, 0.9rem muted text.
+  voiceMembers: { paddingLeft: 24, gap: 2 },
+  voiceMember: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4, paddingHorizontal: 8, borderRadius: 6 },
+  // The speaking ring: 2px around the picture, transparent until they talk (so nothing moves).
+  voiceRing: { padding: 2, margin: -2, borderRadius: 14, borderWidth: 2, borderColor: 'transparent' },
+  voiceRingOn: { borderColor: colors.green },
+  voiceName: { flex: 1, color: colors.textMuted, fontSize: size(14.4) },
+  // #voice-bar: a line above it, the status and where on the first line, the buttons sharing the second.
+  voiceBar: { paddingHorizontal: 8, paddingVertical: 8, gap: 4, borderTopWidth: 1, borderTopColor: colors.border },
+  voiceInfo: { paddingHorizontal: 4 },
+  voiceStatus: { fontSize: size(13.6), fontWeight: '600' },
+  voiceWhere: { fontSize: size(12.8), color: colors.textMuted },
+  voiceButtons: { flexDirection: 'row', gap: 4 },
+  voiceButton: { flex: 1, height: 36, borderRadius: 6, alignItems: 'center', justifyContent: 'center' },
+  voiceButtonOn: { backgroundColor: colors.buttonGreen },
 });

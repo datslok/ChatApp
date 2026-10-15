@@ -10,6 +10,7 @@ import { letterColors, useStyles, useTheme } from './theme';
 import { SERVER } from './config';
 import { friendButtons } from './friends';
 import { Avatar, BotBadge, activityText } from './people';
+import Slider from './Slider';
 
 // The icons before an activity (the web page's ACTIVITY_ICONS).
 const ACTIVITY_ICONS = { playing: 'gamepad-2', listening: 'music', using: 'monitor' };
@@ -42,8 +43,30 @@ export function Activity({ activity, style }) {
   );
 }
 
-// onOpen(key): open a chat (Message); onClose: close it.
-export default function ProfileScreen({ connection, userId, onOpen, onClose }) {
+// How loud they are for us in calls (#profile-volume-row: "Voice volume", 0-200 %). Not on our own
+// profile, nor a bot's (bots never come into calls).
+function VoiceVolume({ voice, userId }) {
+  const styles = useStyles(makeStyles);
+  const [percent, setPercent] = useState(voice.personVolume(userId));
+  return (
+    <View style={styles.volume}>
+      <Text style={styles.volumeLabel}>Voice volume</Text>
+      <View style={styles.volumeSlider}>
+        <Slider
+          value={percent} min={0} max={200} step={5}
+          onChange={(value) => {
+            setPercent(value);
+            voice.setPersonVolume(userId, value);  // (heard at once, in a call)
+          }}
+        />
+      </View>
+      <Text style={styles.volumeValue}>{percent}%</Text>
+    </View>
+  );
+}
+
+// onOpen(key): open a chat (Message); onClose: close it. voice: useVoice()'s (the volume slider).
+export default function ProfileScreen({ connection, voice, userId, onOpen, onClose }) {
   const styles = useStyles(makeStyles);
   const { colors } = useTheme();
   const { users, roles, me } = connection;
@@ -110,6 +133,7 @@ export default function ProfileScreen({ connection, userId, onOpen, onClose }) {
                 </View>
               ) : null}
               {error ? <Text style={styles.error}>{error}</Text> : null}
+              {userId !== me.id && !user.bot ? <VoiceVolume voice={voice} userId={userId} /> : null}
             </View>
           </ScrollView>
           <Pressable onPress={onClose} style={styles.close} hitSlop={8} accessibilityLabel="Close">
@@ -159,6 +183,11 @@ const makeStyles = (colors, size) => StyleSheet.create({
   pressed: { opacity: 0.8 },
   buttonText: { color: '#ffffff', fontSize: size(16) },
   error: { marginTop: 8, fontSize: size(13.6), color: colors.red },
+  // #profile-volume-row: the label, the slider and the percentage on one line, 16px under the buttons.
+  volume: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 16, alignSelf: 'stretch' },
+  volumeLabel: { fontSize: size(14.4), color: colors.textSoft },
+  volumeSlider: { flex: 1 },
+  volumeValue: { width: 44, textAlign: 'right', fontSize: size(14.4), color: colors.textMuted },
   // #profile-close: a 32px circle at the top right, over the banner.
   close: {
     position: 'absolute', top: 12, right: 12, width: 32, height: 32, borderRadius: 16,

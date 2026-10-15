@@ -81,6 +81,16 @@ export function useConnection() {
   const searchAsk = useRef(0);
   // "This chat already has 100 pinned messages": {max} (a new object each time, so it shows again).
   const [pinsFull, setPinsFull] = useState(null);
+  // Who's in each voice channel: {lounge: [{id, muted, deafened}]} (the server's "voice_members").
+  const [voiceMembers, setVoiceMembers] = useState({});
+  // The calls going on in our DMs and groups: {"dm:3:7": [{id, muted, deafened}]} ("dm_call"; an empty
+  // list means that call is over, so it's left out).
+  const [dmCalls, setDmCalls] = useState({});
+  // voice.js listens here for ringing: "call", "call_answered" and "call_ended" go to it as they come.
+  const callListener = useRef(null);
+  // Where we are in voice, as we last told the server ({room, muted, deafened}): told again after
+  // every reconnect, since the server forgets us when the connection drops.
+  const voiceState = useRef({ room: null, muted: false, deafened: false });
 
   // Refs: values that live as long as the component but don't redraw anything when changed.
   // The socket's event handlers need the *latest* chat we're in; a ref always has it, while
@@ -255,7 +265,22 @@ export function useConnection() {
             : message)));
         }
         break;
-      // Everything else (calls, ...) comes in later steps.
+      case 'voice_members':
+        setVoiceMembers(data.rooms);
+        break;
+      case 'dm_call':
+        setDmCalls((old) => {
+          const now = { ...old };
+          if (data.members.length) now[data.channel] = data.members;
+          else delete now[data.channel];
+          return now;
+        });
+        break;
+      case 'call':           // someone is calling us (voice.js rings)
+      case 'call_answered':  // our call was answered, or we answered on another device
+      case 'call_ended':     // a ringing call is over: declined, no answer, cancelled
+        callListener.current?.(data);
+        break;
     }
   }
 
@@ -300,6 +325,10 @@ export function useConnection() {
       firstUnread.current = true;
       setStatus('online');
       sendLooking();
+      // (The calls going on come again with "dm_call" at connect: start from nothing.)
+      setDmCalls({});
+      // In a call when the connection dropped: the server took us out of it, so say again where we are.
+      if (voiceState.current.room) send({ type: 'voice', ...voiceState.current });
       // Back after a drop while reading a chat: join it again, which also sends its
       // history afresh (including whatever was said while we were gone).
       if (currentRef.current) send({ type: 'join', channel: currentRef.current });
@@ -451,6 +480,24 @@ export function useConnection() {
     send({ type: 'delete', message_id: messageId });
   }
 
+  // Calls (voice.js). Where we are in voice (room: "lounge", a DM's or group's key, or null), and
+  // whether we're muted or deafened: the server tells everyone who's where ("voice_members", "dm_call").
+  function sendVoice(state) {
+    voiceState.current = state;
+    send({ type: 'voice', ...state });
+  }
+  // Ring the others in a DM or group; answer a call ringing for us; hang up our own call before anyone
+  // answered (stops their ringing).
+  function ring(chat) {
+    send({ type: 'call', channel: chat });
+  }
+  function answerCall(chat, accept) {
+    send({ type: 'call_answer', channel: chat, accept });
+  }
+  function cancelCall(chat) {
+    send({ type: 'call_cancel', channel: chat });
+  }
+
   // Friends and blocking go through the server's /friends/... addresses (like the web page), not
   // the WebSocket. "request", "accept", "remove" (decline, cancel or unfriend), "block", "unblock".
   // The server then sends both people a fresh "friends" (or "blocks"), which redraws the lists;
@@ -473,9 +520,9 @@ export function useConnection() {
   return {
     status, me, myPresence, appearance, channels, groups, friends, incoming, outgoing, blocked, users, roles, emoji,
     emojiGroups, unread, mentions, current, messages, lastRead, more, typing, mutedChats, pins, pinsFull,
-    searchResults,
+    searchResults, voiceMembers, dmCalls, callListener,
     openChat, closeChat, loadOlder, sendMessage, sendTyping, react, pin, editMessage, deleteMessage,
-    friendAction, mute, openPins, closePins, search, setPresence, logout,
+    friendAction, mute, openPins, closePins, search, setPresence, logout, sendVoice, ring, answerCall, cancelCall,
     reconnect: connect,  // after logging in
   };
 }

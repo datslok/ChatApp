@@ -1,6 +1,5 @@
 // The user menu (the web page's right-click menu, people.js userMenuItems): a long press on someone's
 // picture or name opens it, as a sheet from the bottom. What's in it depends on how we stand with them.
-// (Call comes with calls.)
 import { Alert } from 'react-native';
 import { askToSetAdmin } from './AdminSettings';
 import { mayBan } from './BanDialog';
@@ -10,8 +9,8 @@ import { askToBlock, askToRemove } from './friends';
 
 // onProfile(id), onOpen(key): open their profile, or a chat. onMention: put "@name " in the text box
 // (null on the People page, where there's none). onEditProfile: Settings → Profile (our own menu).
-// onBan(id): the ban popup. onClose: close the menu.
-export default function UserMenu({ connection, userId, onProfile, onOpen, onMention, onEditProfile, onBan, onClose }) {
+// onBan(id): the ban popup. onCall(key): open our DM with them and ring them. onClose: close the menu.
+export default function UserMenu({ connection, userId, onProfile, onOpen, onMention, onEditProfile, onBan, onCall, onClose }) {
   const { users, me, friends, incoming, outgoing, blocked, mutedChats } = connection;
   const user = users[userId];
   if (!user) return null;
@@ -59,6 +58,7 @@ export default function UserMenu({ connection, userId, onProfile, onOpen, onMent
   const dm = dmKey(me.id, userId);
   const isFriend = friends.includes(userId);
   if (isFriend) items.push(<SheetItem key="message" label="Message" onPress={choose(() => onOpen(dm))} />);
+  if (isFriend && !user.bot) items.push(<SheetItem key="call" label="Call" onPress={choose(() => onCall(dm))} />);
   items.push(<SheetLine key="line" />);
   if (isFriend) {
     if (!user.bot) {

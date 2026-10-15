@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A library's own manifest: Gradle merges it into the app's when it builds, so the app gets these
+     permissions and the service without a config plugin. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <!-- Running a foreground service at all, and of each type we use (Android 14 asks for each). -->
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+  <!-- For screen sharing: react-native-webrtc's own service is of this type, but doesn't ask for it. -->
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+  <!-- Keeps the processor awake with the screen off, while a call is on. -->
+  <uses-permission android:name="android.permission.WAKE_LOCK" />
+  <!-- Showing notifications at all (Android 13+ asks for it; without it, even a foreground service's
+       notification is hidden). voice.js asks for it when a call starts. -->
+  <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+  <application>
+    <!-- Not exported: only our own app can start it. Its types: everything a call may use. -->
+    <service
+      android:name="no.datslok.callservice.CallService"
+      android:exported="false"
+      android:foregroundServiceType="microphone|camera|mediaPlayback" />
+  </application>
+</manifest>

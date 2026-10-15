@@ -25,7 +25,22 @@
       "./plugins/animated-webp",
       "./plugins/share-intent",
       "expo-sharing",
-      "expo-video"
+      "expo-video",
+      [
+        "@livekit/react-native-expo-plugin",
+        {
+          "android": {
+            "audioType": "communication",
+            "enableScreenShareService": true
+          }
+        }
+      ],
+      [
+        "expo-audio",
+        {
+          "enableBackgroundPlayback": false
+        }
+      ]
     ]
   }
 }
