@@ -131,6 +131,49 @@
     - [x] Reminders, with Claude only (the 9B model too often got the time wrong)
     - [x] Searching the chat (with Claude: older messages he can't see; only the channels and the chat he's asked in), and a "bot" badge
 
+## Phone app parity
+
+What the web/desktop app has and the phone app doesn't yet (an audit on 2026-10-15). Push to talk, starting
+with Windows, activity detection, zoom, drag-and-drop, hover bars and keyboard shortcuts are left out on purpose.
+
+- [ ] Bugs
+    - [ ] Leave a channel that gets deleted while it's open (the phone stays in it, titled with its key)
+    - [ ] Mention in the user menu does nothing in the Lounge (no text box there): hide it there, like the web
+- [ ] Messages
+    - [ ] Who reacted (the web's hover over a reaction): a long press on a reaction
+    - [ ] Tapping a @mention opens the profile
+    - [ ] Copy text in the long-press menu
+    - [ ] The time of grouped messages (the web shows it on hover): in the long-press menu
+    - [ ] The character counter ("1850 / 2000", "Character limit reached", "No room for that emoji")
+    - [ ] The NEW line live: gone when you send, moved to the first message that arrives while you're away, scrolled to when there are more new messages than fit
+    - [ ] Emptying a message while editing deletes it (and a file's caption can be cleared)
+    - [ ] Jump to the bottom when sending while scrolled up
+    - [ ] @everyone suggested in DMs and groups too, and people's status next to their names in @ suggestions
+    - [ ] Recently used emoji kept after a restart
+    - [ ] Reply quotes with custom emoji as pictures, mentions as chips and a paperclip for files
+    - [ ] Refuse empty (0-byte) files in the tray
+    - [ ] A long press on a search or pin card's sender opens the user menu
+- [ ] Calls
+    - [ ] The connection quality popup (ping, packet loss, the graph, screen share details)
+    - [ ] The noise gate and its sensitivity line (could go in MicProcessor.kt)
+    - [ ] A long press on a call tile or the floating window opens the user menu
+    - [ ] Say why the mic, camera or screen share couldn't start ("Connected, no microphone", "No camera access", ...)
+    - [ ] "No answer" / "Declined" wherever you are (the voice bar), not only in that DM's banner
+    - [ ] The call banner's height draggable and remembered
+    - [ ] The mic test during a call
+    - [ ] The ringtone and call sounds follow the notification volume
+    - [ ] The screen share quality menu (720/1080/1440p, 30/60 fps)
+- [ ] People, notifications and the rest
+    - [ ] Logging in with an unverified email says "check your email" (now: back to a blank login screen)
+    - [ ] Links to the chat (?channel=&message=) open in the app (Android App Links)
+    - [ ] A banner for messages in other chats while the app is open (now only the ping)
+    - [ ] An unread count on the app icon
+    - [ ] Check for new APKs after reconnects and after calls too, not only at start
+    - [ ] Fonts in Settings → Appearance where Android has one (serif, monospace)
+    - [ ] Group rows in the sidebar show "N members"
+    - [ ] Profile in your own panel's menu
+    - [ ] "Add friends to send direct messages." when the DM list is empty
+
 ## Maybe later
 
 - [ ] Discord-style photo picker in the phone app: our own grid of recent photos under the text box (needs photo access, "limited access" included), which also gives the photos' real names
