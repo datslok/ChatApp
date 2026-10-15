@@ -2,6 +2,7 @@
 // The top bar is App.js's; this is everything under it.
 import { useEffect, useRef, useState } from 'react';
 import { File } from 'expo-file-system';
+import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import {
   ActivityIndicator, Alert, FlatList, Image, Keyboard, Modal, Pressable, StyleSheet, Text,
@@ -328,6 +329,27 @@ function Tray({ items, onRemove }) {
   );
 }
 
+// A moment as part of a file name: "2026-10-15-04.51.23" (dots, as Windows allows no ":" in names).
+function timeForName(date) {
+  const two = (number) => String(number).padStart(2, '0');
+  return `${date.getFullYear()}-${two(date.getMonth() + 1)}-${two(date.getDate())}-`
+    + `${two(date.getHours())}.${two(date.getMinutes())}.${two(date.getSeconds())}`;
+}
+
+// "20261014_182205" from the moment the camera wrote inside the photo ("2026:10:14 18:22:05"), or null.
+function takenName(asset) {
+  const taken = asset.exif?.DateTimeOriginal ?? asset.exif?.DateTime;
+  const parts = typeof taken === 'string' && taken.match(/^(\d{4}):(\d{2}):(\d{2}) (\d{2}):(\d{2}):(\d{2})/);
+  return parts ? `${parts[1]}${parts[2]}${parts[3]}_${parts[4]}${parts[5]}${parts[6]}` : null;
+}
+
+// A picked photo's or video's file ending, from its type ("image/jpeg" -> "jpg"), else from its address.
+function extension(asset) {
+  const fromType = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif',
+    'image/heic': 'heic', 'video/mp4': 'mp4', 'video/quicktime': 'mov', 'video/webm': 'webm' }[asset.mimeType];
+  return fromType ?? asset.uri.split('.').pop().toLowerCase();
+}
+
 // backRef: App.js's; this fills in what the back button should do here first (see below).
 export default function ChatScreen({ connection, backRef }) {
   const { current, messages, users, roles, me, lastRead, more, blocked } = connection;
@@ -473,8 +495,9 @@ export default function ChatScreen({ connection, backRef }) {
       mediaTypes: ['images', 'videos'],
       allowsMultipleSelection: true,
       selectionLimit: MAX_TRAY_FILES - tray.length,
+      exif: true,  // what the camera wrote inside each photo: the moment it was taken, for its name
     });
-    if (!result.canceled) addToTray(result.assets.map(fromPicker));
+    if (!result.canceled) addToTray(fromPicker(result.assets));
   }
 
   // The camera. Android asks for permission the first time.
@@ -486,27 +509,47 @@ export default function ChatScreen({ connection, backRef }) {
       return;
     }
     // quality 0.8: a JPEG a few MB big rather than the camera's full size.
-    const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.8 });
-    if (!result.canceled) addToTray(result.assets.map(fromPicker));
+    const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.8, exif: true });
+    if (!result.canceled) addToTray(fromPicker(result.assets));
   }
 
-  // Android's file picker, for any kind of file (expo-file-system's own).
+  // Android's file picker, for any kind of file. expo-document-picker asks Android for each file's
+  // real name ("report.pdf"): the file's address only has a number in it (content://…/document:1000006562).
+  // copyToCacheDirectory: a copy in our own storage, so it can still be read when we upload it.
   async function pickFiles() {
     setAttachMenu(false);
-    const result = await File.pickFileAsync({ multipleFiles: true });
+    const result = await DocumentPicker.getDocumentAsync({ multiple: true, copyToCacheDirectory: true });
     if (!result.canceled) {
-      addToTray(result.result.map((file) => ({ uri: file.uri, name: file.name, type: file.type, size: file.size })));
+      addToTray(result.assets.map((file) => ({
+        uri: file.uri,
+        name: file.name,
+        type: file.mimeType,
+        size: file.size ?? new File(file.uri).size,
+      })));
     }
   }
 
-  // The photo picker's and camera's answers say the same things in other words.
-  function fromPicker(asset) {
-    return {
-      uri: asset.uri,
-      name: asset.fileName ?? asset.uri.split('/').pop(),
-      type: asset.mimeType,
-      size: asset.fileSize ?? new File(asset.uri).size,
-    };
+  // The photo picker's and camera's answers say the same things in other words. Neither has the
+  // photo's real name: Android's picker only gives its number ("1000009517.jpg"; the name stays private
+  // without access to the whole gallery), a new photo a random one. So each is named after when it was
+  // taken, read from inside the photo (EXIF), the way Samsung's camera names them: "20261014_182205.jpg".
+  // A picture without that date (a screenshot, a video) is named after now: "photo-2026-10-15-04.51.23.jpg".
+  // Two the same get _1, _2, … .
+  function fromPicker(assets) {
+    const used = new Set();
+    return assets.map((asset) => {
+      const base = takenName(asset)
+        ?? `${asset.type === 'video' ? 'video' : 'photo'}-${timeForName(new Date())}`;
+      let name = `${base}.${extension(asset)}`;
+      for (let count = 1; used.has(name); count++) name = `${base}_${count}.${extension(asset)}`;
+      used.add(name);
+      return {
+        uri: asset.uri,
+        name,
+        type: asset.mimeType,
+        size: asset.fileSize ?? new File(asset.uri).size,
+      };
+    });
   }
 
   // Send pressed with files in the tray: upload and send each one as its own message, the text

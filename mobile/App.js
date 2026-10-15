@@ -15,6 +15,7 @@ import Sidebar from './src/Sidebar';
 import { chatLabel, dmPartner } from './src/chats';
 import { colors } from './src/colors';
 import { useConnection } from './src/connection';
+import { clearDownloads } from './src/files';
 
 const PEOPLE = 'people';  // the People page's name among the chats' keys (like the web page's FRIENDS)
 
@@ -136,6 +137,8 @@ function Screen() {
 }
 
 export default function App() {
+  // Once at the start: throw away files downloaded last time for Open and Share (files.js).
+  useEffect(clearDownloads, []);
   // Android draws apps "edge to edge", under the status bar and the navigation bar.
   // SafeAreaView adds padding the size of those bars, so nothing ends up behind them.
   return (

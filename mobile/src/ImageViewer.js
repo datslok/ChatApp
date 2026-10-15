@@ -1,20 +1,22 @@
 // A picture opened full screen (the web page's #viewer popup), with the phone's own way of looking
 // closer: pinch to zoom, drag a zoomed picture around, double tap to zoom in or back out.
-// × or the back button closes it; the share button sends the picture on (or saves it).
+// × or the back button closes it; download saves the picture in the phone's Download folder, share sends it on.
 //
 // Fingers are read by react-native-gesture-handler and the picture is moved by react-native-reanimated.
 // Their code runs on the UI thread (the one drawing the screen) rather than in JavaScript's own,
 // so the picture follows the fingers smoothly even while the chat is busy. Values the two share
 // are "shared values" (useSharedValue); functions that run there are marked 'worklet'.
 import { useState } from 'react';
-import { ActivityIndicator, Alert, Image, Modal, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import {
+  ActivityIndicator, Alert, Image, Modal, Pressable, StyleSheet, Text, ToastAndroid, View, useWindowDimensions,
+} from 'react-native';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from './Icon';
 import { colors } from './colors';
 import { SERVER } from './config';
-import { downloadFile, shareFile } from './files';
+import { downloadFile, saveFile, shareFile } from './files';
 
 const MAX_ZOOM = 5;
 const DOUBLE_TAP_ZOOM = 2.5;
@@ -31,7 +33,7 @@ export default function ImageViewer({ file, onClose }) {
   const [screen, setScreen] = useState(useWindowDimensions());
   const insets = useSafeAreaInsets();
   const [natural, setNatural] = useState(null);  // the picture's own size, once loaded
-  const [sharing, setSharing] = useState(false);
+  const [busy, setBusy] = useState(null);  // "save" or "share" while that's downloading
 
   // The picture's size on screen at zoom 1: as big as fits, keeping its shape ("contain").
   let shown = { width: screen.width, height: screen.height };
@@ -145,15 +147,30 @@ export default function ImageViewer({ file, onClose }) {
     transform: [{ translateX: x.value }, { translateY: y.value }, { scale: scale.value }],
   }));
 
+  // Both first download the picture into the app's own storage (files.js), then hand it on.
+  async function save() {
+    if (busy) return;
+    setBusy('save');
+    try {
+      const saved = await saveFile(file, await downloadFile(file));
+      // A toast: Android's own little notice at the bottom, gone by itself after a moment.
+      ToastAndroid.show(`Saved to Download as ${saved.name}`, ToastAndroid.SHORT);
+    } catch (error) {
+      Alert.alert("Couldn't save the picture", error.message);
+    } finally {
+      setBusy(null);
+    }
+  }
+
   async function share() {
-    if (sharing) return;
-    setSharing(true);
+    if (busy) return;
+    setBusy('share');
     try {
       await shareFile(await downloadFile(file));
     } catch (error) {
       Alert.alert(error.message);
     } finally {
-      setSharing(false);
+      setBusy(null);
     }
   }
 
@@ -179,11 +196,14 @@ export default function ImageViewer({ file, onClose }) {
           </View>
         </GestureDetector>
 
-        {/* The bar on top: the file's name, share, close. Over the picture, below the status bar. */}
+        {/* The bar on top: the file's name, download, share, close. Over the picture, below the status bar. */}
         <View style={[styles.bar, { paddingTop: insets.top + 4 }]}>
           <Text numberOfLines={1} style={styles.name}>{file.filename}</Text>
+          <Pressable onPress={save} hitSlop={8} style={styles.button}>
+            {busy === 'save' ? <ActivityIndicator color="#ffffff" /> : <Icon name="download" size={22} color="#ffffff" />}
+          </Pressable>
           <Pressable onPress={share} hitSlop={8} style={styles.button}>
-            {sharing ? <ActivityIndicator color="#ffffff" /> : <Icon name="share-2" size={22} color="#ffffff" />}
+            {busy === 'share' ? <ActivityIndicator color="#ffffff" /> : <Icon name="share-2" size={22} color="#ffffff" />}
           </Pressable>
           <Pressable onPress={onClose} hitSlop={8} style={styles.button}>
             <Icon name="x" size={24} color="#ffffff" />

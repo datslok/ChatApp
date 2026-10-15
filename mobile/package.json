@@ -5,6 +5,7 @@
   "dependencies": {
     "expo": "~57.0.27",
     "expo-dev-client": "~57.0.19",
+    "expo-document-picker": "~57.0.3",
     "expo-file-system": "~57.0.7",
     "expo-image-picker": "~57.0.20",
     "expo-intent-launcher": "~57.0.1",
@@ -25,5 +26,8 @@
     "ios": "expo run:ios",
     "web": "expo start --web"
   },
-  "private": true
+  "private": true,
+  "devDependencies": {
+    "typescript": "~6.0.3"
+  }
 }

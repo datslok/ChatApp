@@ -9,6 +9,7 @@ import { fetch } from 'expo/fetch';
 import { Directory, File, Paths } from 'expo-file-system';
 import * as IntentLauncher from 'expo-intent-launcher';
 import * as Sharing from 'expo-sharing';
+import { saveToDownloads } from '../modules/downloads';
 import { SERVER } from './config';
 
 export const MAX_UPLOAD_SIZE = 10 * 1024 * 1024;  // 10 MB, same as the server
@@ -87,15 +88,15 @@ export async function downloadFile(file, onProgress) {
   return copy;
 }
 
-// Open a downloaded file in another app: Android's "open with" (an intent, ACTION_VIEW).
-// contentUri is the file's content:// address, and flag 1 (FLAG_GRANT_READ_URI_PERMISSION) lets
-// the chosen app read that one file from our storage. False if no app can open it.
-export async function openFile(copy) {
+// Open a saved file in another app: Android's "open with" (an intent, ACTION_VIEW). uri: its content://
+// address in Download (from saveFile); flag 1 (FLAG_GRANT_READ_URI_PERMISSION) lets the chosen app read
+// that one file, which Android allows the app that made it. False if no app can open it.
+export async function openFile(uri, type) {
   try {
     await IntentLauncher.startActivityAsync('android.intent.action.VIEW', {
-      data: copy.contentUri,
+      data: uri,
       flags: 1,
-      type: copy.type || '*/*',  // (Android guesses it from the name: "application/pdf" for .pdf)
+      type: type || '*/*',
     });
     return true;
   } catch {
@@ -106,4 +107,26 @@ export async function openFile(copy) {
 // Android's share sheet for a downloaded file: send it somewhere, or save it (Drive, Files, …).
 export async function shareFile(copy) {
   await Sharing.shareAsync(copy.uri, { mimeType: copy.type || undefined, dialogTitle: copy.name });
+}
+
+// Save a downloaded attachment in the phone's Download folder (our own module, modules/downloads),
+// under its name in the chat, then delete the app's own copy: the one in Download is the one to keep.
+// Returns {name, uri, type}: the name it got there ("cat (2).jpg" when "cat.jpg" was already in
+// Download), its content:// address, and its type (both for openFile).
+export async function saveFile(file, copy) {
+  const type = copy.type || 'application/octet-stream';
+  const saved = await saveToDownloads(copy.uri, file.filename, type);
+  localCopy(file).folder.delete();
+  return { ...saved, type };
+}
+
+// Empty the app's download folder (at every start): what's left there was only needed for Open and
+// Share, and the other app has long since read it.
+export function clearDownloads() {
+  try {
+    const folder = new Directory(Paths.cache, 'downloads');
+    if (folder.exists) folder.delete();
+  } catch {
+    // Not worth bothering anyone about: Android empties the cache by itself when space runs low.
+  }
 }

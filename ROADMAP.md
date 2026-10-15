@@ -110,6 +110,7 @@
     - [x] The People page like the web's: tabs (Friends, Everyone, Requests, Blocked), Online/Offline, its buttons
     - [x] Messages like the web: formatting (bold, code, links, maths), custom emoji, link previews, the emoji picker, GIFs, typing
     - [x] Pictures and files: viewing (pinch to zoom), uploading (photos, camera, any file), downloading (open or share)
+    - [ ] Sharing to the app: ChatApp in Android's share sheet (from the gallery, other apps), into a chat's tray, with the files' real names
     - [ ] The chat's top bar: mute, search, pinned messages
     - [ ] Profiles, the user menu (long press), your status, groups (create, add, rename, leave), invites
     - [ ] Voice and video calls (LiveKit's React Native library), also with the phone locked
@@ -130,4 +131,5 @@
 
 ## Maybe later
 
+- [ ] Discord-style photo picker in the phone app: our own grid of recent photos under the text box (needs photo access, "limited access" included), which also gives the photos' real names
 - [ ] Soundboard in voice (short clips anyone in a call can play for everyone; uploads like custom emoji, a few built-in ones, its own volume)

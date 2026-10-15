@@ -7,7 +7,7 @@ import Icon from './Icon';
 import MathView from './MathView';
 import { colors } from './colors';
 import { SERVER } from './config';
-import { downloadFile, downloaded, openFile, shareFile } from './files';
+import { downloadFile, openFile, saveFile } from './files';
 import { isOnlyEmoji, parseMessage, tokensToCodes } from './format';
 
 // A custom emoji's picture. /custom-emoji/files/ only answers logged-in people; React Native's
@@ -283,18 +283,14 @@ export function Attachment({ file, sender, onLongPress }) {
   return <FileAttachment file={file} sender={sender} onLongPress={onLongPress} />;
 }
 
-// A file that isn't a picture. Like the desktop app: a tap asks first ("Download this file?",
-// with a warning when someone else sent it), then downloads it with a progress bar under the name,
-// then offers to open it (in an app that can) or share it (send it on, or save it somewhere).
+// A file that isn't a picture. Like the desktop app: a tap asks first ("Download this file?", with a
+// warning when someone else sent it), then downloads it with a progress bar under the name, saves it
+// in the phone's Download folder (like a browser), and offers to open it (in an app that can).
 function FileAttachment({ file, sender, onLongPress }) {
   const [progress, setProgress] = useState(null);  // 0..1 while downloading, else null
 
   function ask() {
     if (progress !== null) return;  // already downloading
-    if (downloaded(file)) {         // downloaded before: no need to ask again
-      offer(downloaded(file));
-      return;
-    }
     const sentBy = sender === null ? 'Sent by you.' : `Sent by ${sender}.`;
     const warning = sender === null ? '' : "\n\nOnly open files from people you trust: a file can harm your phone.";
     Alert.alert('Download this file?', `${file.filename} (${formatSize(file.size)})\n${sentBy}${warning}`, [
@@ -305,23 +301,23 @@ function FileAttachment({ file, sender, onLongPress }) {
 
   async function download() {
     setProgress(0);
+    let saved;
     try {
-      offer(await downloadFile(file, setProgress));
+      saved = await saveFile(file, await downloadFile(file, setProgress));
     } catch (error) {
-      Alert.alert(error.message);
+      Alert.alert("Couldn't download the file", error.message);
+      return;
     } finally {
       setProgress(null);
     }
-  }
-
-  function offer(copy) {
-    Alert.alert(file.filename, 'Downloaded.', [
+    Alert.alert('Saved to Download', `as ${saved.name}`, [
       { text: 'Close', style: 'cancel' },
-      { text: 'Share…', onPress: () => shareFile(copy) },
       {
         text: 'Open',
         onPress: async () => {
-          if (!(await openFile(copy))) Alert.alert('No app on this phone can open this file.', 'Share it to save it somewhere instead.');
+          if (!(await openFile(saved.uri, saved.type))) {
+            Alert.alert('No app on this phone can open this file.', "It's in your Download folder.");
+          }
         },
       },
     ]);

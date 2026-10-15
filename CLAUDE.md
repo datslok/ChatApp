@@ -123,11 +123,19 @@ the point is for me to understand how it works, not just to have it done.
   **expo/fetch**, because expo-file-system's own upload/download use an OkHttp client without React Native's
   cookie jar (the server would say "not logged in"); `openFile` (expo-intent-launcher, ACTION_VIEW on the
   `contentUri`, flag 1 = read permission), `shareFile` (expo-sharing). The + by the text box opens `AttachMenu`
-  (expo-image-picker's photo picker and camera; `File.pickFileAsync` for any file, so no expo-document-picker),
+  (expo-image-picker's photo picker and camera, which give no real names: named from the EXIF DateTimeOriginal like
+  Samsung's camera, `20261014_182205.jpg`, else `photo-<time>.jpg`; real names would need photo access, see ROADMAP's Maybe;
+  expo-document-picker for any file, as it asks Android for the real name: `File.pickFileAsync` gave "document:1000006562"),
   the `Tray` above the box (the web's #tray: 10 files, 10 MB, one message per file, the caption with the first,
   failed ones in red), "Uploading x…" on the status line. A tapped picture opens `src/ImageViewer.js` (a Modal with
   its own GestureHandlerRootView: pinch, drag, double tap via react-native-gesture-handler + reanimated; zoom only
-  there); a tapped file asks "Download this file?" like the desktop app, shows a bar, then Open / Share….
+  there); a tapped file asks "Download this file?" like the desktop app, shows a bar, saves it in Download straight away (like a browser; the user's wish) and asks Close / Open (opens the
+  Download copy by its content:// Uri). The viewer's download button saves too, with a toast; Share is only there. Saving is our own native module `mobile/modules/downloads` (Kotlin, made with
+  `create-expo-module --local`, autolinked from `modules/`): `saveAsync` inserts into MediaStore.Downloads with
+  IS_PENDING, copies the bytes, and returns {name, uri}: the name MediaStore gave it (it adds " (1)", " (2)" from the clean name;
+  after 32 it throws and we add the time). No permission (Android 10+; older ones get an error). expo-media-library
+  was tried first and dropped: it only knows Pictures/DCIM. `saveFile` then deletes the app's own copy, and App.js
+  empties `Paths.cache/downloads` at every start (`clearDownloads`), so nothing stays twice.
   `src/people.js` (Avatar with letter colours, StatusDot with the phone shape, BotBadge, Person, nameColor),
   `src/Icon.js` (react-native-svg's SvgXml with the web page's Lucide shapes from `src/icon-shapes.js`,
   written by tools/make_icons.py too), `src/chats.js` (keys and labels), `src/colors.js` (chat.css's dark
