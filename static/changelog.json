@@ -119,7 +119,8 @@
         "✍️ Each chat keeps its own half-written message and files: what you typed or added in a DM no longer follows you to #general, and it's still there when you come back",
         "The round buttons in calls and on the Lounge page (mute, camera, share, hang up) have clear icons again: they were dark grey and hard to see",
         "Coming back to a chat from the Lounge or the People page, the message box has its normal height again instead of a thin sliver",
-        "📎 Files can be up to 50 MB now (it was 10 MB): longer videos fit"
+        "📎 Files can be up to 50 MB now (it was 10 MB): longer videos fit",
+        "📷 Cameras in calls show the whole picture: a phone's upright camera is no longer zoomed in and cut off"
       ]
     },
     {

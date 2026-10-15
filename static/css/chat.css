@@ -1156,7 +1156,10 @@ body.mini-hidden :fullscreen .tile-strip {
   inset: 0;  /* top, right, bottom and left all 0: fill the tile */
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  /* The whole picture, never cut off: a phone's camera is upright (portrait), and "cover" blew it up
+     to the tile's width and cropped away most of it. Now it stands in the middle, the tile's colour
+     beside it; a 16:9 webcam still fills the tile. Screens the same, on black (.screen-tile). */
+  object-fit: contain;
 }
 .tile-video.mine {
   transform: scaleX(-1);  /* our own camera, mirrored (video.js, videoFor: if it faces us) */
@@ -1210,10 +1213,6 @@ body.mini-hidden :fullscreen .tile-strip {
    above everyone's tiles. */
 #lounge-tiles > .screen-tile {
   grid-column: 1 / -1;
-}
-/* Screens are never cut off ("contain": the whole picture, black bars if needed) or mirrored. */
-.tile-video.screen {
-  object-fit: contain;
 }
 /* A shared screen's volume (rooms.js, makeScreenVolume): 🔊 and a slider in the bottom-right
    corner, shown while the mouse is over the screen. Touch screens can't hover ("hover: none"):
