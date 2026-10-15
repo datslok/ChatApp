@@ -2,7 +2,7 @@
 // The top bar is App.js's; this is everything under it.
 import { useRef, useState } from 'react';
 import {
-  ActivityIndicator, Alert, FlatList, KeyboardAvoidingView, Modal, Pressable, StyleSheet, Text,
+  ActivityIndicator, Alert, FlatList, Modal, Pressable, StyleSheet, Text,
   TextInput, View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -406,9 +406,8 @@ export default function ChatScreen({ connection }) {
   const replyName = replyTo && (users[replyTo.user_id]?.name ?? replyTo.name);
 
   return (
-    // KeyboardAvoidingView: when the keyboard opens, it adds room at the bottom the keyboard's
-    // height, so the text box moves up above it instead of being hidden behind it.
-    <KeyboardAvoidingView style={styles.screen} behavior="padding">
+    // (Room for the keyboard is made around the whole screen, in App.js.)
+    <View style={styles.screen}>
       {body}
 
       {suggestions.length > 0 ? (
@@ -472,7 +471,7 @@ export default function ChatScreen({ connection }) {
           onDelete={confirmDelete}
         />
       ) : null}
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 

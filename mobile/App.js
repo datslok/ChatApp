@@ -3,7 +3,7 @@
 // channels on the left, the chat's members on the right.
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, BackHandler, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, BackHandler, KeyboardAvoidingView, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import ChatScreen from './src/ChatScreen';
 import Drawer from './src/Drawer';
@@ -66,7 +66,11 @@ function Main({ connection }) {
     || incoming.length > 0;
 
   return (
-    <View style={styles.main}>
+    // KeyboardAvoidingView: when the keyboard opens, it adds room at the bottom the keyboard's height,
+    // so the text box sits just above the keyboard. Around everything, because it measures its own
+    // position from its parent: lower down (in ChatScreen, under the top bar) it got the sum wrong
+    // and left the text box partly behind the keyboard.
+    <KeyboardAvoidingView style={styles.main} behavior="padding">
       {/* The web page's #topbar on a phone. */}
       <View style={styles.topbar}>
         <Pressable onPress={() => setDrawer('left')} style={styles.topbarButton} hitSlop={4}>
@@ -92,7 +96,7 @@ function Main({ connection }) {
       <Drawer side="right" open={drawer === 'right'} onClose={() => setDrawer(null)}>
         <Members connection={connection} view={view} />
       </Drawer>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
