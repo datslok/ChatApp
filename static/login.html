@@ -175,11 +175,13 @@
     // Already in the desktop app? (Tauri puts __TAURI_INTERNALS__ on its pages; browsers don't have it.)
     if ("__TAURI_INTERNALS__" in window) document.getElementById("get-app").hidden = true;
 
-    // An invite link (/invite/<code>) brings people here as /login?register&invite=<code>.
-    // URLSearchParams reads the part of the address after the "?".
+    // An invite link (/invite/<code>) leaves its code in a cookie and shows the landing page, whose
+    // "Create your account" brings people here as /login?register. The browser sends the cookie by
+    // itself, so the page never sees the code. (Older links came as /login?register&invite=<code>:
+    // URLSearchParams reads the part of the address after the "?".)
     const params = new URLSearchParams(location.search);
     const inviteCode = params.get("invite") || "";
-    // What the server says about it (/invite-info): {required, valid, inviter}. Until it has
+    // What the server says about it (/invite-info): {required, given, valid, inviter}. Until it has
     // answered, null: the form is shown as usual, and the server checks the invite anyway.
     let invite = null;
 
@@ -195,7 +197,7 @@
       submitButton.textContent = registering ? "Create account" : "Log in";
       inviteNote.hidden = !registering || invite === null || (!blocked && !invite.inviter);
       if (blocked) {
-        inviteNote.textContent = inviteCode
+        inviteNote.textContent = invite.given
           ? "This invite link doesn't work any more: it has been used, or it's more than a week old. Ask for a new one."
           : "To make an account, you need an invite link from someone in the chat. Ask a friend for one!";
       } else if (registering && invite?.inviter) {

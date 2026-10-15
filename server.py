@@ -1216,7 +1216,7 @@ def unverified_user(request):
 async def register(credentials: Credentials, request: Request, response: Response, background_tasks: BackgroundTasks):
     # An invite link is needed (see "Invites"), except with REQUIRE_INVITE=0 or for the very first
     # account on a new server, when there's nobody yet to make one.
-    code = credentials.invite.strip()
+    code = invite_code(credentials.invite, request)
     needs_invite = REQUIRE_INVITE and has_people()
     if needs_invite:
         # Limit wrong tries per visitor (IP address). The codes are far too long to guess anyway.
@@ -1270,6 +1270,7 @@ async def register(credentials: Credentials, request: Request, response: Respons
 
     # Logged in, but only to the "check your inbox" page until the link in this email is clicked.
     start_session(response, user_id)
+    response.delete_cookie(INVITE_COOKIE, httponly=True, samesite="lax", secure=SECURE_COOKIES)  # used up
     send_verification(background_tasks, user_id, username, email)
     return {"ok": True}
 
@@ -1924,19 +1925,43 @@ async def set_admin(data: AdminChange, request: Request):
     return {"ok": True}
 
 
+INVITE_COOKIE = "invite"
+
+
+def invite_code(given, request):
+    """The invite to use: one in the address or the form (old-style links), else the one the browser
+    has kept since its invite link was opened (the "invite" cookie, see open_invite_link)."""
+    return given.strip() or request.cookies.get(INVITE_COOKIE, "")
+
+
 @app.get("/invite/{code}")
 async def open_invite_link(code: str):
-    """The link itself: on to the create-account page, with the code for it to send along.
-    (quote() makes whatever was typed safe to put in an address.)"""
-    return RedirectResponse(f"/login?register&invite={quote(code, safe='')}")
+    """The link itself: the browser keeps the code as a cookie, and goes on to the landing page, so
+    people can read what the chat is before making an account; its "Create your account" button and
+    the login page find the invite again through the cookie. Opening the link doesn't use it up."""
+    response = RedirectResponse(f"https://{LANDING_HOST}/" if LANDING_HOST else "/welcome")
+    response.set_cookie(
+        INVITE_COOKIE,
+        code[:100],  # (a real code is far shorter; the server checks it when it's used anyway)
+        max_age=INVITE_DAYS * 24 * 60 * 60,  # as long as an invite works at most
+        httponly=True,   # only the server reads it: pages ask /invite-info
+        samesite="lax",  # sent from the landing page (the same site), not from other websites
+        secure=SECURE_COOKIES,
+    )
+    return response
 
 
 @app.get("/invite-info")
-async def invite_info(code: str = ""):
-    """For the login page: is an invite needed, and if one was given, does it work and whose is it?"""
+async def invite_info(request: Request, response: Response, code: str = ""):
+    """For the login and landing pages: is an invite needed, and does this browser's (or the given)
+    invite work, and whose is it?"""
+    allow_landing_page(request, response)
+    response.headers["Cache-Control"] = "no-store"  # different for everyone: never keep a copy
+    code = invite_code(code, request)
     invite = open_invite(code)
     return {
         "required": REQUIRE_INVITE and has_people(),
+        "given": bool(code),  # (one that doesn't work any more says so, instead of "you need one")
         "valid": invite is not None,
         "inviter": invite[1] if invite else None,
     }

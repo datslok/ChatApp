@@ -24,7 +24,7 @@
     {
       "topic": "👥 People",
       "items": [
-        "Invite a friend: People → Invite someone makes a link that lets one person make an account, within a week. Copy it and send it to them. New accounts confirm their email with a link before they get in",
+        "Invite a friend: People → Invite someone makes a link that lets one person make an account, within a week. Copy it and send it to them. Opening it shows the welcome page with who invited them and a Create your account button. New accounts confirm their email with a link before they get in",
         "People (at the top of the sidebar): your Friends, Everyone on the chat (with a search box, to find someone and add them), friend Requests and the people you Blocked",
         "Friends: send requests and accept them on the People page. DMs are between friends. A new request pings you (and your phone, with notifications on)",
         "Block someone: Block in their profile (click their name or picture). You stop being friends, they can't send you requests or reach you, and their messages are hidden for you (\"Show\" to see one). They aren't told. Unblock them in their profile or on the People page's Blocked tab. Admins and bots can't be blocked",
@@ -117,6 +117,7 @@
     {
       "date": "2026-10-15",
       "items": [
+        "💌 Invite links now open the welcome page first, so whoever you invite can see what the chat can do. It says who invited them, and Create your account is right there (the link stays theirs for the week)",
         "📱 ChatApp for Android: a real app for your phone, with notifications and calls that ring even with the phone locked. Get it at chat.datslok.no/download (on an Android phone, the chat offers it when you open it)",
         "🎬 Videos play right in the chat: send an MP4 or WebM (up to 10 MB) and everyone can watch it there, fullscreen too. Videos sent before now play as well",
         "✍️ Each chat keeps its own half-written message and files: what you typed or added in a DM no longer follows you to #general, and it's still there when you come back",

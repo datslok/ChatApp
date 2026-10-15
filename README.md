@@ -293,7 +293,9 @@ cd C:\ChatApp
 
 Then invite your friends: **People** (top left) → **Invite someone** makes a link that lets one person make
 an account, within a week. Anyone in the chat can make them, so friends can invite their friends too, and
-the `invites` table remembers who invited whom. New accounts confirm their email address with a link before
+the `invites` table remembers who invited whom. Opening a link shows the landing page first (or `/welcome`
+without `LANDING_HOST`), with "*name* invited you" and a **Create your account** button: the browser keeps
+the invite as a cookie for a week, so people can read about the chat before signing up. New accounts confirm their email address with a link before
 they get in (and so does a new address from Settings), so password resets always reach them.
 
 **Make it your own:** a new chat starts with #general, #memes and #chattus (the AI bot's, see below).

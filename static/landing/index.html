@@ -196,6 +196,16 @@
       color: var(--muted);
     }
 
+    /* Came from an invite link: who invited you, and the way to make your account. */
+    .invited {
+      margin-top: 24px;
+      font-size: 1.1rem;
+    }
+
+    .invited .button {
+      margin-left: 8px;
+    }
+
     /* The screenshot, in a frame with a shadow, as if it were a window. */
     .screenshot {
       display: block;
@@ -342,6 +352,7 @@
         <a class="button grey" data-app="android" href="{{CHAT}}/download#android">⬇ Android app</a>
       </div>
       <p class="register" id="register-line">New here? Ask someone in the chat for an invite link, and open it to make your account.</p>
+      <p class="invited" id="invited" hidden><span id="inviter"></span> invited you 🎉 <a class="button" href="{{CHAT}}/login?register">Create your account</a></p>
       <img class="screenshot" src="/landing/screenshot.png" alt="ChatApp: channels on the left, messages in the middle, who's online on the right">
     </div>
 
@@ -449,13 +460,15 @@
     const loginButton = document.getElementById("login-button");
     const logoutButton = document.getElementById("logout-button");
     const registerLine = document.getElementById("register-line");
+    const invited = document.getElementById("invited");
 
     function showLoggedIn(username, picture) {
       const loggedIn = username !== null;
       me.hidden = !loggedIn;
       logoutButton.hidden = !loggedIn;
       loginButton.hidden = loggedIn;
-      registerLine.hidden = loggedIn;  // they have an account already
+      registerLine.hidden = loggedIn || invited.hidden === false;  // they have an account, or an invite
+      if (loggedIn) invited.hidden = true;
       if (!loggedIn) return;
       document.getElementById("me-name").textContent = username;  // as text, never as HTML
       mePicture.hidden = !picture;
@@ -484,7 +497,26 @@
       showLoggedIn(null, null);
     });
 
+    // Came here from an invite link? Then the chat has kept its code as a cookie (server.py,
+    // open_invite_link), and tells us whose invite it is, if it still works. The cookie goes along the
+    // same way as the login cookie above.
+    async function checkInvite() {
+      try {
+        const response = await fetch(CHAT + "/invite-info", { credentials: "include" });
+        if (!response.ok) return;
+        const answer = await response.json();
+        if (!answer.valid || !answer.inviter) return;  // no invite (or a used-up one): the usual line
+        document.getElementById("inviter").textContent = answer.inviter;  // as text, never as HTML
+        if (!me.hidden) return;  // logged in already: no account to make
+        invited.hidden = false;
+        registerLine.hidden = true;
+      } catch {
+        // Can't reach the chat: the usual line stays.
+      }
+    }
+
     checkLogin();
+    checkInvite();
   </script>
 </body>
 </html>

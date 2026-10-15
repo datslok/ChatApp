@@ -521,8 +521,11 @@ the point is for me to understand how it works, not just to have it done.
 - Invites and email verification (server.py, "Invites" and "Email verification"; since 2026-10-14, replacing the
   old INVITE_CODE): `/register` needs an unused invite (`invites`: code, created_by, used_by; one use,
   `INVITE_DAYS` 7, `MAX_OPEN_INVITES` 10 each), checked and used up in the same transaction as the INSERT, unless
-  `REQUIRE_INVITE=0` (dev.env; serve.ps1 refuses it) or nobody has an account yet. `/invite/<code>` redirects to
-  `/login?register&invite=`, which asks `/invite-info`. People page → Invite someone (#invite-dialog, people.js
+  `REQUIRE_INVITE=0` (dev.env; serve.ps1 refuses it) or nobody has an account yet. `/invite/<code>` sets the HttpOnly
+  cookie "invite" (a week) and redirects to the landing page (`https://LANDING_HOST/`, else /welcome; the user's wish:
+  people read the features first), whose script asks `/invite-info` (CORS like /whoami) and shows "x invited you" +
+  Create your account (`/login?register`). `invite_code` (an explicit code, else the cookie) is used by /invite-info
+  and /register, which deletes the cookie; /invite-info's `given` lets login.html say "doesn't work any more". People page → Invite someone (#invite-dialog, people.js
   "Invites"). New accounts get `email_verified` 0 and a link (`email_verifications`, hashed token + the address,
   `VERIFY_HOURS` 24); `user_id_from_token` only accepts verified accounts, so an unverified one is "logged out"
   everywhere except static/verify.html (`/verify-email`, `/verify/status`, `/verify/resend`, `/verify/change`;
