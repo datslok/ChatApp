@@ -24,6 +24,7 @@ export const colors = {
   accent: '#5865f2',      // buttons, mentions, your own reactions
   accent15: 'rgba(88, 101, 242, 0.15)',  // behind your own reaction (the accent at 15%)
   accent30: 'rgba(88, 101, 242, 0.3)',   // behind an @mention (the accent at 30%)
+  accent35: 'rgba(88, 101, 242, 0.35)',  // a message lighting up after a jump to it
   mentionText: '#c9cdfb', // the text of an @mention
   link: '#00a8fc',
   green: '#23a55a',       // online

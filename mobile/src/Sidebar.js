@@ -12,13 +12,17 @@ import { GroupPicture, Person, PersonPicture } from './people';
 // what's in it, told whether the text should be white (`strong`) and bold (unread).
 // (Defined out here, not inside Sidebar: a component defined inside another is a new one at every
 // redraw, so React would rebuild every row each time, pictures included.)
-function Row({ chatKey, active, unread, mentions, onPress, children }) {
-  const isUnread = chatKey && unread.has(chatKey) && !active;
+// A muted chat is faded and has no unread dot (a red count still shows: a mention by name).
+function Row({ chatKey, active, unread, mentions, mutedChats, onPress, children }) {
+  const muted = chatKey && mutedChats.has(chatKey);
+  const isUnread = chatKey && unread.has(chatKey) && !active && !muted;
   const count = (chatKey && mentions[chatKey]) || 0;
   return (
     <Pressable
       onPress={onPress}
-      style={({ pressed }) => [styles.row, active && styles.active, pressed && !active && styles.pressed]}
+      style={({ pressed }) => [
+        styles.row, active && styles.active, pressed && !active && styles.pressed, muted && !active && styles.muted,
+      ]}
     >
       {isUnread ? <View style={styles.unreadDot} /> : null}
       <View style={styles.rowInside}>{children(active || isUnread, isUnread)}</View>
@@ -28,8 +32,8 @@ function Row({ chatKey, active, unread, mentions, onPress, children }) {
 }
 
 export default function Sidebar({ connection, view, onPick, onPeople }) {
-  const { channels, groups, friends, users, roles, me, myPresence, unread, mentions, incoming } = connection;
-  const marks = { unread, mentions };  // every Row gets these: <Row {...marks} ...>
+  const { channels, groups, friends, users, roles, me, myPresence, unread, mentions, mutedChats, incoming } = connection;
+  const marks = { unread, mentions, mutedChats };  // every Row gets these: <Row {...marks} ...>
 
   // The text colour of a row: white when it's the open chat or unread, else muted.
   const textStyle = (strong, bold) => [styles.rowText, strong && styles.rowTextStrong, bold && styles.bold];
@@ -112,6 +116,7 @@ const styles = StyleSheet.create({
   rowInside: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, minWidth: 0 },
   active: { backgroundColor: colors.bgActive },
   pressed: { backgroundColor: colors.bgHover },
+  muted: { opacity: 0.5 },  // .channel.muted
   rowText: { color: colors.textMuted, fontSize: 16 },
   rowTextStrong: { color: colors.textStrong },
   bold: { fontWeight: '600' },

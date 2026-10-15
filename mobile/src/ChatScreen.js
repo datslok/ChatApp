@@ -5,19 +5,23 @@ import { File } from 'expo-file-system';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import {
-  ActivityIndicator, Alert, BackHandler, FlatList, Image, Keyboard, Modal, Pressable, StyleSheet, Text,
-  TextInput, View,
+  ActivityIndicator, Alert, Animated, BackHandler, Easing, FlatList, Image, Keyboard, Modal, Pressable,
+  StyleSheet, Text, TextInput, View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import ChatHeader from './ChatHeader';
 import Icon from './Icon';
 import MessageText, { Attachment, CustomEmoji, LinkPreview, formatSize } from './MessageText';
+import PinsScreen from './PinsScreen';
 import Picker from './Picker';
+import SearchScreen from './SearchScreen';
 import { colors } from './colors';
 import { chatLabel } from './chats';
 import { SERVER } from './config';
 import { IMAGE_TYPES, MAX_TRAY_FILES, MAX_UPLOAD_SIZE, uploadFile } from './files';
 import { copySharedFile } from '../modules/shared-files';
 import { Avatar, BotBadge, nameColor } from './people';
+import { dayName, headerTime, isSameDay } from './time';
 
 // Quick reactions in the long-press menu, before its smiley (which opens the whole emoji picker).
 const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🎉'];
@@ -28,33 +32,9 @@ const MAX_SUGGESTIONS = 10;
 // A message from the same person within 5 minutes joins the one before (no picture or name).
 const GROUP_MINUTES = 5;
 
-const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August',
-  'September', 'October', 'November', 'December'];
-
-// ----- Times, like the web page: "Today", "Yesterday", "10 October 2026", and "14:03".
-
-function isSameDay(a, b) {
-  return a.toDateString() === b.toDateString();
-}
-
-function dayName(date) {
-  const yesterday = new Date();
-  yesterday.setDate(yesterday.getDate() - 1);
-  if (isSameDay(date, new Date())) return 'Today';
-  if (isSameDay(date, yesterday)) return 'Yesterday';
-  return `${date.getDate()} ${MONTHS[date.getMonth()]} ${date.getFullYear()}`;
-}
-
-function clock(date) {
-  const two = (n) => String(n).padStart(2, '0');
-  return `${two(date.getHours())}:${two(date.getMinutes())}`;
-}
-
-// Above a message: "Today at 14:03", "Yesterday at 09:12", "10 October 2026 14:03".
-function headerTime(date) {
-  const day = dayName(date);
-  return (day === 'Today' || day === 'Yesterday' ? day + ' at ' : day + ' ') + clock(date);
-}
+// Going to a message further up (a pin, a search result, a reply's quote): at most this many batches
+// of 50 older messages are loaded to reach it (2,000 messages, like the web page's MAX_JUMP_BATCHES).
+const MAX_JUMP_BATCHES = 40;
 
 // ----- Text
 
@@ -150,7 +130,22 @@ function buildRows(messages, lastRead, blocked) {
   return rows;
 }
 
-function Message({ message, grouped, connection, isBlocked, onShow, onLongPress }) {
+// A message we jumped to lights up and fades out over 2 seconds (chat.css's .message.flash).
+// Drawn behind the message; `key` gives every jump a new one, so it starts over.
+function Flash() {
+  // An Animated.Value is a number React Native can change smoothly, frame by frame, without
+  // redrawing the component: here the highlight's opacity, from 1 to 0.
+  const fade = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    // useNativeDriver: Android's side runs the animation by itself, so it stays smooth.
+    Animated.timing(fade, { toValue: 0, duration: 2000, easing: Easing.out(Easing.ease), useNativeDriver: true }).start();
+  }, []);
+  return <Animated.View pointerEvents="none" style={[styles.flash, { opacity: fade }]} />;
+}
+
+// flash: a number while it should light up (a new number lights it up again).
+// onJump(messageId): go to a message in this chat (the reply's quote).
+function Message({ message, grouped, connection, isBlocked, flash, onShow, onLongPress, onJump }) {
   const { users, roles, emoji, me } = connection;
   const sender = users[message.user_id];
   const name = sender?.name ?? message.name;
@@ -180,10 +175,11 @@ function Message({ message, grouped, connection, isBlocked, onShow, onLongPress 
         pressed && styles.pressed,
       ]}
     >
+      {flash ? <Flash key={flash} /> : null}
       {/* The picture's column: the picture, or (grouped) an empty space as wide as one. */}
       {grouped ? <View style={styles.pictureSpace} /> : <Avatar user={sender} name={name} size={40} />}
       <View style={styles.body}>
-        {message.reply ? <ReplyLine reply={message.reply} connection={connection} /> : null}
+        {message.reply ? <ReplyLine reply={message.reply} connection={connection} onJump={onJump} /> : null}
         {grouped ? null : (
           <View style={styles.header}>
             <Text style={[styles.name, { color: nameColor(sender, roles) ?? colors.textStrong }]}>{name}</Text>
@@ -222,7 +218,8 @@ function Message({ message, grouped, connection, isBlocked, onShow, onLongPress 
 }
 
 // The quote above a reply: the reply icon, the original's sender (small picture, name) and its start.
-function ReplyLine({ reply, connection }) {
+// A tap goes to the original (like a click on the web page).
+function ReplyLine({ reply, connection, onJump }) {
   const { users, emoji } = connection;
   if (reply.deleted) {
     return (
@@ -233,14 +230,14 @@ function ReplyLine({ reply, connection }) {
     );
   }
   return (
-    <View style={styles.replyLine}>
+    <Pressable style={styles.replyLine} onPress={() => onJump(reply.id)}>
       <Icon name="reply" size={14} color={colors.textMuted} />
       <Avatar user={users[reply.user_id]} name={reply.name} size={16} />
       <Text style={styles.replyName}>{users[reply.user_id]?.name ?? reply.name}</Text>
       <Text numberOfLines={1} style={styles.replyText}>
         {reply.text ? readableText(reply.text, users, emoji) : reply.file ? 'Attachment' : ''}
       </Text>
-    </View>
+    </Pressable>
   );
 }
 
@@ -355,7 +352,10 @@ function extension(asset) {
 // shared: something shared to the app from another one, for the tray and the text box (App.js), or
 // null; onSharedTaken: say it's been taken. trays, drafts (and their setters): every chat's tray and
 // half-written text (App.js keeps them, so they stay while this screen is away, on the People page).
-export default function ChatScreen({ connection, backRef, shared, onSharedTaken, trays, setTrays, drafts, setDrafts }) {
+// onOpenChat(key): open another chat (App.js's go), for a search result there.
+export default function ChatScreen({
+  connection, backRef, shared, onSharedTaken, trays, setTrays, drafts, setDrafts, onOpenChat,
+}) {
   const { current, messages, users, roles, me, lastRead, more, blocked } = connection;
   const [menuFor, setMenuFor] = useState(null);    // the message whose menu is open
   const [replyTo, setReplyTo] = useState(null);    // the message we're replying to
@@ -365,6 +365,14 @@ export default function ChatScreen({ connection, backRef, shared, onSharedTaken,
   const [picker, setPicker] = useState(null);      // the emoji/GIF picker: null, "insert", or {react: message}
   // The status line's right side: {text, error}, like "Uploading cat.jpg…", or what went wrong; or null.
   const [status, setStatus] = useState(null);
+  const [popup, setPopup] = useState(null);  // the bar's popup that's open: "pins", "search" or null
+  // The message we're on our way to, {chat, id} (loading older batches until it's there), or null.
+  const [jump, setJump] = useState(null);
+  const jumpBatches = useRef({ count: 0, waitingFor: null });  // batches asked for, and our oldest id then
+  const [flash, setFlash] = useState(null);  // the message that lights up: {id, n}
+  const list = useRef(null);     // the FlatList, to scroll it
+  const rowsNow = useRef([]);    // the rows it was last given (newest first)
+  const scrollTries = useRef(0);
   // Each chat keeps its own tray and text, like Discord: a picture picked or words typed in a DM stay
   // there when you go elsewhere.
   // Each chat's tray (trays, from App.js): files about to be sent there,
@@ -506,6 +514,65 @@ export default function ChatScreen({ connection, backRef, shared, onSharedTaken,
     setTimeout(() => setStatus((now) => (now?.text === text ? null : now)), 5000);
   }
 
+  // ----- Going to a message (the web page's jumpToMessage and openMessage)
+  //
+  // From a pin, a search result or a reply's quote. Another chat opens first, and its history comes.
+  // A message older than everything loaded: older batches load until it's there (each batch changes
+  // `messages`, which runs the effect below again). Then the list scrolls to it and it lights up.
+
+  function jumpTo(chat, id) {
+    setPopup(null);
+    jumpBatches.current = { count: 0, waitingFor: null };
+    if (chat !== current) onOpenChat(chat);
+    setJump({ chat, id });
+  }
+
+  useEffect(() => {
+    if (!jump || jump.chat !== current || messages === null) return;  // (the chat's history isn't here yet)
+    const index = rowsNow.current.findIndex((row) => row.message?.id === jump.id);
+    if (index !== -1) {
+      setJump(null);
+      setStatus((now) => (now?.finding ? null : now));
+      scrollTries.current = 0;
+      // viewPosition 0.5: in the middle of the screen.
+      list.current?.scrollToIndex({ index, viewPosition: 0.5, animated: true });
+      setFlash({ id: jump.id, n: Date.now() });
+      return;
+    }
+    // Not loaded. Older than everything we have (ids only grow): load older ones, if there are any.
+    // Otherwise (between loaded ones, or nothing older left) it was deleted.
+    const oldest = messages[0]?.id;
+    const batches = jumpBatches.current;
+    if (oldest !== undefined && jump.id < oldest && more && batches.count < MAX_JUMP_BATCHES) {
+      if (batches.waitingFor === oldest) return;  // asked already; that batch hasn't come yet
+      batches.count += 1;
+      batches.waitingFor = oldest;
+      setStatus({ text: 'Finding the message…', finding: true });
+      connection.loadOlder();
+      return;
+    }
+    setJump(null);
+    setStatus((now) => (now?.finding ? null : now));
+    showError(batches.count >= MAX_JUMP_BATCHES ? 'That message is very far up: scroll up to find it.'
+      : 'That message has been deleted.');
+  }, [jump, messages, current]);
+
+  // scrollToIndex only knows where rows are that have been drawn, and FlatList only draws the rows
+  // near the screen (that's what keeps a long list fast). For one further away it calls this
+  // instead: scroll to a guess (its number times the rows' average height), which draws the rows
+  // there, then try again a moment later. A few times at most.
+  function onScrollToIndexFailed(info) {
+    if (scrollTries.current >= 10) return;
+    scrollTries.current += 1;
+    list.current?.scrollToOffset({ offset: info.averageItemLength * info.index, animated: false });
+    setTimeout(() => list.current?.scrollToIndex({ index: info.index, viewPosition: 0.5, animated: true }), 100);
+  }
+
+  // The chat already has 100 pinned messages (the server said "pins_full").
+  useEffect(() => {
+    if (connection.pinsFull) showError(`This chat already has ${connection.pinsFull.max} pinned messages: unpin one first.`);
+  }, [connection.pinsFull]);
+
   // ----- Files: picking them (the + sheet), the tray, sending them.
 
   // Files picked: into the tray, if they're not too big and there's room (the web page's addToTray).
@@ -535,6 +602,7 @@ export default function ChatScreen({ connection, backRef, shared, onSharedTaken,
   useEffect(() => {
     fromShare.current = null;
     setCursor(draft.length);
+    setJump((now) => (now?.chat === current ? now : null));  // (on the way to a message in the chat we left: forget it)
   }, [current]);
   useEffect(() => {
     if (!shared) return;
@@ -756,8 +824,10 @@ export default function ChatScreen({ connection, backRef, shared, onSharedTaken,
       <Message
         message={item.message} grouped={item.grouped} connection={connection}
         isBlocked={blocked.includes(item.message.user_id) && !shownBlocked.has(item.message.id)}
+        flash={flash?.id === item.message.id ? flash.n : null}
         onShow={(id) => setShownBlocked((old) => new Set(old).add(id))}
         onLongPress={setMenuFor}
+        onJump={(id) => jumpTo(current, id)}
       />
     );
   }
@@ -771,10 +841,15 @@ export default function ChatScreen({ connection, backRef, shared, onSharedTaken,
     // inverted: the list is drawn upside down, so it starts at the bottom like a chat, and a new
     // message appears at the bottom without scrolling. So it gets the rows newest first, and its
     // "end" is the top: getting near it (onEndReached) asks for older messages.
+    rows.reverse();
+    rowsNow.current = rows;  // (for jumping: which row a message is)
     body = (
       <FlatList
+        ref={list}
         inverted
-        data={rows.reverse()}
+        data={rows}
+        extraData={flash}  // (draw the rows again when a message should light up)
+        onScrollToIndexFailed={onScrollToIndexFailed}
         keyExtractor={(row) => row.key}
         renderItem={renderRow}
         contentContainerStyle={styles.listInside}
@@ -797,6 +872,7 @@ export default function ChatScreen({ connection, backRef, shared, onSharedTaken,
   return (
     // (Room for the keyboard is made around the whole screen, in App.js.)
     <View style={styles.screen}>
+      <ChatHeader connection={connection} onSearch={() => setPopup('search')} onPins={() => setPopup('pins')} />
       {body}
 
       {/* The web page's #status-line, always there (so nothing jumps): who's typing on the left,
@@ -909,6 +985,11 @@ export default function ChatScreen({ connection, backRef, shared, onSharedTaken,
         />
       ) : null}
 
+      {popup === 'pins' ? (
+        <PinsScreen connection={connection} onJump={(id) => jumpTo(current, id)} onClose={() => setPopup(null)} />
+      ) : null}
+      {popup === 'search' ? <SearchScreen connection={connection} onJump={jumpTo} onClose={() => setPopup(null)} /> : null}
+
       {/* A reaction (from a message's long-press menu): every emoji, in a popup sheet. */}
       {picker?.react ? (
         <Picker
@@ -928,6 +1009,8 @@ export default function ChatScreen({ connection, backRef, shared, onSharedTaken,
 // The web page's sizes (chat.css), with its rem as 16 px: 0.75rem = 12, 0.85rem = 13.6, and so on.
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bgMain },
+  // The light behind a message we jumped to: the accent at 35%, over the whole message.
+  flash: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.accent35 },
   middle: { flex: 1 },
   listInside: { padding: 12 },  // #messages on a phone: 12px
   // .message: the picture's column and the body side by side, 12px apart.

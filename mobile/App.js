@@ -111,9 +111,10 @@ function Main({ connection, share, onShareDone }) {
     return <ShareScreen connection={connection} share={share} onPick={pick} onCancel={onShareDone} />;
   }
 
-  // The red dot on the menu button: something unread somewhere else (a chat, a mention, a request).
+  // The red dot on the menu button: something unread somewhere else (a chat that isn't muted, a
+  // mention, a request).
   const elsewhere = (key) => key !== view;
-  const somethingNew = [...unread].some(elsewhere)
+  const somethingNew = [...unread].some((key) => elsewhere(key) && !connection.mutedChats.has(key))
     || Object.keys(mentions).some((key) => elsewhere(key) && mentions[key] > 0)
     || incoming.length > 0;
 
@@ -141,7 +142,7 @@ function Main({ connection, share, onShareDone }) {
       <View style={styles.content}>
         {view === PEOPLE
           ? <PeopleScreen connection={connection} onOpen={go} />
-          : <ChatScreen connection={connection} backRef={chatBack} shared={toTray} onSharedTaken={() => setToTray(null)} trays={trays} setTrays={setTrays} drafts={drafts} setDrafts={setDrafts} />}
+          : <ChatScreen connection={connection} backRef={chatBack} shared={toTray} onSharedTaken={() => setToTray(null)} trays={trays} setTrays={setTrays} drafts={drafts} setDrafts={setDrafts} onOpenChat={go} />}
       </View>
 
       <Drawer side="left" open={drawer === 'left'} onClose={() => setDrawer(null)}>

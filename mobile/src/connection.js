@@ -67,6 +67,17 @@ export function useConnection() {
   // Are there older messages than the ones we have (the server's "more": it sent a full batch)?
   const [more, setMore] = useState(false);
   const loadingOlder = useRef(false);  // asked for older ones, waiting for them
+  const [mutedChats, setMutedChats] = useState(new Set());  // chats we muted: no unread dot, faded
+  // The open chat's pinned messages while the 📌 list is open (null: on their way), and whether it
+  // is open (a ref: the socket's handlers need it, to ask again when a pin changes).
+  const [pins, setPins] = useState(null);
+  const pinsOpen = useRef(false);
+  // The newest search's answer, {ask, results}: ask numbers our searches (search() returns it), so
+  // the search screen can tell an older search's answer (typing fast) from the one it waits for.
+  const [searchResults, setSearchResults] = useState(null);
+  const searchAsk = useRef(0);
+  // "This chat already has 100 pinned messages": {max} (a new object each time, so it shows again).
+  const [pinsFull, setPinsFull] = useState(null);
 
   // Refs: values that live as long as the component but don't redraw anything when changed.
   // The socket's event handlers need the *latest* chat we're in; a ref always has it, while
@@ -118,6 +129,20 @@ export function useConnection() {
         break;
       case 'blocks':
         setBlocked(data.blocked);
+        break;
+      case 'mutes':
+        // Our muted chats (at connect, and after muting or unmuting here or on another device).
+        setMutedChats(new Set(data.channels));
+        break;
+      case 'pins':
+        if (pinsOpen.current && data.channel === currentRef.current) setPins(data.messages);
+        break;
+      case 'pins_full':
+        setPinsFull({ max: data.max });
+        break;
+      case 'search_results':
+        // (From any chat: not checked against the one we're in.)
+        if (data.ask === searchAsk.current) setSearchResults({ ask: data.ask, results: data.results });
         break;
       case 'users': {
         const byId = {};
@@ -186,6 +211,7 @@ export function useConnection() {
           setMessages((old) => old?.map((message) => (message.id === data.message_id
             ? { ...message, pinned: data.pinned }
             : message)));
+          if (pinsOpen.current) send({ type: 'pins' });  // the 📌 list is open: ask for it afresh
         }
         break;
       case 'message':
@@ -209,6 +235,7 @@ export function useConnection() {
             .map((message) => (message.reply?.id === data.message_id
               ? { ...message, reply: { id: data.message_id, deleted: true } }
               : message)));
+          if (pinsOpen.current) send({ type: 'pins' });  // (it may have been pinned)
         }
         break;
       case 'reactions':
@@ -361,6 +388,29 @@ export function useConnection() {
   function pin(messageId, pinned) {
     send({ type: 'pin', message_id: messageId, pinned });  // ("pinned" comes back to everyone)
   }
+  // Mute or unmute a chat. The server answers all our devices with the new list ("mutes").
+  function mute(key, muted) {
+    send({ type: 'mute', channel: key, muted });
+  }
+  // The 📌 list of the chat we're in: asked when it opens, and again whenever a pin changes while
+  // it's open (see "pinned" and "deleted" above). The answer comes as `pins`.
+  function openPins() {
+    pinsOpen.current = true;
+    setPins(null);
+    send({ type: 'pins' });
+  }
+  function closePins() {
+    pinsOpen.current = false;
+    setPins(null);
+  }
+  // Search: words, a chat's key or null (everywhere we can see), a person's id or null (anyone).
+  // Returns this search's number; its answer comes as `searchResults` with the same `ask`.
+  // (Any answer still on its way for an earlier search is from then on ignored.)
+  function search(query, chat, from) {
+    searchAsk.current += 1;
+    send({ type: 'search', query, channel: chat, from, ask: searchAsk.current });
+    return searchAsk.current;
+  }
   function react(messageId, emoji) {
     send({ type: 'react', message_id: messageId, emoji });  // again = take it back (a toggle)
   }
@@ -392,9 +442,10 @@ export function useConnection() {
 
   return {
     status, me, myPresence, channels, groups, friends, incoming, outgoing, blocked, users, roles, emoji,
-    emojiGroups, unread, mentions, current, messages, lastRead, more, typing,
+    emojiGroups, unread, mentions, current, messages, lastRead, more, typing, mutedChats, pins, pinsFull,
+    searchResults,
     openChat, closeChat, loadOlder, sendMessage, sendTyping, react, pin, editMessage, deleteMessage,
-    friendAction,
+    friendAction, mute, openPins, closePins, search,
     reconnect: connect,  // after logging in
   };
 }
