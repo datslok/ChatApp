@@ -2,9 +2,9 @@
 // four tabs (Friends, Everyone, Requests, Blocked); Everyone has a search box and Online / Offline;
 // Requests has Received / Sent. Each person's row has the buttons that fit how we stand with them.
 import { useState } from 'react';
-import { Alert, FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { colors } from './colors';
-import { dmKey } from './chats';
+import { friendButtons } from './friends';
 import { Person } from './people';
 
 const TABS = [
@@ -14,8 +14,9 @@ const TABS = [
   { key: 'blocked', label: 'Blocked' },
 ];
 
-// onOpen(key): open that chat (App.js's go).
-export default function PeopleScreen({ connection, onOpen }) {
+// onOpen(key): open that chat (App.js's go). onProfile(id), onUserMenu(id): a row's tap and long press.
+// onInvite: the Invite someone popup.
+export default function PeopleScreen({ connection, onOpen, onProfile, onUserMenu, onInvite }) {
   const { users, roles, me, myPresence, friends, incoming, outgoing, blocked, friendAction } = connection;
   const [tab, setTab] = useState('friends');
   const [query, setQuery] = useState('');   // the Everyone tab's search box
@@ -25,42 +26,6 @@ export default function PeopleScreen({ connection, onOpen }) {
     setError('');
     const problem = await friendAction(action, userId);
     if (problem) setError(problem);
-  }
-
-  function confirmBlock(user) {
-    Alert.alert(
-      `Block ${user.name}?`,
-      "You stop being friends, and their messages are hidden for you. They aren't told.",
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Block', style: 'destructive', onPress: () => act('block', user.id) },
-      ],
-    );
-  }
-
-  // The buttons for one person, depending on how we're connected (the web page's makeFriendButtons):
-  // blue for the main one, grey ("secondary") for the rest.
-  function buttonsFor(user) {
-    const buttons = [];
-    const add = (label, onPress, secondary) => buttons.push({ label, onPress, secondary });
-    if (blocked.includes(user.id)) {
-      add('Unblock', () => act('unblock', user.id), true);
-      return buttons;  // nothing else until they're unblocked: no friend request, no DM
-    }
-    if (friends.includes(user.id)) {
-      add('Message', () => onOpen(dmKey(me.id, user.id)));
-      if (!user.bot) add('Remove', () => act('remove', user.id), true);  // bots are everyone's friend
-    } else if (incoming.includes(user.id)) {
-      add('Accept', () => act('accept', user.id));
-      add('Decline', () => act('remove', user.id), true);
-    } else if (outgoing.includes(user.id)) {
-      add('Cancel request', () => act('remove', user.id), true);
-    } else {
-      add('Add friend', () => act('request', user.id));
-    }
-    // Block: never admins (the chat's rule) or bots. The server checks too.
-    if (!user.admin && !user.bot) add('Block', () => confirmBlock(user), true);
-    return buttons;
   }
 
   // Everyone but us, alphabetically (the web page keeps the server's order, which is that).
@@ -102,10 +67,15 @@ export default function PeopleScreen({ connection, onOpen }) {
     if (item.empty) return <Text style={styles.empty}>{item.empty}</Text>;
     const { user } = item;
     return (
-      <View style={styles.row}>
+      // (The buttons inside are touch areas of their own: a tap on one does its thing, not the profile.)
+      <Pressable
+        onPress={() => onProfile(user.id)}
+        onLongPress={() => onUserMenu(user.id)}
+        style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+      >
         <Person user={user} roles={roles} me={me} myPresence={myPresence} color={colors.text} ring={colors.bgMain} />
         <View style={styles.actions}>
-          {buttonsFor(user).map((button) => (
+          {friendButtons(user, connection, act, onOpen).map((button) => (
             <Pressable
               key={button.label}
               onPress={button.onPress}
@@ -115,7 +85,7 @@ export default function PeopleScreen({ connection, onOpen }) {
             </Pressable>
           ))}
         </View>
-      </View>
+      </Pressable>
     );
   }
 
@@ -124,6 +94,10 @@ export default function PeopleScreen({ connection, onOpen }) {
       {/* .friends-header: "People" and the tabs, which go below it when they don't fit beside it. */}
       <View style={styles.header}>
         <Text style={styles.title}>People</Text>
+        {/* #invite-button: green, at the end of the heading's line. */}
+        <Pressable onPress={onInvite} style={({ pressed }) => [styles.invite, pressed && styles.pressed]}>
+          <Text style={styles.buttonText}>Invite someone</Text>
+        </Pressable>
         <View style={styles.tabs}>
           {TABS.map(({ key, label }) => (
             <Pressable key={key} onPress={() => pickTab(key)} style={[styles.tab, tab === key && styles.tabActive]}>
@@ -160,6 +134,8 @@ const styles = StyleSheet.create({
     paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: colors.line,
   },
   title: { fontSize: 17.6, fontWeight: 'bold', color: colors.textStrong },
+  // #invite-button: margin-left auto (to the end), padding 6px 12px, the green button colour, 0.9rem.
+  invite: { marginLeft: 'auto', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 6, backgroundColor: colors.buttonGreen },
   // On a phone the four tabs don't fit side by side at the web page's size (they wrapped, Blocked on a
   // line of its own), so here they share the whole width equally.
   tabs: { flexDirection: 'row', gap: 4, width: '100%' },
@@ -178,6 +154,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8, paddingHorizontal: 4,
     borderBottomWidth: 1, borderBottomColor: colors.line,
   },
+  rowPressed: { backgroundColor: colors.bgHover },
   actions: { flexDirection: 'row', gap: 6, flexShrink: 0 },
   button: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6, backgroundColor: colors.accent },
   secondary: { backgroundColor: colors.bgNeutral },

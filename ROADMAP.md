@@ -112,7 +112,7 @@
     - [x] Pictures and files: viewing (pinch to zoom), uploading (photos, camera, any file), downloading (open or share)
     - [x] Sharing to the app: ChatApp in Android's share sheet (from the gallery, other apps), into a chat's tray, with the files' real names (still to test with a release build: a share that starts the app, which development builds' launcher swallows)
     - [x] The chat's top bar: mute, search, pinned messages
-    - [ ] Profiles, the user menu (long press), your status, groups (create, add, rename, leave), invites
+    - [x] Profiles, the user menu (long press), your status, groups (create, add, rename, leave), invites
     - [ ] Voice and video calls (LiveKit's React Native library), also with the phone locked
     - [ ] Push notifications through Firebase Cloud Messaging, ringing calls
     - [ ] Settings: profile, appearance (themes, colours, text size), notifications, log out

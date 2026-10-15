@@ -1,13 +1,14 @@
 // The right drawer: the web page's member list (#members, people.js renderMembers). Who's in the
 // chat we're in: everyone in a channel, the two people in a DM, a group's members. Bots in their own
 // section at the top, then each role with its online people (by their top role), the other online
-// people, and everyone offline at the bottom, dimmed.
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+// people, and everyone offline at the bottom, dimmed. A tap opens someone's profile, a long press the
+// user menu.
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { colors } from './colors';
 import { dmPartner } from './chats';
 import { Person, topRole } from './people';
 
-export default function Members({ connection, view }) {
+export default function Members({ connection, view, onProfile, onUserMenu }) {
   const { users, roles, groups, me, myPresence } = connection;
   const everyone = Object.values(users).sort((a, b) => a.name.localeCompare(b.name));
 
@@ -38,9 +39,14 @@ export default function Members({ connection, view }) {
         <View key={section.title} style={index > 0 && styles.later}>
           <Text style={styles.heading}>{section.title}</Text>
           {section.people.map((user) => (
-            <View key={user.id} style={[styles.person, section.dim && styles.dim]}>
+            <Pressable
+              key={user.id}
+              onPress={() => onProfile(user.id)}
+              onLongPress={() => onUserMenu(user.id)}
+              style={({ pressed }) => [styles.person, section.dim && styles.dim, pressed && styles.pressed]}
+            >
               <Person user={user} roles={roles} me={me} myPresence={myPresence} color={colors.textMuted} />
-            </View>
+            </Pressable>
           ))}
         </View>
       ))}
@@ -53,6 +59,7 @@ const styles = StyleSheet.create({
   inside: { padding: 16 },
   later: { marginTop: 20 },  // every section but the first: 20px above it
   heading: { color: colors.textMuted, fontSize: 12, fontWeight: '600', textTransform: 'uppercase', marginBottom: 8 },
-  person: { paddingVertical: 4 },
+  person: { paddingVertical: 4, paddingHorizontal: 4, marginHorizontal: -4, borderRadius: 6 },
+  pressed: { backgroundColor: colors.bgHover },
   dim: { opacity: 0.5 },
 });

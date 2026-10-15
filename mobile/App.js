@@ -8,12 +8,17 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { ChatButtons, ChatTitle } from './src/ChatHeader';
 import ChatScreen from './src/ChatScreen';
 import Drawer from './src/Drawer';
+import { GroupDialog, GroupMenu, RenameDialog } from './src/GroupScreen';
 import Icon from './src/Icon';
+import InviteScreen from './src/InviteScreen';
 import LoginScreen from './src/LoginScreen';
+import MeScreen from './src/MeScreen';
 import Members from './src/Members';
 import PeopleScreen from './src/PeopleScreen';
+import ProfileScreen from './src/ProfileScreen';
 import ShareScreen from './src/ShareScreen';
 import Sidebar from './src/Sidebar';
+import UserMenu from './src/UserMenu';
 import { dmPartner } from './src/chats';
 import { colors } from './src/colors';
 import { useConnection } from './src/connection';
@@ -31,6 +36,12 @@ function Main({ connection, share, onShareDone }) {
   // The chat's popup that's open ("search" or "pins", from the top bar's buttons), or null. The chat
   // screen draws it: its Jump buttons go to messages there.
   const [popup, setPopup] = useState(null);
+  // The popup or menu about people and groups that's open, drawn over everything here (each closes
+  // itself with onClose): {type: "profile" or "userMenu", id}, {type: "me"}, {type: "group", key}
+  // (key null: a new group), {type: "rename" or "groupMenu", key}, {type: "invites"}; or null.
+  const [dialog, setDialog] = useState(null);
+  const closeDialog = () => setDialog(null);
+  const [focusTick, setFocusTick] = useState(0);  // a new number: the chat screen puts the cursor in its text box
   // The chats we came from, for the back button (newest last). A ref: changing it redraws nothing.
   const history = useRef([]);
   const chatBack = useRef(null);  // what the chat screen wants the back button to do first, if anything
@@ -49,6 +60,27 @@ function Main({ connection, share, onShareDone }) {
     setDrawer(null);  // picking a chat closes the drawer, like the web page's switchChannel
     if (key === PEOPLE) connection.closeChat();  // in no chat: new messages anywhere count as unread
     else connection.openChat(key);
+  }
+
+  // Someone's profile, or the user menu (a long press). Like the web page, these close the drawers:
+  // they go over the chat.
+  function openProfile(id) {
+    setDrawer(null);
+    setDialog({ type: 'profile', id });
+  }
+  function openUserMenu(id) {
+    setDrawer(null);
+    setDialog({ type: 'userMenu', id });
+  }
+
+  // The user menu's Mention: "@kari " at the end of this chat's text, and the cursor there.
+  function mention(user) {
+    setDrafts((old) => {
+      const text = old[view] ?? '';
+      const space = text && !text.endsWith(' ') ? ' ' : '';
+      return { ...old, [view]: `${text}${space}@${user.name} ` };
+    });
+    setFocusTick((n) => n + 1);
   }
 
   // At the start: the first channel (the web page opens one too).
@@ -138,7 +170,10 @@ function Main({ connection, share, onShareDone }) {
           <>
             <ChatTitle connection={connection} chatKey={view} />
             {/* Mute, search, pins: the web page's #dm-header buttons, here in the top bar itself. */}
-            <ChatButtons connection={connection} chatKey={view} onPopup={setPopup} />
+            <ChatButtons
+              connection={connection} chatKey={view} onPopup={setPopup}
+              onGroupMenu={() => setDialog({ type: 'groupMenu', key: view })}
+            />
           </>
         )}
         {view === PEOPLE ? <View style={styles.topbarButton} /> : (
@@ -151,16 +186,51 @@ function Main({ connection, share, onShareDone }) {
 
       <View style={styles.content}>
         {view === PEOPLE
-          ? <PeopleScreen connection={connection} onOpen={go} />
-          : <ChatScreen connection={connection} backRef={chatBack} shared={toTray} onSharedTaken={() => setToTray(null)} trays={trays} setTrays={setTrays} drafts={drafts} setDrafts={setDrafts} onOpenChat={go} popup={popup} setPopup={setPopup} />}
+          ? (
+            <PeopleScreen
+              connection={connection} onOpen={go} onProfile={openProfile} onUserMenu={openUserMenu}
+              onInvite={() => setDialog({ type: 'invites' })}
+            />
+          )
+          : <ChatScreen connection={connection} backRef={chatBack} shared={toTray} onSharedTaken={() => setToTray(null)} trays={trays} setTrays={setTrays} drafts={drafts} setDrafts={setDrafts} onOpenChat={go} popup={popup} setPopup={setPopup} onProfile={openProfile} onUserMenu={openUserMenu} focusTick={focusTick} />}
       </View>
 
       <Drawer side="left" open={drawer === 'left'} onClose={() => setDrawer(null)}>
-        <Sidebar connection={connection} view={view} onPick={go} onPeople={() => go(PEOPLE)} />
+        <Sidebar
+          connection={connection} view={view} onPick={go} onPeople={() => go(PEOPLE)} onUserMenu={openUserMenu}
+          onNewGroup={() => {
+            setDrawer(null);  // (the web page closes the drawer too)
+            setDialog({ type: 'group', key: null });
+          }}
+          onMe={() => setDialog({ type: 'me' })}
+        />
       </Drawer>
       <Drawer side="right" open={drawer === 'right'} onClose={() => setDrawer(null)}>
-        <Members connection={connection} view={view} />
+        <Members connection={connection} view={view} onProfile={openProfile} onUserMenu={openUserMenu} />
       </Drawer>
+
+      {dialog?.type === 'profile' ? (
+        <ProfileScreen connection={connection} userId={dialog.id} onOpen={go} onClose={closeDialog} />
+      ) : null}
+      {dialog?.type === 'userMenu' ? (
+        <UserMenu
+          connection={connection} userId={dialog.id} onProfile={openProfile} onOpen={go} onClose={closeDialog}
+          onMention={view === PEOPLE ? null : mention}  // (only in a chat, which has a text box)
+        />
+      ) : null}
+      {dialog?.type === 'me' ? <MeScreen connection={connection} onClose={closeDialog} /> : null}
+      {dialog?.type === 'group' ? (
+        <GroupDialog connection={connection} groupKey={dialog.key} onCreated={go} onClose={closeDialog} />
+      ) : null}
+      {dialog?.type === 'groupMenu' ? (
+        <GroupMenu
+          connection={connection} groupKey={dialog.key} onClose={closeDialog}
+          onAdd={() => setDialog({ type: 'group', key: dialog.key })}
+          onRename={() => setDialog({ type: 'rename', key: dialog.key })}
+        />
+      ) : null}
+      {dialog?.type === 'rename' ? <RenameDialog connection={connection} groupKey={dialog.key} onClose={closeDialog} /> : null}
+      {dialog?.type === 'invites' ? <InviteScreen onClose={closeDialog} /> : null}
     </KeyboardAvoidingView>
   );
 }

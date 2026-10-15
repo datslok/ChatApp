@@ -143,8 +143,9 @@ function Flash() {
 }
 
 // flash: a number while it should light up (a new number lights it up again).
-// onJump(messageId): go to a message in this chat (the reply's quote).
-function Message({ message, grouped, connection, isBlocked, flash, onShow, onLongPress, onJump }) {
+// onJump(messageId): go to a message in this chat (the reply's quote). onProfile(id), onUserMenu(id):
+// a tap on the picture or name opens their profile, a long press the user menu.
+function Message({ message, grouped, connection, isBlocked, flash, onShow, onLongPress, onJump, onProfile, onUserMenu }) {
   const { users, roles, emoji, me } = connection;
   const sender = users[message.user_id];
   const name = sender?.name ?? message.name;
@@ -176,12 +177,26 @@ function Message({ message, grouped, connection, isBlocked, flash, onShow, onLon
     >
       {flash ? <Flash key={flash} /> : null}
       {/* The picture's column: the picture, or (grouped) an empty space as wide as one. */}
-      {grouped ? <View style={styles.pictureSpace} /> : <Avatar user={sender} name={name} size={40} />}
+      {/* The picture and the name are touch areas of their own inside the message's: a touch goes to the
+          innermost one that wants it, so a long press here opens the user menu instead of the message's.
+          (Not for messages from before accounts, which have nobody behind them.) */}
+      {grouped ? <View style={styles.pictureSpace} /> : (
+        <Pressable
+          disabled={!sender}
+          onPress={() => onProfile(sender.id)}
+          onLongPress={() => onUserMenu(sender.id)}
+          style={styles.pictureTouch}
+        >
+          <Avatar user={sender} name={name} size={40} />
+        </Pressable>
+      )}
       <View style={styles.body}>
         {message.reply ? <ReplyLine reply={message.reply} connection={connection} onJump={onJump} /> : null}
         {grouped ? null : (
           <View style={styles.header}>
-            <Text style={[styles.name, { color: nameColor(sender, roles) ?? colors.textStrong }]}>{name}</Text>
+            <Pressable disabled={!sender} onPress={() => onProfile(sender.id)} onLongPress={() => onUserMenu(sender.id)}>
+              <Text style={[styles.name, { color: nameColor(sender, roles) ?? colors.textStrong }]}>{name}</Text>
+            </Pressable>
             {sender?.bot ? <BotBadge /> : null}
             <Text style={styles.time}>{headerTime(new Date(message.sent_at))}</Text>
           </View>
@@ -352,9 +367,12 @@ function extension(asset) {
 // null; onSharedTaken: say it's been taken. trays, drafts (and their setters): every chat's tray and
 // half-written text (App.js keeps them, so they stay while this screen is away, on the People page).
 // onOpenChat(key): open another chat (App.js's go), for a search result there. popup: the top bar's
-// popup that's open ("search", "pins" or null), drawn here; setPopup changes it.
+// popup that's open ("search", "pins" or null), drawn here; setPopup changes it. onProfile(id),
+// onUserMenu(id): someone's profile or user menu (App.js draws them). focusTick: a new number puts the
+// cursor at the end of the text box (after the user menu's Mention added "@name ").
 export default function ChatScreen({
   connection, backRef, shared, onSharedTaken, trays, setTrays, drafts, setDrafts, onOpenChat, popup, setPopup,
+  onProfile, onUserMenu, focusTick,
 }) {
   const { current, messages, users, roles, me, lastRead, more, blocked } = connection;
   const [menuFor, setMenuFor] = useState(null);    // the message whose menu is open
@@ -567,6 +585,13 @@ export default function ChatScreen({
     setTimeout(() => list.current?.scrollToIndex({ index: info.index, viewPosition: 0.5, animated: true }), 100);
   }
 
+  // Mention (the user menu): App.js has added "@name " to our text; the cursor goes after it.
+  useEffect(() => {
+    if (focusTick === 0) return;  // (not when the screen first appears)
+    setCursor(draft.length);
+    focusTextBox(350);
+  }, [focusTick]);
+
   // The chat already has 100 pinned messages (the server said "pins_full").
   useEffect(() => {
     if (connection.pinsFull) showError(`This chat already has ${connection.pinsFull.max} pinned messages: unpin one first.`);
@@ -757,8 +782,9 @@ export default function ChatScreen({
 
   // Ready to type after Reply or Edit. A moment later: the menu's popup is still closing, and
   // Android won't open the keyboard for a box behind it.
-  function focusTextBox() {
-    setTimeout(() => input.current?.focus(), 100);
+  // (delay: the user menu's Mention waits longer, for its whole popup to fade out first.)
+  function focusTextBox(delay = 100) {
+    setTimeout(() => input.current?.focus(), delay);
   }
 
   function startReply() {
@@ -827,6 +853,8 @@ export default function ChatScreen({
         onShow={(id) => setShownBlocked((old) => new Set(old).add(id))}
         onLongPress={setMenuFor}
         onJump={(id) => jumpTo(current, id)}
+        onProfile={onProfile}
+        onUserMenu={onUserMenu}
       />
     );
   }
@@ -1019,6 +1047,7 @@ const styles = StyleSheet.create({
   // A message mentioning us: 8% yellow behind it, and a 2px yellow line on its left.
   mentionsMe: { backgroundColor: colors.yellow8, borderLeftWidth: 2, borderLeftColor: colors.yellow, paddingLeft: 2 },
   pictureSpace: { width: 40 },
+  pictureTouch: { alignSelf: 'flex-start' },  // (only the picture itself, not the row's whole height)
   body: { flex: 1, minWidth: 0 },
   header: { flexDirection: 'row', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' },
   name: { fontSize: 16, fontWeight: '600' },

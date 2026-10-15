@@ -1,7 +1,8 @@
 // What the top bar shows for a chat (App.js): its name (a group's members under it), and the web
 // page's #dm-header buttons: the bell (mute), search and the pinned messages. (On the web page these
-// are a second bar under the top one; in the app they share the top bar, the user's wish.) The call
-// button and a group's buttons come with their own steps.
+// are a second bar under the top one; in the app they share the top bar, the user's wish.) In a group
+// also ⋯, its menu (Add people, Rename, Leave: on the web page three buttons in that bar). The call
+// button comes with calls.
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Icon from './Icon';
 import { chatLabel, dmPartner } from './chats';
@@ -33,9 +34,11 @@ function HeaderIcon({ icon, label, onPress }) {
   );
 }
 
-// onPopup("search" or "pins"): open that popup (the chat screen draws it).
-export function ChatButtons({ connection, chatKey, onPopup }) {
-  const { users, me, mutedChats } = connection;
+// onPopup("search" or "pins"): open that popup (the chat screen draws it). onGroupMenu: open a
+// group's menu.
+export function ChatButtons({ connection, chatKey, onPopup, onGroupMenu }) {
+  const { users, me, mutedChats, groups } = connection;
+  const isGroup = groups.some((group) => group.key === chatKey);
   // The bell mutes this chat, the crossed-out bell unmutes it. Not in a DM with an admin: admins
   // can't be muted (the server's can_mute).
   const muted = mutedChats.has(chatKey);
@@ -51,6 +54,7 @@ export function ChatButtons({ connection, chatKey, onPopup }) {
       ) : null}
       <HeaderIcon icon="search" label="Search" onPress={() => onPopup('search')} />
       <HeaderIcon icon="pin" label="Pinned messages" onPress={() => onPopup('pins')} />
+      {isGroup ? <HeaderIcon icon="ellipsis-vertical" label="Group options" onPress={onGroupMenu} /> : null}
     </>
   );
 }
@@ -60,7 +64,7 @@ const styles = StyleSheet.create({
   name: { fontSize: 16, fontWeight: '600', color: colors.textStrong },
   // #group-members: 0.75rem, muted.
   members: { fontSize: 12, color: colors.textMuted },
-  // A little narrower than the menu and members buttons, so five fit beside the name.
-  icon: { paddingHorizontal: 7, paddingVertical: 8, borderRadius: 6 },
+  // A little narrower than the menu and members buttons, so all of them fit beside the name.
+  icon: { paddingHorizontal: 6, paddingVertical: 8, borderRadius: 6 },
   iconPressed: { backgroundColor: colors.bgHover },
 });

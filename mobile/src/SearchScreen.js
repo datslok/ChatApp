@@ -5,7 +5,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import Icon from './Icon';
-import { CardButton, MessageCard, Popup, styles as cardStyles } from './MessageCard';
+import { CardButton, MessageCard, Popup, styles as cardStyles, useFocusSoon } from './MessageCard';
 import { chatLabel } from './chats';
 import { colors } from './colors';
 import { Avatar } from './people';
@@ -38,6 +38,8 @@ export default function SearchScreen({ connection, onJump, onClose }) {
   const [pickerTop, setPickerTop] = useState(0);  // where they go: just under "From"
   const [ask, setAsk] = useState(null);  // our newest search's number (null: nothing to search for)
   const timer = useRef(null);
+  const wordsBox = useRef(null);
+  useFocusSoon(wordsBox);  // the keyboard, ready for the words
 
   // Search now, with these. (Passed in: a value set with setQuery a moment ago isn't in the
   // variable `query` until the next drawing.) Nothing to search for: no results, and a hint.
@@ -108,6 +110,7 @@ export default function SearchScreen({ connection, onJump, onClose }) {
   return (
     <Popup icon="search" title="Search" onClose={onClose}>
       <TextInput
+        ref={wordsBox}
         style={styles.input}
         value={query}
         onChangeText={onType}
@@ -115,7 +118,6 @@ export default function SearchScreen({ connection, onJump, onClose }) {
         placeholder="Words to find"
         placeholderTextColor={colors.textMuted}
         maxLength={200}
-        autoFocus
         selectTextOnFocus  // the words from last time, selected: typing replaces them
         returnKeyType="search"
       />

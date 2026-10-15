@@ -11,10 +11,16 @@ export function dmPartner(key, myId) {
   return key.slice(3).split(':').map(Number).find((id) => id !== myId) ?? null;
 }
 
-// A group's name, or (without one) its other members' names.
+// A group's people: its members without the bots (every bot is in every group, see server.py).
+export function groupPeople(group, users) {
+  return group.members.filter((id) => !users[id]?.bot);
+}
+
+// A group's name, or (without one) the other people's names ("kari, ola"), like the web page's groupLabel.
 export function groupName(group, users, myId) {
   if (group.name) return group.name;
-  return group.members.filter((id) => id !== myId).map((id) => users[id]?.name ?? '?').join(', ');
+  const others = groupPeople(group, users).filter((id) => id !== myId).map((id) => users[id]?.name ?? 'someone');
+  return others.length ? others.join(', ') : 'Just you';
 }
 
 // What a chat is called in the top bar and the text box: "#memes", "@kari", or a group's name

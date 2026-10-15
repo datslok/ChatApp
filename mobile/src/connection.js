@@ -388,6 +388,11 @@ export function useConnection() {
   function pin(messageId, pinned) {
     send({ type: 'pin', message_id: messageId, pinned });  // ("pinned" comes back to everyone)
   }
+  // Our status: online, idle, dnd or invisible. The server tells all our devices ("my_presence") and
+  // everyone else ("users"); that's what changes the screen.
+  function setPresence(presence) {
+    send({ type: 'presence', presence });
+  }
   // Mute or unmute a chat. The server answers all our devices with the new list ("mutes").
   function mute(key, muted) {
     send({ type: 'mute', channel: key, muted });
@@ -445,7 +450,7 @@ export function useConnection() {
     emojiGroups, unread, mentions, current, messages, lastRead, more, typing, mutedChats, pins, pinsFull,
     searchResults,
     openChat, closeChat, loadOlder, sendMessage, sendTyping, react, pin, editMessage, deleteMessage,
-    friendAction, mute, openPins, closePins, search,
+    friendAction, mute, openPins, closePins, search, setPresence,
     reconnect: connect,  // after logging in
   };
 }

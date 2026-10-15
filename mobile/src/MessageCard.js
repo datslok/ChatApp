@@ -1,5 +1,6 @@
 // The pinned messages and search popups (the web page's #pins-dialog and #search-dialog): the popup
 // itself, and the cards they list messages on (messages.js, makeMessageCard).
+import { useEffect } from 'react';
 import { KeyboardAvoidingView, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from './Icon';
@@ -7,6 +8,16 @@ import MessageText from './MessageText';
 import { colors } from './colors';
 import { Avatar } from './people';
 import { clock, dayName } from './time';
+
+// Put the cursor in a text box (and so open the keyboard) once a popup has appeared. TextInput's own
+// autoFocus inside a Modal comes too early on Android: the box gets the cursor while the popup's
+// window isn't ready yet, so no keyboard comes up. 300 ms covers the popup's fade-in.
+export function useFocusSoon(ref) {
+  useEffect(() => {
+    const timer = setTimeout(() => ref.current?.focus(), 300);
+    return () => clearTimeout(timer);
+  }, []);
+}
 
 // A popup in the middle of the screen over a dark backdrop: a title with its icon, × to close, and
 // what's in it. Tapping the backdrop or Android's back button closes it too (onRequestClose).
@@ -24,7 +35,7 @@ export function Popup({ icon, title, onClose, children }) {
         <Pressable style={styles.backdropTap} onPress={onClose} />
         <View style={styles.popup}>
           <View style={styles.top}>
-            <Icon name={icon} size={20} color={colors.textStrong} />
+            {icon ? <Icon name={icon} size={20} color={colors.textStrong} /> : null}
             <Text style={styles.title}>{title}</Text>
             <Pressable onPress={onClose} hitSlop={12} accessibilityLabel="Close">
               <Icon name="x" size={22} color={colors.textMuted} />
@@ -60,6 +71,26 @@ export function MessageCard({ message, where, connection, children }) {
       ) : null}
       <View style={styles.buttons}>{children}</View>
     </View>
+  );
+}
+
+// The popups' own buttons at the bottom right (the web page's .group-dialog-buttons): Cancel and
+// Create group, Close and New link. `secondary`: grey; `disabled`: faded and not pressable.
+export function DialogButtons({ children }) {
+  return <View style={styles.dialogButtons}>{children}</View>;
+}
+
+export function DialogButton({ label, onPress, secondary, disabled }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      style={({ pressed }) => [
+        styles.dialogButton, secondary && styles.secondary, disabled && styles.disabled, pressed && styles.pressed,
+      ]}
+    >
+      <Text style={styles.dialogButtonText}>{label}</Text>
+    </Pressable>
   );
 }
 
@@ -109,4 +140,19 @@ export const styles = StyleSheet.create({
   secondary: { backgroundColor: colors.bgNeutral },
   pressed: { opacity: 0.8 },
   buttonText: { fontSize: 13.6, color: '#ffffff' },
+  // .group-dialog-buttons: at the right, 8px apart; each padding 10px 20px, radius 6px, 1rem.
+  dialogButtons: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8, marginTop: 10 },
+  dialogButton: { paddingVertical: 10, paddingHorizontal: 20, borderRadius: 6, backgroundColor: colors.accent },
+  disabled: { opacity: 0.5 },
+  dialogButtonText: { fontSize: 16, color: '#ffffff' },
+  // .group-dialog-help: 0.85rem, muted.
+  help: { fontSize: 13.6, color: colors.textMuted },
+  // Text boxes in the popups (#group-filter): padding 8px 10px, radius 6px, the darkest background.
+  input: {
+    paddingVertical: 8, paddingHorizontal: 10, borderRadius: 6, backgroundColor: colors.bgDarkest,
+    color: colors.text, fontSize: 15.2,
+  },
+  // .action-status: red; .success: green.
+  problem: { fontSize: 13.6, color: colors.red },
+  success: { fontSize: 13.6, color: colors.green },
 });

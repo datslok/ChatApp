@@ -9,17 +9,19 @@ import { dmKey, groupName } from './chats';
 import { GroupPicture, Person, PersonPicture } from './people';
 
 // One row of the list, like the web page's .channel buttons. `children` is a function that draws
-// what's in it, told whether the text should be white (`strong`) and bold (unread).
+// what's in it, told whether the text should be white (`strong`) and bold (unread). onLongPress: a
+// DM's user menu.
 // (Defined out here, not inside Sidebar: a component defined inside another is a new one at every
 // redraw, so React would rebuild every row each time, pictures included.)
 // A muted chat is faded and has no unread dot (a red count still shows: a mention by name).
-function Row({ chatKey, active, unread, mentions, mutedChats, onPress, children }) {
+function Row({ chatKey, active, unread, mentions, mutedChats, onPress, onLongPress, children }) {
   const muted = chatKey && mutedChats.has(chatKey);
   const isUnread = chatKey && unread.has(chatKey) && !active && !muted;
   const count = (chatKey && mentions[chatKey]) || 0;
   return (
     <Pressable
       onPress={onPress}
+      onLongPress={onLongPress}
       style={({ pressed }) => [
         styles.row, active && styles.active, pressed && !active && styles.pressed, muted && !active && styles.muted,
       ]}
@@ -31,7 +33,8 @@ function Row({ chatKey, active, unread, mentions, mutedChats, onPress, children 
   );
 }
 
-export default function Sidebar({ connection, view, onPick, onPeople }) {
+// onUserMenu(id): a DM's long press. onNewGroup: the + by "Direct messages". onMe: your panel at the bottom.
+export default function Sidebar({ connection, view, onPick, onPeople, onUserMenu, onNewGroup, onMe }) {
   const { channels, groups, friends, users, roles, me, myPresence, unread, mentions, mutedChats, incoming } = connection;
   const marks = { unread, mentions, mutedChats };  // every Row gets these: <Row {...marks} ...>
 
@@ -64,7 +67,13 @@ export default function Sidebar({ connection, view, onPick, onPeople }) {
           </Row>
         )))}
 
-        <Text style={styles.heading}>Direct messages</Text>
+        {/* "Direct messages" and its + for a new group (the web page's #new-group). */}
+        <View style={styles.headingRow}>
+          <Text style={[styles.heading, styles.grow]}>Direct messages</Text>
+          <Pressable onPress={onNewGroup} hitSlop={10} accessibilityLabel="New group" style={styles.newGroup}>
+            {({ pressed }) => <Icon name="plus" size={18} color={pressed ? colors.iconStrong : colors.icon} />}
+          </Pressable>
+        </View>
         {groups.map((group) => (
           <Row {...marks} key={group.key} chatKey={group.key} active={view === group.key} onPress={() => onPick(group.key)}>
             {(strong, bold) => (
@@ -78,7 +87,7 @@ export default function Sidebar({ connection, view, onPick, onPeople }) {
         {dms.map((user) => {
           const key = dmKey(me.id, user.id);
           return (
-            <Row {...marks} key={key} chatKey={key} active={view === key} onPress={() => onPick(key)}>
+            <Row {...marks} key={key} chatKey={key} active={view === key} onPress={() => onPick(key)} onLongPress={() => onUserMenu(user.id)}>
               {(strong, bold) => (
                 <Person
                   user={user} roles={roles} me={me} myPresence={myPresence} bold={bold}
@@ -92,11 +101,12 @@ export default function Sidebar({ connection, view, onPick, onPeople }) {
       </ScrollView>
 
       {/* You, at the bottom (the web page's #user-panel): your picture with your status, and your name. */}
+      {/* A tap opens your popup with your status (MeScreen). */}
       {mine ? (
-        <View style={styles.userPanel}>
+        <Pressable onPress={onMe} style={({ pressed }) => [styles.userPanel, pressed && styles.panelPressed]}>
           <PersonPicture user={mine} me={me} myPresence={myPresence} size={40} ring={colors.bgPanelAlt} />
           <Text numberOfLines={1} style={styles.myName}>{mine.name}</Text>
-        </View>
+        </Pressable>
       ) : null}
     </View>
   );
@@ -135,6 +145,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.red, alignItems: 'center', justifyContent: 'center',
   },
   badgeText: { color: '#ffffff', fontSize: 11, fontWeight: '700' },
+  panelPressed: { backgroundColor: colors.bgHover },
+  // The heading with the + at its right end (the + sits where the heading's text would end).
+  headingRow: { flexDirection: 'row', alignItems: 'center' },
+  newGroup: { marginTop: 16, marginBottom: 8, paddingHorizontal: 12 },
   userPanel: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, backgroundColor: colors.bgPanelAlt },
   myName: { flex: 1, color: colors.textStrong, fontSize: 13.6, fontWeight: '600' },
 });

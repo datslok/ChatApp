@@ -161,6 +161,17 @@ the point is for me to understand how it works, not just to have it done.
   results, a reply's quote) opens the chat (App.js `go` as `onOpenChat`), loads older batches (40 at most) until the
   row is there, `scrollToIndex` (`onScrollToIndexFailed` scrolls to a guess and retries) and `Flash` fades it.
   `src/time.js`: dayName, clock, headerTime. Expo's dev-menu gear can cover the top bar's buttons in development builds: drag it.
+  People and groups (since 2026-10-15): App.js's `dialog` state draws them over everything: `src/ProfileScreen.js`
+  (#profile: Banner, roles, Activity with activityDuration, bio, the friend buttons), `src/UserMenu.js` (userMenuItems
+  as a `src/Sheet.js` bottom sheet; no Call, Ban or Make admin yet; Mention appends "@name " to `drafts` and bumps
+  `focusTick`), `src/MeScreen.js` (#me-popup above your panel: Status picker, `setPresence`; no Edit profile/Log out
+  yet), `src/GroupScreen.js` (GroupDialog: new group / Add people with a search box over checkboxes; RenameDialog, as
+  Android has no prompt(); GroupMenu, the ⋯ in a group's top bar: Add people, Rename, Leave), `src/InviteScreen.js`
+  (the People page's green Invite someone; Copy via **expo-clipboard**, New link copies at once). `src/friends.js`:
+  friendButtons/askToBlock/askToRemove, shared by People, profile and menu; `src/api.js`: getJson/postJson.
+  A tap on a message's picture or name, a member or a People row opens the profile, a long press the user menu (a
+  nested Pressable takes the touch before the message's); a DM's long press in the sidebar the menu; + by "Direct
+  messages" a new group; your panel your popup. `groupName` leaves bots out ("Just you"), like the web's groupLabel.
   `prebuild --clean` failing with EBUSY on `android/`: the adb server started by run:android stands in it (`adb kill-server`).
   `src/people.js` (Avatar with letter colours, StatusDot with the phone shape, BotBadge, Person, nameColor),
   `src/Icon.js` (react-native-svg's SvgXml with the web page's Lucide shapes from `src/icon-shapes.js`,

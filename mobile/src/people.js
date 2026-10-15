@@ -37,8 +37,9 @@ export function Avatar({ user, name, size = 40 }) {
   }
   const letter = (name || user?.name || '?').charAt(0).toUpperCase();
   const background = user?.id ? letterColors[user.id % letterColors.length] : colors.bgNeutral;
-  // The web page's letter sizes: 1rem at 40 px, 0.75rem at 24, 0.55rem at 16.
-  const fontSize = size >= 40 ? 16 : size >= 24 ? 12 : 9;
+  // The web page's letter sizes: 2.5rem at 96 px (a profile), 2rem at 80 (your popup), 1rem at 40,
+  // 0.75rem at 24, 0.55rem at 16.
+  const fontSize = size >= 80 ? size * 0.41 : size >= 40 ? 16 : size >= 24 ? 12 : 9;
   return (
     <View style={[round, styles.letter, { backgroundColor: background }]}>
       <Text style={[styles.letterText, { fontSize }]}>{letter}</Text>
