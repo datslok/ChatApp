@@ -26,6 +26,8 @@ from urllib.parse import quote, urlencode, urljoin, urlsplit
 
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import padding
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.exception_handlers import http_exception_handler
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
@@ -83,6 +85,10 @@ LIVEKIT_API_SECRET = os.environ.get("LIVEKIT_API_SECRET", "")
 # services only deliver pushes signed with the private key. Without them: no push notifications.
 VAPID_PUBLIC_KEY = os.environ.get("VAPID_PUBLIC_KEY", "")
 VAPID_PRIVATE_KEY = os.environ.get("VAPID_PRIVATE_KEY", "")
+# Push notifications for the native phone app go through Firebase Cloud Messaging: the Firebase
+# project's service account key (a JSON file from Firebase's console, never committed) lets us
+# send them. Without it: no pushes to the app (the web's still work).
+FIREBASE_KEY_FILE = Path(os.environ.get("FIREBASE_KEY_FILE", "firebase-key.json"))
 print(f"Using database {DATABASE_FILE} and upload folder {UPLOAD_DIR}/")
 if not REQUIRE_INVITE:
     print("WARNING: REQUIRE_INVITE=0, so anyone who can reach this server can create an account.")
@@ -2491,6 +2497,101 @@ async def push_mute(data: PushMute, request: Request):
     return {"ok": True}
 
 
+# ----- The native phone app: Firebase Cloud Messaging (FCM) -----
+#
+# The app has no service worker. Instead it registers with Firebase on the phone and gets a "token":
+# that phone's address at FCM, which it gives us (/push/fcm) at every connect. We keep it in
+# push_subscriptions like a browser's subscription, as "fcm:<token>", so muting, unsubscribing and
+# send_push's rules (not while looking, not on Do Not Disturb) work the same for both.
+#
+# Sending is one HTTPS request to Google per push. It must carry an access token that proves we're
+# this Firebase project. We get one (good for an hour) by signing a small JWT with the service
+# account's private key and trading it in at Google. Unlike make_jwt's HMAC (one shared secret), this
+# is RS256: an RSA signature, which Google checks with the public half of the key it keeps.
+
+firebase_account = json.loads(FIREBASE_KEY_FILE.read_text()) if FIREBASE_KEY_FILE.exists() else None
+firebase_access = {"token": None, "expires": 0}  # the current access token, and when it runs out
+FCM_TOKEN = re.compile(r"[\w:-]{20,4096}")  # what a token looks like (letters, digits, _ : -)
+FCM_SCOPE = "https://www.googleapis.com/auth/firebase.messaging"  # all we ask permission for: sending
+
+
+def firebase_access_token():
+    """An access token for FCM: the one we have, or a new one if it runs out within a minute."""
+    if time.time() < firebase_access["expires"] - 60:
+        return firebase_access["token"]
+    now = int(time.time())
+    header = {"alg": "RS256", "typ": "JWT"}
+    claims = {
+        "iss": firebase_account["client_email"],  # who's asking: the service account
+        "scope": FCM_SCOPE,
+        "aud": firebase_account["token_uri"],      # for Google's token address only
+        "iat": now,
+        "exp": now + 3600,
+    }
+    signed_part = base64url(json.dumps(header).encode()) + "." + base64url(json.dumps(claims).encode())
+    key = serialization.load_pem_private_key(firebase_account["private_key"].encode(), password=None)
+    signature = key.sign(signed_part.encode(), padding.PKCS1v15(), hashes.SHA256())
+    form = urlencode({
+        "grant_type": "urn:ietf:params:oauth:grant-type:jwt-bearer",  # "here's a signed JWT, give me a token"
+        "assertion": signed_part + "." + base64url(signature),
+    }).encode()
+    with urllib.request.urlopen(firebase_account["token_uri"], data=form, timeout=10) as response:
+        answer = json.load(response)
+    firebase_access.update(token=answer["access_token"], expires=time.time() + answer["expires_in"])
+    return answer["access_token"]
+
+
+class FcmTokenGone(Exception):
+    """FCM says this token isn't anyone's any more (the app was uninstalled, or got a new token)."""
+
+
+def send_fcm(token, payload, ttl):
+    """One push to one phone. Run it in a thread: it waits for Google's answer. A "data message": the
+    app's own code (mobile/modules/push) makes the notification from it, so every value is text."""
+    message = {
+        "token": token,
+        "data": {key: str(value) for key, value in payload.items() if value is not None},
+        # HIGH: deliver at once, even to a sleeping phone (Google allows it for pushes that show a
+        # notification, which ours do). ttl: how long FCM keeps trying a phone that's off.
+        "android": {"priority": "HIGH", "ttl": f"{ttl}s"},
+    }
+    request = urllib.request.Request(
+        f"https://fcm.googleapis.com/v1/projects/{firebase_account['project_id']}/messages:send",
+        data=json.dumps({"message": message}).encode(),
+        headers={"Authorization": "Bearer " + firebase_access_token(), "Content-Type": "application/json"},
+    )
+    try:
+        urllib.request.urlopen(request, timeout=10).close()
+    except urllib.error.HTTPError as error:
+        if error.code == 404:  # "UNREGISTERED"
+            raise FcmTokenGone() from error
+        raise Exception(f"{error.code} {error.read()[:300]!r}") from error
+
+
+class PhonePush(BaseModel):
+    token: str
+
+
+@app.post("/push/fcm")
+async def push_fcm(data: PhonePush, request: Request):
+    """The phone app's FCM token: pushes go to this phone from now on (until /push/unsubscribe)."""
+    user_id, username, password_hash, email = logged_in_user(request)
+    if firebase_account is None:
+        raise HTTPException(400, "Push notifications for the app aren't set up on this server.")
+    if not FCM_TOKEN.fullmatch(data.token):
+        raise HTTPException(400, "That doesn't look like a token.")
+    with db:
+        # Sent at every connect, so an existing row stays as it is (its mute too), unless someone else
+        # logged in on that phone: then it's theirs, unmuted.
+        db.execute(
+            "INSERT INTO push_subscriptions (endpoint, user_id, p256dh, auth) VALUES (?, ?, '', '')"
+            " ON CONFLICT (endpoint) DO UPDATE SET user_id = excluded.user_id,"
+            " muted_until = CASE WHEN user_id = excluded.user_id THEN muted_until END",
+            ("fcm:" + data.token, user_id),
+        )
+    return {"ok": True}
+
+
 # Sending. A push service only passes a push on: pywebpush encrypts it for that one browser (with
 # the subscription's keys) and signs it with our private key. "sub" says who we are, for the push
 # service to contact if our pushes cause trouble: an email address, from MAIL_FROM.
@@ -2518,24 +2619,40 @@ def has_app_open(user_id):
     return any(client["user_id"] == user_id and client["app"] for client in clients.values())
 
 
-async def send_push(user_ids, payload, ttl=24 * 60 * 60, urgency="normal"):
+async def send_push(user_ids, payload, ttl=24 * 60 * 60, urgency="normal", always=False):
     """Push this to every device of these people that turned push on and isn't muted, unless they're
     looking at the chat somewhere right now or have the Windows app open (then they get it there), or
     chose Do Not Disturb. ttl: how many seconds the push service keeps trying a phone that's off or
     offline. Run it as a background task: each push service takes a moment to answer, and the chat
-    mustn't wait for that."""
-    user_ids = [user_id for user_id in user_ids
-                if not is_looking(user_id) and not has_app_open(user_id) and presence_of(user_id) != "dnd"]
-    if not VAPID_PRIVATE_KEY or not user_ids:
+    mustn't wait for that.
+    always: to all of them, whatever they're doing, and only to the phone app: for taking a ringing
+    call off their phones (a browser's notification can't be taken back by a push)."""
+    if not always:
+        user_ids = [user_id for user_id in user_ids
+                    if not is_looking(user_id) and not has_app_open(user_id) and presence_of(user_id) != "dnd"]
+    if not user_ids:
         return
     marks = ",".join("?" * len(user_ids))  # "?,?,?": one placeholder per person
     rows = db.execute(
         f"SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE user_id IN ({marks})"
-        " AND (muted_until IS NULL OR muted_until < ?)",
-        (*user_ids, time.time()),
+        + ("" if always else " AND (muted_until IS NULL OR muted_until < ?)"),
+        (*user_ids,) if always else (*user_ids, time.time()),
     ).fetchall()
     data = json.dumps(payload)
     for endpoint, p256dh, auth in rows:
+        if endpoint.startswith("fcm:"):  # the phone app
+            if firebase_account is None:
+                continue
+            try:
+                await asyncio.to_thread(send_fcm, endpoint.removeprefix("fcm:"), payload, ttl)
+            except FcmTokenGone:
+                with db:
+                    db.execute("DELETE FROM push_subscriptions WHERE endpoint = ?", (endpoint,))
+            except Exception as error:
+                print(f"A push to the phone app failed: {error}")
+            continue
+        if always or not VAPID_PRIVATE_KEY:
+            continue
         try:
             # In a thread: webpush waits for the push service's answer, which would stop the whole
             # server (everyone's chat) in the meantime if it ran here.
@@ -2571,11 +2688,12 @@ def push_message(people, message):
     """A new message for these people (a DM to them, or mentioning them): "axel in #general"."""
     channel = message["channel"]
     if channel.startswith("dm:"):
-        title = message["name"]
+        chat = None  # (a DM is the person)
     elif channel.startswith("g:"):
-        title = f'{message["name"]} in {group_title(channel)}'
+        chat = group_title(channel)
     else:
-        title = f'{message["name"]} in #{channel_name(channel)}'
+        chat = "#" + channel_name(channel)
+    title = message["name"] if chat is None else f'{message["name"]} in {chat}'
     body = readable_text(message["text"])
     if len(body) > PUSH_TEXT_LENGTH:
         body = body[:PUSH_TEXT_LENGTH] + "…"
@@ -2585,6 +2703,10 @@ def push_message(people, message):
     push_in_background(people, {
         "title": title, "body": body, "channel": channel, "message_id": message["id"],
         "icon": f"/avatars/{avatar}" if avatar else "/icons/icon-192.png",
+        # For the phone app, which stacks a chat's messages in one notification ("kari: hi"):
+        # who wrote it, and the chat's name (none for a DM: that's the person).
+        "kind": "message", "sender": message["name"], "sender_id": message["user_id"],
+        "chat": chat,
     })
 
 
@@ -2976,7 +3098,7 @@ async def friend_request(data: FriendAction, request: Request):
         avatar = db.execute("SELECT avatar_id FROM users WHERE id = ?", (me,)).fetchone()[0]
         push_in_background([other], {
             "title": username_of(me), "body": "👋 sent you a friend request", "channel": "friends",
-            "icon": f"/avatars/{avatar}" if avatar else "/icons/icon-192.png",
+            "icon": f"/avatars/{avatar}" if avatar else "/icons/icon-192.png", "kind": "friend",
         })
     elif row[1] == 0 and row[0] == other:
         # They had already asked us: asking back counts as accepting.
@@ -4079,9 +4201,20 @@ async def start_call(channel, caller):
         title, body = username_of(caller), "📞 Calling you"
     else:
         title, body = group_title(channel), f"📞 {username_of(caller)} is calling"
+    avatar = db.execute("SELECT avatar_id FROM users WHERE id = ?", (caller,)).fetchone()[0]
     push_in_background(list(others), {
         "title": title, "body": body, "channel": channel, "call": True, "icon": "/icons/icon-192.png",
-    }, ttl=30, urgency="high")
+        # For the phone app's incoming call (its picture is the caller's):
+        "kind": "call", "sender": username_of(caller), "sender_id": caller,
+        "avatar": f"/avatars/{avatar}" if avatar else None,
+    }, ttl=RING_SECONDS, urgency="high")
+
+
+def stop_ringing(people, channel):
+    """Take a ringing call off these people's phones: answered on another device, declined, or over.
+    (Their pages stop by themselves, from "call_answered" or "call_ended".)"""
+    if people:
+        push_in_background(list(people), {"kind": "call_end", "channel": channel}, ttl=RING_SECONDS, always=True)
 
 
 async def ring_timeout(channel):
@@ -4093,6 +4226,7 @@ async def ring_timeout(channel):
         await end_call(channel, "no_answer")
         return
     # A group call that's going on: those who never answered stop ringing (they can still join).
+    stop_ringing(call["ringing"], channel)
     for person in list(call["ringing"]):
         call["ringing"].discard(person)
         await send_to_user(person, {"type": "call_answered", "channel": channel})
@@ -4107,6 +4241,7 @@ async def answer_call(channel, user_id, accept):
         return
     call["ringing"].discard(user_id)
     await send_to_user(user_id, {"type": "call_answered", "channel": channel})  # all their tabs stop ringing
+    stop_ringing([user_id], channel)  # ...and their phones
     if not accept:
         if not call["ringing"] and call["started"] is None:
             await end_call(channel, "declined")  # everyone in the group said no
@@ -4125,6 +4260,7 @@ async def end_call(channel, reason):
         return
     if call["ring"] is not asyncio.current_task():  # (cancelling ourselves would stop us right here)
         call["ring"].cancel()
+    stop_ringing(call["ringing"], channel)  # (those still ringing: their phones too)
     for person in call_people(channel):
         await send_to_user(person, {"type": "call_ended", "channel": channel, "reason": reason})
 
@@ -4158,6 +4294,19 @@ async def check_call(channel):
             await end_call(channel, "cancelled")  # the caller hung up (or closed the tab)
     elif not in_room:
         await end_call(channel, "ended")  # the last one left
+
+
+class CallChannel(BaseModel):
+    channel: str
+
+
+@app.post("/calls/decline")
+async def decline_call(data: CallChannel, request: Request):
+    """Decline on a ringing call's notification in the phone app, which may not even be running (so
+    there's no WebSocket to say it with): the same as {"type": "call_answer", "accept": false}."""
+    user_id, username, password_hash, email = logged_in_user(request)
+    await answer_call(data.channel, user_id, False)
+    return {"ok": True}
 
 
 @app.get("/voice-token")
@@ -4740,6 +4889,7 @@ async def chat(websocket: WebSocket):
             "appearance": appearance_of(user_id),  # Settings → Appearance (None: the defaults)
             "presence": presence_of(user_id),  # the status they chose (the others may see another: users)
             "vapid_public_key": VAPID_PUBLIC_KEY or None,  # for subscribing to push (None: not set up)
+            "phone_push": firebase_account is not None,  # can the phone app get pushes (FCM)?
             "season": current_season(),  # the seasonal easter egg ("Seasons"; None: none now)
         })
         await send(websocket, {"type": "channels", "channels": channel_list()})  # (they may have changed while away)

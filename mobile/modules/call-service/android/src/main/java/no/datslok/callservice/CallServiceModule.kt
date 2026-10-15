@@ -35,6 +35,7 @@ class CallServiceModule : Module() {
 
     OnCreate {
       CallService.onHangUp = { sendEvent("onHangUp", mapOf<String, Any>()) }
+      appContext.reactContext?.let { CuePlayer.load(it) }
       // Our microphone processing (MicProcessor.kt) goes into every call from now on. (LiveKit's setup,
       // which makes the controller, runs when the app starts, before any module.)
       try {
@@ -50,6 +51,10 @@ class CallServiceModule : Module() {
     }
     Function("setAiNoiseSuppression") { on: Boolean ->
       MicProcessor.denoise = on
+    }
+    // A call's short sound: "calling", "join" or "leave" (CuePlayer.kt).
+    Function("playCue") { name: String ->
+      CuePlayer.play(name)
     }
     OnDestroy {
       CallService.onHangUp = null

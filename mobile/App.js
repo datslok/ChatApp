@@ -32,14 +32,18 @@ import { ThemeContext, loadAppearance, makeTheme, saveAppearance, useStyles, use
 import { useConnection } from './src/connection';
 import { LOUNGE, LOUNGE_ROOM, useVoice } from './src/voice';
 import { clearOldCopies } from './src/files';
+import { isMuted, useNotifications } from './src/notifications';
 import { addShareListener, getInitialShare } from './modules/shared-files';
+import { addOpenListener, getInitialOpen } from './modules/push';
 
 const PEOPLE = 'people';  // the People page's name among the chats' keys (like the web page's FRIENDS)
 
 // share: something shared to the app from another one, waiting for "Share to…" (or null);
 // onShareDone: it's been dealt with (sent to a chat or cancelled). voice: useVoice()'s (calls);
-// openChatRef: we put `go` in it, for the ringing popup's Accept.
-function Main({ connection, voice, openChatRef, share, onShareDone }) {
+// openChatRef: we put `go` in it, for the ringing popup's Accept. notifications: useNotifications()'s
+// (Settings → Notifications). opened: the notification that was tapped, {channel, messageId, action}
+// (modules/push), or null; onOpenedDone: we've gone there.
+function Main({ connection, voice, notifications, openChatRef, share, onShareDone, opened, onOpenedDone }) {
   const styles = useStyles(makeStyles);
   const { colors } = useTheme();
   const { channels, unread, mentions, incoming } = connection;
@@ -64,6 +68,11 @@ function Main({ connection, voice, openChatRef, share, onShareDone }) {
   // here, as the chat screen goes away on the People page.
   const [trays, setTrays] = useState({});
   const [drafts, setDrafts] = useState({});
+  // A message to go to, {chat, id} (a tapped notification's), until the chat screen has taken it.
+  const [jumpRequest, setJumpRequest] = useState(null);
+  // The People page's tab to open on, {tab, at} (a friend request's notification: Requests); `at` (when)
+  // is the page's key, so each one starts the page afresh on that tab.
+  const [peopleTab, setPeopleTab] = useState(null);
   // A share asks "Share to…" when it started the app, or when no chat is open (the People page).
   const pickChat = !!share && (share.fromStart || view === PEOPLE);
   // What's new: fetched again at every connect (a new `me`), for the red dot on ⚙️ and Settings.
@@ -73,6 +82,7 @@ function Main({ connection, voice, openChatRef, share, onShareDone }) {
     if (remember && view !== null && view !== key) history.current.push(view);
     setView(key);
     setDrawer(null);  // picking a chat closes the drawer, like the web page's switchChannel
+    if (key !== PEOPLE) setPeopleTab(null);  // (Requests was for that one visit)
     // The People page and the Lounge are in no chat: new messages anywhere count as unread.
     if (key === PEOPLE || key === LOUNGE) connection.closeChat();
     else connection.openChat(key);
@@ -148,6 +158,24 @@ function Main({ connection, voice, openChatRef, share, onShareDone }) {
     return () => listener.remove();
   }, [drawer, view, pickChat]);
 
+  // A notification was tapped (or started the app): go there, once the first chat is open. A message:
+  // its chat, and the message (the web page's openMessage). A friend request: People → Requests. A
+  // call: its chat (the server rings us again as we connect, so the popup shows); Accept answers it.
+  useEffect(() => {
+    if (!opened || view === null) return;
+    onOpenedDone();
+    const { channel, messageId, action } = opened;
+    if (action === 'accept') {
+      voice.acceptFromNotification(channel);
+    } else if (channel === 'friends') {
+      setPeopleTab({ tab: 'requests', at: Date.now() });
+      go(PEOPLE);
+    } else if (channel) {
+      go(channel);
+      if (messageId) setJumpRequest({ chat: channel, id: messageId });
+    }
+  }, [opened, view === null]);
+
   // Something shared to the app while it was open, in a chat: straight into that chat (the chat screen
   // takes the files into its tray and the text into the text box).
   useEffect(() => {
@@ -219,11 +247,12 @@ function Main({ connection, voice, openChatRef, share, onShareDone }) {
         {view === LOUNGE ? null : view === PEOPLE
           ? (
             <PeopleScreen
+              key={peopleTab?.at ?? 'people'}
               connection={connection} onOpen={go} onProfile={openProfile} onUserMenu={openUserMenu}
-              onInvite={() => setDialog({ type: 'invites' })}
+              onInvite={() => setDialog({ type: 'invites' })} startTab={peopleTab?.tab}
             />
           )
-          : <ChatScreen connection={connection} backRef={chatBack} shared={toTray} onSharedTaken={() => setToTray(null)} trays={trays} setTrays={setTrays} drafts={drafts} setDrafts={setDrafts} onOpenChat={go} popup={popup} setPopup={setPopup} onProfile={openProfile} onUserMenu={openUserMenu} focusTick={focusTick} />}
+          : <ChatScreen connection={connection} backRef={chatBack} shared={toTray} onSharedTaken={() => setToTray(null)} trays={trays} setTrays={setTrays} drafts={drafts} setDrafts={setDrafts} onOpenChat={go} popup={popup} setPopup={setPopup} onProfile={openProfile} onUserMenu={openUserMenu} focusTick={focusTick} jumpRequest={jumpRequest} onJumpTaken={() => setJumpRequest(null)} />}
         {/* In a call but looking at something else: the call in a corner (above a chat's text box). */}
         <CallFloat
           connection={connection} voice={voice} view={view} onOpen={go}
@@ -241,6 +270,7 @@ function Main({ connection, voice, openChatRef, share, onShareDone }) {
           }}
           onMe={() => setDialog({ type: 'me' })}
           settingsDot={changelog.unseen}
+          notificationsMuted={isMuted(notifications.settings) || connection.myPresence === 'dnd'}
           onSeason={() => {
             setDrawer(null);
             setDialog({ type: 'season' });
@@ -281,7 +311,10 @@ function Main({ connection, voice, openChatRef, share, onShareDone }) {
         />
       ) : null}
       {dialog?.type === 'settings' ? (
-        <SettingsScreen connection={connection} voice={voice} changelog={changelog} page={dialog.page} onClose={closeDialog} />
+        <SettingsScreen
+          connection={connection} voice={voice} notifications={notifications} changelog={changelog}
+          page={dialog.page} onClose={closeDialog}
+        />
       ) : null}
       {dialog?.type === 'season' && connection.me.season ? (
         <SeasonScreen season={connection.me.season} onClose={closeDialog} />
@@ -318,12 +351,14 @@ function Loading({ text }) {
   );
 }
 
-function Screen({ share, onShareDone }) {
+function Screen({ share, onShareDone, opened, onOpenedDone }) {
   const connection = useConnection();
   // Calls, kept up here: this stays while we're logged in, so a call goes on whatever the screens do.
   const openChatRef = useRef(null);
   const voice = useVoice(connection, openChatRef);
+  const notifications = useNotifications(connection);
   const { status, me } = connection;
+
   // The appearance kept with the account (in "welcome", and "appearance" after a change on any device).
   const { setAppearance } = useTheme();
   useEffect(() => {
@@ -332,7 +367,12 @@ function Screen({ share, onShareDone }) {
   if (status === 'logged-out') return <LoginScreen onLoggedIn={connection.reconnect} />;
   // Not connected yet (we don't know who we are until "welcome").
   if (me === null) return <Loading text={status === 'offline' ? "Can't reach the server, trying again…" : null} />;
-  return <Main connection={connection} voice={voice} openChatRef={openChatRef} share={share} onShareDone={onShareDone} />;
+  return (
+    <Main
+      connection={connection} voice={voice} notifications={notifications} openChatRef={openChatRef}
+      share={share} onShareDone={onShareDone} opened={opened} onOpenedDone={onOpenedDone}
+    />
+  );
 }
 
 // The frame around everything: the safe area (see App) and the phone's status bar, in the theme's
@@ -372,6 +412,13 @@ export default function App() {
     const subscription = addShareListener((next) => setShare({ ...next, fromStart: false }));
     return () => subscription.remove();
   }, []);
+  // A tapped notification (modules/push): kept up here too, through the login and the connecting.
+  const [opened, setOpened] = useState(null);
+  useEffect(() => {
+    getInitialOpen().then((first) => first && setOpened(first)).catch(() => {});
+    const subscription = addOpenListener(setOpened);
+    return () => subscription.remove();
+  }, []);
   // Android draws apps "edge to edge", under the status bar and the navigation bar.
   // SafeAreaView adds padding the size of those bars, so nothing ends up behind them.
   // ThemeContext.Provider hands the theme to every component inside it (useTheme, useStyles).
@@ -379,7 +426,9 @@ export default function App() {
     <ThemeContext.Provider value={theme}>
       <SafeAreaProvider>
         <Frame>
-          <Screen share={share} onShareDone={() => setShare(null)} />
+          <Screen
+            share={share} onShareDone={() => setShare(null)} opened={opened} onOpenedDone={() => setOpened(null)}
+          />
         </Frame>
       </SafeAreaProvider>
     </ThemeContext.Provider>

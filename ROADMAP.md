@@ -116,7 +116,7 @@
     - [x] Settings: my account, profile, appearance (themes, colours, text size), log out
     - [x] The rest of Settings: the web's picture editor (move and zoom; animated GIFs stay animated for pictures, banners and emoji), Emoji, What's new, Bugs & ideas, Admin (with Ban and Make admin in the user menu), the seasonal easter egg
     - [x] Voice and video calls (LiveKit's React Native library), also with the phone locked; the Lounge; Settings → Voice & audio and Video (with RNNoise and the mic volume in our own native code); the floating call window (also on the web page)
-    - [ ] Push notifications through Firebase Cloud Messaging, ringing calls; Settings → Notifications
+    - [x] Push notifications through Firebase Cloud Messaging (stacked per chat, with the sender's picture), ringing calls (a small call window over the lock screen: only the caller, Accept and Decline; Accept asks to unlock first), the ping while the app is open; Settings → Notifications (with mute). Still to test with a release build: a tap that starts the closed app, which development builds' launcher swallows (as with sharing)
     - [ ] Distribution: the app's icon, a release signing key, the real server, an APK on the download page, and updates (expo-updates)
 - [x] **23.** Chattus, an AI bot in the chat, with a language model on the server's graphics card
     - [x] A local model answering (llama.cpp's llama-server with Qwen 3.5 9B; Ollama couldn't find the GTX 1070), started at boot ("ChatApp AI", install.ps1 -AI)

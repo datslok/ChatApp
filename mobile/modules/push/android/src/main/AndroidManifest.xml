@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A library's own manifest: Gradle merges it into the app's when it builds. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <!-- Showing notifications at all (Android 13+ asks; notifications.js asks when push is turned on). -->
+  <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+  <!-- A ringing call may open our call screen (IncomingCallActivity: the caller, Decline, Accept) over
+       the lock screen. Android 14+ lets the user take this away: Settings → Notifications says so. -->
+  <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+
+  <application>
+    <!-- Where Firebase delivers our pushes (MESSAGING_EVENT). Not exported: Firebase's own code in our
+         app hands them over, nobody else may. -->
+    <service android:name="no.datslok.push.PushService" android:exported="false">
+      <intent-filter>
+        <action android:name="com.google.firebase.MESSAGING_EVENT" />
+      </intent-filter>
+    </service>
+    <!-- The incoming call window: the only thing of ours shown over the lock screen (showWhenLocked; the
+         app itself never is). Its own task (taskAffinity ""), out of the recent apps, one at a time: it
+         never brings the chat along over the lock screen. Not exported: only our notification opens it. -->
+    <activity
+      android:name="no.datslok.push.IncomingCallActivity"
+      android:exported="false"
+      android:showWhenLocked="true"
+      android:turnScreenOn="true"
+      android:taskAffinity=""
+      android:excludeFromRecents="true"
+      android:launchMode="singleInstance"
+      android:theme="@style/IncomingCallWindow" />
+    <!-- Decline on a ringing call's notification. -->
+    <receiver android:name="no.datslok.push.DeclineReceiver" android:exported="false" />
+  </application>
+</manifest>

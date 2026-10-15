@@ -381,10 +381,11 @@ function extension(asset) {
 // onOpenChat(key): open another chat (App.js's go), for a search result there. popup: the top bar's
 // popup that's open ("search", "pins" or null), drawn here; setPopup changes it. onProfile(id),
 // onUserMenu(id): someone's profile or user menu (App.js draws them). focusTick: a new number puts the
-// cursor at the end of the text box (after the user menu's Mention added "@name ").
+// cursor at the end of the text box (after the user menu's Mention added "@name "). jumpRequest: a
+// message to go to, {chat, id} (a tapped notification's), or null; onJumpTaken: say we're on our way.
 export default function ChatScreen({
   connection, backRef, shared, onSharedTaken, trays, setTrays, drafts, setDrafts, onOpenChat, popup, setPopup,
-  onProfile, onUserMenu, focusTick,
+  onProfile, onUserMenu, focusTick, jumpRequest, onJumpTaken,
 }) {
   const styles = useStyles(makeStyles);
   const { colors } = useTheme();
@@ -557,6 +558,13 @@ export default function ChatScreen({
     if (chat !== current) onOpenChat(chat);
     setJump({ chat, id });
   }
+
+  // A tapped notification's message (App.js has opened its chat already).
+  useEffect(() => {
+    if (!jumpRequest) return;
+    jumpTo(jumpRequest.chat, jumpRequest.id);
+    onJumpTaken();
+  }, [jumpRequest]);
 
   useEffect(() => {
     if (!jump || jump.chat !== current || messages === null) return;  // (the chat's history isn't here yet)

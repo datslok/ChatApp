@@ -30,6 +30,12 @@ export function setAiNoiseSuppression(on) {
   CallService.setAiNoiseSuppression(on);
 }
 
+// A call's short sound, "calling", "join" or "leave", played at once on the call's own sound channel
+// (CuePlayer.kt), not as media (which waits while Android switches the audio into or out of call mode).
+export function playCue(name) {
+  CallService.playCue(name);
+}
+
 // Calls listener() when Hang up is tapped in the notification. Returns a subscription (.remove()).
 export function addHangUpListener(listener) {
   return CallService.addListener('onHangUp', listener);

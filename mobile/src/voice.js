@@ -14,16 +14,18 @@
 // the speaker, the earpiece, headphones or Bluetooth (`outputs`), the camera can flip, and a shared screen
 // has no sound (react-native-webrtc can't record the phone's sound).
 import { useEffect, useRef, useState } from 'react';
-import { NativeEventEmitter, NativeModules, PermissionsAndroid, Platform, Vibration } from 'react-native';
+import { AppState, NativeEventEmitter, NativeModules, PermissionsAndroid, Platform, Vibration } from 'react-native';
 import { Room, RoomEvent, Track, VideoPresets43 } from 'livekit-client';
 import { AndroidAudioTypePresets, AudioSession } from '@livekit/react-native';
 import { createAudioPlayer, setAudioModeAsync } from 'expo-audio';
 import { File, Paths } from 'expo-file-system';
 import { SERVER } from './config';
 import { chatLabel } from './chats';
+import { phonePushOn } from './notifications';
 import {
-  addHangUpListener, setAiNoiseSuppression, setMicVolume, startCallService, stopCallService,
+  addHangUpListener, playCue, setAiNoiseSuppression, setMicVolume, startCallService, stopCallService,
 } from '../modules/call-service';
+import { clearCallNotification, isCallNotificationShowing } from '../modules/push';
 
 export const LOUNGE = 'voice:lounge';  // the Lounge page's key among the chats' (the web page's LOUNGE)
 export const LOUNGE_ROOM = 'lounge';   // its LiveKit room
@@ -72,20 +74,22 @@ function saveVoiceSettings(settings) {
 
 // ----- Sounds (the web page generates them; here they're files made by tools/make_call_sounds.py)
 
-// Played on the media stream and mixed with the call's sound, never pausing it.
+// The ringtone (someone calling us, before any call has started) is played as media, mixed with
+// whatever plays, never pausing it.
 setAudioModeAsync({ interruptionMode: 'mixWithOthers', shouldPlayInBackground: true }).catch(() => {});
 
-const players = {};
+let ringPlayer = null;
+// The sounds during a call ("calling", "join", "leave") go to our call-service module instead, on the
+// call's own sound channel: as media they waited seconds while Android switched into or out of call mode.
 function playSound(name) {
+  if (name !== 'ring') {
+    playCue(name);
+    return;
+  }
   try {
-    players[name] ??= createAudioPlayer({
-      ring: require('../assets/sounds/ring.wav'),
-      calling: require('../assets/sounds/calling.wav'),
-      join: require('../assets/sounds/join.wav'),
-      leave: require('../assets/sounds/leave.wav'),
-    }[name]);
-    players[name].seekTo(0);
-    players[name].play();
+    ringPlayer ??= createAudioPlayer(require('../assets/sounds/ring.wav'));
+    ringPlayer.seekTo(0);
+    ringPlayer.play();
   } catch {}
 }
 
@@ -136,6 +140,9 @@ export function useVoice(connection, onOpenChatRef) {
   const callingTimer = useRef(null);
   const ringTimer = useRef(null);
   const noticeTimer = useRef(null);
+  // A call's Accept in its notification (App.js): the call to answer as soon as the server rings us for
+  // it (it does as we connect), or null.
+  const acceptWhenRung = useRef(null);
   const redraw = () => setTick((n) => n + 1);
 
   function setSettings(changes) {
@@ -558,6 +565,17 @@ export function useVoice(connection, onOpenChatRef) {
     stopRinging();
     setIncoming(call);
     latest.current.incoming = call;
+    // In the background with push on, the call's notification rings (modules/push): not twice.
+    if (AppState.currentState !== 'active' && phonePushOn()) return;
+    ringSounds();
+  }
+
+  // The ringtone and buzzing, until stopRinging. Not while the call's notification rings: Android repeats
+  // its sound until the notification goes, even when the app is paused (as it may be over the lock
+  // screen), which our timer wouldn't. Accept, Decline or the call ending takes it away.
+  function ringSounds() {
+    const call = latest.current.incoming;
+    if (!call || ringTimer.current || isCallNotificationShowing(call.channel)) return;
     // "Do not disturb": the popup, but no sound or buzzing (like the web page's isMuted()).
     if (latest.current.connection.myPresence === 'dnd') return;
     playSound('ring');
@@ -565,10 +583,35 @@ export function useVoice(connection, onOpenChatRef) {
     Vibration.vibrate([0, 500, 1500], true);  // buzz half a second every 2 seconds, until stopped
   }
 
+  // Back in the app with a call ringing and no notification ringing for it (it was swiped away, or push
+  // is off): our turn.
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') ringSounds();
+    });
+    return () => subscription.remove();
+  }, []);
+
+  // Accept in a ringing call's notification: answer it now if it's ringing here already, else as soon
+  // as the server rings us for it (a few seconds, while we connect; not after its 30 s).
+  function acceptFromNotification(channel) {
+    if (latest.current.incoming?.channel === channel) {
+      accept();
+      return;
+    }
+    acceptWhenRung.current = channel;
+    setTimeout(() => {
+      if (acceptWhenRung.current === channel) acceptWhenRung.current = null;
+    }, 30 * 1000);
+  }
+
+  // (Accepted, declined, answered elsewhere or over: the notification goes too, if it's still there. The
+  // server also takes it away with a push, but that takes a moment.)
   function stopRinging() {
     clearInterval(ringTimer.current);
     ringTimer.current = null;
     Vibration.cancel();
+    if (latest.current.incoming) clearCallNotification(latest.current.incoming.channel);
     setIncoming(null);
     latest.current.incoming = null;
   }
@@ -601,7 +644,11 @@ export function useVoice(connection, onOpenChatRef) {
     if (data.type === 'call') {
       // Already in that call (joined it from elsewhere): that's an answer.
       if (inRoom === data.channel) connection.answerCall(data.channel, true);
-      else startRinging({ channel: data.channel, from: data.from, name: data.name });
+      else if (acceptWhenRung.current === data.channel) {  // Accepted in its notification already
+        acceptWhenRung.current = null;
+        latest.current.incoming = { channel: data.channel, from: data.from, name: data.name };
+        accept();
+      } else startRinging({ channel: data.channel, from: data.from, name: data.name });
     } else if (data.type === 'call_answered') {
       if (ringingNow?.channel === data.channel) stopRinging();  // (answered on another device)
       if (ours === data.channel) {
@@ -644,6 +691,6 @@ export function useVoice(connection, onOpenChatRef) {
     roomName, status, muted, deafened, camera, facing, sharing, speaking, outputs, output, connected,
     outgoing, incoming, notice,
     join, leave, setNoiseSuppression, toggleMute, toggleDeafen, toggleCamera, flipCamera, toggleShare, refreshOutputs, selectOutput,
-    startCall, accept, decline, callPeople,
+    startCall, accept, decline, acceptFromNotification, callPeople,
   };
 }

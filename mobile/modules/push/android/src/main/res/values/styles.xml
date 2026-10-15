@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- The incoming call window's (IncomingCallActivity): see-through, so the lock screen stays in sight
+       around its box; no title bar, no darkening, no animation of its own. -->
+  <style name="IncomingCallWindow" parent="@android:style/Theme.DeviceDefault.NoActionBar">
+    <item name="android:windowIsTranslucent">true</item>
+    <item name="android:windowBackground">@android:color/transparent</item>
+    <item name="android:windowIsFloating">false</item>
+    <item name="android:backgroundDimEnabled">false</item>
+  </style>
+</resources>

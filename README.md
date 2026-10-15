@@ -90,8 +90,8 @@ the same PC, but the scripts assume two).
 | `tools\make_emoji_json.py` | your PC | makes `static\emoji.json` (every emoji, for the pickers and the server's list of allowed reactions) from Unicode's `emoji-test.txt`: `curl.exe -L -o emoji-test.txt https://unicode.org/Public/emoji/latest/emoji-test.txt`, then `python tools\make_emoji_json.py emoji-test.txt`; run it when a new emoji version comes out |
 | `tools\make_icons.py` | your PC | makes `static\js\icon-shapes.js`, the buttons' line icons (Lucide's), and the same for the phone app (`mobile\src\icon-shapes.js`); add an icon's name in it and run it again |
 | `tools\get_rnnoise.py` | your PC | puts RNNoise (the AI noise suppression, Xiph's C library) into the phone app's native code (`mobile\modules\call-service\android\src\main\cpp\rnnoise-0.2\`), checked against pinned hashes; only needed to change its version |
-| `tools\make_call_sounds.py` | your PC | makes the phone app's call sounds (`mobile\assets\sounds\*.wav`: ringing, calling, joining, leaving) from the web page's tones; run it again after changing one |
-| `tools\make_vapid_keys.py` | either | once: the key pair for push notifications, for `.env` |
+| `tools\make_call_sounds.py` | your PC | makes the phone app's sounds from the web page's tones: the ringtone and message ping (`mobile\assets\sounds\`), the notifications' ping and ring (`mobile\modules\push\...\res\raw\`) and the in-call calling, join and leave sounds (`mobile\modules\call-service\...\res\raw\`); run it again after changing one |
+| `tools\make_vapid_keys.py` | either | once: the key pair for push notifications (the web page's), for `.env` |
 | `npx expo run:android` (in `mobile\`) | your PC | builds the native phone app, installs it on a phone over USB and starts Metro |
 | `npx expo start` (in `mobile\`) | your PC | only Metro, for an app already installed by `run:android` |
 
@@ -573,7 +573,7 @@ Get-WinEvent Microsoft-Windows-TaskScheduler/Operational -MaxEvents 20 | Format-
 Every night at 04:00 the server backs itself up onto its backup disk (`E:\ChatApp-backups` by default;
 the scheduled task **ChatApp backup**):
 
-- `2026-10-11\chat.db` and `.env`: a safe copy of the database (and the settings) per day, the last 30 kept
+- `2026-10-11\chat.db` and `.env` (and `firebase-key.json`): a safe copy of the database (and the settings) per day, the last 30 kept
 - `uploads\` and `releases\`: every file, new ones added each night, nothing deleted
 
 Your own PC can fetch the newest one too, so there's a copy outside the server:
@@ -600,7 +600,7 @@ Everything after that day's 04:00 is lost (messages, accounts, settings changed 
 ### Moving to another PC
 
 1. **On the old server:** `.\scripts\server\export.ps1` makes `chatapp-data.zip` with `chat.db` (a safe
-   copy, even while the chat runs), `uploads\`, `releases\` and `.env`. Copy it to a USB stick. **It
+   copy, even while the chat runs), `uploads\`, `releases\`, `.env` and `firebase-key.json`. Copy it to a USB stick. **It
    holds your secrets and everyone's messages**: delete it everywhere once the move is done.
 2. **On the new PC:** steps 2 and 4 of [Host your own](#host-your-own), but instead of writing `.env`
    (step 3), unpack the data before installing: `.\scripts\server\import.ps1 D:\chatapp-data.zip`.
@@ -704,10 +704,42 @@ The sound itself goes over UDP straight to the PC's address on your home network
 phone must be on the same Wi-Fi, and Windows Firewall must let `livekit-server.exe` in (Windows asks
 the first time it runs; if you said no, allow it under "Allow an app through Windows Firewall"). A call
 keeps going with the phone locked: the app then shows an "In a call" notification with Hang up.
-The call sounds (ringing, joining, leaving) are WAV files in `mobile\assets\sounds\`, made from the web
-page's tones by `python tools\make_call_sounds.py`. The app's noise suppression ("On") is RNNoise, compiled
+The call sounds (ringing, joining, leaving) are WAV files made from the web page's tones by
+`python tools\make_call_sounds.py`; the ones played during a call go through Android's call sound
+channel, so they don't wait while the phone switches into call mode. The app's noise suppression ("On") is RNNoise, compiled
 into the app's own native code along with everything else; its source is in
 `mobile\modules\call-service\android\src\main\cpp\`, put there by `python tools\get_rnnoise.py`.
+
+#### Push notifications in the app
+
+The app gets notifications through **Firebase Cloud Messaging** (FCM), Google's push service, which
+every Android phone with Google Play keeps a connection to. It's free. You need a Firebase project:
+
+1. At [console.firebase.google.com](https://console.firebase.google.com): **Create a project** (Google
+   Analytics can be off).
+2. **Add app → Android**, with the app's package name (`android.package` in `mobile\app.json`). Download
+   **google-services.json** into `mobile\` (it says which project the app belongs to; git ignores it).
+   Skip the rest of that page's steps: Expo does them.
+3. **Project settings → Service accounts → Generate new private key**. Save it as **firebase-key.json** in
+   the chat's folder, on your PC (for `start.ps1`) and on the server, where the chat reads it at start:
+
+```powershell
+scp firebase-key.json chatserver:C:/ChatApp/firebase-key.json
+ssh chatserver "Stop-ScheduledTask ChatApp; Start-ScheduledTask ChatApp"
+```
+
+   It lets whoever has it send notifications as your app: never commit it (git ignores it), keep it
+   out of chats and email. `export.ps1` and the nightly backup take it along with `.env`.
+4. `npx expo prebuild --clean`, then `npx expo run:android`: the app now has Firebase in it.
+
+The app turns notifications on at its first start (Android asks whether it may); Settings →
+Notifications turns them off and on, mutes them for a while, and sets the sound while the app is open.
+DMs, mentions and friend requests come stacked per chat with the sender's picture; a call rings until
+it's answered, with Decline and Accept. With the phone locked, a call opens a small call screen (who's
+calling, Decline, Accept; if Android allows "Full screen notifications": Settings → Notifications says so).
+That screen is all that ever shows over the lock screen, never the chat: Accept asks to unlock first.
+Like the web page's, notifications only come while you're not looking at the chat on any device, never
+on Do Not Disturb.
 
 Later, when only JavaScript changed, `npx expo start` is enough. Run `npx expo run:android` again
 after adding a package with native code. Add packages with `npx expo install <name>` (not

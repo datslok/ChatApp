@@ -6,6 +6,9 @@ __pycache__/
 .env
 dev-chattus.env
 dev-secrets.env
+# Firebase: the server's key for sending phone pushes, and the phone app's project file
+firebase-key.json
+mobile/google-services.json
 
 # The AI bot's notes on what each custom emoji shows (remade by itself when missing)
 chattus-emoji.json

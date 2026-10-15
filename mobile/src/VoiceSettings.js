@@ -11,8 +11,9 @@ import { Button, Heading, Help, Title } from './SettingsParts';
 import Slider from './Slider';
 import { useStyles } from './theme';
 
-// A row of choices, one of them picked (like a <select>, but every choice in sight).
-function Choices({ choices, value, onPick }) {
+// A row of choices, one of them picked (like a <select>, but every choice in sight). It wraps onto
+// more lines when they don't fit (Settings → Notifications' mute uses it too).
+export function Choices({ choices, value, onPick }) {
   const styles = useStyles(makeStyles);
   return (
     <View style={styles.choices}>
@@ -204,7 +205,7 @@ export function VideoSettings({ voice }) {
 }
 
 const makeStyles = (colors, size) => StyleSheet.create({
-  choices: { flexDirection: 'row', gap: 8, marginBottom: 8 },
+  choices: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 },
   choice: { paddingVertical: 8, paddingHorizontal: 16, borderRadius: 6, backgroundColor: colors.bgDarkest },
   chosen: { backgroundColor: colors.accent },
   pressed: { opacity: 0.8 },

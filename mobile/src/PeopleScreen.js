@@ -15,12 +15,13 @@ const TABS = [
 ];
 
 // onOpen(key): open that chat (App.js's go). onProfile(id), onUserMenu(id): a row's tap and long press.
-// onInvite: the Invite someone popup.
-export default function PeopleScreen({ connection, onOpen, onProfile, onUserMenu, onInvite }) {
+// onInvite: the Invite someone popup. startTab: the tab it opens on (a friend request's notification:
+// "requests"); Friends if none.
+export default function PeopleScreen({ connection, onOpen, onProfile, onUserMenu, onInvite, startTab }) {
   const styles = useStyles(makeStyles);
   const { colors } = useTheme();
   const { users, roles, me, myPresence, friends, incoming, outgoing, blocked, friendAction } = connection;
-  const [tab, setTab] = useState('friends');
+  const [tab, setTab] = useState(startTab ?? 'friends');
   const [query, setQuery] = useState('');   // the Everyone tab's search box
   const [error, setError] = useState('');   // what the server said no with, under the list
 

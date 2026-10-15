@@ -93,11 +93,13 @@ function Row({ chatKey, active, unread, mentions, mutedChats, onPress, onLongPre
 }
 
 // onUserMenu(id): a DM's long press. onNewGroup: the + by "Direct messages". onMe: your panel at the
-// bottom. onSettings: its ⚙️ (settingsDot: a red dot on it, What's new has news). onSeason: the
+// bottom. onSettings: its ⚙️ (settingsDot: a red dot on it, What's new has news; notificationsMuted:
+// a bell-off on it). onSeason: the
 // seasonal easter egg on your picture. voice: useVoice()'s (the Voice list, the voice bar, mute and
 // deafen); onProfile(id): someone in voice was tapped.
 export default function Sidebar({
-  connection, voice, view, onPick, onPeople, onUserMenu, onNewGroup, onMe, onSettings, settingsDot, onSeason, onProfile,
+  connection, voice, view, onPick, onPeople, onUserMenu, onNewGroup, onMe, onSettings, settingsDot, notificationsMuted,
+  onSeason, onProfile,
 }) {
   const styles = useStyles(makeStyles);
   const { colors } = useTheme();
@@ -220,6 +222,9 @@ export default function Sidebar({
               <>
                 <Icon name="settings" size={22} color={pressed ? colors.iconStrong : colors.icon} />
                 {settingsDot ? <View style={styles.settingsDot} /> : null}
+                {notificationsMuted ? (
+                  <View style={styles.mutedIcon}><Icon name="bell-off" size={11} color={colors.icon} /></View>
+                ) : null}
               </>
             )}
           </Pressable>
@@ -272,6 +277,8 @@ const makeStyles = (colors, size) => StyleSheet.create({
   myPicture: { padding: 4, margin: -4 },
   // #settings-new-dot: the red dot in ⚙️'s top corner.
   settingsDot: { position: 'absolute', top: 6, right: 6, width: 8, height: 8, borderRadius: 4, backgroundColor: colors.red },
+  // #muted-icon: notifications are muted (or Do Not Disturb), a small bell-off on ⚙️'s bottom corner.
+  mutedIcon: { position: 'absolute', bottom: 4, right: 4 },
   myName: { flex: 1, color: colors.textStrong, fontSize: size(13.6), fontWeight: '600' },
   panelButtonOff: { backgroundColor: colors.buttonRed },
   // .voice-channel.in-voice: green and bold.

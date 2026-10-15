@@ -7,6 +7,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { AppState, Platform } from 'react-native';
 import { SERVER, SOCKET_URL } from './config';
+import { forgetThisPhone } from './notifications';
 import { DEFAULT_APPEARANCE } from './theme';
 
 // The newest emoji version each Android draws (its API level -> Unicode's emoji version): newer
@@ -88,6 +89,8 @@ export function useConnection() {
   const [dmCalls, setDmCalls] = useState({});
   // voice.js listens here for ringing: "call", "call_answered" and "call_ended" go to it as they come.
   const callListener = useRef(null);
+  // notifications.js listens here: a DM or mention in another chat (the "notify" in "unread": the ping).
+  const notifyListener = useRef(null);
   // Where we are in voice, as we last told the server ({room, muted, deafened}): told again after
   // every reconnect, since the server forgets us when the connection drops.
   const voiceState = useRef({ room: null, muted: false, deafened: false });
@@ -120,7 +123,11 @@ export function useConnection() {
       case 'welcome':
         // max_text_length: the server's limit on a message, so the text box can use the same.
         // season: the seasonal easter egg ({name, emoji or image, video}), or null (Sidebar.js).
-        setMe({ id: data.id, username: data.username, maxTextLength: data.max_text_length, season: data.season });
+        // phonePush: the server can send this app push notifications (it has Firebase's key).
+        setMe({
+          id: data.id, username: data.username, maxTextLength: data.max_text_length, season: data.season,
+          phonePush: data.phone_push === true,
+        });
         setMyPresence(data.presence);
         setAppearance(data.appearance ?? DEFAULT_APPEARANCE);  // (null: never changed: the defaults)
         break;
@@ -205,6 +212,7 @@ export function useConnection() {
             return now;
           });
         }
+        if (data.notify) notifyListener.current?.(data.notify);
         break;
       }
       case 'history':
@@ -402,6 +410,7 @@ export function useConnection() {
   // then the connection closes for good and App.js shows the login screen. me goes back to null, so
   // logging in as someone else shows nothing of this account while the new "welcome" is on its way.
   async function logout() {
+    await forgetThisPhone();  // (no more of this account's pushes here)
     await fetch(`${SERVER}/logout`, { method: 'POST' }).catch(() => {});
     loggedOut.current = true;
     currentRef.current = null;
@@ -520,7 +529,7 @@ export function useConnection() {
   return {
     status, me, myPresence, appearance, channels, groups, friends, incoming, outgoing, blocked, users, roles, emoji,
     emojiGroups, unread, mentions, current, messages, lastRead, more, typing, mutedChats, pins, pinsFull,
-    searchResults, voiceMembers, dmCalls, callListener,
+    searchResults, voiceMembers, dmCalls, callListener, notifyListener,
     openChat, closeChat, loadOlder, sendMessage, sendTyping, react, pin, editMessage, deleteMessage,
     friendAction, mute, openPins, closePins, search, setPresence, logout, sendVoice, ring, answerCall, cancelCall,
     reconnect: connect,  // after logging in

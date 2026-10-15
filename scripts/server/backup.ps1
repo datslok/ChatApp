@@ -2,7 +2,7 @@
 # install.ps1, step 8), onto a second disk:
 #
 #   <Destination>\2026-10-11\chat.db   a safe copy of the database, one folder per day (the last 30 kept)
-#   <Destination>\2026-10-11\.env      the settings and secrets, with it
+#   <Destination>\2026-10-11\.env      the settings and secrets, with it (and firebase-key.json, if any)
 #   <Destination>\uploads\             every uploaded file: only new ones are copied, nothing is
 #   <Destination>\releases\            ever deleted here (so a file deleted by mistake survives)
 #   <Destination>\seasonal\            (the seasonal easter egg's videos, the same way)
@@ -32,6 +32,7 @@ try {
     & $python tools\copy_db.py chat.db (Join-Path $folder "chat.db") | Write-Output
     if ($LASTEXITCODE -ne 0) { throw "Copying chat.db failed." }
     Copy-Item .env $folder -Force
+    if (Test-Path firebase-key.json) { Copy-Item firebase-key.json $folder -Force }  # (the phone app's pushes)
 
     # 2. Uploads, releases and the seasonal videos: robocopy (Windows' own copy tool) copies only new
     #    and changed files. /E: with subfolders. No /PURGE: files deleted here stay in the backup.

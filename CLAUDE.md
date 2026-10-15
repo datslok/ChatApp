@@ -79,7 +79,7 @@ the point is for me to understand how it works, not just to have it done.
   (development builds, so native modules like LiveKit's work), in JavaScript (not TypeScript), in
   `mobile/`, Android first (my girlfriend's phone; iPhones maybe later via Expo's cloud builds). It talks
   to the same server: `/login` and its cookie, the same WebSocket messages and endpoints. Native push
-  will go through Firebase Cloud Messaging instead of Web Push. The web app and PWA stay meanwhile.
+  goes through Firebase Cloud Messaging instead of Web Push ("Push notifications" below). The web app and PWA stay meanwhile.
   Setup done (2026-10-12): `mobile/` is the blank JS template (Expo SDK 57, React Native 0.86, React 19,
   Gradle 9.3) plus `expo-dev-client`; `app.json` name "ChatApp", slug "chatapp", Android package
   `no.datslok.chat` (permanent). Android Studio 2026.2 with its SDK in `%LOCALAPPDATA%\Android\Sdk`;
@@ -234,8 +234,10 @@ the point is for me to understand how it works, not just to have it done.
   in your panel, the green phone in ChatButtons, Call in the user menu, Voice volume in profiles, In voice in MeScreen,
   `src/VoiceSettings.js` (Voice & audio: Choices, Others' volume, the mic test via expo-audio's recorder metering, which
   LiveKit's measuring can't do outside a call; Video: front/back + a preview with react-native-webrtc's RTCView).
-  Sounds: **expo-audio** (plugin with enableBackgroundPlayback false: no media service of its own) plays
-  `mobile/assets/sounds/*.wav` from `tools/make_call_sounds.py` (rooms.js's tones). Locked phone: our module
+  Sounds from `tools/make_call_sounds.py` (rooms.js's tones): the ringtone through **expo-audio** (plugin with
+  enableBackgroundPlayback false: no media service of its own; `mobile/assets/sounds/ring.wav`); calling/join/leave through
+  the call-service module's `CuePlayer.kt` (SoundPool, USAGE_VOICE_COMMUNICATION_SIGNALLING, res/raw), because media
+  sounds waited 5-6 s while Android switched into or out of call mode. Locked phone: our module
   `mobile/modules/call-service` (Kotlin; its own AndroidManifest.xml is merged in: FOREGROUND_SERVICE_MICROPHONE/CAMERA/
   MEDIA_PLAYBACK/MEDIA_PROJECTION, the service with those types): `CallService` (startForeground with the types we have
   permission for, the "Ongoing calls" channel, Hang up -> "onHangUp", a partial wake lock, stops on onTaskRemoved) and a
@@ -245,6 +247,30 @@ the point is for me to understand how it works, not just to have it done.
   127.0.0.1:7880 (`adb reverse tcp:7880 tcp:7880`) and UDP 7882 on the LAN address (same Wi-Fi; this PC's firewall allows
   livekit-server.exe).
   `prebuild --clean` failing with EBUSY on `android/`: the adb server started by run:android stands in it (`adb kill-server`).
+  Push notifications (since 2026-10-15): Firebase project `chatapp-e2944` (my Google account, Spark plan, no Analytics or
+  Gemini); `mobile/google-services.json` (app.json `googleServicesFile`) and the service account key `firebase-key.json`
+  in the repo folder (server.py's `FIREBASE_KEY_FILE`), both git-ignored; the key goes with export/import/backup.ps1.
+  **The real server doesn't have the key yet** (copy it with scp when the app is distributed). Server: `/push/fcm` stores the
+  token in push_subscriptions as `fcm:<token>` (an upsert that keeps the mute), `send_push` sends data messages through
+  `send_fcm` (FCM HTTP v1; the access token from an RS256 JWT we sign with `cryptography`, cached an hour; 404 deletes),
+  `always=True` (phones only, ignoring looking/mute) for `stop_ringing`'s `call_end` (answer_call, ring_timeout, end_call),
+  `/calls/decline`, "welcome" has `phone_push`. App: our module `mobile/modules/push` (Kotlin; firebase-messaging 25.1.3,
+  whose getToken/onNewToken are deprecated since 25.1 for installation IDs but still work): `PushService` (Firebase's
+  MESSAGING_EVENT), `Notifications.kt` (channels "messages" with the ping and "incoming_calls" with the looping ring
+  (FLAG_INSISTENT); MessagingStyle stacked per chat (tag = chat key) with avatars fetched with CookieManager's cookie;
+  CallStyle with a full-screen intent), **`IncomingCallActivity`: the only thing ever shown over the lock screen (the
+  user's rule: never the app itself; MainActivity showWhenLocked was tried and refused)**, a small centred see-through
+  window (picture, "x is calling…", Accept/Decline like IncomingCall.js, its own task); Accept = requestDismissKeyguard
+  (unlock) then the app with "accept"; `DeclineReceiver` POSTs /calls/decline with the cookie. `PushModule.kt`: token,
+  taps (`getInitialOpenAsync`/"onOpen" like shared-files: {channel, messageId, action open/ring/accept}), clearChat/
+  clearCall/isCallShowing, canFillScreen (USE_FULL_SCREEN_INTENT, Android 14+). JS: `src/notifications.js`
+  (`useNotifications` in App.js's Screen: notification-settings.json, register at every welcome, asks POST_NOTIFICATIONS
+  the first time, mute -> /push/mute, the ping (`assets/sounds/ping.wav`) on "unread"'s notify and new friend requests,
+  not in the background while push is on; clears a chat's notification when it's opened; `forgetThisPhone` at logout),
+  `src/NotificationSettings.js`, voice.js (no own ringing in the background with push on, nor while the call's
+  notification is showing: Android's loop keeps going when the app is paused; `acceptFromNotification`), App.js (`opened`
+  -> go/jumpRequest/People's Requests tab). A tap that starts a closed app can't be tested in development builds (the dev
+  launcher drops the extras, as with shares). `adb logcat -d` (read-only) showed what went wrong each time.
   `src/people.js` (Avatar with letter colours, StatusDot with the phone shape, BotBadge, Person, nameColor),
   `src/Icon.js` (react-native-svg's SvgXml with the web page's Lucide shapes from `src/icon-shapes.js`,
   written by tools/make_icons.py too), `src/chats.js` (keys and labels), `src/theme.js` (the theme, see below).

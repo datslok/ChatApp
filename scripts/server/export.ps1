@@ -6,6 +6,7 @@
 #   releases/   the desktop app's installers and latest.json
 #   seasonal/   the seasonal easter egg's videos (if any)
 #   .env        the settings and secrets (mail password, LiveKit keys, ...)
+#   firebase-key.json  the key for the phone app's push notifications (if any)
 #
 # Run it on the PC the chat runs on now:   .\scripts\server\export.ps1
 # Then copy chatapp-data.zip to the new PC (a USB stick, say) and run .\scripts\server\import.ps1 there.
@@ -32,7 +33,7 @@ try {
     & $python @pythonArgs tools\copy_db.py chat.db (Join-Path $temp "chat.db")  # (@ spreads the list into arguments)
     if ($LASTEXITCODE -ne 0) { throw "Copying chat.db failed." }
 
-    foreach ($item in "uploads", "releases", "seasonal", ".env") {
+    foreach ($item in "uploads", "releases", "seasonal", ".env", "firebase-key.json") {
         if (Test-Path $item) {
             Write-Host "Copying $item..."
             Copy-Item $item -Destination $temp -Recurse

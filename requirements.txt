@@ -3,4 +3,5 @@ uvicorn[standard]
 argon2-cffi
 pillow
 pywebpush
+cryptography  # (also comes with pywebpush) signing our requests to Firebase, for the phone app's pushes
 anthropic

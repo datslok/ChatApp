@@ -16,8 +16,8 @@ import { Person } from './people';
 const MAX_GROUP_SIZE = 10;  // as the server's
 const MAX_NAME = 30;        // (the web page's maxlength; the server's MAX_CHANNEL_NAME)
 
-// A checkbox: a rounded square, filled with a tick when ticked.
-function Checkbox({ checked }) {
+// A checkbox: a rounded square, filled with a tick when ticked. (Settings → Notifications has some too.)
+export function Checkbox({ checked }) {
   const styles = useStyles(makeStyles);
   return (
     <View style={[styles.box, checked && styles.boxChecked]}>
