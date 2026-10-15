@@ -45,7 +45,13 @@ config.expo.android.versionCode = (config.expo.android.versionCode || 0) + 1;
 fs.writeFileSync("mobile/app.json", JSON.stringify(config, null, 2) + "\n");
 console.log(config.expo.version + " " + config.expo.android.versionCode);
 '@
-$version, $versionCode = (node -e $bump).Split(" ")
+# (From a file: Windows PowerShell drops the double quotes from a script handed to node -e.)
+$bumpFile = Join-Path $env:TEMP "chatapp-bump.js"
+Set-Content $bumpFile $bump -Encoding ascii
+$bumped = node $bumpFile
+Remove-Item $bumpFile
+if ($LASTEXITCODE -ne 0 -or -not $bumped) { Write-Host "Raising the version failed (see above)."; exit 1 }
+$version, $versionCode = $bumped.Split(" ")
 Write-Host "Version $version (versionCode $versionCode)" -ForegroundColor Cyan
 
 # 2. Build. prebuild makes android\ from app.json again (the adb server would hold the folder: stopped first).
@@ -56,7 +62,12 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "prebuild failed." }
     Push-Location android
     try {
-        .\gradlew.bat app:assembleRelease
+        # -x: without Android's code checks ("lint"), which a release build otherwise runs on every library
+        # (their code, not ours), and which ran out of memory. Expo's own builds leave them out too.
+        # reactNativeArchitectures: native code only for phones' processors (64- and 32-bit ARM), not the
+        # PC emulators' x86 ones: 148 MB with all four.
+        .\gradlew.bat app:assembleRelease -x lint -x test -x lintVitalAnalyzeRelease -x lintVitalReportRelease -x lintVitalRelease `
+            "-PreactNativeArchitectures=armeabi-v7a,arm64-v8a"
         if ($LASTEXITCODE -ne 0) { throw "The build failed." }
     } finally { Pop-Location }
 } catch {

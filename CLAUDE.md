@@ -271,6 +271,25 @@ the point is for me to understand how it works, not just to have it done.
   notification is showing: Android's loop keeps going when the app is paused; `acceptFromNotification`), App.js (`opened`
   -> go/jumpRequest/People's Requests tab). A tap that starts a closed app can't be tested in development builds (the dev
   launcher drops the extras, as with shares). `adb logcat -d` (read-only) showed what went wrong each time.
+  Distribution (since 2026-10-15): the icon is an adaptive icon made by `tools/make_pwa_icons.py` (the drawing on
+  transparency, centred on its smallest enclosing circle and scaled to the 66/108 safe zone, the user's wish; app.json
+  backgroundColor #0086D7, a monochrome layer). Release builds are signed by `plugins/release-signing.js` with
+  `~/.chatapp-keys/android-release.jks` (password in `~/.gradle/gradle.properties`, CHATAPP_RELEASE_*; see my memory;
+  the user keeps a copy). `plugins/dev-variant.js`: debug builds are `no.datslok.chat.dev` "ChatApp Dev" (the user's
+  choice: both on the phone; google-services.json has both apps), so `adb shell am start` etc. need the .dev package.
+  `config.js` SERVER: `__DEV__` ? localhost:8001 : https://chat.datslok.no. Updates: **expo-updates** with
+  runtimeVersion policy appVersion (fingerprint hashed generated folders) against server.py's `/app-update` (Expo's
+  protocol 1: newest `releases/app-updates/<version>/*.json`, URLs filled from PUBLIC_URL, 204 when none; files in
+  `releases/app-assets/<md5>.<ext>`, immutable), made by `scripts/app-update.ps1` (refuses when mobile/modules,
+  plugins, app.json or package*.json changed since android.json's commit) + `tools/make_app_update.py`. New APKs:
+  `scripts/app-release.ps1` (bumps version + versionCode, commits "Phone app x", prebuild + gradlew
+  app:assembleRelease, apksigner must say CN=ChatApp, `releases/ChatApp-android-<v>.apk` + `releases/android.json`
+  {version, versionCode, apk, commit}, scp, removes old APKs; hyphens keep them out of release-upload.ps1's
+  `ChatApp_*` clean-up). The app: `src/appUpdate.js` + `src/UpdateScreen.js` (release builds: android.json newer
+  than Updates.runtimeVersion -> "A new version" popup, download into cache/apk with a bar, ACTION_VIEW to Android's
+  installer; REQUEST_INSTALL_PACKAGES in app.json). `/download/android` redirects to the newest APK (served as
+  application/vnd.android.package-archive); download.html shows the Android section on Android (#android/#windows);
+  login and landing pages say "Get the Android app" on Android (`data-android`), nothing on iPhones.
   `src/people.js` (Avatar with letter colours, StatusDot with the phone shape, BotBadge, Person, nameColor),
   `src/Icon.js` (react-native-svg's SvgXml with the web page's Lucide shapes from `src/icon-shapes.js`,
   written by tools/make_icons.py too), `src/chats.js` (keys and labels), `src/theme.js` (the theme, see below).
