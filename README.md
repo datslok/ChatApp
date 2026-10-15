@@ -93,6 +93,7 @@ the same PC, but the scripts assume two).
 | `tools\make_icons.py` | your PC | makes `static\js\icon-shapes.js`, the buttons' line icons (Lucide's), and the same for the phone app (`mobile\src\icon-shapes.js`); add an icon's name in it and run it again |
 | `tools\get_rnnoise.py` | your PC | puts RNNoise (the AI noise suppression, Xiph's C library) into the phone app's native code (`mobile\modules\call-service\android\src\main\cpp\rnnoise-0.2\`), checked against pinned hashes; only needed to change its version |
 | `tools\make_call_sounds.py` | your PC | makes the phone app's sounds from the web page's tones: the ringtone and message ping (`mobile\assets\sounds\`), the notifications' ping and ring (`mobile\modules\push\...\res\raw\`) and the in-call calling, join and leave sounds (`mobile\modules\call-service\...\res\raw\`); run it again after changing one |
+| `tools\make_screenshot.py` | your PC | the landing page's screenshot, on a throwaway chat with test accounts (never the real one); run it again when the chat's look changes |
 | `tools\make_app_update.py` | your PC | used by `app-update.ps1`: turns `npx expo export` into an update for the server |
 | `tools\make_vapid_keys.py` | either | once: the key pair for push notifications (the web page's), for `.env` |
 | `npx expo run:android` (in `mobile\`) | your PC | builds the native phone app, installs it on a phone over USB and starts Metro |
@@ -318,7 +319,9 @@ The page's buttons lead to your `PUBLIC_URL` by themselves. Someone logged in to
 name and **Log out** at the top (the page asks the chat's `/whoami`, which only answers your
 `LANDING_HOST`; this needs the main domain and the chat to be the same site, like `example.com` and
 `chat.example.com`). Its texts and pictures (`logo.png`,
-`screenshot.png`) are yours to change.
+`screenshot.png`) are yours to change. `python tools\make_screenshot.py` makes a new screenshot on a
+throwaway chat of its own (test accounts, a conversation showing the maths, a poll and the rest, never
+your real chat), photographed with Edge; change its conversation to your liking.
 
 ### Optional: GIF search
 

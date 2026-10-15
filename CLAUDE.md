@@ -574,7 +574,10 @@ the point is for me to understand how it works, not just to have it done.
 - `static/landing/`: the landing page (`index.html`, `logo.png` from `icon/chattuschattus_square.png`,
   `screenshot.png`), served at `/` when the Host is `LANDING_HOST` (datslok.no) and always at `/welcome`;
   `{{CHAT}}` in it becomes PUBLIC_URL (server.py, `landing_page`). Its pictures are under `/landing/`.
-  The screenshot is of a throwaway server with test accounts (never the real chat). `/login?register`
+  The screenshot is of a throwaway server with test accounts (never the real chat): `tools/make_screenshot.py` (port
+  8009, a temporary db; accounts with emoji pictures, statuses incl. alex's, activities, roles, the Lounge, a #general
+  conversation with LaTeX, a reply, reactions, a custom emoji, a spoiler, code, Chattus's poll; Edge headless over the
+  DevTools protocol, 1440x800 at 2x; the Windows banner and What's new dot closed via localStorage: the user's wish). `/login?register`
   opens the login page in register mode.
   Logged in to the chat? The page asks `PUBLIC_URL/whoami` (name and picture only) with the cookie, and
   shows the name and "Log out" (`POST /logout`). Both answer with CORS headers for exactly
