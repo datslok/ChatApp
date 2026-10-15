@@ -19,11 +19,19 @@ export function useConnection() {
   const [outgoing, setOutgoing] = useState([]);  // ids of people we sent one to
   const [blocked, setBlocked] = useState([]);    // ids of people we blocked
   const [users, setUsers] = useState({});        // everyone, by id: {3: {id, name, ...}}
+  const [roles, setRoles] = useState([]);        // the server's roles, top first: [{id, name, colour}]
+  const [myPresence, setMyPresence] = useState('online');  // the status we chose (others may see another)
   const [emoji, setEmoji] = useState({});        // custom emoji names by id: {17: "pog"}
   const [unread, setUnread] = useState(new Set());  // chats with messages we haven't seen
   const [mentions, setMentions] = useState({});  // unread mentions of us per chat: {memes: 2}
   const [current, setCurrent] = useState(null);  // the chat we're reading, or null (the list)
   const [messages, setMessages] = useState(null);  // its messages, oldest first (null: loading)
+  // Where we had stopped reading it (the history's "last_read", a message id): the red NEW line
+  // goes above the first message after it. null: no line.
+  const [lastRead, setLastRead] = useState(null);
+  // Are there older messages than the ones we have (the server's "more": it sent a full batch)?
+  const [more, setMore] = useState(false);
+  const loadingOlder = useRef(false);  // asked for older ones, waiting for them
 
   // Refs: values that live as long as the component but don't redraw anything when changed.
   // The socket's event handlers need the *latest* chat we're in; a ref always has it, while
@@ -52,6 +60,13 @@ export function useConnection() {
       case 'welcome':
         // max_text_length: the server's limit on a message, so the text box can use the same.
         setMe({ id: data.id, username: data.username, maxTextLength: data.max_text_length });
+        setMyPresence(data.presence);
+        break;
+      case 'my_presence':
+        setMyPresence(data.presence);
+        break;
+      case 'roles':
+        setRoles(data.roles);
         break;
       case 'channels':
         setChannels(data.channels);
@@ -101,7 +116,29 @@ export function useConnection() {
         break;
       }
       case 'history':
-        if (data.channel === currentRef.current) setMessages(data.messages);
+        if (data.channel === currentRef.current) {
+          setMessages(data.messages);
+          setMore(data.more);
+          loadingOlder.current = false;
+          // A line only if something after it is new (never opened before: no line either).
+          const newest = data.messages[data.messages.length - 1];
+          setLastRead(data.last_read !== null && newest && newest.id > data.last_read ? data.last_read : null);
+        }
+        break;
+      case 'older':
+        // The 50 before our oldest, oldest first: they go in front.
+        if (data.channel === currentRef.current) {
+          setMessages((old) => [...data.messages, ...(old ?? [])]);
+          setMore(data.more);
+        }
+        loadingOlder.current = false;
+        break;
+      case 'pinned':
+        if (data.channel === currentRef.current) {
+          setMessages((old) => old?.map((message) => (message.id === data.message_id
+            ? { ...message, pinned: data.pinned }
+            : message)));
+        }
         break;
       case 'message':
         if (data.channel === currentRef.current) {
@@ -195,6 +232,9 @@ export function useConnection() {
     currentRef.current = key;
     setCurrent(key);
     setMessages(null);
+    setLastRead(null);
+    setMore(false);
+    loadingOlder.current = false;
     setUnread((old) => {
       const now = new Set(old);
       now.delete(key);
@@ -221,6 +261,16 @@ export function useConnection() {
   // screen shows the same, and something the server refused never appears.
   function sendMessage(text, replyTo) {
     send({ type: 'message', text, reply_to: replyTo ?? null });
+    setLastRead(null);  // we wrote something: caught up, the NEW line goes (like the web page)
+  }
+  // Scrolled up to the oldest message we have: ask for the 50 before it (once at a time).
+  function loadOlder() {
+    if (!more || loadingOlder.current || !messages?.length) return;
+    loadingOlder.current = true;
+    send({ type: 'older', before: messages[0].id });
+  }
+  function pin(messageId, pinned) {
+    send({ type: 'pin', message_id: messageId, pinned });  // ("pinned" comes back to everyone)
   }
   function react(messageId, emoji) {
     send({ type: 'react', message_id: messageId, emoji });  // again = take it back (a toggle)
@@ -252,9 +302,9 @@ export function useConnection() {
   }
 
   return {
-    status, me, channels, groups, friends, incoming, outgoing, blocked, users, emoji, unread, mentions,
-    current, messages,
-    openChat, closeChat, sendMessage, react, editMessage, deleteMessage, friendAction,
+    status, me, myPresence, channels, groups, friends, incoming, outgoing, blocked, users, roles, emoji,
+    unread, mentions, current, messages, lastRead, more,
+    openChat, closeChat, loadOlder, sendMessage, react, pin, editMessage, deleteMessage, friendAction,
     reconnect: connect,  // after logging in
   };
 }

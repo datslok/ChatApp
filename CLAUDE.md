@@ -84,22 +84,29 @@ the point is for me to understand how it works, not just to have it done.
   variables: use PowerShell and read them with `[Environment]::GetEnvironmentVariable(..., 'User')`.
   `adb shell screencap` shows me the phone's screen. Samsung phones need Samsung's ADB driver (Windows
   Update offers it but Settings hid it on 2026-10-15: installed through the Windows Update COM API, elevated).
-  The code: `App.js` picks the screen; `src/config.js` (`SERVER`: the dev server at localhost:8001, reached
-  with `adb reverse tcp:8001 tcp:8001`), `src/connection.js` (`useConnection`: the WebSocket, reconnecting,
-  "looking" with `mobile: true`, state from welcome/channels/groups/friends/users/custom_emoji/unread/history/
-  message/edited/deleted; `openChat`/`closeChat` send "join"), `src/LoginScreen.js` (POST /login; Android
-  keeps the cookie and sends it with the WebSocket; a 4001 close shows the login), `src/ChannelsScreen.js`
-  (channels, groups, friends' DMs, unread dots and mention counts), `src/ChatScreen.js` (an inverted
-  FlatList; the text box in a KeyboardAvoidingView, enough on the S24 without keyboard-controller; a long press
-  opens `MessageMenu`, a Modal with 6 quick reactions, Reply, Edit/Delete for your own or an admin's, its bottom
-  padding from `useSafeAreaInsets`; reaction chips toggle; nothing changes until the server's answer;
-  `MessageText` tints `<@id>` mentions, `mentionsMe` the yellow highlight; @ suggestions from `chatPeople`
-  (DM: the other one and bots; group: members; channel: everyone, plus @everyone), tracked with
-  `onSelectionChange`; blocked people's messages behind "Show"), `src/PeopleScreen.js` (requests, friends,
-  sent, blocked, search everyone; buttons as the web's makeFriendButtons; `friendAction` POSTs /friends/...),
-  `src/StatusDot.js` (presence colours, also on DM rows). App.js: `page` "chats"/"people" under an open chat,
-  a People button with the incoming-requests count (`__DEV__`: room for the dev build's gear button), `src/colors.js` (chat.css's dark theme). No navigation library yet;
-  `react-native-safe-area-context` for edge to edge. dev.db has the test accounts "phone" and "phone2". Rules (from the template's AGENTS.md): check Expo's
+  **Design rule (the user's): the app copies the web chat's design, in particular its phone layout (chat.css
+  `@media (max-width: 700px)`), and only differs where a phone needs it.** The code: `App.js` is the web
+  page's phone layout: `#topbar` (menu · label · users; a red dot on menu when anything else is unread),
+  the chat (or People) under it, `src/Drawer.js` (80% / max 280px, slides 0.2 s "ease" with `Animated`, a
+  backdrop; `position: absolute` spelled out: `StyleSheet.absoluteFillObject` silently did nothing in RN 0.86),
+  `src/Sidebar.js` (left: People + request badge, channels with headings, DMs with pictures and dots, your
+  panel), `src/Members.js` (right: Bots, roles, Online, Offline dimmed, like renderMembers); `view` (a key or
+  "people"), a history for the back button (closes a drawer first), the first channel at start.
+  `src/config.js` (`SERVER`: the dev server at localhost:8001, reached with `adb reverse tcp:8001 tcp:8001`),
+  `src/connection.js` (`useConnection`: the WebSocket, reconnecting, "looking" with `mobile: true`, state from
+  welcome/my_presence/roles/channels/groups/friends/blocks/users/custom_emoji/unread/history/older/message/
+  edited/deleted/reactions/pinned; `openChat`/`closeChat` send "join", `loadOlder`, `lastRead`, `friendAction`
+  POSTs /friends/...), `src/LoginScreen.js` (login.html's card; Forgot/Create open the web pages in the
+  browser; POST /login, Android keeps the cookie for the WebSocket and images; a 4001 close shows it),
+  `src/ChatScreen.js` (messages.js's rules: `buildRows` groups within 5 min, date lines, the NEW line; 40px
+  pictures, role colours, "Today at", the reply line, chips; an inverted FlatList with `onEndReached` for
+  older; the long-press `MessageMenu` stands in for the hover bar: reactions, Reply, Pin, Edit, Delete;
+  editing in the bottom box (phone reason: the keyboard); `#autocomplete`-style @ suggestions; blocked
+  messages behind Show), `src/PeopleScreen.js` (the third sub-step's; not yet the web's tabs),
+  `src/people.js` (Avatar with letter colours, StatusDot with the phone shape, BotBadge, Person, nameColor),
+  `src/Icon.js` (react-native-svg's SvgXml with the web page's Lucide shapes from `src/icon-shapes.js`,
+  written by tools/make_icons.py too), `src/chats.js` (keys and labels), `src/colors.js` (chat.css's dark
+  theme by variable name; other themes later). dev.db has the test accounts "phone" and "phone2". Rules (from the template's AGENTS.md): check Expo's
   docs for SDK 57 specifically, always `npx expo install` for packages, never edit the generated
   `android/` (git-ignored; `npx expo prebuild --clean` after changing `app.json`).
 - `static/login.html`: the login / create account page.

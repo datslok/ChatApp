@@ -1,5 +1,6 @@
 """Make static/js/icon-shapes.js: the line icons the chat's buttons use (instead of emoji), from Lucide
-(lucide.dev, ISC licence), one fixed version from npm's lucide-static package.
+(lucide.dev, ISC licence), one fixed version from npm's lucide-static package. The same shapes also
+go to mobile/src/icon-shapes.js for the phone app (src/Icon.js draws them), so both use the same icons.
 
     python tools/make_icons.py
 
@@ -49,18 +50,27 @@ with tarfile.open(fileobj=io.BytesIO(package)) as archive:
         inner = re.search(r"<svg[^>]*>(.*)</svg>", svg, re.S).group(1)
         shapes[name] = " ".join(line.strip() for line in inner.strip().splitlines())
 
-lines = [
-    "// The line icons on the chat's buttons: Lucide's (lucide.dev), version " + VERSION + ", copied from npm's",
-    "// lucide-static by tools/make_icons.py (don't edit by hand: add a name there and run it again).",
-    "//",
-    "// Lucide's licence:",
-    *("// " + line if line else "//" for line in licence.splitlines()),
-    "",
-    "const ICON_SHAPES = {",
-    *(f"  {json.dumps(name)}: {json.dumps(shape)}," for name, shape in shapes.items()),
-    "};",
-    "",
-]
-output = Path(__file__).parent.parent / "static" / "js" / "icon-shapes.js"
-output.write_text("\n".join(lines), encoding="utf-8", newline="\n")
-print(f"Wrote {len(shapes)} icons to {output}")
+def icon_file(declaration):
+    """The file's text: the licence, then the shapes after `declaration` ("const ICON_SHAPES = {")."""
+    return "\n".join([
+        "// The line icons on the chat's buttons: Lucide's (lucide.dev), version " + VERSION + ", copied from npm's",
+        "// lucide-static by tools/make_icons.py (don't edit by hand: add a name there and run it again).",
+        "//",
+        "// Lucide's licence:",
+        *("// " + line if line else "//" for line in licence.splitlines()),
+        "",
+        declaration,
+        *(f"  {json.dumps(name)}: {json.dumps(shape)}," for name, shape in shapes.items()),
+        "};",
+        "",
+    ])
+
+
+root = Path(__file__).parent.parent
+# The web page's scripts share one global scope (a plain const); the app's are modules (export).
+for output, declaration in [
+    (root / "static" / "js" / "icon-shapes.js", "const ICON_SHAPES = {"),
+    (root / "mobile" / "src" / "icon-shapes.js", "export const ICON_SHAPES = {"),
+]:
+    output.write_text(icon_file(declaration), encoding="utf-8", newline="\n")
+    print(f"Wrote {len(shapes)} icons to {output}")

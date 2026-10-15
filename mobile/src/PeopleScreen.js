@@ -1,24 +1,16 @@
 // Friends: requests to answer, friends (with their DM), requests we sent, people we blocked, and
 // a search box to find anyone else and add them (like the web page's People page).
-import { useEffect, useState } from 'react';
-import { Alert, BackHandler, FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useState } from 'react';
+import { Alert, FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { colors } from './colors';
-import { dmKey } from './ChannelsScreen';
-import StatusDot from './StatusDot';
+import { dmKey } from './chats';
+import { Person } from './people';
 
-export default function PeopleScreen({ connection, onBack }) {
-  const { users, me, friends, incoming, outgoing, blocked, friendAction, openChat } = connection;
+// onOpen(key): open that chat (App.js's go).
+export default function PeopleScreen({ connection, onOpen }) {
+  const { users, roles, me, myPresence, friends, incoming, outgoing, blocked, friendAction } = connection;
   const [query, setQuery] = useState('');
   const [error, setError] = useState('');
-
-  // Android's back button: back to the chats.
-  useEffect(() => {
-    const listener = BackHandler.addEventListener('hardwareBackPress', () => {
-      onBack();
-      return true;
-    });
-    return () => listener.remove();
-  }, []);
 
   async function act(action, userId) {
     setError('');
@@ -46,7 +38,7 @@ export default function PeopleScreen({ connection, onBack }) {
       return buttons;  // nothing else until they're unblocked
     }
     if (friends.includes(user.id)) {
-      add('Message', () => openChat(dmKey(me.id, user.id)), 'blue');
+      add('Message', () => onOpen(dmKey(me.id, user.id)), 'blue');
       if (!user.bot) add('Remove', () => act('remove', user.id), 'grey');  // bots are everyone's friend
     } else if (incoming.includes(user.id)) {
       add('Accept', () => act('accept', user.id), 'green');
@@ -92,13 +84,7 @@ export default function PeopleScreen({ connection, onBack }) {
     const { user } = item;
     return (
       <View style={styles.row}>
-        <StatusDot user={user} />
-        <View style={styles.who}>
-          <Text style={styles.name} numberOfLines={1}>
-            {user.name}{user.bot ? <Text style={styles.bot}>  BOT</Text> : null}
-          </Text>
-          {user.status ? <Text style={styles.status} numberOfLines={1}>{user.status}</Text> : null}
-        </View>
+        <Person user={user} roles={roles} me={me} myPresence={myPresence} color={colors.textStrong} ring={colors.bgMain} />
         {buttonsFor(user).map((button) => (
           <Pressable
             key={button.label}
@@ -114,12 +100,6 @@ export default function PeopleScreen({ connection, onBack }) {
 
   return (
     <View style={styles.screen}>
-      <View style={styles.header}>
-        <Pressable onPress={onBack} hitSlop={12} style={styles.back}>
-          <Text style={styles.backText}>←</Text>
-        </Pressable>
-        <Text style={styles.title}>People</Text>
-      </View>
       <TextInput
         style={styles.search}
         value={query}
@@ -137,13 +117,6 @@ export default function PeopleScreen({ connection, onBack }) {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bgMain },
-  header: {
-    flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10,
-    borderBottomWidth: 1, borderBottomColor: colors.bgDarkest,
-  },
-  back: { paddingRight: 12 },
-  backText: { color: colors.textSoft, fontSize: 24 },
-  title: { flex: 1, color: colors.textStrong, fontSize: 18, fontWeight: 'bold' },
   search: {
     margin: 12, backgroundColor: colors.bgDarkest, color: colors.text, fontSize: 16,
     borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8,

@@ -1,7 +1,10 @@
-// Logging in: the same POST /login as the web page's login.html. The server answers with the
-// session cookie, which Android keeps (like a browser) and sends with the WebSocket from then on.
+// Logging in, drawn like the web page's login.html: a card in the middle with the same fields,
+// button and links. The same POST /login: the server answers with the session cookie, which Android
+// keeps (like a browser) and sends with the WebSocket from then on.
 import { useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  ActivityIndicator, KeyboardAvoidingView, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View,
+} from 'react-native';
 import { colors } from './colors';
 import { SERVER } from './config';
 
@@ -37,52 +40,70 @@ export default function LoginScreen({ onLoggedIn }) {
   }
 
   return (
-    <View style={styles.screen}>
-      <Text style={styles.title}>ChatApp</Text>
-      <Text style={styles.label}>Username</Text>
-      <TextInput
-        style={styles.input}
-        value={username}
-        onChangeText={setUsername}
-        autoCapitalize="none"   // usernames: no capital first letter from the keyboard
-        autoCorrect={false}
-        autoComplete="username" // lets Android's password manager fill it in
-        returnKeyType="next"
-      />
-      <Text style={styles.label}>Password</Text>
-      <TextInput
-        style={styles.input}
-        value={password}
-        onChangeText={setPassword}
-        secureTextEntry          // dots instead of letters
-        autoComplete="current-password"
-        returnKeyType="go"
-        onSubmitEditing={logIn}  // the keyboard's Enter key logs in too
-      />
-      {error ? <Text style={styles.error}>{error}</Text> : null}
-      {/* A Pressable is a tappable area; its style can depend on whether it's being pressed. */}
-      <Pressable
-        style={({ pressed }) => [styles.button, (pressed || busy) && styles.buttonPressed]}
-        onPress={logIn}
-      >
-        {busy ? <ActivityIndicator color={colors.textStrong} /> : <Text style={styles.buttonText}>Log in</Text>}
-      </Pressable>
-    </View>
+    <KeyboardAvoidingView style={styles.screen} behavior="padding">
+      {/* A ScrollView, so the card can scroll up above the keyboard on a small screen. */}
+      <ScrollView contentContainerStyle={styles.middle} keyboardShouldPersistTaps="handled">
+        <View style={styles.card}>
+          <Text style={styles.title}>ChatApp</Text>
+          <View style={styles.field}>
+            <Text style={styles.label}>Username</Text>
+            <TextInput
+              style={styles.input}
+              value={username}
+              onChangeText={setUsername}
+              autoCapitalize="none"   // usernames: no capital first letter from the keyboard
+              autoCorrect={false}
+              autoComplete="username" // lets Android's password manager fill it in
+              returnKeyType="next"
+            />
+          </View>
+          <View style={styles.field}>
+            <Text style={styles.label}>Password</Text>
+            <TextInput
+              style={styles.input}
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry          // dots instead of letters
+              autoComplete="current-password"
+              returnKeyType="go"
+              onSubmitEditing={logIn}  // the keyboard's Enter key logs in too
+            />
+          </View>
+          {/* Always there (empty or not), so the card doesn't jump when an error appears. */}
+          <Text style={styles.error}>{error}</Text>
+          <Pressable style={({ pressed }) => [styles.button, (pressed || busy) && styles.pressed]} onPress={logIn}>
+            {busy ? <ActivityIndicator color="#ffffff" /> : <Text style={styles.buttonText}>Log in</Text>}
+          </Pressable>
+          {/* These two pages are the web page's own for now: they open in the phone's browser. */}
+          <Text style={styles.link} onPress={() => Linking.openURL(`${SERVER}/reset`)}>Forgot password?</Text>
+          <Text style={styles.switch}>
+            No account yet?{' '}
+            <Text style={styles.linkButton} onPress={() => Linking.openURL(`${SERVER}/login?register`)}>Create one</Text>
+          </Text>
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
-// React Native's styles look like CSS, written as JavaScript objects with camelCase names.
-// Every <View> is a flexbox column by default.
+// login.html's sizes and colours.
 const styles = StyleSheet.create({
-  screen: { flex: 1, justifyContent: 'center', padding: 24, backgroundColor: colors.bgMain },
-  title: { color: colors.textStrong, fontSize: 28, fontWeight: 'bold', textAlign: 'center', marginBottom: 32 },
-  label: { color: colors.textMuted, fontSize: 12, fontWeight: 'bold', textTransform: 'uppercase', marginBottom: 6 },
+  screen: { flex: 1, backgroundColor: colors.bgMain },
+  middle: { flexGrow: 1, justifyContent: 'center', alignItems: 'center', padding: 16 },
+  // The card: 384px wide at most, padding 32px, radius 8px, 12px between its rows.
+  card: { width: '100%', maxWidth: 384, padding: 32, borderRadius: 8, backgroundColor: colors.bgPanel, gap: 12 },
+  title: { marginBottom: 8, fontSize: 24, fontWeight: 'bold', color: '#ffffff', textAlign: 'center' },
+  field: { gap: 6 },
+  label: { fontSize: 13.6, color: colors.textSoft },
   input: {
-    backgroundColor: colors.bgDarkest, color: colors.text, fontSize: 16,
-    borderRadius: 6, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 16,
+    paddingHorizontal: 12, paddingVertical: 10, borderRadius: 6, backgroundColor: colors.bgDarkest,
+    color: colors.text, fontSize: 16,
   },
-  error: { color: colors.red, marginBottom: 16 },
-  button: { backgroundColor: colors.accent, borderRadius: 6, paddingVertical: 12, alignItems: 'center' },
-  buttonPressed: { opacity: 0.7 },
-  buttonText: { color: colors.textStrong, fontSize: 16, fontWeight: 'bold' },
+  error: { minHeight: 18, color: colors.red, fontSize: 14.4 },
+  button: { padding: 10, borderRadius: 6, backgroundColor: colors.accent, alignItems: 'center' },
+  pressed: { opacity: 0.8 },
+  buttonText: { color: '#ffffff', fontSize: 16 },
+  link: { textAlign: 'center', fontSize: 14.4, color: colors.link },
+  switch: { textAlign: 'center', fontSize: 14.4, color: colors.textSoft },
+  linkButton: { color: colors.link, textDecorationLine: 'underline' },
 });

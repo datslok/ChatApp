@@ -87,7 +87,7 @@ the same PC, but the scripts assume two).
 | `tools\make_admin.py` | either | make someone an admin, or take it away (the owner can also do it in Settings → Admin → Admins) |
 | `tools\feedback.py` | either | read the bug reports and ideas, mark them done |
 | `tools\make_pwa_icons.py` | your PC | makes the phone app's icons from the app icon |
-| `tools\make_icons.py` | your PC | makes `static\js\icon-shapes.js`, the buttons' line icons (Lucide's); add an icon's name in it and run it again |
+| `tools\make_icons.py` | your PC | makes `static\js\icon-shapes.js`, the buttons' line icons (Lucide's), and the same for the phone app (`mobile\src\icon-shapes.js`); add an icon's name in it and run it again |
 | `tools\make_vapid_keys.py` | either | once: the key pair for push notifications, for `.env` |
 | `npx expo run:android` (in `mobile\`) | your PC | builds the native phone app, installs it on a phone over USB and starts Metro |
 | `npx expo start` (in `mobile\`) | your PC | only Metro, for an app already installed by `run:android` |
