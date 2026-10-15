@@ -40,12 +40,19 @@ $exported = $LASTEXITCODE -eq 0
 Pop-Location
 if (-not $exported) { Write-Host "Exporting failed (see above)."; exit 1 }
 
-# 2. The update. (The Python of the chatapp conda environment, as start.ps1 uses.)
-$output = conda run -n chatapp python tools\make_app_update.py $export $version releases
+# 2. The update. (Only Python's standard library: the chatapp conda environment's Python if conda is
+# there, as in a PowerShell that start.ps1 works in, else whichever python there is.)
+$global:LASTEXITCODE = 1
+if (Get-Command conda -ErrorAction SilentlyContinue) {
+    $output = conda run -n chatapp python tools\make_app_update.py $export $version releases
+} else {
+    $output = python tools\make_app_update.py $export $version releases
+}
 Remove-Item $export -Recurse -Force
 if ($LASTEXITCODE -ne 0) { Write-Host "Making the update failed: $output"; exit 1 }
 Write-Host $output
 $manifest = Get-ChildItem "releases\app-updates\$version" -Filter *.json | Sort-Object Name | Select-Object -Last 1
+if (-not $manifest) { Write-Host "No update was made (see above)."; exit 1 }
 $files = (Get-Content $manifest.FullName -Raw | ConvertFrom-Json)
 $names = @($files.launchAsset.file) + @($files.assets | ForEach-Object { $_.file })
 
