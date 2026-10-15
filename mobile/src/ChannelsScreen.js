@@ -2,6 +2,7 @@
 // groups first, then a DM with each friend (like the web page's sidebar).
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors } from './colors';
+import StatusDot from './StatusDot';
 
 // A DM's key is "dm:" + the two user ids, the smaller first (the server's rule): "dm:3:7".
 export function dmKey(myId, theirId) {
@@ -41,7 +42,7 @@ export default function ChannelsScreen({ connection }) {
   }
   const dms = friends
     .filter((id) => users[id])  // (someone not in the users list yet: skip until they are)
-    .map((id) => ({ key: dmKey(me?.id, id), name: users[id].name }))
+    .map((id) => ({ key: dmKey(me?.id, id), name: users[id].name, person: users[id] }))
     .sort((a, b) => a.name.localeCompare(b.name));
   rows.push(...dms);
 
@@ -58,6 +59,7 @@ export default function ChannelsScreen({ connection }) {
         style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
         onPress={() => openChat(item.key)}
       >
+        {item.person ? <StatusDot user={item.person} /> : null}
         <Text style={[styles.name, isUnread && styles.nameUnread]} numberOfLines={1}>
           {item.name}
         </Text>

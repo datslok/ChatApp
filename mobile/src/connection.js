@@ -6,7 +6,7 @@
 // by itself when it changes. It speaks exactly the same messages as the web page (core.js).
 import { useEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
-import { SOCKET_URL } from './config';
+import { SERVER, SOCKET_URL } from './config';
 
 export function useConnection() {
   // "connecting", "online", "offline" (dropped: trying again) or "logged-out".
@@ -15,6 +15,9 @@ export function useConnection() {
   const [channels, setChannels] = useState([]);  // the server's channels and headings, in order
   const [groups, setGroups] = useState([]);      // our group DMs
   const [friends, setFriends] = useState([]);    // our friends' ids (each has a DM with us)
+  const [incoming, setIncoming] = useState([]);  // ids of people who sent us a friend request
+  const [outgoing, setOutgoing] = useState([]);  // ids of people we sent one to
+  const [blocked, setBlocked] = useState([]);    // ids of people we blocked
   const [users, setUsers] = useState({});        // everyone, by id: {3: {id, name, ...}}
   const [emoji, setEmoji] = useState({});        // custom emoji names by id: {17: "pog"}
   const [unread, setUnread] = useState(new Set());  // chats with messages we haven't seen
@@ -57,7 +60,13 @@ export function useConnection() {
         setGroups(data.groups);
         break;
       case 'friends':
+        // Sent at connect, and again after every change (ours or theirs) to any of the three.
         setFriends(data.friends);
+        setIncoming(data.incoming);
+        setOutgoing(data.outgoing);
+        break;
+      case 'blocks':
+        setBlocked(data.blocked);
         break;
       case 'users': {
         const byId = {};
@@ -223,9 +232,29 @@ export function useConnection() {
     send({ type: 'delete', message_id: messageId });
   }
 
+  // Friends and blocking go through the server's /friends/... addresses (like the web page), not
+  // the WebSocket. "request", "accept", "remove" (decline, cancel or unfriend), "block", "unblock".
+  // The server then sends both people a fresh "friends" (or "blocks"), which redraws the lists;
+  // so this only returns the error to show, or null if it worked.
+  async function friendAction(action, userId) {
+    try {
+      const response = await fetch(`${SERVER}/friends/${action}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: userId }),
+      });
+      if (response.ok) return null;
+      const answer = await response.json().catch(() => ({}));
+      return typeof answer.detail === 'string' ? answer.detail : 'Something went wrong.';
+    } catch {
+      return "Couldn't reach the server.";
+    }
+  }
+
   return {
-    status, me, channels, groups, friends, users, emoji, unread, mentions, current, messages,
-    openChat, closeChat, sendMessage, react, editMessage, deleteMessage,
+    status, me, channels, groups, friends, incoming, outgoing, blocked, users, emoji, unread, mentions,
+    current, messages,
+    openChat, closeChat, sendMessage, react, editMessage, deleteMessage, friendAction,
     reconnect: connect,  // after logging in
   };
 }

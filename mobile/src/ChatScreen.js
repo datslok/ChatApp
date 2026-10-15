@@ -1,8 +1,8 @@
 // One chat: its messages live, and writing (sending, replies, reactions, editing, deleting).
 import { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator, Alert, BackHandler, FlatList, KeyboardAvoidingView, Modal, Pressable, StyleSheet,
-  Text, TextInput, View,
+  ActivityIndicator, Alert, BackHandler, FlatList, KeyboardAvoidingView, Modal, Pressable, ScrollView,
+  StyleSheet, Text, TextInput, View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from './colors';
@@ -21,6 +21,41 @@ function readableText(text, users, emoji) {
     .replace(/<:(\d+)>/g, (whole, id) => (emoji[id] ? `:${emoji[id]}:` : ':?:'));
 }
 
+// Who can be @mentioned here (besides us): in a DM the other person, and the bots (naming one
+// invites it in, see the server's bot_invited); in a group its members; in a channel everyone.
+function chatPeople(key, { users, groups, me }) {
+  const everyone = Object.values(users).filter((user) => user.id !== me.id);
+  if (key.startsWith('dm:')) {
+    const ids = key.slice(3).split(':').map(Number);
+    return everyone.filter((user) => ids.includes(user.id) || user.bot);
+  }
+  const group = groups.find((g) => g.key === key);
+  if (group) return everyone.filter((user) => group.members.includes(user.id));
+  return everyone;
+}
+
+// Does this text mention us (by name, or with @everyone)? Like the web page's mentionsMe.
+function mentionsMe(text, myId) {
+  return text.includes(`<@${myId}>`) || text.includes('<@everyone>');
+}
+
+// A message's text with its @mentions drawn as tinted names. split() with a (group) in the
+// pattern keeps the separators: "hi <@3>!" -> ["hi ", "<@3>", "!"]. A <Text> inside a <Text>
+// carries on the same line with its own style, like a <span> in HTML.
+function MessageText({ text, users, emoji, style }) {
+  const parts = text.split(/(<@\d+>|<@everyone>)/);
+  return (
+    <Text style={style}>
+      {parts.map((part, index) => {
+        if (/^<@(\d+|everyone)>$/.test(part)) {
+          return <Text key={index} style={styles.mention}>{readableText(part, users, emoji)}</Text>;
+        }
+        return readableText(part, users, emoji);
+      })}
+    </Text>
+  );
+}
+
 // A reaction is an emoji, or a custom emoji as "custom:17": shown by name until we draw pictures.
 function reactionLabel(reaction, emoji) {
   const custom = reaction.match(/^custom:(\d+)$/);
@@ -36,15 +71,28 @@ function when(isoTime) {
   return `${time.getDate()}.${time.getMonth() + 1} ${clock}`;
 }
 
-function Message({ message, users, emoji, myId, onLongPress, onReact }) {
+function Message({ message, users, emoji, myId, isBlocked, onShow, onLongPress, onReact }) {
   const name = (message.user_id && users[message.user_id]?.name) || message.name;
-  const text = readableText(message.text, users, emoji);
   const note = message.kind !== null;  // the server's own notes: "📞 started a call", "📌 pinned..."
+
+  // Someone we blocked: hidden, unless we tap to see this one (like the web page).
+  if (isBlocked) {
+    return (
+      <Pressable onPress={() => onShow(message.id)} style={styles.message}>
+        <Text style={styles.blocked}>🚫 A message from someone you blocked · <Text style={styles.show}>Show</Text></Text>
+      </Pressable>
+    );
+  }
+
   return (
     // Pressable: a long press (half a second) opens the menu for this message.
     <Pressable
       onLongPress={() => onLongPress(message)}
-      style={({ pressed }) => [styles.message, pressed && styles.messagePressed]}
+      style={({ pressed }) => [
+        styles.message,
+        mentionsMe(message.text, myId) && message.user_id !== myId && styles.mentionsMe,  // yellow, for us
+        pressed && styles.messagePressed,
+      ]}
     >
       {message.reply ? (
         <Text style={styles.reply} numberOfLines={1}>
@@ -57,9 +105,9 @@ function Message({ message, users, emoji, myId, onLongPress, onReact }) {
         <Text style={styles.name}>{name}</Text>
         <Text style={styles.time}>{when(message.sent_at)}</Text>
       </View>
-      {text ? (
+      {message.text ? (
         <Text style={[styles.text, note && styles.note]}>
-          {text}
+          <MessageText text={message.text} users={users} emoji={emoji} />
           {message.edited_at ? <Text style={styles.time}> (edited)</Text> : null}
         </Text>
       ) : null}
@@ -140,8 +188,32 @@ export default function ChatScreen({ connection }) {
   // A ref to the text box itself (not its text): input.current.focus() puts the cursor in it,
   // which opens the keyboard. React fills it in through the TextInput's ref={input}.
   const input = useRef(null);
+  const [cursor, setCursor] = useState(0);         // where the cursor is in the text box
+  const [shownBlocked, setShownBlocked] = useState(new Set());  // blocked people's messages we chose to see
 
   const isAdmin = users[me.id]?.admin === true;
+
+  // @ suggestions: is the word just before the cursor an "@" and the start of a name? Then offer
+  // the people in this chat whose names start with it (and @everyone in a channel), up to 5.
+  const typedMention = draft.slice(0, cursor).match(/(?:^|\s)@([\w-]*)$/);  // [whole match, "ka"]
+  let suggestions = [];
+  if (typedMention) {
+    const start = typedMention[1].toLowerCase();
+    suggestions = chatPeople(current, connection)
+      .filter((user) => user.name.toLowerCase().startsWith(start))
+      .map((user) => user.name);
+    const isChannel = !current.startsWith('dm:') && !current.startsWith('g:');
+    if (isChannel && 'everyone'.startsWith(start)) suggestions.push('everyone');
+    suggestions = suggestions.slice(0, 5);
+  }
+
+  // Swap the half-typed "@ka" before the cursor for the whole "@kari " (the server turns it into
+  // a mention when the message is sent).
+  function pickSuggestion(name) {
+    const before = draft.slice(0, cursor).replace(/@[\w-]*$/, `@${name} `);
+    setDraft(before + draft.slice(cursor));
+    setCursor(before.length);
+  }
 
   // Android's back button (or back gesture) goes back to the list instead of leaving the app.
   // Returning true says "handled". The function useEffect returns removes the listener again
@@ -227,6 +299,8 @@ export default function ChatScreen({ connection }) {
         renderItem={({ item }) => (
           <Message
             message={item} users={users} emoji={emoji} myId={me.id}
+            isBlocked={connection.blocked.includes(item.user_id) && !shownBlocked.has(item.id)}
+            onShow={(id) => setShownBlocked((old) => new Set(old).add(id))}
             onLongPress={setMenuFor} onReact={connection.react}
           />
         )}
@@ -261,12 +335,28 @@ export default function ChatScreen({ connection }) {
           </Pressable>
         </View>
       ) : null}
+      {suggestions.length > 0 ? (
+        // keyboardShouldPersistTaps: a tap on a name works without first closing the keyboard.
+        <ScrollView horizontal keyboardShouldPersistTaps="always" style={styles.suggestions}>
+          {suggestions.map((name) => (
+            <Pressable
+              key={name}
+              onPress={() => pickSuggestion(name)}
+              style={({ pressed }) => [styles.suggestion, pressed && styles.messagePressed]}
+            >
+              <Text style={styles.suggestionText}>@{name}</Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+      ) : null}
       <View style={styles.composer}>
         <TextInput
           ref={input}
           style={styles.input}
           value={draft}
           onChangeText={setDraft}
+          // Where the cursor is (selection.end), for the @ suggestions.
+          onSelectionChange={(event) => setCursor(event.nativeEvent.selection.end)}
           placeholder={`Message ${chatTitle(current, connection)}`}
           placeholderTextColor={colors.textMuted}
           multiline                          // grows with the text, up to maxHeight
@@ -311,6 +401,14 @@ const styles = StyleSheet.create({
   listInside: { paddingVertical: 8 },
   message: { paddingHorizontal: 16, paddingVertical: 6 },
   messagePressed: { backgroundColor: colors.bgActive },
+  // A message mentioning us: a faint yellow background and a yellow line on the left (the web's look).
+  mentionsMe: { backgroundColor: colors.yellowFaint, borderLeftWidth: 2, borderLeftColor: colors.yellow, paddingLeft: 14 },
+  mention: { backgroundColor: colors.accentFaint, color: colors.mentionText, fontWeight: '500' },
+  blocked: { color: colors.textMuted, fontStyle: 'italic' },
+  show: { color: colors.textSoft, fontStyle: 'normal', fontWeight: 'bold' },
+  suggestions: { flexGrow: 0, paddingHorizontal: 8, paddingTop: 6 },
+  suggestion: { backgroundColor: colors.bgPanel, borderRadius: 14, paddingHorizontal: 12, paddingVertical: 6, marginRight: 6 },
+  suggestionText: { color: colors.mentionText, fontSize: 15 },
   reply: { color: colors.textMuted, fontSize: 13, marginBottom: 2 },
   top: { flexDirection: 'row', alignItems: 'baseline', gap: 8 },
   name: { color: colors.textStrong, fontSize: 15, fontWeight: 'bold' },

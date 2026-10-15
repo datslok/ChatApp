@@ -92,7 +92,13 @@ the point is for me to understand how it works, not just to have it done.
   (channels, groups, friends' DMs, unread dots and mention counts), `src/ChatScreen.js` (an inverted
   FlatList; the text box in a KeyboardAvoidingView, enough on the S24 without keyboard-controller; a long press
   opens `MessageMenu`, a Modal with 6 quick reactions, Reply, Edit/Delete for your own or an admin's, its bottom
-  padding from `useSafeAreaInsets`; reaction chips toggle; nothing changes until the server's answer), `src/colors.js` (chat.css's dark theme). No navigation library yet;
+  padding from `useSafeAreaInsets`; reaction chips toggle; nothing changes until the server's answer;
+  `MessageText` tints `<@id>` mentions, `mentionsMe` the yellow highlight; @ suggestions from `chatPeople`
+  (DM: the other one and bots; group: members; channel: everyone, plus @everyone), tracked with
+  `onSelectionChange`; blocked people's messages behind "Show"), `src/PeopleScreen.js` (requests, friends,
+  sent, blocked, search everyone; buttons as the web's makeFriendButtons; `friendAction` POSTs /friends/...),
+  `src/StatusDot.js` (presence colours, also on DM rows). App.js: `page` "chats"/"people" under an open chat,
+  a People button with the incoming-requests count (`__DEV__`: room for the dev build's gear button), `src/colors.js` (chat.css's dark theme). No navigation library yet;
   `react-native-safe-area-context` for edge to edge. dev.db has the test accounts "phone" and "phone2". Rules (from the template's AGENTS.md): check Expo's
   docs for SDK 57 specifically, always `npx expo install` for packages, never edit the generated
   `android/` (git-ignored; `npx expo prebuild --clean` after changing `app.json`).

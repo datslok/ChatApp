@@ -1,16 +1,20 @@
 // The whole app: one connection to the server, and whichever screen fits what it says.
 import { StatusBar } from 'expo-status-bar';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { useState } from 'react';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import ChannelsScreen from './src/ChannelsScreen';
 import ChatScreen from './src/ChatScreen';
 import LoginScreen from './src/LoginScreen';
+import PeopleScreen from './src/PeopleScreen';
 import { colors } from './src/colors';
 import { useConnection } from './src/connection';
 
 function Screen() {
   const connection = useConnection();
-  const { status, me, current } = connection;
+  const { status, me, current, incoming } = connection;
+  // Which page is under an open chat: "chats" (the list) or "people". Leaving a chat goes back to it.
+  const [page, setPage] = useState('chats');
 
   if (status === 'logged-out') {
     return <LoginScreen onLoggedIn={connection.reconnect} />;
@@ -27,11 +31,24 @@ function Screen() {
   if (current !== null) {
     return <ChatScreen connection={connection} />;
   }
+  if (page === 'people') {
+    return <PeopleScreen connection={connection} onBack={() => setPage('chats')} />;
+  }
   return (
     <View style={styles.list}>
       <View style={styles.header}>
         <Text style={styles.title}>ChatApp</Text>
-        <Text style={styles.me}>{me.username}</Text>
+        <Pressable
+          onPress={() => setPage('people')}
+          // __DEV__ is true only in development builds, whose gear button floats over this corner.
+          style={({ pressed }) => [styles.peopleButton, __DEV__ && styles.clearOfGear, pressed && styles.pressed]}
+        >
+          <Text style={styles.peopleText}>People</Text>
+          {/* Friend requests waiting for an answer. */}
+          {incoming.length > 0 ? (
+            <View style={styles.badge}><Text style={styles.badgeText}>{incoming.length}</Text></View>
+          ) : null}
+        </Pressable>
       </View>
       {status !== 'online' ? <Text style={styles.offline}>Reconnecting…</Text> : null}
       <ChannelsScreen connection={connection} />
@@ -58,10 +75,18 @@ const styles = StyleSheet.create({
   loadingText: { color: colors.textMuted },
   list: { flex: 1 },
   header: {
-    flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.bgDarkest,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.bgDarkest,
   },
   title: { color: colors.textStrong, fontSize: 20, fontWeight: 'bold' },
-  me: { color: colors.textMuted },
+  peopleButton: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: colors.bgActive, borderRadius: 16, paddingHorizontal: 14, paddingVertical: 6,
+  },
+  clearOfGear: { marginRight: 64 },
+  pressed: { opacity: 0.7 },
+  peopleText: { color: colors.textStrong, fontWeight: 'bold' },
+  badge: { minWidth: 20, height: 20, borderRadius: 10, paddingHorizontal: 6, backgroundColor: colors.red, justifyContent: 'center', alignItems: 'center' },
+  badgeText: { color: colors.textStrong, fontSize: 12, fontWeight: 'bold' },
   offline: { backgroundColor: colors.red, color: colors.textStrong, textAlign: 'center', paddingVertical: 4 },
 });
