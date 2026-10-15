@@ -47,7 +47,8 @@ export function useConnection() {
   function handle(data) {
     switch (data.type) {
       case 'welcome':
-        setMe({ id: data.id, username: data.username });
+        // max_text_length: the server's limit on a message, so the text box can use the same.
+        setMe({ id: data.id, username: data.username, maxTextLength: data.max_text_length });
         break;
       case 'channels':
         setChannels(data.channels);
@@ -107,7 +108,20 @@ export function useConnection() {
         break;
       case 'deleted':
         if (data.channel === currentRef.current) {
-          setMessages((old) => old?.filter((message) => message.id !== data.message_id));
+          // Gone from the list, and replies to it now quote "a deleted message".
+          setMessages((old) => old
+            ?.filter((message) => message.id !== data.message_id)
+            .map((message) => (message.reply?.id === data.message_id
+              ? { ...message, reply: { id: data.message_id, deleted: true } }
+              : message)));
+        }
+        break;
+      case 'reactions':
+        // A message's reactions changed (someone added or removed one): its whole new list.
+        if (data.channel === currentRef.current) {
+          setMessages((old) => old?.map((message) => (message.id === data.message_id
+            ? { ...message, reactions: data.reactions }
+            : message)));
         }
         break;
       // Everything else (reactions, calls, typing, ...) comes in later steps.
@@ -193,9 +207,25 @@ export function useConnection() {
     send({ type: 'join', channel: null });
   }
 
+  // Writing. None of these change the screen themselves: the server answers everyone in the chat,
+  // us included ("message", "reactions", "edited", "deleted"), and that's what we draw. So every
+  // screen shows the same, and something the server refused never appears.
+  function sendMessage(text, replyTo) {
+    send({ type: 'message', text, reply_to: replyTo ?? null });
+  }
+  function react(messageId, emoji) {
+    send({ type: 'react', message_id: messageId, emoji });  // again = take it back (a toggle)
+  }
+  function editMessage(messageId, text) {
+    send({ type: 'edit', message_id: messageId, text });
+  }
+  function deleteMessage(messageId) {
+    send({ type: 'delete', message_id: messageId });
+  }
+
   return {
     status, me, channels, groups, friends, users, emoji, unread, mentions, current, messages,
-    openChat, closeChat,
+    openChat, closeChat, sendMessage, react, editMessage, deleteMessage,
     reconnect: connect,  // after logging in
   };
 }

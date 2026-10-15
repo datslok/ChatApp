@@ -104,7 +104,7 @@
 - [ ] **22.** A native phone app: React Native with Expo, in `mobile/`, Android first (iPhone later from the same code)
     - [x] Setup: Android Studio and its SDK, an Expo project (JavaScript), a development build on the phone that updates live
     - [x] Log in, the channel list, and reading messages live over the WebSocket
-    - [ ] Writing: sending, replies, reactions, editing and deleting
+    - [x] Writing: sending, replies, reactions, editing and deleting
     - [ ] DMs, friends, unread dots and mentions
     - [ ] Pictures and files: viewing, uploading, downloading
     - [ ] Voice and video calls (LiveKit's React Native library), also with the phone locked
