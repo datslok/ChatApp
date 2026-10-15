@@ -609,6 +609,9 @@ function joinCurrentChannel() {
   friendsView.hidden = !inFriends;
   loungeView.hidden = !inLounge;
   channelView.hidden = inFriends || inLounge;
+  // The text box can only measure its text now that it's shown (ui.js, autoGrow): from the Lounge or
+  // the People page, switchDraft's autoGrow ran while it was still hidden.
+  if (!channelView.hidden) autoGrow();
   renderMembers();  // the right column shows who's in this chat (people.js)
   if (inLounge) {
     renderLoungeView();

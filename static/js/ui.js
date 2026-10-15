@@ -146,7 +146,10 @@ for (const dialog of document.querySelectorAll("dialog")) {
 
 // A textarea doesn't grow by itself. Shrink it to nothing ("auto"), then make it as tall as
 // its text needs (scrollHeight). The CSS max-height stops it at half the screen.
+// Not while it's hidden (the Lounge or the People page is showing: offsetParent is null): a hidden
+// element has no size, so it would be made 0 px tall. core.js calls this again once it's shown.
 function autoGrow() {
+  if (input.offsetParent === null) return;
   input.style.height = "auto";
   input.style.height = input.scrollHeight + "px";
 }
