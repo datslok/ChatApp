@@ -138,18 +138,21 @@ function Main({ connection, voice, notifications, openChatRef, share, onShareDon
     save: () => ({ view, drafts }),
   });
 
-  // Looking at a DM with someone who's no longer a friend (removed, blocked), or a group we're no
-  // longer in? Then it's gone: off to the first channel, like the web page.
+  // Looking at a DM with someone who's no longer a friend (removed, blocked), a group we're no
+  // longer in, or a channel an admin deleted? Then it's gone: off to the first channel, like the web page.
   useEffect(() => {
     const first = channels.find((channel) => !channel.heading);
+    if (!first) return;  // (no channel list yet: nothing can be judged gone)
     const partner = dmPartner(view, connection.me.id);
     const goneDm = partner !== null && !connection.friends.includes(partner);
     const goneGroup = view?.startsWith('g:') && !connection.groups.some((group) => group.key === view);
-    if ((goneDm || goneGroup) && first) {
+    const isChannel = view !== null && partner === null && !view.startsWith('g:') && view !== PEOPLE && view !== LOUNGE;
+    const goneChannel = isChannel && !channels.some((channel) => channel.key === view && !channel.heading);
+    if (goneDm || goneGroup || goneChannel) {
       history.current = history.current.filter((key) => key !== view);
       go(first.key, false);
     }
-  }, [connection.friends, connection.groups]);
+  }, [connection.friends, connection.groups, channels]);
 
   // Android's back button, the web page's way: close an open drawer, else back to the chat before.
   // With nowhere left to go, returning false lets Android do its own thing (leave the app).
@@ -307,7 +310,7 @@ function Main({ connection, voice, notifications, openChatRef, share, onShareDon
       {dialog?.type === 'userMenu' ? (
         <UserMenu
           connection={connection} userId={dialog.id} onProfile={openProfile} onOpen={go} onClose={closeDialog}
-          onMention={view === PEOPLE ? null : mention}  // (only in a chat, which has a text box)
+          onMention={view === PEOPLE || view === LOUNGE ? null : mention}  // (only in a chat, which has a text box)
           onEditProfile={() => setDialog({ type: 'settings', page: 'profile' })}
           onBan={(id) => setDialog({ type: 'ban', id })}
           onCall={(dm) => {

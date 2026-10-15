@@ -136,9 +136,9 @@
 What the web/desktop app has and the phone app doesn't yet (an audit on 2026-10-15). Push to talk, starting
 with Windows, activity detection, zoom, drag-and-drop, hover bars and keyboard shortcuts are left out on purpose.
 
-- [ ] Bugs
-    - [ ] Leave a channel that gets deleted while it's open (the phone stays in it, titled with its key)
-    - [ ] Mention in the user menu does nothing in the Lounge (no text box there): hide it there, like the web
+- [x] Bugs
+    - [x] Leave a channel that gets deleted while it's open (the phone stays in it, titled with its key)
+    - [x] Mention in the user menu does nothing in the Lounge (no text box there): hide it there, like the web
 - [ ] Messages
     - [ ] Who reacted (the web's hover over a reaction): a long press on a reaction
     - [ ] Tapping a @mention opens the profile
