@@ -668,6 +668,17 @@ build** on the phone: the native part is built once, and the JavaScript comes li
 on your PC, so saving `App.js` changes the app within a second. The phone needs to be on the same
 network as the PC. Shake the phone for the developer menu (Reload, DevTools).
 
+The app talks to the server named in `mobile\src\config.js`: your development server
+(`.\start.ps1`) by default. That one only listens on your PC, so with the phone plugged in, run
+this once (again after replugging) to make the phone's own `localhost:8001` lead to the PC's:
+
+```powershell
+adb reverse tcp:8001 tcp:8001
+```
+
+Log in with an account on the development server (create one in the browser at
+http://localhost:8001; the email verification link is printed in the server's window).
+
 Later, when only JavaScript changed, `npx expo start` is enough. Run `npx expo run:android` again
 after adding a package with native code. Add packages with `npx expo install <name>` (not
 `npm install`), so you get the version that matches Expo. The `android\` folder is generated from

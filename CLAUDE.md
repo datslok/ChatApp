@@ -82,7 +82,16 @@ the point is for me to understand how it works, not just to have it done.
   `platform-tools` on PATH. My phone (Samsung S24 Ultra, SM-S928B) over USB; Metro reaches it over
   Wi-Fi. Running it: README, "The native app (in progress)". The Bash tool doesn't see these user
   variables: use PowerShell and read them with `[Environment]::GetEnvironmentVariable(..., 'User')`.
-  `adb shell screencap` shows me the phone's screen. Rules (from the template's AGENTS.md): check Expo's
+  `adb shell screencap` shows me the phone's screen. Samsung phones need Samsung's ADB driver (Windows
+  Update offers it but Settings hid it on 2026-10-15: installed through the Windows Update COM API, elevated).
+  The code: `App.js` picks the screen; `src/config.js` (`SERVER`: the dev server at localhost:8001, reached
+  with `adb reverse tcp:8001 tcp:8001`), `src/connection.js` (`useConnection`: the WebSocket, reconnecting,
+  "looking" with `mobile: true`, state from welcome/channels/groups/friends/users/custom_emoji/unread/history/
+  message/edited/deleted; `openChat`/`closeChat` send "join"), `src/LoginScreen.js` (POST /login; Android
+  keeps the cookie and sends it with the WebSocket; a 4001 close shows the login), `src/ChannelsScreen.js`
+  (channels, groups, friends' DMs, unread dots and mention counts), `src/ChatScreen.js` (an inverted
+  FlatList, read-only so far), `src/colors.js` (chat.css's dark theme). No navigation library yet;
+  `react-native-safe-area-context` for edge to edge. dev.db has the test accounts "phone" and "phone2". Rules (from the template's AGENTS.md): check Expo's
   docs for SDK 57 specifically, always `npx expo install` for packages, never edit the generated
   `android/` (git-ignored; `npx expo prebuild --clean` after changing `app.json`).
 - `static/login.html`: the login / create account page.
