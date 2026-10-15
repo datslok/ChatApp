@@ -34,6 +34,7 @@ import { useConnection } from './src/connection';
 import { LOUNGE, LOUNGE_ROOM, useVoice } from './src/voice';
 import { clearOldCopies } from './src/files';
 import { isMuted, useNotifications } from './src/notifications';
+import { restored, useLiveUpdates } from './src/liveUpdates';
 import { addShareListener, getInitialShare } from './modules/shared-files';
 import { addOpenListener, getInitialOpen } from './modules/push';
 
@@ -68,7 +69,8 @@ function Main({ connection, voice, notifications, openChatRef, share, onShareDon
   // like Discord, so a picture picked or words typed in a DM stay there when you go elsewhere. Kept
   // here, as the chat screen goes away on the People page.
   const [trays, setTrays] = useState({});
-  const [drafts, setDrafts] = useState({});
+  // (After a switch to new JavaScript: as they were just before it, liveUpdates.js.)
+  const [drafts, setDrafts] = useState(() => restored?.drafts ?? {});
   // A message to go to, {chat, id} (a tapped notification's), until the chat screen has taken it.
   const [jumpRequest, setJumpRequest] = useState(null);
   // The People page's tab to open on, {tab, at} (a friend request's notification: Requests); `at` (when)
@@ -117,11 +119,24 @@ function Main({ connection, voice, notifications, openChatRef, share, onShareDon
     setFocusTick((n) => n + 1);
   }
 
-  // At the start: the first channel (the web page opens one too).
+  // At the start: the first channel (the web page opens one too), or after a switch to new JavaScript,
+  // the chat that was open (not the Lounge, which would mean being in a call: then there's no switch).
   useEffect(() => {
     const first = channels.find((channel) => !channel.heading);
-    if (view === null && first) go(first.key, false);
+    if (view !== null || !first) return;
+    const before = restored?.view;
+    go(before && before !== LOUNGE ? before : first.key, false);
   }, [channels]);
+
+  // New JavaScript from the server while we're open (liveUpdates.js): only switched to when nothing would
+  // be lost or cut off. Not in or ringing for a call, no files waiting in any chat's tray (or on their way
+  // in from a share), no popup or dialog open (a half-done edit in Settings, say).
+  useLiveUpdates({
+    connection,
+    safe: !voice.roomName && !voice.incoming && !voice.outgoing && !share && !toTray && dialog === null
+      && popup === null && Object.values(trays).every((files) => !files?.length),
+    save: () => ({ view, drafts }),
+  });
 
   // Looking at a DM with someone who's no longer a friend (removed, blocked), or a group we're no
   // longer in? Then it's gone: off to the first channel, like the web page.

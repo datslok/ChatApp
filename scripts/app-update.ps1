@@ -1,6 +1,7 @@
 # From the development PC: sends the phone app's JavaScript to the phones, without a new APK. Most
-# changes are only JavaScript (mobile\App.js, mobile\src\): the phones fetch the new bundle by
-# themselves at their next start (expo-updates) and use it from the start after. See README,
+# changes are only JavaScript (mobile\App.js, mobile\src\). At the end the chat restarts (deploy.ps1, like
+# release-upload.ps1): every open app reconnects, finds the new bundle and switches to it as soon as
+# nothing would be lost (mobile\src\liveUpdates.js); closed ones get it when they start. See README,
 # "Releasing the phone app".
 #
 #   .\scripts\app-update.ps1
@@ -62,4 +63,8 @@ scp ($names | ForEach-Object { "releases\app-assets\$_" }) "chatserver:$ServerFo
 if ($LASTEXITCODE -ne 0) { Write-Host "Copying the files failed (see above)."; exit 1 }
 scp $manifest.FullName "chatserver:$ServerFolder/releases/app-updates/$version/"
 if ($LASTEXITCODE -ne 0) { Write-Host "Copying the manifest failed (see above)."; exit 1 }
-Write-Host "Done: phones with version $version fetch it at their next start, and use it from the one after." -ForegroundColor Green
+
+Write-Host "Restarting the chat, so the open apps reconnect and switch to it..."
+& .\scripts\deploy.ps1
+if ($LASTEXITCODE -ne 0) { Write-Host "The restart failed (see above): open apps switch when they reconnect or come back on screen."; exit 1 }
+Write-Host "Done: open apps with version $version switch to it as soon as they safely can, the others when they start." -ForegroundColor Green

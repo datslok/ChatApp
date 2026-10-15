@@ -751,9 +751,12 @@ on Do Not Disturb.
 Friends get the app from `/download` (on an Android phone it shows the Android app): an APK, the app's
 install file, straight from your server, no Play Store. After that it updates itself, in two ways:
 
-- **JavaScript** (most changes: screens, buttons, behaviour): `.\scripts\app-update.ps1`. Phones fetch
-  it by themselves at their next start ([expo-updates](https://docs.expo.dev/versions/latest/sdk/updates/),
-  from your server's `/app-update`) and use it from the start after that. Nothing to tap.
+- **JavaScript** (most changes: screens, buttons, behaviour): `.\scripts\app-update.ps1`. It restarts the
+  chat at the end, so every open app reconnects, fetches the new bundle
+  ([expo-updates](https://docs.expo.dev/versions/latest/sdk/updates/), from your server's `/app-update`)
+  and switches to it in a second, like the desktop app does, as soon as nothing would be lost (not in a
+  call, no files waiting, no popup open; the open chat and half-written messages stay). Closed apps get
+  it when they start. Nothing to tap.
 - **Native code** (a module or package with native code, a permission, the icon, `app.json`): those need a
   new APK. `.\scripts\app-release.ps1` raises the version, builds and signs the APK and puts it on the
   server; the app then offers "A new version" at its next start, downloads it and opens Android's

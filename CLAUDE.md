@@ -282,7 +282,10 @@ the point is for me to understand how it works, not just to have it done.
   `config.js` SERVER: `__DEV__` ? localhost:8001 : https://chat.datslok.no. Updates: **expo-updates** with
   runtimeVersion policy appVersion (fingerprint hashed generated folders) against server.py's `/app-update` (Expo's
   protocol 1: newest `releases/app-updates/<version>/*.json`, URLs filled from PUBLIC_URL, 204 when none; files in
-  `releases/app-assets/<md5>.<ext>`, immutable), made by `scripts/app-update.ps1` (refuses when mobile/modules,
+  `releases/app-assets/<md5>.<ext>`, immutable; `src/liveUpdates.js` checks at every connect and return to the app and
+  switches with Updates.reloadAsync when safe (no call, trays, share or popup; view + drafts kept through cache
+  reload-state.json, `restored`), the user's wish, like the desktop's reload), made by `scripts/app-update.ps1` (ends
+  with deploy.ps1 so open apps reconnect; refuses when mobile/modules,
   plugins, app.json or package*.json changed since android.json's commit) + `tools/make_app_update.py`. New APKs:
   `scripts/app-release.ps1` (bumps version + versionCode, commits "Phone app x", prebuild + gradlew
   app:assembleRelease, apksigner must say CN=ChatApp, `releases/ChatApp-android-<v>.apk` + `releases/android.json`
