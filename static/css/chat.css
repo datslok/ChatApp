@@ -935,6 +935,49 @@ body {
   cursor: default;
 }
 
+/* The floating call window (rooms.js): one tile over the page, placed by JavaScript ("fixed": against
+   the window, not scrolling with anything). touch-action none: a finger on it drags it instead of
+   scrolling the page; user-select none: dragging doesn't select text. */
+#call-float {
+  position: fixed;
+  z-index: 40;  /* over the chat, under popups and menus */
+  width: 240px;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  touch-action: none;
+  user-select: none;
+  cursor: grab;
+}
+#call-float[hidden] {
+  display: none;
+}
+#call-float.dragging {
+  cursor: grabbing;
+}
+/* After letting go: slides into its corner. */
+#call-float.snapping {
+  transition: left 0.2s ease, top 0.2s ease;
+}
+#call-float .call-tile {
+  cursor: inherit;
+}
+#call-float .avatar.large {
+  width: 64px;
+  height: 64px;
+  font-size: 1.6rem;
+}
+/* Smaller on a phone's narrow screen. */
+@media (max-width: 700px) {
+  #call-float {
+    width: 160px;
+  }
+  #call-float .avatar.large {
+    width: 44px;
+    height: 44px;
+    font-size: 1.1rem;
+  }
+}
+
 /* The call banner at the top of a DM: a dark area of a fixed height, the tiles filling it,
    the buttons below them. "flex-shrink: 0": the messages below give way, never the banner. */
 #call-panel {

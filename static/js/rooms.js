@@ -624,6 +624,7 @@ const loungeJoin = document.getElementById("lounge-join");
 const loungeFullscreen = document.getElementById("lounge-fullscreen");
 
 function renderLoungeView() {
+  renderCallFloat();  // (the floating call window changes at the same moments: see below)
   if (currentChannel !== LOUNGE) return;  // not looking at it: nothing to draw
   const inLounge = voiceRoomName === "lounge";
   const members = voiceMembers.lounge || [];  // from the server, the same list as in the sidebar
@@ -966,3 +967,136 @@ loungeMute.addEventListener("click", toggleMute);  // the same as the 🎤 at th
 loungeCamera.addEventListener("click", toggleCamera);
 loungeLeave.addEventListener("click", leaveVoice);
 loungeJoin.addEventListener("click", () => joinVoice("lounge", "Lounge"));
+
+// ---------- The floating call window ----------
+//
+// In a call but looking at something else (another chat, the People page, a DM while in Lounge):
+// whoever is talking, as a small tile in a corner (their camera if it's on), so the call never goes
+// out of sight; like Discord's on phones. A click goes back to the call. Drag it anywhere: let go and
+// it slides into the nearest corner of the chat area, and stays there (localStorage "callFloatCorner").
+// The tile is makeTile's, so it has the speaking ring, the mute icons and the user menu (right-click).
+
+const callFloat = document.getElementById("call-float");
+const FLOAT_MARGIN = 16;  // from the chat area's edges
+let floatCorner = "bottom-right";  // "top-left", "top-right", "bottom-left" or "bottom-right"
+try {
+  floatCorner = localStorage.getItem("callFloatCorner") || floatCorner;
+} catch {}
+let floatShownId = null;    // whose tile it shows now
+let lastSpeakerId = null;   // the last other person who talked in our call
+
+// The call's page: the Lounge page, or the DM or group the call is in. null: not in a call.
+function callPage() {
+  return voiceRoomName === "lounge" ? LOUNGE : voiceRoomName;
+}
+
+// Who it shows: whoever talked last (not us), else the DM's other person, else anyone else there, else us.
+function floatPerson() {
+  const others = voiceRoom ? [...voiceRoom.remoteParticipants.keys()].map(Number) : [];
+  if (lastSpeakerId !== null && others.includes(lastSpeakerId)) return lastSpeakerId;
+  const partner = dmPartner(voiceRoomName);
+  if (partner !== null) return partner;
+  return others[0] ?? myId;
+}
+
+// Called whenever a call or the page we're on changes (renderLoungeView, which every such change reaches).
+function renderCallFloat() {
+  const page = callPage();
+  if (page === null) lastSpeakerId = null;
+  const show = page !== null && currentChannel !== page;
+  callFloat.hidden = !show;
+  if (!show) {
+    floatShownId = null;
+    return;
+  }
+  const id = floatPerson();
+  const members = (voiceRoomName === "lounge" ? voiceMembers.lounge : dmCalls[voiceRoomName]) || [];
+  const state = members.find((member) => member.id === id) || {};
+  const here = id === myId || voiceRoom?.remoteParticipants.has(String(id));
+  const ringing = outgoingCall === voiceRoomName && !here;
+  const tile = makeTile(id, {
+    muted: state.muted, deafened: state.deafened, video: here ? cameraTrack(id) : null, away: !here,
+    note: ringing ? "Calling…" : "",
+  });
+  tile.classList.toggle("speaking", speakingIds.has(String(id)));
+  callFloat.replaceChildren(tile);
+  floatShownId = id;
+  placeFloat();
+}
+
+// The area it sits in: the messages (in a chat), else the page that's showing.
+function floatArea() {
+  if (!channelView.hidden) return messages.getBoundingClientRect();
+  return (friendsView.hidden ? loungeView : friendsView).getBoundingClientRect();
+}
+
+function placeFloat() {
+  if (callFloat.hidden) return;
+  const area = floatArea();
+  const [vertical, horizontal] = floatCorner.split("-");
+  const left = horizontal === "left" ? area.left + FLOAT_MARGIN : area.right - callFloat.offsetWidth - FLOAT_MARGIN;
+  const top = vertical === "top" ? area.top + FLOAT_MARGIN : area.bottom - callFloat.offsetHeight - FLOAT_MARGIN;
+  callFloat.style.left = Math.max(0, left) + "px";
+  callFloat.style.top = Math.max(0, top) + "px";
+}
+
+addEventListener("resize", placeFloat);
+
+// Dragging, with pointer events (mouse and fingers alike). setPointerCapture keeps the moves coming to
+// it even when the pointer is quicker than the window. A press that moves less than 5 px is a click.
+let floatDrag = null;  // {x, y, left, top, moved} while pressed
+let floatJustDragged = false;
+
+callFloat.addEventListener("pointerdown", (event) => {
+  if (event.button !== 0) return;
+  const box = callFloat.getBoundingClientRect();
+  floatDrag = { x: event.clientX, y: event.clientY, left: box.left, top: box.top, moved: false };
+  callFloat.setPointerCapture(event.pointerId);
+  callFloat.classList.remove("snapping");
+});
+
+callFloat.addEventListener("pointermove", (event) => {
+  if (!floatDrag) return;
+  const dx = event.clientX - floatDrag.x;
+  const dy = event.clientY - floatDrag.y;
+  if (!floatDrag.moved && Math.hypot(dx, dy) < 5) return;
+  floatDrag.moved = true;
+  callFloat.classList.add("dragging");
+  callFloat.style.left = floatDrag.left + dx + "px";
+  callFloat.style.top = floatDrag.top + dy + "px";
+});
+
+function endFloatDrag() {
+  if (!floatDrag) return;
+  const moved = floatDrag.moved;
+  floatDrag = null;
+  callFloat.classList.remove("dragging");
+  if (!moved) return;  // a click: see below
+  floatJustDragged = true;
+  // The nearest corner: which half of the area its middle ended up in, across and down.
+  const area = floatArea();
+  const box = callFloat.getBoundingClientRect();
+  const vertical = box.top + box.height / 2 < area.top + area.height / 2 ? "top" : "bottom";
+  const horizontal = box.left + box.width / 2 < area.left + area.width / 2 ? "left" : "right";
+  floatCorner = `${vertical}-${horizontal}`;
+  try {
+    localStorage.setItem("callFloatCorner", floatCorner);
+  } catch {}
+  callFloat.classList.add("snapping");  // (chat.css: left and top slide there)
+  placeFloat();
+}
+
+callFloat.addEventListener("pointerup", endFloatDrag);
+callFloat.addEventListener("pointercancel", endFloatDrag);
+
+// A click (not the end of a drag) opens the call. In the capture phase, before the tile's own click
+// handler (toggleFocus, for tiles in a call area), which mustn't run here.
+callFloat.addEventListener("click", (event) => {
+  event.stopPropagation();
+  if (floatJustDragged) {
+    floatJustDragged = false;
+    return;
+  }
+  const page = callPage();
+  if (page) switchChannel(page, channelLabel(page));
+}, true);

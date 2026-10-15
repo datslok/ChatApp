@@ -517,6 +517,15 @@ function showSpeaking() {
   for (const tile of document.querySelectorAll("#lounge-tiles .call-tile")) {
     tile.classList.toggle("speaking", voiceRoomName === "lounge" && speakingIds.has(tile.dataset.userId));
   }
+  // ...and the floating call window (rooms.js), which shows whoever talked last: someone else started
+  // talking, so it may need someone else's tile.
+  for (const id of speakingIds) {
+    if (Number(id) !== myId) lastSpeakerId = Number(id);
+  }
+  if (!callFloat.hidden && floatPerson() !== floatShownId) renderCallFloat();
+  for (const tile of callFloat.querySelectorAll(".call-tile")) {
+    tile.classList.toggle("speaking", speakingIds.has(tile.dataset.userId));
+  }
 }
 
 // ----- Connection quality: the signal icon in the voice bar, and its popup (like Discord's)
