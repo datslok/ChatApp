@@ -1244,8 +1244,12 @@ body.mini-hidden :fullscreen .tile-strip {
   cursor: pointer;
 }
 
+/* As wide as its column, but never taller than 70% of the window (so at most 70vh at 16:9 wide), and
+   in the middle of its column: alone in the Lounge, someone sits in the centre instead of on the left. */
 #lounge-tiles > .call-tile {
-  max-height: 70vh;
+  width: 100%;
+  max-width: calc(70vh * 16 / 9);
+  justify-self: center;
 }
 /* A shared screen's tile: black around the screen, double-click for fullscreen. */
 .screen-tile {
