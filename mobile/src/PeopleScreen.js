@@ -1,16 +1,25 @@
-// Friends: requests to answer, friends (with their DM), requests we sent, people we blocked, and
-// a search box to find anyone else and add them (like the web page's People page).
+// The People page, like the web page's (#friends-view, people.js renderPeopleList): a heading with
+// four tabs (Friends, Everyone, Requests, Blocked); Everyone has a search box and Online / Offline;
+// Requests has Received / Sent. Each person's row has the buttons that fit how we stand with them.
 import { useState } from 'react';
 import { Alert, FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { colors } from './colors';
 import { dmKey } from './chats';
 import { Person } from './people';
 
+const TABS = [
+  { key: 'friends', label: 'Friends' },
+  { key: 'everyone', label: 'Everyone' },
+  { key: 'requests', label: 'Requests' },
+  { key: 'blocked', label: 'Blocked' },
+];
+
 // onOpen(key): open that chat (App.js's go).
 export default function PeopleScreen({ connection, onOpen }) {
   const { users, roles, me, myPresence, friends, incoming, outgoing, blocked, friendAction } = connection;
-  const [query, setQuery] = useState('');
-  const [error, setError] = useState('');
+  const [tab, setTab] = useState('friends');
+  const [query, setQuery] = useState('');   // the Everyone tab's search box
+  const [error, setError] = useState('');   // what the server said no with, under the list
 
   async function act(action, userId) {
     setError('');
@@ -29,113 +38,150 @@ export default function PeopleScreen({ connection, onOpen }) {
     );
   }
 
-  // The buttons for one person, depending on how we're connected (the web page's makeFriendButtons).
+  // The buttons for one person, depending on how we're connected (the web page's makeFriendButtons):
+  // blue for the main one, grey ("secondary") for the rest.
   function buttonsFor(user) {
     const buttons = [];
-    const add = (label, onPress, kind) => buttons.push({ label, onPress, kind });
+    const add = (label, onPress, secondary) => buttons.push({ label, onPress, secondary });
     if (blocked.includes(user.id)) {
-      add('Unblock', () => act('unblock', user.id), 'grey');
-      return buttons;  // nothing else until they're unblocked
+      add('Unblock', () => act('unblock', user.id), true);
+      return buttons;  // nothing else until they're unblocked: no friend request, no DM
     }
     if (friends.includes(user.id)) {
-      add('Message', () => onOpen(dmKey(me.id, user.id)), 'blue');
-      if (!user.bot) add('Remove', () => act('remove', user.id), 'grey');  // bots are everyone's friend
+      add('Message', () => onOpen(dmKey(me.id, user.id)));
+      if (!user.bot) add('Remove', () => act('remove', user.id), true);  // bots are everyone's friend
     } else if (incoming.includes(user.id)) {
-      add('Accept', () => act('accept', user.id), 'green');
-      add('Decline', () => act('remove', user.id), 'grey');
+      add('Accept', () => act('accept', user.id));
+      add('Decline', () => act('remove', user.id), true);
     } else if (outgoing.includes(user.id)) {
-      add('Cancel', () => act('remove', user.id), 'grey');
+      add('Cancel request', () => act('remove', user.id), true);
     } else {
-      add('Add friend', () => act('request', user.id), 'green');
+      add('Add friend', () => act('request', user.id));
     }
     // Block: never admins (the chat's rule) or bots. The server checks too.
-    if (!user.admin && !user.bot) {
-      add('Block', () => confirmBlock(user), 'grey');
-    }
+    if (!user.admin && !user.bot) add('Block', () => confirmBlock(user), true);
     return buttons;
   }
 
-  // Everyone else, alphabetically. Searching: anyone whose name contains the text.
+  // Everyone but us, alphabetically (the web page keeps the server's order, which is that).
   const everyone = Object.values(users)
     .filter((user) => user.id !== me.id)
-    .sort((a, b) => a.name.localeCompare(b.name));
-  const ids = (list) => everyone.filter((user) => list.includes(user.id));
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+  const among = (ids) => everyone.filter((user) => ids.includes(user.id));
 
+  // The list's rows: subheadings, people, and a note where a section is empty.
   const rows = [];
-  function section(title, list, emptyText) {
-    if (list.length === 0 && !emptyText) return;  // (a section with nothing in it isn't shown)
-    rows.push({ key: 'heading:' + title, heading: `${title} (${list.length})` });
-    if (list.length === 0) rows.push({ key: 'empty:' + title, empty: emptyText });
-    for (const user of list) rows.push({ key: title + user.id, user });
+  function section(title, people, emptyText) {
+    if (title) rows.push({ key: 'heading:' + title, heading: title });
+    for (const user of people) rows.push({ key: `${title}:${user.id}`, user });
+    if (people.length === 0) rows.push({ key: 'empty:' + title, empty: emptyText });
   }
-  const typed = query.trim().toLowerCase();
-  if (typed) {
-    section('Results', everyone.filter((user) => user.name.toLowerCase().includes(typed)), 'Nobody by that name.');
+  if (tab === 'friends') {
+    section('', among(friends), 'No friends yet. Find people in the Everyone tab and add them.');
+  } else if (tab === 'everyone') {
+    const typed = query.trim().toLowerCase();
+    const found = everyone.filter((user) => user.name.toLowerCase().includes(typed));
+    const online = found.filter((user) => user.online);
+    const offline = found.filter((user) => !user.online);
+    section(`Online — ${online.length}`, online, typed ? 'Nobody online by that name.' : 'Nobody else is online.');
+    section(`Offline — ${offline.length}`, offline, typed ? 'Nobody offline by that name.' : 'Nobody is offline.');
+  } else if (tab === 'blocked') {
+    section('', among(blocked), "You haven't blocked anyone.");
   } else {
-    section('Friend requests', ids(incoming));
-    section('Friends', ids(friends), 'No friends yet. Search above to add someone.');
-    section('Sent requests', ids(outgoing));
-    section('Blocked', ids(blocked));
+    section('Received', among(incoming), 'No requests waiting.');
+    section('Sent', among(outgoing), "You haven't sent any requests.");
+  }
+
+  function pickTab(key) {
+    setTab(key);
+    setError('');
   }
 
   function renderRow({ item }) {
-    if (item.heading) return <Text style={styles.heading}>{item.heading}</Text>;
+    if (item.heading) return <Text style={styles.subheading}>{item.heading}</Text>;
     if (item.empty) return <Text style={styles.empty}>{item.empty}</Text>;
     const { user } = item;
     return (
       <View style={styles.row}>
-        <Person user={user} roles={roles} me={me} myPresence={myPresence} color={colors.textStrong} ring={colors.bgMain} />
-        {buttonsFor(user).map((button) => (
-          <Pressable
-            key={button.label}
-            onPress={button.onPress}
-            style={({ pressed }) => [styles.button, styles[button.kind], pressed && styles.pressed]}
-          >
-            <Text style={styles.buttonText}>{button.label}</Text>
-          </Pressable>
-        ))}
+        <Person user={user} roles={roles} me={me} myPresence={myPresence} color={colors.text} ring={colors.bgMain} />
+        <View style={styles.actions}>
+          {buttonsFor(user).map((button) => (
+            <Pressable
+              key={button.label}
+              onPress={button.onPress}
+              style={({ pressed }) => [styles.button, button.secondary && styles.secondary, pressed && styles.pressed]}
+            >
+              <Text style={styles.buttonText}>{button.label}</Text>
+            </Pressable>
+          ))}
+        </View>
       </View>
     );
   }
 
   return (
-    <View style={styles.screen}>
-      <TextInput
-        style={styles.search}
-        value={query}
-        onChangeText={setQuery}
-        placeholder="Search for someone"
-        placeholderTextColor={colors.textMuted}
-        autoCapitalize="none"
-        autoCorrect={false}
-      />
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+    <View style={styles.page}>
+      {/* .friends-header: "People" and the tabs, which go below it when they don't fit beside it. */}
+      <View style={styles.header}>
+        <Text style={styles.title}>People</Text>
+        <View style={styles.tabs}>
+          {TABS.map(({ key, label }) => (
+            <Pressable key={key} onPress={() => pickTab(key)} style={[styles.tab, tab === key && styles.tabActive]}>
+              {/* adjustsFontSizeToFit: a long label ("Requests (2)") shrinks a little to stay on one line. */}
+              <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={[styles.tabText, tab === key && styles.tabTextActive]}>
+                {label}{key === 'requests' && incoming.length > 0 ? ` (${incoming.length})` : ''}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      </View>
+      {tab === 'everyone' ? (
+        <TextInput
+          style={styles.search}
+          value={query}
+          onChangeText={setQuery}
+          placeholder="Search everyone"
+          placeholderTextColor={colors.textMuted}
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+      ) : null}
       <FlatList data={rows} renderItem={renderRow} keyboardShouldPersistTaps="handled" />
+      {error ? <Text style={styles.status}>{error}</Text> : null}
     </View>
   );
 }
 
+// chat.css's People page (#friends-view and friends), rem as 16 px.
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.bgMain },
+  page: { flex: 1, paddingHorizontal: 24, paddingVertical: 16, backgroundColor: colors.bgMain },
+  header: {
+    flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 16, rowGap: 8,
+    paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: colors.line,
+  },
+  title: { fontSize: 17.6, fontWeight: 'bold', color: colors.textStrong },
+  // On a phone the four tabs don't fit side by side at the web page's size (they wrapped, Blocked on a
+  // line of its own), so here they share the whole width equally.
+  tabs: { flexDirection: 'row', gap: 4, width: '100%' },
+  tab: { flex: 1, alignItems: 'center', paddingHorizontal: 4, paddingVertical: 6, borderRadius: 6 },
+  tabActive: { backgroundColor: colors.bgActive },
+  tabText: { fontSize: 15.2, color: colors.textMuted },
+  tabTextActive: { color: colors.textStrong },
   search: {
-    margin: 12, backgroundColor: colors.bgDarkest, color: colors.text, fontSize: 16,
-    borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8,
+    marginTop: 12, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 6,
+    backgroundColor: colors.bgDarkest, color: colors.text, fontSize: 16,
   },
-  error: { color: colors.red, paddingHorizontal: 16, paddingBottom: 8 },
-  heading: {
-    color: colors.textMuted, fontSize: 12, fontWeight: 'bold', textTransform: 'uppercase',
-    paddingHorizontal: 16, paddingTop: 16, paddingBottom: 6,
+  subheading: { marginTop: 12, marginBottom: 4, fontSize: 12, textTransform: 'uppercase', color: colors.textMuted },
+  empty: { marginVertical: 4, marginHorizontal: 12, fontSize: 13.6, color: colors.textMuted },
+  // .people-row: the person on the left, the buttons on the right, a line under each.
+  row: {
+    flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8, paddingHorizontal: 4,
+    borderBottomWidth: 1, borderBottomColor: colors.line,
   },
-  empty: { color: colors.textMuted, paddingHorizontal: 16, paddingVertical: 8 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, paddingVertical: 10 },
-  who: { flex: 1 },
-  name: { color: colors.textStrong, fontSize: 16 },
-  bot: { color: colors.accent, fontSize: 11, fontWeight: 'bold' },
-  status: { color: colors.textMuted, fontSize: 13 },
-  button: { borderRadius: 6, paddingHorizontal: 10, paddingVertical: 7 },
-  blue: { backgroundColor: colors.accent },
-  green: { backgroundColor: colors.buttonGreen },
-  grey: { backgroundColor: colors.bgNeutral },
-  pressed: { opacity: 0.7 },
-  buttonText: { color: colors.textStrong, fontSize: 13, fontWeight: 'bold' },
+  actions: { flexDirection: 'row', gap: 6, flexShrink: 0 },
+  button: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6, backgroundColor: colors.accent },
+  secondary: { backgroundColor: colors.bgNeutral },
+  pressed: { opacity: 0.8 },
+  buttonText: { color: '#ffffff', fontSize: 13.6 },
+  status: { marginTop: 8, fontSize: 13.6, color: colors.red },
 });

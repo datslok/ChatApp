@@ -107,7 +107,7 @@
     - [x] Writing: sending, replies, reactions, editing and deleting
     - [x] DMs, friends, unread dots and mentions
     - [x] The web chat's phone design: top bar with drawers (channels, members), messages grouped with pictures, Lucide icons
-    - [ ] The People page like the web's: tabs (Friends, Everyone, Requests, Blocked), Online/Offline, its buttons
+    - [x] The People page like the web's: tabs (Friends, Everyone, Requests, Blocked), Online/Offline, its buttons
     - [ ] Messages like the web: formatting (bold, code, links, maths), custom emoji, link previews, the emoji picker, GIFs, typing
     - [ ] Pictures and files: viewing, uploading, downloading
     - [ ] The chat's top bar: mute, search, pinned messages

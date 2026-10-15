@@ -102,7 +102,10 @@ the point is for me to understand how it works, not just to have it done.
   pictures, role colours, "Today at", the reply line, chips; an inverted FlatList with `onEndReached` for
   older; the long-press `MessageMenu` stands in for the hover bar: reactions, Reply, Pin, Edit, Delete;
   editing in the bottom box (phone reason: the keyboard); `#autocomplete`-style @ suggestions; blocked
-  messages behind Show), `src/PeopleScreen.js` (the third sub-step's; not yet the web's tabs),
+  messages behind Show), `src/PeopleScreen.js` (renderPeopleList's tabs Friends/Everyone/Requests/Blocked, Everyone's search and
+  Online/Offline, Received/Sent, makeFriendButtons; phone reason: the four tabs share the width equally, as
+  at the web page's size they wrapped; no Invite someone or profiles yet: their own sub-step). App.js leaves
+  a DM whose person is no longer a friend (or a group we left) for the first channel, like the web page.
   `src/people.js` (Avatar with letter colours, StatusDot with the phone shape, BotBadge, Person, nameColor),
   `src/Icon.js` (react-native-svg's SvgXml with the web page's Lucide shapes from `src/icon-shapes.js`,
   written by tools/make_icons.py too), `src/chats.js` (keys and labels), `src/colors.js` (chat.css's dark

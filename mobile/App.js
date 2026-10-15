@@ -12,7 +12,7 @@ import LoginScreen from './src/LoginScreen';
 import Members from './src/Members';
 import PeopleScreen from './src/PeopleScreen';
 import Sidebar from './src/Sidebar';
-import { chatLabel } from './src/chats';
+import { chatLabel, dmPartner } from './src/chats';
 import { colors } from './src/colors';
 import { useConnection } from './src/connection';
 
@@ -38,6 +38,19 @@ function Main({ connection }) {
     const first = channels.find((channel) => !channel.heading);
     if (view === null && first) go(first.key, false);
   }, [channels]);
+
+  // Looking at a DM with someone who's no longer a friend (removed, blocked), or a group we're no
+  // longer in? Then it's gone: off to the first channel, like the web page.
+  useEffect(() => {
+    const first = channels.find((channel) => !channel.heading);
+    const partner = dmPartner(view, connection.me.id);
+    const goneDm = partner !== null && !connection.friends.includes(partner);
+    const goneGroup = view?.startsWith('g:') && !connection.groups.some((group) => group.key === view);
+    if ((goneDm || goneGroup) && first) {
+      history.current = history.current.filter((key) => key !== view);
+      go(first.key, false);
+    }
+  }, [connection.friends, connection.groups]);
 
   // Android's back button, the web page's way: close an open drawer, else back to the chat before.
   // With nowhere left to go, returning false lets Android do its own thing (leave the app).
