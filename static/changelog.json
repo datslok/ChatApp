@@ -74,7 +74,8 @@
     {
       "topic": "📱 On your phone",
       "items": [
-        "Install the chat as an app: open it on your phone and tap Install in the banner (or Chrome's ⋮ menu, Install app; iPhone: Safari, Share, Add to Home Screen). Its own icon and window, no address bar"
+        "Android: get the ChatApp app at chat.datslok.no/download (on your phone, the chat offers it in a popup too). Notifications for DMs, mentions and friend requests, calls that ring with the phone locked (Accept and Decline right there; Accept asks you to unlock first) and keep going in your pocket. It updates itself. Its Settings → Notifications: notifications on or off, the sound while it's open, and mute for a while",
+        "iPhone: install the chat as an app: in Safari, Share, Add to Home Screen. Its own icon and window, no address bar"
       ]
     },
     {
@@ -116,6 +117,7 @@
     {
       "date": "2026-10-15",
       "items": [
+        "📱 ChatApp for Android: a real app for your phone, with notifications and calls that ring even with the phone locked. Get it at chat.datslok.no/download (on an Android phone, the chat offers it when you open it)",
         "🎬 Videos play right in the chat: send an MP4 or WebM (up to 10 MB) and everyone can watch it there, fullscreen too. Videos sent before now play as well",
         "✍️ Each chat keeps its own half-written message and files: what you typed or added in a DM no longer follows you to #general, and it's still there when you come back",
         "The round buttons in calls and on the Lounge page (mute, camera, share, hang up) have clear icons again: they were dark grey and hard to see",

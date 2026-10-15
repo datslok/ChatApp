@@ -331,6 +331,21 @@
     </div>
   </dialog>
 
+  <!-- On an Android phone in the browser: the real app, offered once the chat has loaded
+       (notifications.js, "The Android app"). -->
+  <dialog id="android-app-dialog">
+    <div class="invite-content">
+      <img class="android-app-icon" src="/icons/icon-192.png" alt="">
+      <h2>ChatApp for Android</h2>
+      <p class="group-dialog-help">The chat as a real app on your phone: notifications for DMs, mentions and
+        calls, also with the phone locked, and calls that keep going in your pocket.</p>
+      <div class="group-dialog-buttons">
+        <button type="button" id="android-app-later" class="secondary">Not now</button>
+        <button type="button" id="android-app-download">Download</button>
+      </div>
+    </div>
+  </dialog>
+
   <!-- Your own popup, from the bottom-left panel: your profile, the call you're in, Edit profile and
        Log out. Filled in by people.js (renderMePopup). -->
   <dialog id="me-popup" autofocus>  <!-- autofocus: the popup itself gets the focus, not its first button -->

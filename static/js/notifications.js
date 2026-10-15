@@ -319,7 +319,8 @@ window.addEventListener("appinstalled", () => {
 async function showPhoneBanner() {
   let step = null;
   if (onPhone && loadSetting("phoneBanner")) {
-    if (!runningAsApp && (installPrompt || onIPhone)) {
+    // (Not on Android: the real app is offered there instead, offerAndroidApp below.)
+    if (!runningAsApp && !/Android/.test(navigator.userAgent) && (installPrompt || onIPhone)) {
       step = "install";
     } else if (canPush && vapidPublicKey && !(await currentSubscription())) {
       step = "notify";
@@ -362,6 +363,38 @@ phoneBannerAction.addEventListener("click", async () => {
 document.getElementById("phone-banner-close").addEventListener("click", () => {
   phoneBanner.hidden = true;
   saveSetting("phoneBanner", false);  // (Settings → Notifications still has the switch)
+});
+
+// ----- The Android app: on an Android phone in the browser (or the installed PWA), a popup offers the
+// real app (mobile/; /download has it and the steps to install it) once the chat has loaded (core.js,
+// after "welcome"). "Not now" (or Back) asks again a week later; the time is kept in localStorage.
+const onAndroid = /Android/.test(navigator.userAgent);
+const androidAppDialog = document.getElementById("android-app-dialog");
+const ANDROID_APP_ASK_AGAIN = 7 * 24 * 60 * 60 * 1000;  // a week, in milliseconds
+
+function offerAndroidApp() {
+  if (!onAndroid || androidAppDialog.open) return;
+  let askAgainAt = 0;
+  try {
+    askAgainAt = Number(localStorage.getItem("androidAppAskAgain")) || 0;
+  } catch {}
+  if (Date.now() < askAgainAt) return;
+  androidAppDialog.showModal();  // (modal: over everything, the rest dimmed, until a button or Back)
+}
+
+function notNow() {
+  try {
+    localStorage.setItem("androidAppAskAgain", String(Date.now() + ANDROID_APP_ASK_AGAIN));
+  } catch {}
+}
+document.getElementById("android-app-later").addEventListener("click", () => {
+  notNow();
+  androidAppDialog.close();
+});
+// Back (or Esc) closes a <dialog> by itself with a "cancel" event: that's a "not now" too.
+androidAppDialog.addEventListener("cancel", notNow);
+document.getElementById("android-app-download").addEventListener("click", () => {
+  location.href = "/download";  // (it shows the Android app on Android, with the steps)
 });
 
 // The "get the app" banner above the chat: only in a browser on Windows (the app is Windows-only;

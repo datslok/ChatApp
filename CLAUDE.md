@@ -74,7 +74,9 @@ the point is for me to understand how it works, not just to have it done.
   (one per channel, `tag`) and on a tap focuses an open chat (postMessage "open") or opens
   `/?channel=..&message=..` (core.js reads it). A device with push on doesn't notify by itself (`pushOn`).
   On phones, a banner (`#phone-banner`, notifications.js) offers Install (Chrome's `beforeinstallprompt`, kept and
-  used by our button; iPhones get the steps in words), then Turn on (push), until closed.
+  used by our button; iPhones get the steps in words), then Turn on (push), until closed. On Android it skips Install:
+  `#android-app-dialog` (notifications.js `offerAndroidApp`, after each "welcome") offers the native app instead (the
+  user's wish), Download -> /download, Not now or Back = again in a week (localStorage "androidAppAskAgain").
 - Next: a native phone app (milestone 22), chosen because the PWA felt janky: React Native with Expo
   (development builds, so native modules like LiveKit's work), in JavaScript (not TypeScript), in
   `mobile/`, Android first (my girlfriend's phone; iPhones maybe later via Expo's cloud builds). It talks

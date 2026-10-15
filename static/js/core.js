@@ -329,6 +329,7 @@ function handleServerMessage(event) {
     vapidPublicKey = data.vapid_public_key;  // for push notifications (notifications.js)
     season = data.season;  // the seasonal easter egg, or null (people.js, renderUserPanel)
     showPhoneBanner();  // now that we know whether the server has push (notifications.js)
+    offerAndroidApp();  // on an Android phone: the real app (notifications.js)
     if (pageVersion === null) {
       pageVersion = data.page_version;  // the first welcome: the version we were loaded with
     } else if (data.page_version !== pageVersion) {
