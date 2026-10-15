@@ -106,6 +106,18 @@ the point is for me to understand how it works, not just to have it done.
   Online/Offline, Received/Sent, makeFriendButtons; phone reason: the four tabs share the width equally, as
   at the web page's size they wrapped; no Invite someone or profiles yet: their own sub-step). App.js leaves
   a DM whose person is no longer a friend (or a group we left) for the first channel, like the web page.
+  Messages like the web (since 2026-10-15): `src/format.js` (messages.js's formatting rules, INLINE_PATTERN
+  and all, into a tree; `isOnlyEmoji` for jumbo), `src/MessageText.js` (draws it: code, quotes, spoilers,
+  links open in the browser, mentions, custom emoji via React Native's Image (it sends the cookie; expo-image,
+  tried first, didn't, so the server 404'd), attachments, link preview cards; a paragraph with $inline maths$
+  becomes a wrapping row of words, as Android can't size a view inside a Text), `src/MathView.js` (KaTeX from
+  the server's /katex-0.18.9/ in a react-native-webview per formula, which reports its size; containerStyle
+  needs the size too or the webview's flex: 1 box collapses), `src/Picker.js` (the phone bottom sheet with
+  Emoji | GIF tabs, recently used in memory, custom emoji by owner; GIFs via /gifs/search and /gifs/send),
+  ":"/"@" suggestions and the status line ("is typing…", "Sending GIF…") in ChatScreen. `plugins/animated-webp.js`
+  (a config plugin in app.json) turns on `expo.webp.animated` for GIPHY's WebP. emoji.json now also has
+  "versions" (make_emoji_json.py; Unicode 18.0 on 2026-10-15): the app hides emoji newer than its Android draws
+  (`newestEmojiVersion`, API 36 = Emoji 16.0; a cracking face 🫫 showed as a box).
   `src/people.js` (Avatar with letter colours, StatusDot with the phone shape, BotBadge, Person, nameColor),
   `src/Icon.js` (react-native-svg's SvgXml with the web page's Lucide shapes from `src/icon-shapes.js`,
   written by tools/make_icons.py too), `src/chats.js` (keys and labels), `src/colors.js` (chat.css's dark

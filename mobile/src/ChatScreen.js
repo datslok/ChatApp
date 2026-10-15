@@ -7,12 +7,18 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from './Icon';
+import MessageText, { Attachment, CustomEmoji, LinkPreview } from './MessageText';
+import Picker from './Picker';
 import { colors } from './colors';
 import { chatLabel } from './chats';
+import { SERVER } from './config';
 import { Avatar, BotBadge, nameColor } from './people';
 
-// The reactions in the long-press menu (a full emoji picker comes later).
+// Quick reactions in the long-press menu, before its smiley (which opens the whole emoji picker).
 const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🎉'];
+
+// At most this many suggestions while typing ":" or "@" (the web page's MAX_SUGGESTIONS).
+const MAX_SUGGESTIONS = 10;
 
 // A message from the same person within 5 minutes joins the one before (no picture or name).
 const GROUP_MINUTES = 5;
@@ -48,12 +54,13 @@ function headerTime(date) {
 // ----- Text
 
 // Messages store mentions and custom emoji by id ("<@3>", "<@everyone>", "<:17>"), so renames
-// show the new name. Turn them back into words: "@kari", ":pog:" (the pictures come later).
+// show the new name. Turn them back into what's typed: "@kari", ":pog:". (For the reply quote's
+// line and the text box when editing; messages themselves are drawn by MessageText.)
 function readableText(text, users, emoji) {
   return text
-    .replace(/<@(\d+)>/g, (whole, id) => '@' + (users[id]?.name ?? 'someone'))
+    .replace(/<@(\d+)>/g, (whole, id) => '@' + (users[id]?.name ?? 'unknown'))
     .replace(/<@everyone>/g, '@everyone')
-    .replace(/<:(\d+)>/g, (whole, id) => (emoji[id] ? `:${emoji[id]}:` : ':?:'));
+    .replace(/<:(\d+)>/g, (whole, id) => (emoji[id] ? `:${emoji[id].name}:` : ':deleted:'));
 }
 
 // Does this text mention us (by name, or with @everyone)?
@@ -61,19 +68,41 @@ function mentionsMe(text, myId) {
   return text.includes(`<@${myId}>`) || text.includes('<@everyone>');
 }
 
-// A message's text with its @mentions drawn tinted (.mention). split() with a (group) keeps the
-// separators: "hi <@3>!" -> ["hi ", "<@3>", "!"]. A <Text> inside a <Text> carries on the same
-// line with its own style, like a <span> in HTML.
-function MessageText({ text, users, emoji }) {
-  return text.split(/(<@\d+>|<@everyone>)/).map((part, index) => (/^<@(\d+|everyone)>$/.test(part)
-    ? <Text key={index} style={styles.mention}>{readableText(part, users, emoji)}</Text>
-    : readableText(part, users, emoji)));
+// A reaction's emoji: a Unicode one as itself, a custom one ("custom:17") as its picture, 18 px.
+function ReactionEmoji({ reaction, emoji }) {
+  const custom = reaction.match(/^custom:(\d+)$/);
+  return custom ? <CustomEmoji item={emoji[custom[1]]} size={18} /> : <Text style={styles.chipText}>{reaction}</Text>;
 }
 
-// A reaction is an emoji, or a custom emoji as "custom:17": shown by name until we draw pictures.
-function reactionLabel(reaction, emoji) {
-  const custom = reaction.match(/^custom:(\d+)$/);
-  return custom ? `:${emoji[custom[1]] ?? '?'}:` : reaction;
+// The ":" suggestions (the web page's findSuggestions): custom emoji whose names start with what's
+// typed, then those that contain it; then Unicode emoji by name (with _ for spaces), best first:
+// the whole name, the name's start, a later word's start, anywhere; shorter names first.
+function findEmoji(typed, { emoji, emojiGroups, users }) {
+  const query = typed.toLowerCase();
+  const customs = Object.values(emoji);
+  const found = [
+    ...customs.filter((item) => item.name.toLowerCase().startsWith(query)),
+    ...customs.filter((item) => !item.name.toLowerCase().startsWith(query) && item.name.toLowerCase().includes(query)),
+  ].map((item) => ({ key: 'custom:' + item.id, custom: item, label: `:${item.name}:`, detail: users[item.owner_id]?.name, insert: `:${item.name}: ` }));
+  const words = query.replace(/_/g, ' ');
+  const rank = (name) => {
+    if (name === words) return 0;
+    if (name.startsWith(words)) return 1;
+    if (name.includes(' ' + words)) return 2;
+    return name.includes(words) ? 3 : null;
+  };
+  const unicode = [];
+  for (const group of emojiGroups ?? []) {
+    for (const [character, name] of group.emoji) {
+      const score = rank(name.toLowerCase());
+      if (score !== null) unicode.push({ score, name, character });
+    }
+  }
+  unicode.sort((a, b) => a.score - b.score || a.name.length - b.name.length);
+  for (const { character, name } of unicode) {
+    found.push({ key: character, character, label: name, insert: character });
+  }
+  return found.slice(0, MAX_SUGGESTIONS);
 }
 
 // Who can be @mentioned here (besides us): in a DM the other person, and the bots (naming one
@@ -157,18 +186,12 @@ function Message({ message, grouped, connection, isBlocked, onShow, onLongPress 
             <Text style={styles.time}>{headerTime(new Date(message.sent_at))}</Text>
           </View>
         )}
+        {/* Then, like the web page: the text, the attached file, the link's preview card, the reactions. */}
         {message.text ? (
-          <Text style={[styles.text, note && styles.note]}>
-            <MessageText text={message.text} users={users} emoji={emoji} />
-            {message.edited_at ? <Text style={styles.edited}> (edited)</Text> : null}
-          </Text>
+          <MessageText text={message.text} users={users} emoji={emoji} edited={message.edited_at} note={note} />
         ) : null}
-        {message.file ? (
-          <View style={styles.file}>
-            <Icon name={message.file.image ? 'image' : 'paperclip'} size={16} color={colors.textSoft} />
-            <Text style={styles.fileName}>{message.file.filename}</Text>
-          </View>
-        ) : null}
+        {message.file ? <Attachment file={message.file} /> : null}
+        {message.preview ? <LinkPreview preview={message.preview} /> : null}
         {message.reactions.length > 0 ? (
           <View style={styles.reactions}>
             {message.reactions.map((reaction) => {
@@ -179,7 +202,8 @@ function Message({ message, grouped, connection, isBlocked, onShow, onLongPress 
                   onPress={() => connection.react(message.id, reaction.emoji)}  // add ours, or take it back
                   style={[styles.chip, mine && styles.chipMine]}
                 >
-                  <Text style={styles.chipText}>{reactionLabel(reaction.emoji, emoji)} {reaction.user_ids.length}</Text>
+                  <ReactionEmoji reaction={reaction.emoji} emoji={emoji} />
+                  <Text style={styles.chipText}>{reaction.user_ids.length}</Text>
                 </Pressable>
               );
             })}
@@ -215,7 +239,7 @@ function ReplyLine({ reply, connection }) {
 
 // The long-press menu, a sheet from the bottom. The same choices, in the same order, as the web
 // page's bar on a message: reactions, Reply, Pin, Edit, Delete.
-function MessageMenu({ message, canChange, onClose, onReact, onReply, onPin, onEdit, onDelete }) {
+function MessageMenu({ message, canChange, onClose, onReact, onMoreReactions, onReply, onPin, onEdit, onDelete }) {
   // A Modal covers the whole screen, navigation bar included, so the sheet leaves room for that
   // bar itself: insets.bottom is its height.
   const insets = useSafeAreaInsets();
@@ -234,6 +258,10 @@ function MessageMenu({ message, canChange, onClose, onReact, onReply, onPin, onE
                 <Text style={styles.quickReactionText}>{reaction}</Text>
               </Pressable>
             ))}
+            {/* The web page's "Add reaction" smiley: every emoji, in the picker. */}
+            <Pressable onPress={onMoreReactions} style={({ pressed }) => [styles.quickReaction, pressed && styles.pressed]}>
+              <Icon name="smiley" size={30} />
+            </Pressable>
           </View>
           <MenuItem icon="reply" label="Reply" onPress={onReply} />
           {message.kind === null ? <MenuItem icon="pin" label={message.pinned ? 'Unpin' : 'Pin'} onPress={onPin} /> : null}
@@ -262,30 +290,81 @@ export default function ChatScreen({ connection }) {
   const [editing, setEditing] = useState(null);    // the message we're editing
   const [cursor, setCursor] = useState(0);         // where the cursor is in the text box
   const [shownBlocked, setShownBlocked] = useState(new Set());  // blocked people's messages we chose to see
+  const [picker, setPicker] = useState(null);      // the emoji/GIF picker: null, "insert", or {react: message}
+  const [sending, setSending] = useState('');      // "Sending GIF…", or what went wrong (the status line's right side)
   // A ref to the text box itself (not its text): input.current.focus() puts the cursor in it.
   const input = useRef(null);
 
   const label = chatLabel(current, connection);
   const isAdmin = users[me.id]?.admin === true;
 
-  // @ suggestions: is the word just before the cursor an "@" and the start of a name? Then offer
-  // the people in this chat whose names start with it (and @everyone in a channel), up to 5.
-  const typedMention = draft.slice(0, cursor).match(/(?:^|\s)@([\w-]*)$/);  // [whole match, "ka"]
+  // Suggestions while typing (the web page's autocomplete), from the text just before the cursor:
+  // ":po" (2+ letters) offers emoji, "@ka" offers people in this chat (and @everyone in a channel):
+  // names starting with it first, then names containing it.
+  const beforeCursor = draft.slice(0, cursor);
+  const typedEmoji = beforeCursor.match(/(^|\s):([A-Za-z0-9_]{2,32})$/);
+  const typedMention = beforeCursor.match(/(^|\s)@([A-Za-z0-9_-]{0,32})$/);
   let suggestions = [];
-  if (typedMention) {
-    const start = typedMention[1].toLowerCase();
-    suggestions = chatPeople(current, connection).filter((user) => user.name.toLowerCase().startsWith(start));
+  if (typedEmoji) {
+    suggestions = findEmoji(typedEmoji[2], connection);
+  } else if (typedMention) {
+    const query = typedMention[2].toLowerCase();
+    const people = chatPeople(current, connection);
+    const named = [
+      ...people.filter((user) => user.name.toLowerCase().startsWith(query)),
+      ...people.filter((user) => !user.name.toLowerCase().startsWith(query) && user.name.toLowerCase().includes(query)),
+    ];
+    suggestions = named.map((user) => ({ key: 'user' + user.id, user, label: user.name, insert: `@${user.name} ` }));
     const isChannel = !current.startsWith('dm:') && !current.startsWith('g:');
-    if (isChannel && 'everyone'.startsWith(start)) suggestions.push({ id: 'everyone', name: 'everyone' });
-    suggestions = suggestions.slice(0, 5);
+    if (isChannel && 'everyone'.startsWith(query)) suggestions.push({ key: 'everyone', label: 'everyone', insert: '@everyone ' });
+    suggestions = suggestions.slice(0, MAX_SUGGESTIONS);
   }
 
-  // Swap the half-typed "@ka" before the cursor for the whole "@kari " (the server turns it into
-  // a mention when the message is sent).
-  function pickSuggestion(name) {
-    const before = draft.slice(0, cursor).replace(/@[\w-]*$/, `@${name} `);
+  // Swap the half-typed ":po" or "@ka" before the cursor for the whole thing (":pog: ", "@kari ").
+  function pickSuggestion(suggestion) {
+    const before = beforeCursor.replace(/[:@][A-Za-z0-9_-]*$/, suggestion.insert);
     setDraft(before + draft.slice(cursor));
     setCursor(before.length);
+  }
+
+  // Typing: tell the others ("kari is typing…"), at most every 2 s (connection.js).
+  function onType(text) {
+    setDraft(text);
+    if (text.trim()) connection.sendTyping();
+  }
+
+  // An emoji from the picker goes in at the cursor: a Unicode one as itself, a custom one as
+  // ":name:" (the server makes it a picture). Not if the message would get too long.
+  function insertEmoji(value) {
+    const text = value.startsWith('custom:') ? `:${connection.emoji[value.slice(7)]?.name}:` : value;
+    if (draft.length + text.length > me.maxTextLength) return;
+    const before = draft.slice(0, cursor) + text;
+    setDraft(before + draft.slice(cursor));
+    setCursor(before.length);
+  }
+
+  // A GIF: the server fetches it from GIPHY and keeps it as an upload (/gifs/send), then it goes
+  // out as a message with that file, a reply if we were replying (the web page's sendGif).
+  async function sendGif(gif) {
+    setPicker(null);
+    setSending('Sending GIF…');
+    try {
+      const response = await fetch(`${SERVER}/gifs/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: gif.id }),
+      });
+      const answer = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setSending(typeof answer.detail === 'string' ? answer.detail : "Couldn't send the GIF.");
+        return;
+      }
+      connection.sendMessage('', replyTo?.id, answer.id);
+      setReplyTo(null);
+      setSending('');
+    } catch {
+      setSending('Not connected, try again in a moment.');
+    }
   }
 
   function send() {
@@ -405,24 +484,45 @@ export default function ChatScreen({ connection }) {
 
   const replyName = replyTo && (users[replyTo.user_id]?.name ?? replyTo.name);
 
+  // "kari is typing…", "kari and ola are typing…", "Several people are typing…" (the web page's words).
+  const { typing } = connection;
+  let typingText = '';
+  if (typing.length === 1) typingText = `${typing[0]} is typing…`;
+  else if (typing.length === 2) typingText = `${typing[0]} and ${typing[1]} are typing…`;
+  else if (typing.length > 2) typingText = 'Several people are typing…';
+
   return (
     // (Room for the keyboard is made around the whole screen, in App.js.)
     <View style={styles.screen}>
       {body}
 
+      {/* The web page's #status-line, always there (so nothing jumps): who's typing on the left,
+          a GIF on its way (or what went wrong) on the right. */}
+      <View style={styles.statusLine}>
+        <Text numberOfLines={1} style={styles.statusText}>{typingText}</Text>
+        {sending ? <Text style={[styles.statusText, sending !== 'Sending GIF…' && styles.statusError]}>{sending}</Text> : null}
+      </View>
+
       {suggestions.length > 0 ? (
-        // The web page's #autocomplete: a box just above the text box, a row per person.
+        // The web page's #autocomplete: a box just above the text box, a row per suggestion.
         <View style={styles.autocomplete}>
-          {suggestions.map((user) => (
+          {suggestions.map((suggestion) => (
             <Pressable
-              key={user.id}
-              onPress={() => pickSuggestion(user.name)}
+              key={suggestion.key}
+              onPress={() => pickSuggestion(suggestion)}
               style={({ pressed }) => [styles.suggestion, pressed && styles.suggestionPressed]}
             >
-              {user.id === 'everyone'
-                ? <Text style={styles.suggestionAt}>@</Text>
-                : <Avatar user={user} size={24} />}
-              <Text style={[styles.suggestionName, { color: nameColor(user, roles) ?? colors.text }]}>{user.name}</Text>
+              {suggestion.user ? <Avatar user={suggestion.user} size={24} /> : null}
+              {suggestion.custom ? <CustomEmoji item={suggestion.custom} size={24} /> : null}
+              {suggestion.character ? <Text style={styles.suggestionEmoji}>{suggestion.character}</Text> : null}
+              {suggestion.key === 'everyone' ? <Text style={styles.suggestionAt}>@</Text> : null}
+              <Text
+                numberOfLines={1}
+                style={[styles.suggestionName, { color: (suggestion.user && nameColor(suggestion.user, roles)) ?? colors.text }]}
+              >
+                {suggestion.label}
+              </Text>
+              {suggestion.detail ? <Text style={styles.suggestionDetail}>{suggestion.detail}</Text> : null}
             </Pressable>
           ))}
         </View>
@@ -443,13 +543,17 @@ export default function ChatScreen({ connection }) {
           ref={input}
           style={styles.input}
           value={draft}
-          onChangeText={setDraft}
-          onSelectionChange={(event) => setCursor(event.nativeEvent.selection.end)}  // for the @ suggestions
+          onChangeText={onType}
+          onSelectionChange={(event) => setCursor(event.nativeEvent.selection.end)}  // for the suggestions
           placeholder={`Message ${label}`}
           placeholderTextColor={colors.textMuted}
           multiline                          // grows with the text, up to maxHeight
           maxLength={me.maxTextLength}       // the server's limit (from "welcome")
         />
+        {/* The smiley: on a phone one button for both emoji and GIFs (the picker's tabs). */}
+        <Pressable onPress={() => setPicker('insert')} style={({ pressed }) => [styles.smiley, pressed && styles.sendPressed]}>
+          <Icon name="smiley" size={24} />
+        </Pressable>
         <Pressable
           onPress={send}
           disabled={!draft.trim()}
@@ -465,10 +569,31 @@ export default function ChatScreen({ connection }) {
           canChange={menuFor.user_id === me.id || isAdmin}  // the server's rule too
           onClose={() => setMenuFor(null)}
           onReact={react}
+          onMoreReactions={() => {
+            setPicker({ react: menuFor });
+            setMenuFor(null);
+          }}
           onReply={startReply}
           onPin={togglePin}
           onEdit={startEdit}
           onDelete={confirmDelete}
+        />
+      ) : null}
+
+      {picker ? (
+        <Picker
+          connection={connection}
+          mode={picker === 'insert' ? 'insert' : 'react'}
+          onPickEmoji={(value) => {
+            if (picker === 'insert') {
+              insertEmoji(value);  // (the picker stays open for more, like the web page's)
+            } else {
+              connection.react(picker.react.id, value);
+              setPicker(null);
+            }
+          }}
+          onPickGif={sendGif}
+          onClose={() => setPicker(null)}
         />
       ) : null}
     </View>
@@ -492,12 +617,7 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' },
   name: { fontSize: 16, fontWeight: '600' },
   time: { fontSize: 12, color: colors.textMuted },
-  text: { fontSize: 16, lineHeight: 22, color: colors.text },
   note: { color: colors.textMuted, fontStyle: 'italic' },
-  edited: { fontSize: 11.2, color: colors.textMuted, fontStyle: 'normal' },
-  mention: { backgroundColor: colors.accent30, color: colors.mentionText, fontWeight: '500' },
-  file: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
-  fileName: { color: colors.textSoft, fontSize: 14 },
   blockedRow: { alignItems: 'center', gap: 8, marginTop: 8 },
   blocked: { flex: 1, color: colors.textMuted, fontSize: 14 },
   show: { color: colors.link },
@@ -508,6 +628,7 @@ const styles = StyleSheet.create({
   // .reactions and .reaction-chip.
   reactions: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 4 },
   chip: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
     paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8, borderWidth: 1, borderColor: 'transparent',
     backgroundColor: colors.bgPanel,
   },
@@ -542,7 +663,15 @@ const styles = StyleSheet.create({
   suggestion: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 8, paddingVertical: 6, borderRadius: 6 },
   suggestionPressed: { backgroundColor: colors.bgHover },
   suggestionAt: { width: 24, textAlign: 'center', fontSize: 18, color: colors.textMuted },
-  suggestionName: { fontSize: 16 },
+  suggestionName: { flexShrink: 1, fontSize: 15.2 },
+  suggestionEmoji: { width: 24, textAlign: 'center', fontSize: 20.8 },
+  suggestionDetail: { marginLeft: 'auto', fontSize: 12.8, color: colors.textMuted },  // pushed to the right
+  // #status-line: always 1.2 lines tall, typing on the left, sending on the right.
+  statusLine: { flexDirection: 'row', justifyContent: 'space-between', gap: 12, height: 17, paddingHorizontal: 16 },
+  statusText: { flexShrink: 1, fontSize: 13.6, lineHeight: 17, color: colors.textMuted },
+  statusError: { color: colors.red },
+  // The smiley: like the web page's "+" and smiley buttons, on the message box's colour.
+  smiley: { backgroundColor: colors.bgInput, borderRadius: 8, padding: 10 },
   // #reply-bar.
   replyBar: {
     flexDirection: 'row', alignItems: 'center', gap: 6, marginHorizontal: 8, paddingHorizontal: 12,

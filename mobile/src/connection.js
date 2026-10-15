@@ -5,8 +5,36 @@
 // drops), and puts what the server sends into state, so every screen that shows it redraws
 // by itself when it changes. It speaks exactly the same messages as the web page (core.js).
 import { useEffect, useRef, useState } from 'react';
-import { AppState } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import { SERVER, SOCKET_URL } from './config';
+
+// The newest emoji version each Android draws (its API level -> Unicode's emoji version): newer
+// emoji would show as empty boxes, so the picker leaves them out. (The web page finds out by drawing
+// each one on a canvas instead; an app can't.)
+function newestEmojiVersion() {
+  const api = Number(Platform.Version);
+  if (api >= 37) return 17.0;
+  if (api >= 36) return 16.0;  // Android 16
+  if (api >= 35) return 15.1;
+  if (api >= 34) return 15.0;
+  if (api >= 33) return 14.0;
+  if (api >= 31) return 13.1;
+  if (api >= 30) return 13.0;
+  if (api >= 29) return 12.0;
+  return 11.0;
+}
+
+// emoji.json's groups without the emoji this phone can't draw (its "versions": {"17.0": [...], ...}).
+function drawableGroups(data) {
+  const newest = newestEmojiVersion();
+  const tooNew = new Set();
+  for (const [version, emoji] of Object.entries(data.versions ?? {})) {
+    if (Number(version) > newest) for (const item of emoji) tooNew.add(item);
+  }
+  return data.groups
+    .map((group) => ({ name: group.name, emoji: group.emoji.filter(([emoji]) => !tooNew.has(emoji)) }))
+    .filter((group) => group.emoji.length > 0);  // (a group with nothing left goes)
+}
 
 export function useConnection() {
   // "connecting", "online", "offline" (dropped: trying again) or "logged-out".
@@ -21,7 +49,14 @@ export function useConnection() {
   const [users, setUsers] = useState({});        // everyone, by id: {3: {id, name, ...}}
   const [roles, setRoles] = useState([]);        // the server's roles, top first: [{id, name, colour}]
   const [myPresence, setMyPresence] = useState('online');  // the status we chose (others may see another)
-  const [emoji, setEmoji] = useState({});        // custom emoji names by id: {17: "pog"}
+  const [emoji, setEmoji] = useState({});        // custom emoji by id: {17: {id, name, file, owner_id}}
+  // Every Unicode emoji, for the picker and ":" suggestions: the server's /emoji.json, fetched once
+  // ({groups: [{name, emoji: [["😀", "grinning face"], ...]}, ...]}). null until it has come.
+  const [emojiGroups, setEmojiGroups] = useState(null);
+  // Who's typing in the chat we're in, by name: each disappears 3 s after their last "typing".
+  const [typing, setTyping] = useState([]);
+  const typingTimers = useRef({});   // name -> its timer
+  const lastTypingSent = useRef(0);  // when we last said we're typing (at most every 2 s)
   const [unread, setUnread] = useState(new Set());  // chats with messages we haven't seen
   const [mentions, setMentions] = useState({});  // unread mentions of us per chat: {memes: 2}
   const [current, setCurrent] = useState(null);  // the chat we're reading, or null (the list)
@@ -90,11 +125,23 @@ export function useConnection() {
         break;
       }
       case 'custom_emoji': {
-        const names = {};
-        for (const item of data.emoji) names[item.id] = item.name;
-        setEmoji(names);
+        const byId = {};
+        for (const item of data.emoji) byId[item.id] = item;
+        setEmoji(byId);
         break;
       }
+      case 'typing':
+        // {"type": "typing", "channel", "name"}: someone else in this chat is typing.
+        if (data.channel === currentRef.current) showTyping(data.name);
+        break;
+      case 'preview':
+        // A link's preview card, a moment after its message (the server fetched the page meanwhile).
+        if (data.channel === currentRef.current) {
+          setMessages((old) => old?.map((message) => (message.id === data.message_id
+            ? { ...message, preview: data.preview }
+            : message)));
+        }
+        break;
       case 'unread': {
         // Right after connecting: every unread chat (replaces what we had). Later: one chat
         // that just got a new message (added). Never the chat we're reading: that's seen.
@@ -143,6 +190,7 @@ export function useConnection() {
       case 'message':
         if (data.channel === currentRef.current) {
           setMessages((old) => [...(old ?? []), data]);
+          stopTyping(data.name);  // their message is here: they're done typing it
         }
         break;
       case 'edited':
@@ -170,7 +218,36 @@ export function useConnection() {
             : message)));
         }
         break;
-      // Everything else (reactions, calls, typing, ...) comes in later steps.
+      // Everything else (calls, ...) comes in later steps.
+    }
+  }
+
+  // ----- Typing (the web page's people.js, "Typing")
+
+  function showTyping(name) {
+    clearTimeout(typingTimers.current[name]);
+    typingTimers.current[name] = setTimeout(() => stopTyping(name), 3000);
+    setTyping((old) => (old.includes(name) ? old : [...old, name]));
+  }
+
+  function stopTyping(name) {
+    clearTimeout(typingTimers.current[name]);
+    delete typingTimers.current[name];
+    setTyping((old) => old.filter((other) => other !== name));
+  }
+
+  function clearTyping() {
+    for (const timer of Object.values(typingTimers.current)) clearTimeout(timer);
+    typingTimers.current = {};
+    setTyping([]);
+  }
+
+  // Called as we type: tell the others, at most every 2 seconds.
+  function sendTyping() {
+    const now = Date.now();
+    if (now - lastTypingSent.current > 2000) {
+      lastTypingSent.current = now;
+      send({ type: 'typing' });
     }
   }
 
@@ -210,6 +287,12 @@ export function useConnection() {
   // Runs once when the app starts; the function it returns runs when it closes.
   useEffect(() => {
     connect();
+    // Unicode's emoji list, once (it changes only when the server's tools/make_emoji_json.py runs).
+    // (no-cache: ask the server each time instead of using a copy up to a day old, which is how
+    // long the server lets it be kept: once per start, a new list shows at once.)
+    fetch(`${SERVER}/emoji.json`, { headers: { 'Cache-Control': 'no-cache' } })
+      .then((response) => response.json()).then((data) => setEmojiGroups(drawableGroups(data)))
+      .catch(() => {});  // (no picker list then; everything else works)
     // Android may cut the connection while the app is in the background. Coming back to the
     // app, reconnect at once instead of waiting for the next try.
     const watcher = AppState.addEventListener('change', (state) => {
@@ -235,6 +318,7 @@ export function useConnection() {
     setLastRead(null);
     setMore(false);
     loadingOlder.current = false;
+    clearTyping();
     setUnread((old) => {
       const now = new Set(old);
       now.delete(key);
@@ -259,9 +343,11 @@ export function useConnection() {
   // Writing. None of these change the screen themselves: the server answers everyone in the chat,
   // us included ("message", "reactions", "edited", "deleted"), and that's what we draw. So every
   // screen shows the same, and something the server refused never appears.
-  function sendMessage(text, replyTo) {
-    send({ type: 'message', text, reply_to: replyTo ?? null });
+  // `file`: an uploaded file's id (a GIF from /gifs/send, say) to send with it.
+  function sendMessage(text, replyTo, file) {
+    send({ type: 'message', text, reply_to: replyTo ?? null, file: file ?? null });
     setLastRead(null);  // we wrote something: caught up, the NEW line goes (like the web page)
+    lastTypingSent.current = 0;  // so the next message's typing is told at once
   }
   // Scrolled up to the oldest message we have: ask for the 50 before it (once at a time).
   function loadOlder() {
@@ -303,8 +389,9 @@ export function useConnection() {
 
   return {
     status, me, myPresence, channels, groups, friends, incoming, outgoing, blocked, users, roles, emoji,
-    unread, mentions, current, messages, lastRead, more,
-    openChat, closeChat, loadOlder, sendMessage, react, pin, editMessage, deleteMessage, friendAction,
+    emojiGroups, unread, mentions, current, messages, lastRead, more, typing,
+    openChat, closeChat, loadOlder, sendMessage, sendTyping, react, pin, editMessage, deleteMessage,
+    friendAction,
     reconnect: connect,  // after logging in
   };
 }
