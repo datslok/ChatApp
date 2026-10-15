@@ -356,7 +356,8 @@ the point is for me to understand how it works, not just to have it done.
   first bytes ("ftyp" at byte 4; 1A 45 DF A3), served inline like pictures (`SHOWN_TYPES`; FileResponse answers range
   requests for seeking), `file_info` has `"video"`; `mark_old_videos()` at every start turns earlier .mp4/.webm
   downloads that pass into videos. Web: messages.js `makeVideo` (<video controls preload="metadata"> + the
-  `makeFileLink` under it; an unplayable format leaves the link). Phone: expo-video (`VideoAttachment` in
+  `makeFileLink` under it; an unplayable format leaves the link; `controlslist="nodownload"`, the user's wish: the name
+  under it downloads). Phone: expo-video (`VideoAttachment` in
   MessageText.js: the first frame with a play button; a tap opens `src/VideoScreen.js`, the popup with our control bar
   right under the video (the user's wish; Android's full screen had its controls at the screen's bottom); a
   see-through Pressable lies over the VideoView because the native view swallowed taps, so in-message controls never worked); its player downloads with its own OkHttp client without
