@@ -78,10 +78,11 @@ export function useConnection() {
   const firstUnread = useRef(true);  // the first "unread" after connecting is the whole list
   const loggedOut = useRef(false);   // the server said 4001: no point reconnecting until we log in
 
+  // True if it went out (false: not connected right now).
   function send(data) {
-    if (socket.current?.readyState === WebSocket.OPEN) {
-      socket.current.send(JSON.stringify(data));
-    }
+    if (socket.current?.readyState !== WebSocket.OPEN) return false;
+    socket.current.send(JSON.stringify(data));
+    return true;
   }
 
   // Tell the server whether the app is on screen, and that this is a phone: like the web
@@ -343,11 +344,13 @@ export function useConnection() {
   // Writing. None of these change the screen themselves: the server answers everyone in the chat,
   // us included ("message", "reactions", "edited", "deleted"), and that's what we draw. So every
   // screen shows the same, and something the server refused never appears.
-  // `file`: an uploaded file's id (a GIF from /gifs/send, say) to send with it.
+  // `file`: an uploaded file's id (a picture we picked, a GIF from /gifs/send) to send with it.
+  // True if it went out.
   function sendMessage(text, replyTo, file) {
-    send({ type: 'message', text, reply_to: replyTo ?? null, file: file ?? null });
+    if (!send({ type: 'message', text, reply_to: replyTo ?? null, file: file ?? null })) return false;
     setLastRead(null);  // we wrote something: caught up, the NEW line goes (like the web page)
     lastTypingSent.current = 0;  // so the next message's typing is told at once
+    return true;
   }
   // Scrolled up to the oldest message we have: ask for the 50 before it (once at a time).
   function loadOlder() {

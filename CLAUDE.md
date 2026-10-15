@@ -118,6 +118,16 @@ the point is for me to understand how it works, not just to have it done.
   (a config plugin in app.json) turns on `expo.webp.animated` for GIPHY's WebP. emoji.json now also has
   "versions" (make_emoji_json.py; Unicode 18.0 on 2026-10-15): the app hides emoji newer than its Android draws
   (`newestEmojiVersion`, API 36 = Emoji 16.0; a cracking face 🫫 showed as a box).
+  Pictures and files (since 2026-10-15): `src/files.js` uploads (POST /upload with an expo-file-system `File` as the
+  body) and downloads (a stream written piece by piece into `Paths.cache/downloads/<id>/`, with progress) through
+  **expo/fetch**, because expo-file-system's own upload/download use an OkHttp client without React Native's
+  cookie jar (the server would say "not logged in"); `openFile` (expo-intent-launcher, ACTION_VIEW on the
+  `contentUri`, flag 1 = read permission), `shareFile` (expo-sharing). The + by the text box opens `AttachMenu`
+  (expo-image-picker's photo picker and camera; `File.pickFileAsync` for any file, so no expo-document-picker),
+  the `Tray` above the box (the web's #tray: 10 files, 10 MB, one message per file, the caption with the first,
+  failed ones in red), "Uploading x…" on the status line. A tapped picture opens `src/ImageViewer.js` (a Modal with
+  its own GestureHandlerRootView: pinch, drag, double tap via react-native-gesture-handler + reanimated; zoom only
+  there); a tapped file asks "Download this file?" like the desktop app, shows a bar, then Open / Share….
   `src/people.js` (Avatar with letter colours, StatusDot with the phone shape, BotBadge, Person, nameColor),
   `src/Icon.js` (react-native-svg's SvgXml with the web page's Lucide shapes from `src/icon-shapes.js`,
   written by tools/make_icons.py too), `src/chats.js` (keys and labels), `src/colors.js` (chat.css's dark

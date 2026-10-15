@@ -109,7 +109,7 @@
     - [x] The web chat's phone design: top bar with drawers (channels, members), messages grouped with pictures, Lucide icons
     - [x] The People page like the web's: tabs (Friends, Everyone, Requests, Blocked), Online/Offline, its buttons
     - [x] Messages like the web: formatting (bold, code, links, maths), custom emoji, link previews, the emoji picker, GIFs, typing
-    - [ ] Pictures and files: viewing, uploading, downloading
+    - [x] Pictures and files: viewing (pinch to zoom), uploading (photos, camera, any file), downloading (open or share)
     - [ ] The chat's top bar: mute, search, pinned messages
     - [ ] Profiles, the user menu (long press), your status, groups (create, add, rename, leave), invites
     - [ ] Voice and video calls (LiveKit's React Native library), also with the phone locked

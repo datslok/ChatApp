@@ -1,11 +1,13 @@
 // Drawing a message the web page's way: its formatted text (format.js's tree), custom emoji as
 // pictures, link preview cards and attachments. The sizes and colours are chat.css's.
 import { useState } from 'react';
-import { Image, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Image, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import ImageViewer from './ImageViewer';
 import Icon from './Icon';
 import MathView from './MathView';
 import { colors } from './colors';
 import { SERVER } from './config';
+import { downloadFile, downloaded, openFile, shareFile } from './files';
 import { isOnlyEmoji, parseMessage, tokensToCodes } from './format';
 
 // A custom emoji's picture. /custom-emoji/files/ only answers logged-in people; React Native's
@@ -237,7 +239,7 @@ export default function MessageText({ text, users, emoji, edited, note }) {
 
 // A picture as big as fits in maxWidth x maxHeight without changing its shape (CSS max-width +
 // max-height). Its size is only known once loaded (onLoad), so until then it takes a small space.
-export function FittedImage({ uri, maxWidth, maxHeight, style, onPress }) {
+export function FittedImage({ uri, maxWidth, maxHeight, style, onPress, onLongPress }) {
   const [natural, setNatural] = useState(null);   // the picture's own {width, height}
   const [room, setRoom] = useState(maxWidth);      // how wide it may be here (the column may be narrower)
   let size = { width: Math.min(room, maxWidth), height: 120 };
@@ -255,24 +257,89 @@ export function FittedImage({ uri, maxWidth, maxHeight, style, onPress }) {
   );
   return (
     <View style={styles.fitted} onLayout={(event) => setRoom(event.nativeEvent.layout.width)}>
-      {onPress ? <Pressable onPress={onPress}>{picture}</Pressable> : picture}
+      {onPress ? <Pressable onPress={onPress} onLongPress={onLongPress}>{picture}</Pressable> : picture}
     </View>
   );
 }
 
 // ----- What comes after the text
 
-// An attached file: a picture is shown (at most 400 x 300); any other file shows its name and size.
-// (Opening pictures full size and downloading files come with the "Pictures and files" step.)
-export function Attachment({ file }) {
+// An attached file: a picture is shown (at most 400 x 300) and a tap opens it full screen; any other
+// file shows its name and size, and a tap downloads it. sender: who sent it (their name), or null for us.
+// onLongPress: the message's menu (a tap target inside the message would otherwise take the touch).
+export function Attachment({ file, sender, onLongPress }) {
+  const [viewing, setViewing] = useState(false);
   if (file.image) {
-    return <FittedImage uri={`${SERVER}/uploads/${encodeURIComponent(file.id)}`} maxWidth={400} maxHeight={300} style={styles.attachmentImage} />;
+    return (
+      <>
+        <FittedImage
+          uri={`${SERVER}/uploads/${encodeURIComponent(file.id)}`} maxWidth={400} maxHeight={300}
+          style={styles.attachmentImage} onPress={() => setViewing(true)} onLongPress={onLongPress}
+        />
+        {viewing ? <ImageViewer file={file} onClose={() => setViewing(false)} /> : null}
+      </>
+    );
   }
+  return <FileAttachment file={file} sender={sender} onLongPress={onLongPress} />;
+}
+
+// A file that isn't a picture. Like the desktop app: a tap asks first ("Download this file?",
+// with a warning when someone else sent it), then downloads it with a progress bar under the name,
+// then offers to open it (in an app that can) or share it (send it on, or save it somewhere).
+function FileAttachment({ file, sender, onLongPress }) {
+  const [progress, setProgress] = useState(null);  // 0..1 while downloading, else null
+
+  function ask() {
+    if (progress !== null) return;  // already downloading
+    if (downloaded(file)) {         // downloaded before: no need to ask again
+      offer(downloaded(file));
+      return;
+    }
+    const sentBy = sender === null ? 'Sent by you.' : `Sent by ${sender}.`;
+    const warning = sender === null ? '' : "\n\nOnly open files from people you trust: a file can harm your phone.";
+    Alert.alert('Download this file?', `${file.filename} (${formatSize(file.size)})\n${sentBy}${warning}`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Download', onPress: download },
+    ]);
+  }
+
+  async function download() {
+    setProgress(0);
+    try {
+      offer(await downloadFile(file, setProgress));
+    } catch (error) {
+      Alert.alert(error.message);
+    } finally {
+      setProgress(null);
+    }
+  }
+
+  function offer(copy) {
+    Alert.alert(file.filename, 'Downloaded.', [
+      { text: 'Close', style: 'cancel' },
+      { text: 'Share…', onPress: () => shareFile(copy) },
+      {
+        text: 'Open',
+        onPress: async () => {
+          if (!(await openFile(copy))) Alert.alert('No app on this phone can open this file.', 'Share it to save it somewhere instead.');
+        },
+      },
+    ]);
+  }
+
   return (
-    <View style={styles.attachmentFile}>
-      <Icon name="file" size={16} color={colors.textSoft} />
-      <Text style={styles.attachmentName}>{file.filename} ({formatSize(file.size)})</Text>
-    </View>
+    <Pressable onPress={ask} onLongPress={onLongPress} style={({ pressed }) => [styles.attachmentFile, pressed && styles.attachmentPressed]}>
+      <View style={styles.attachmentRow}>
+        <Icon name="file" size={16} color={colors.link} />
+        <Text style={styles.attachmentName}>{file.filename} ({formatSize(file.size)})</Text>
+      </View>
+      {progress !== null ? (
+        // The web page's <progress>: a groove, filled as far as it's come.
+        <View style={styles.progress}>
+          <View style={[styles.progressFill, { width: `${Math.round(progress * 100)}%` }]} />
+        </View>
+      ) : null}
+    </Pressable>
   );
 }
 
@@ -327,8 +394,17 @@ const styles = StyleSheet.create({
   wrapped: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center' },
   lineBreak: { width: '100%', height: 0 },
   attachmentImage: { marginTop: 4, borderRadius: 8 },
-  attachmentFile: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
-  attachmentName: { color: colors.textSoft, fontSize: 14 },
+  // .attachment-file: a box on the panel colour, the name in the link colour.
+  attachmentFile: {
+    alignSelf: 'flex-start', marginTop: 4, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8,
+    backgroundColor: colors.bgPanel,
+  },
+  attachmentPressed: { opacity: 0.7 },
+  attachmentRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  attachmentName: { flexShrink: 1, color: colors.link, fontSize: 16 },
+  // Its progress bar: 4px, the link colour on the darkest one.
+  progress: { height: 4, marginTop: 6, borderRadius: 2, backgroundColor: colors.bgDarkest, overflow: 'hidden' },
+  progressFill: { height: 4, backgroundColor: colors.link },
   // .link-preview: a card with a 4px line on its left.
   preview: {
     maxWidth: 432, marginTop: 6, paddingTop: 10, paddingHorizontal: 14, paddingBottom: 12, gap: 4,

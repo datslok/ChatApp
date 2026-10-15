@@ -22,11 +22,11 @@ VERSION = "1.48.0"
 
 # Every icon the page uses, by Lucide's name.
 ICONS = [
-    "arrow-down", "arrow-up", "ban", "bell", "bell-off", "bug", "chevron-down", "file", "gamepad-2",
-    "headphone-off", "headphones", "image", "lightbulb", "log-out", "maximize", "megaphone", "menu",
-    "mic", "mic-off", "minimize", "monitor", "monitor-up", "music", "paperclip", "pencil", "phone",
-    "phone-off", "pin", "reply", "search", "settings", "trash-2", "users", "video", "x",
-    "volume-2",
+    "arrow-down", "arrow-up", "ban", "bell", "bell-off", "bug", "camera", "chevron-down",
+    "download", "file", "gamepad-2", "headphone-off", "headphones", "image", "lightbulb", "log-out",
+    "maximize", "megaphone", "menu", "mic", "mic-off", "minimize", "monitor", "monitor-up", "music",
+    "paperclip", "pencil", "phone", "phone-off", "pin", "plus", "reply", "search", "settings",
+    "share-2", "trash-2", "users", "video", "volume-2", "x",
 ]
 
 # npm's description of that version, with the package's address and its hash ("integrity").

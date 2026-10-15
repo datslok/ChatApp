@@ -1,0 +1,109 @@
+// Files going up and coming down: uploading what we picked, downloading an attachment into the
+// app's own storage, then opening it in another app or sharing it (the web page's messages.js,
+// "Uploads", and the desktop app's downloads).
+//
+// Both go through Expo's fetch (expo/fetch), not expo-file-system's own upload and download: those
+// use an HTTP client without React Native's cookies, so the server would answer "not logged in".
+// Expo's fetch shares the cookie jar that /login filled.
+import { fetch } from 'expo/fetch';
+import { Directory, File, Paths } from 'expo-file-system';
+import * as IntentLauncher from 'expo-intent-launcher';
+import * as Sharing from 'expo-sharing';
+import { SERVER } from './config';
+
+export const MAX_UPLOAD_SIZE = 10 * 1024 * 1024;  // 10 MB, same as the server
+export const MAX_TRAY_FILES = 10;                   // the web page's limit too
+
+// The types the server shows as pictures (server.py's IMAGE_TYPES); anything else is a download.
+export const IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
+
+// Upload one file (a tray item: {uri, name, type}). Returns its id from the server; throws an
+// Error with something to show if it failed.
+export async function uploadFile(item) {
+  let response;
+  try {
+    // The body is the file itself (an expo-file-system File, read from wherever Android keeps it);
+    // its name goes in the URL, as on the web page.
+    response = await fetch(`${SERVER}/upload?filename=${encodeURIComponent(item.name)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': item.type || 'application/octet-stream' },
+      body: new File(item.uri),
+    });
+  } catch {
+    throw new Error(`Couldn't upload ${item.name}`);  // no network, or the file couldn't be read
+  }
+  const answer = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    // The server's reason if it gave one, like "Files can be at most 10 MB."
+    throw new Error(typeof answer.detail === 'string' ? answer.detail : `Couldn't upload ${item.name}`);
+  }
+  return answer.id;
+}
+
+// Where an attachment is kept once downloaded: the app's cache (Android may clear it when space
+// runs low), in a folder per file id so two files called "notes.pdf" don't overwrite each other.
+// It keeps its own name, so the app that opens it shows the right one.
+function localCopy(file) {
+  const folder = new Directory(Paths.cache, 'downloads', file.id);
+  return { folder, copy: new File(folder, file.filename.replace(/[\\/:*?"<>|]/g, '_')) };
+}
+
+// The downloaded copy of an attachment ({id, filename, size} from a message), if we have one.
+export function downloaded(file) {
+  const { copy } = localCopy(file);
+  return copy.exists && copy.size === file.size ? copy : null;
+}
+
+// Download an attachment, calling onProgress(0..1) as it comes. Returns the local File.
+// The answer is read piece by piece (a stream) and each piece is written straight to the file,
+// so we know how far along it is and a big file never sits in memory all at once.
+export async function downloadFile(file, onProgress) {
+  const already = downloaded(file);
+  if (already) return already;
+
+  const response = await fetch(`${SERVER}/uploads/${encodeURIComponent(file.id)}`);
+  if (!response.ok) throw new Error("Couldn't download the file");
+
+  const { folder, copy } = localCopy(file);
+  folder.create({ intermediates: true, idempotent: true });  // (idempotent: no error if it's there)
+  copy.create({ overwrite: true });
+  const handle = copy.open();
+  let received = 0;
+  try {
+    const reader = response.body.getReader();
+    while (true) {
+      const { done, value } = await reader.read();  // the next piece, as bytes (a Uint8Array)
+      if (done) break;
+      handle.writeBytes(value);
+      received += value.length;
+      onProgress?.(Math.min(1, received / file.size));
+    }
+  } catch (error) {
+    handle.close();
+    copy.delete();  // half a file is no use
+    throw new Error("Couldn't download the file");
+  }
+  handle.close();
+  return copy;
+}
+
+// Open a downloaded file in another app: Android's "open with" (an intent, ACTION_VIEW).
+// contentUri is the file's content:// address, and flag 1 (FLAG_GRANT_READ_URI_PERMISSION) lets
+// the chosen app read that one file from our storage. False if no app can open it.
+export async function openFile(copy) {
+  try {
+    await IntentLauncher.startActivityAsync('android.intent.action.VIEW', {
+      data: copy.contentUri,
+      flags: 1,
+      type: copy.type || '*/*',  // (Android guesses it from the name: "application/pdf" for .pdf)
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// Android's share sheet for a downloaded file: send it somewhere, or save it (Drive, Files, …).
+export async function shareFile(copy) {
+  await Sharing.shareAsync(copy.uri, { mimeType: copy.type || undefined, dialogTitle: copy.name });
+}

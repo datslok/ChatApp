@@ -1,17 +1,20 @@
 // One chat: its messages, drawn like the web page's (messages.js, showMessage), and writing.
 // The top bar is App.js's; this is everything under it.
 import { useEffect, useRef, useState } from 'react';
+import { File } from 'expo-file-system';
+import * as ImagePicker from 'expo-image-picker';
 import {
-  ActivityIndicator, Alert, FlatList, Keyboard, Modal, Pressable, StyleSheet, Text,
+  ActivityIndicator, Alert, FlatList, Image, Keyboard, Modal, Pressable, StyleSheet, Text,
   TextInput, View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from './Icon';
-import MessageText, { Attachment, CustomEmoji, LinkPreview } from './MessageText';
+import MessageText, { Attachment, CustomEmoji, LinkPreview, formatSize } from './MessageText';
 import Picker from './Picker';
 import { colors } from './colors';
 import { chatLabel } from './chats';
 import { SERVER } from './config';
+import { IMAGE_TYPES, MAX_TRAY_FILES, MAX_UPLOAD_SIZE, uploadFile } from './files';
 import { Avatar, BotBadge, nameColor } from './people';
 
 // Quick reactions in the long-press menu, before its smiley (which opens the whole emoji picker).
@@ -190,7 +193,9 @@ function Message({ message, grouped, connection, isBlocked, onShow, onLongPress 
         {message.text ? (
           <MessageText text={message.text} users={users} emoji={emoji} edited={message.edited_at} note={note} />
         ) : null}
-        {message.file ? <Attachment file={message.file} /> : null}
+        {message.file ? (
+          <Attachment file={message.file} sender={message.user_id === me.id ? null : name} onLongPress={() => onLongPress(message)} />
+        ) : null}
         {message.preview ? <LinkPreview preview={message.preview} /> : null}
         {message.reactions.length > 0 ? (
           <View style={styles.reactions}>
@@ -282,6 +287,47 @@ function MenuItem({ icon, label, onPress, danger }) {
   );
 }
 
+// The + button's sheet: where the files come from. (The web page's + opens the computer's file
+// picker; a phone has three places: the photos, the camera, and its files.)
+function AttachMenu({ onClose, onPhotos, onCamera, onFiles }) {
+  const insets = useSafeAreaInsets();
+  return (
+    <Modal transparent animationType="fade" visible onRequestClose={onClose} navigationBarTranslucent statusBarTranslucent>
+      <Pressable style={styles.backdrop} onPress={onClose}>
+        <Pressable style={[styles.sheet, { paddingTop: 8, paddingBottom: insets.bottom + 8 }]}>
+          <MenuItem icon="image" label="Photos and videos" onPress={onPhotos} />
+          <MenuItem icon="camera" label="Take a photo" onPress={onCamera} />
+          <MenuItem icon="file" label="File" onPress={onFiles} />
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
+// The tray above the text box (the web page's #tray): what's about to be sent, each with an ×.
+// A picture as a small square, any other file as its name and size; a failed one outlined in red.
+function Tray({ items, onRemove }) {
+  return (
+    <View style={styles.tray}>
+      {items.map((item) => (
+        <View key={item.key} style={[styles.trayItem, !item.image && styles.trayFile, item.failed && styles.trayFailed]}>
+          {item.image ? (
+            <Image source={{ uri: item.uri }} style={styles.trayImage} />
+          ) : (
+            <View style={styles.trayFileRow}>
+              <Icon name="file" size={14} color={colors.text} />
+              <Text numberOfLines={3} style={styles.trayFileName}>{item.name} ({formatSize(item.size)})</Text>
+            </View>
+          )}
+          <Pressable onPress={() => onRemove(item)} hitSlop={6} style={styles.trayRemove}>
+            <Icon name="x" size={16} color="#ffffff" />
+          </Pressable>
+        </View>
+      ))}
+    </View>
+  );
+}
+
 // backRef: App.js's; this fills in what the back button should do here first (see below).
 export default function ChatScreen({ connection, backRef }) {
   const { current, messages, users, roles, me, lastRead, more, blocked } = connection;
@@ -292,7 +338,11 @@ export default function ChatScreen({ connection, backRef }) {
   const [cursor, setCursor] = useState(0);         // where the cursor is in the text box
   const [shownBlocked, setShownBlocked] = useState(new Set());  // blocked people's messages we chose to see
   const [picker, setPicker] = useState(null);      // the emoji/GIF picker: null, "insert", or {react: message}
-  const [sending, setSending] = useState('');      // "Sending GIF…", or what went wrong (the status line's right side)
+  // The status line's right side: {text, error}, like "Uploading cat.jpg…", or what went wrong; or null.
+  const [status, setStatus] = useState(null);
+  const [tray, setTray] = useState([]);            // files about to be sent: {key, uri, name, type, size, image, failed}
+  const [attachMenu, setAttachMenu] = useState(false);  // the + button's sheet is open
+  const [uploading, setUploading] = useState(false);    // the tray is being sent
   // A ref to the text box itself (not its text): input.current.focus() puts the cursor in it.
   const input = useRef(null);
   // Android's back button: App.js asks this first (backRef), and while the emoji panel is open, back
@@ -371,7 +421,7 @@ export default function ChatScreen({ connection, backRef }) {
   // out as a message with that file, a reply if we were replying (the web page's sendGif).
   async function sendGif(gif) {
     setPicker(null);
-    setSending('Sending GIF…');
+    setStatus({ text: 'Sending GIF…' });
     try {
       const response = await fetch(`${SERVER}/gifs/send`, {
         method: 'POST',
@@ -380,19 +430,121 @@ export default function ChatScreen({ connection, backRef }) {
       });
       const answer = await response.json().catch(() => ({}));
       if (!response.ok) {
-        setSending(typeof answer.detail === 'string' ? answer.detail : "Couldn't send the GIF.");
+        showError(typeof answer.detail === 'string' ? answer.detail : "Couldn't send the GIF.");
         return;
       }
       connection.sendMessage('', replyTo?.id, answer.id);
       setReplyTo(null);
-      setSending('');
+      setStatus(null);
     } catch {
-      setSending('Not connected, try again in a moment.');
+      showError('Not connected, try again in a moment.');
     }
+  }
+
+  // Something went wrong: in red on the status line, gone after 5 s (the web page's showUploadError).
+  function showError(text) {
+    setStatus({ text, error: true });
+    setTimeout(() => setStatus((now) => (now?.text === text ? null : now)), 5000);
+  }
+
+  // ----- Files: picking them (the + sheet), the tray, sending them.
+
+  // Files picked: into the tray, if they're not too big and there's room (the web page's addToTray).
+  // Each: {uri, name, type, size}.
+  function addToTray(files) {
+    const room = MAX_TRAY_FILES - tray.length;
+    const fitting = files.filter((file) => file.size <= MAX_UPLOAD_SIZE);
+    if (fitting.length < files.length) showError('Files can be at most 10 MB');
+    else if (fitting.length > room) showError(`At most ${MAX_TRAY_FILES} files at a time`);
+    const added = fitting.slice(0, room).map((file) => ({
+      ...file,
+      key: `${Date.now()}-${Math.random()}`,  // only for React's list
+      image: IMAGE_TYPES.includes(file.type),
+      failed: false,
+    }));
+    setTray((old) => [...old, ...added]);
+  }
+
+  // Android's photo picker (several at once). Needs no permission: the picker is Android's own,
+  // and only what's picked reaches the app.
+  async function pickPhotos() {
+    setAttachMenu(false);
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images', 'videos'],
+      allowsMultipleSelection: true,
+      selectionLimit: MAX_TRAY_FILES - tray.length,
+    });
+    if (!result.canceled) addToTray(result.assets.map(fromPicker));
+  }
+
+  // The camera. Android asks for permission the first time.
+  async function takePhoto() {
+    setAttachMenu(false);
+    const permission = await ImagePicker.requestCameraPermissionsAsync();
+    if (!permission.granted) {
+      showError('The app may not use the camera (Android settings → Apps → ChatApp)');
+      return;
+    }
+    // quality 0.8: a JPEG a few MB big rather than the camera's full size.
+    const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.8 });
+    if (!result.canceled) addToTray(result.assets.map(fromPicker));
+  }
+
+  // Android's file picker, for any kind of file (expo-file-system's own).
+  async function pickFiles() {
+    setAttachMenu(false);
+    const result = await File.pickFileAsync({ multipleFiles: true });
+    if (!result.canceled) {
+      addToTray(result.result.map((file) => ({ uri: file.uri, name: file.name, type: file.type, size: file.size })));
+    }
+  }
+
+  // The photo picker's and camera's answers say the same things in other words.
+  function fromPicker(asset) {
+    return {
+      uri: asset.uri,
+      name: asset.fileName ?? asset.uri.split('/').pop(),
+      type: asset.mimeType,
+      size: asset.fileSize ?? new File(asset.uri).size,
+    };
+  }
+
+  // Send pressed with files in the tray: upload and send each one as its own message, the text
+  // going with the first one (and the reply). One that fails stays in the tray, in red (sendTray).
+  async function sendTray(caption) {
+    setUploading(true);
+    let reply = replyTo?.id;
+    for (const item of tray) {
+      setStatus({ text: `Uploading ${item.name}…` });
+      let sent = false;
+      try {
+        sent = connection.sendMessage(caption, reply, await uploadFile(item));
+        if (!sent) showError('Not connected, try again in a moment');
+      } catch (error) {
+        showError(error.message);
+      }
+      if (!sent) {
+        setTray((old) => old.map((other) => (other.key === item.key ? { ...other, failed: true } : other)));
+        continue;
+      }
+      setTray((old) => old.filter((other) => other.key !== item.key));
+      if (caption) {
+        caption = '';  // used up by this file
+        setDraft('');
+      }
+      reply = null;
+      setReplyTo(null);
+    }
+    setStatus((now) => (now?.error ? now : null));  // (a failure's message stays its 5 s)
+    setUploading(false);
   }
 
   function send() {
     const text = draft.trim();
+    if (tray.length > 0 && !editing) {
+      if (!uploading) sendTray(text);
+      return;
+    }
     if (!text) return;
     if (editing) {
       connection.editMessage(editing.id, text);
@@ -521,10 +673,10 @@ export default function ChatScreen({ connection, backRef }) {
       {body}
 
       {/* The web page's #status-line, always there (so nothing jumps): who's typing on the left,
-          a GIF on its way (or what went wrong) on the right. */}
+          a file or GIF on its way (or what went wrong) on the right. */}
       <View style={styles.statusLine}>
         <Text numberOfLines={1} style={styles.statusText}>{typingText}</Text>
-        {sending ? <Text style={[styles.statusText, sending !== 'Sending GIF…' && styles.statusError]}>{sending}</Text> : null}
+        {status ? <Text style={[styles.statusText, status.error && styles.statusError]}>{status.text}</Text> : null}
       </View>
 
       {suggestions.length > 0 ? (
@@ -562,7 +714,16 @@ export default function ChatScreen({ connection, backRef }) {
           </Pressable>
         </View>
       ) : null}
+      {tray.length > 0 && !editing ? (
+        <Tray items={tray} onRemove={(item) => !uploading && setTray((old) => old.filter((other) => other !== item))} />
+      ) : null}
       <View style={styles.form}>
+        {/* The web page's + (not while editing: an edit can't add a file). */}
+        {editing ? null : (
+          <Pressable onPress={() => setAttachMenu(true)} style={({ pressed }) => [styles.smiley, pressed && styles.sendPressed]}>
+            <Icon name="plus" size={24} />
+          </Pressable>
+        )}
         <TextInput
           ref={input}
           style={styles.input}
@@ -581,7 +742,7 @@ export default function ChatScreen({ connection, backRef }) {
         </Pressable>
         <Pressable
           onPress={send}
-          disabled={!draft.trim()}
+          disabled={!draft.trim() && (tray.length === 0 || !!editing)}
           style={({ pressed }) => [styles.send, pressed && styles.sendPressed]}
         >
           <Text style={styles.sendText}>{editing ? 'Save' : 'Send'}</Text>
@@ -598,6 +759,10 @@ export default function ChatScreen({ connection, backRef }) {
           onPickGif={sendGif}
           onClose={() => setPicker(null)}
         />
+      ) : null}
+
+      {attachMenu ? (
+        <AttachMenu onClose={() => setAttachMenu(false)} onPhotos={pickPhotos} onCamera={takePhoto} onFiles={pickFiles} />
       ) : null}
 
       {menuFor ? (
@@ -703,8 +868,20 @@ const styles = StyleSheet.create({
   statusLine: { flexDirection: 'row', justifyContent: 'space-between', gap: 12, height: 17, paddingHorizontal: 16 },
   statusText: { flexShrink: 1, fontSize: 13.6, lineHeight: 17, color: colors.textMuted },
   statusError: { color: colors.red },
-  // The smiley: like the web page's "+" and smiley buttons, on the message box's colour.
+  // The + and the smiley: like the web page's "+" and smiley buttons, on the message box's colour.
   smiley: { backgroundColor: colors.bgInput, borderRadius: 8, padding: 10 },
+  // #tray on a phone: 80px squares (a file 160px wide), wrapping; the × in a red circle, 28px.
+  tray: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingTop: 8, paddingHorizontal: 16 },
+  trayItem: { width: 80, height: 80, borderRadius: 8, overflow: 'hidden', backgroundColor: colors.bgPanel },
+  trayFile: { width: 160, padding: 8, paddingRight: 34 },
+  trayFailed: { borderWidth: 2, borderColor: colors.red },
+  trayImage: { width: '100%', height: '100%' },
+  trayFileRow: { flexDirection: 'row', gap: 4 },
+  trayFileName: { flexShrink: 1, fontSize: 12.8, color: colors.text },
+  trayRemove: {
+    position: 'absolute', top: 4, right: 4, width: 28, height: 28, borderRadius: 14,
+    alignItems: 'center', justifyContent: 'center', backgroundColor: colors.red,
+  },
   // #reply-bar.
   replyBar: {
     flexDirection: 'row', alignItems: 'center', gap: 6, marginHorizontal: 8, paddingHorizontal: 12,
