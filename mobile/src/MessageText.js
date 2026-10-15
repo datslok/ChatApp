@@ -175,8 +175,32 @@ function hasInlineMath(parts) {
 
 // A message's whole text: code blocks, quotes and paragraphs, with " (edited)" after the last
 // line. A message of only emoji (1 to 27) is drawn big, like the web page's .jumbo.
+// One emoji as people see it, though it may be several characters: a flag (two letters), a keycap
+// (1️⃣), or a picture with its marks (FE0F, skin tones), joined to more by "glue" (200D) like 👩‍💻.
+const ONE_EMOJI = /\p{Regional_Indicator}{2}|[#*0-9]️?⃣|\p{Extended_Pictographic}[️\u{1F3FB}-\u{1F3FF}]*(?:‍\p{Extended_Pictographic}[️\u{1F3FB}-\u{1F3FF}]*)*/gu;
+
+// A message of only emoji, drawn big: a row of pieces centred on each other, the custom ones as 48 px
+// pictures and the rest as text without a fixed line height. (In one line of text, Android sat the
+// emoji lower than the pictures and cut off their bottoms.) split() keeps the <:17> tokens' ids.
+function JumboEmoji({ text, emoji, editedLabel }) {
+  return (
+    <View style={styles.jumboRow}>
+      {text.split(/<:(\d+)>/).map((part, index) => {
+        if (index % 2 === 1) return <CustomEmoji key={index} item={emoji[part]} size={48} />;
+        // Each emoji a piece of its own: Android measured a run of big emoji too narrow, and cut the
+        // last one off. (The spaces between them: the row's gap does that.)
+        return (part.match(ONE_EMOJI) ?? []).map((one, n) => <Text key={`${index}-${n}`} style={styles.jumboText}>{one}</Text>);
+      })}
+      {editedLabel}
+    </View>
+  );
+}
+
 export default function MessageText({ text, users, emoji, edited, note }) {
   const jumbo = isOnlyEmoji(text);
+  if (jumbo) {
+    return <JumboEmoji text={text} emoji={emoji} editedLabel={edited ? <Text style={styles.edited}>(edited)</Text> : null} />;
+  }
   const context = { users, emoji, jumbo };
   const textStyle = [styles.text, jumbo && styles.jumbo, note && styles.note];
   const blocks = parseMessage(text);
@@ -277,6 +301,9 @@ const styles = StyleSheet.create({
   text: { fontSize: 16, lineHeight: 22, color: colors.text },
   note: { color: colors.textMuted, fontStyle: 'italic' },
   jumbo: { fontSize: 41.6, lineHeight: 50 },
+  // .jumbo: emoji at 2.6rem; pictures 48 px; all centred on one line, wrapping when there are many.
+  jumboRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 4 },
+  jumboText: { fontSize: 41.6, color: colors.text },
   edited: { fontSize: 11.2, color: colors.textMuted, fontStyle: 'normal' },
   bold: { fontWeight: 'bold' },
   italic: { fontStyle: 'italic' },
