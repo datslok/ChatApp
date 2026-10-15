@@ -296,6 +296,8 @@ the point is for me to understand how it works, not just to have it done.
   kind, releases, logs, leftover .db/.zip files, backups, free disk; only reads). The server
   PC's SSH server (step 7 of scripts\server\install.ps1) only accepts the home network.
 - `.env.example`: template for `.env` (SECURE_COOKIES, the keys). `.env` itself is never committed.
+  The git-ignored development files have theirs too: `dev-secrets.env.example` (GIPHY_API_KEY for start.ps1)
+  and `dev-chattus.env.example` (chattus.ps1 -Dev). `dev.env` has no secrets, so it's committed as it is.
 - Settings → Admin (settings.js, "Admin"; only for `amAdmin()`): one tab ("Admin (n)": open bug reports) whose
   page has sub-tabs (`.admin-tab`, `showAdminSection`) for the sections Inbox, Channels, Roles and Invites
   (everyone's open links with ×, and who joined with whose: `GET /admin/invites`, `/admin/invites/{code}/cancel`,

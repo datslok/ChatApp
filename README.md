@@ -114,9 +114,9 @@ second browser window (a private one, so it has its own login) to make a second 
 between them. This uses its own database (`dev.db`) and upload folder (`dev-uploads/`), set in
 `dev.env`.
 
-**GIF search** needs a GIPHY key (see [Optional: GIF search](#optional-gif-search)). Put it in a file
-`dev-secrets.env` here, as a line `GIPHY_API_KEY=...`: start.ps1 reads it, and git ignores it, so the
-key is never committed. Without it the GIF button says GIF search isn't set up.
+**GIF search** needs a GIPHY key (see [Optional: GIF search](#optional-gif-search)). Copy
+`dev-secrets.env.example` to `dev-secrets.env` and put the key in it: start.ps1 reads it, and git
+ignores it, so the key is never committed. Without it the GIF button says GIF search isn't set up.
 
 The first account in a new `dev.db` is the admin by itself. To make another one an admin:
 `python tools\make_admin.py theirname --db dev.db` (with the `chatapp` environment active: `conda activate chatapp`).
@@ -430,12 +430,14 @@ Stop-ScheduledTask "ChatApp AI"`).
 through that same tunnel:
 
 ```powershell
+copy dev-chattus.env.example dev-chattus.env   # once (dev-chattus.env is git-ignored)
 python tools\make_bot.py --db dev.db --uploads dev-uploads --env dev-chattus.env   # once: Chattus in dev.db
-# then add the server's key to dev-chattus.env (git-ignored), as a line LLAMA_API_KEY=...
+# then put the server's key in dev-chattus.env's LLAMA_API_KEY= line
 .\chattus.ps1 -Dev    # with start.ps1 running, and the tunnel open in another window
 ```
 
-With Claude, put `CHATTUS_MODEL` and `ANTHROPIC_API_KEY` in `dev-chattus.env` instead; no tunnel needed.
+With Claude, fill in `CHATTUS_MODEL` and `ANTHROPIC_API_KEY` in `dev-chattus.env` instead; no tunnel needed.
+`dev-chattus.env.example` says what each line is.
 
 ### 8. Optional: update from your other PC
 
