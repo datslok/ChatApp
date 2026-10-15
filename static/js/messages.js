@@ -314,6 +314,10 @@ function makeVideo(url, file, message) {
   const video = document.createElement("video");
   video.src = url;
   video.controls = true;
+  // No "Download" in the player's ⋮ menu: the file's name under the video downloads it already
+  // (in the app, with its progress bar). Chromium only (the app, Chrome, Edge); as an attribute, so
+  // browsers without it (Firefox has no video.controlsList) just ignore it.
+  video.setAttribute("controlslist", "nodownload");
   video.preload = "metadata";
   video.addEventListener("error", () => video.remove());
   box.append(video, makeFileLink(url, file, message));
