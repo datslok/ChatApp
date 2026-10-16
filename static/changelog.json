@@ -121,6 +121,7 @@
       "date": "2026-10-16",
       "items": [
         "📞 Calls in the Android app (a new version: install it when the app offers it): the signal bars in the voice bar show the connection, with a tap for the details; Settings → Voice & audio has the sensitivity line, like on PC, and the meter works in calls too; the ringtone follows your ring volume; it says why the microphone or camera didn't start; hold a call tile for the user menu; drag the bottom of a call banner to resize it; and pick the size when sharing your screen",
+        "📱 Someone on the Android app shows as idle as soon as they lock their phone or leave the app, and offline 10 minutes later (before, they went offline at once). On a PC nothing changes",
         "📞 Android turns off calls on the lock screen with every update of the Android app, so the app now asks once after each update to allow them again (Allow it opens the right Android setting)",
         "🐱 The Android app's notifications show the ChatApp cat (in the status bar and on each notification) instead of a plain speech bubble",
         "📱 The Android app's last missing pieces (a new version: install it when the app offers it): a banner at the top for DMs and mentions in other chats, an unread count on the app's icon, links to the chat open in the app, the fonts from Settings → Appearance (Georgia, Consolas and Comic Sans, as near as Android has them), \"N members\" under groups, and logging in before your email is confirmed shows \"Check your inbox\" instead of nothing",
@@ -178,7 +179,7 @@
         "Windows app 0.1.18: fixes the app forgetting your audio settings (and showing the What's new dot again) every time it starts. After this update, set your audio settings once more and they'll stick",
         "Pinned messages 📌: hover over a message and click 📌 to pin it, and click 📌 at the top of the chat to see them all",
         "Search 🔍: find messages by their words, in one chat or everywhere, from anyone or one person. The 🔍 is at the top of every chat",
-        "Statuses: click your name at the bottom left for Online, Idle, Do Not Disturb or Invisible. You also turn Idle by yourself after 10 minutes away",
+        "Statuses: click your name at the bottom left for Online, Idle, Do Not Disturb or Invisible. You also turn Idle by yourself after 10 minutes away. In the Android app you're Idle as soon as you lock your phone or leave the app, and offline 10 minutes later",
         "Mute a chat 🔕: the 🔔 at the top of a channel, DM or group. You still hear about @mentions of you, and anything from an admin",
         "Blocking 🚫: Block in someone's profile hides their messages and stops them reaching you. Unblock on the Friends page's Blocked tab",
         "Friend requests now ping you 👋, with a notification that opens your requests (on your phone too)",

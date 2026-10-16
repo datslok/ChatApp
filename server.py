@@ -4171,31 +4171,60 @@ def online_user_ids():
 # left). What the others see: "offline" without an open tab, and when Invisible; "dnd" and "idle" as
 # chosen; and Online turns "idle" by itself when none of their pages has been looked at for IDLE_AFTER
 # (each page says when it's in sight: "looking"). Do Not Disturb also stops every notification.
+#
+# Phones have their own rule (the user's wish, 2026-10-16): Android cuts a locked phone's connection
+# within moments, so it went grey at once. Now a phone counts as online while the app is on screen, idle
+# from the moment it's locked or left, and gone PHONE_AWAY_FOR after that, whether its connection is still
+# open or not: phones_away remembers a phone whose connection closed while it was away. (In a call it
+# stays idle: the call keeps the connection, and they're clearly there.) Each person shows the most
+# present of their devices: a PC in use keeps them online with the phone locked. PCs are as before.
 
 PRESENCES = ["online", "idle", "dnd", "invisible"]
 IDLE_AFTER = 10 * 60  # seconds without looking at the chat anywhere
+PHONE_AWAY_FOR = 10 * 60  # seconds a locked (or left) phone still shows its person as idle
+
+phones_away = {}  # {user_id: since when}: a phone whose connection closed while away (see above)
+
+
+def device_presence(client, now, bot=False):
+    """What one open page or app says about its person: "online", "idle" or None (nothing: a phone
+    away for too long)."""
+    if bot or client["away_since"] is None:  # (bots never "look", and are always there)
+        return "online"
+    away = now - client["away_since"]
+    if client["mobile"]:
+        return "idle" if away < PHONE_AWAY_FOR or client["voice"] else None
+    return "online" if away < IDLE_AFTER else "idle"
 
 
 def shown_presence(user_id, chosen, bot=False):
     """What the others see of this person: "online", "idle", "dnd" or "offline"."""
-    tabs = [client for client in clients.values() if client["user_id"] == user_id]
-    if not tabs or chosen == "invisible":
+    now = time.time()
+    seen = {device_presence(client, now, bot) for client in clients.values() if client["user_id"] == user_id}
+    away_since = phones_away.get(user_id)
+    if away_since is not None:
+        if now - away_since < PHONE_AWAY_FOR:
+            seen.add("idle")
+        else:
+            phones_away.pop(user_id, None)  # (over: forgotten)
+    seen.discard(None)
+    if not seen or chosen == "invisible":
         return "offline"
     if chosen in ("idle", "dnd"):
         return chosen
-    now = time.time()
-    # Every page out of sight for a while (away_since: when it stopped being looked at). Not bots:
-    # they never "look", and are always there.
-    if not bot and all(client["away_since"] is not None and now - client["away_since"] >= IDLE_AFTER for client in tabs):
-        return "idle"
-    return "online"
+    return "online" if "online" in seen else "idle"
 
 
 def on_phone_only(user_id, presence):
-    """Is this person only here on a phone (every open page of theirs says it's one)? Then the others
-    see a little phone instead of their dot. Not when they show as offline (Invisible gives nothing away)."""
+    """Is this person only here on a phone (every open page of theirs says it's one, or the phone that
+    just left is all there is)? Then the others see a little phone instead of their dot. Not when they
+    show as offline (Invisible gives nothing away)."""
     tabs = [client for client in clients.values() if client["user_id"] == user_id]
-    return presence != "offline" and bool(tabs) and all(client["mobile"] for client in tabs)
+    if presence == "offline":
+        return False
+    if not tabs:
+        return user_id in phones_away
+    return all(client["mobile"] for client in tabs)
 
 
 # What someone is doing (the Windows app sees it: desktop/src-tauri/src/activity.rs; the page sends it
@@ -5535,15 +5564,21 @@ async def chat(websocket: WebSocket):
                 # {"type": "looking", "looking": true}: the page is in sight and has the focus (or
                 # not any more). Nobody gets a push while they're looking at the chat somewhere.
                 looking = data.get("looking") is True
-                if looking != clients[websocket]["looking"]:
+                looking_changed = looking != clients[websocket]["looking"]
+                if looking_changed:
                     clients[websocket]["away_since"] = None if looking else time.time()
                 clients[websocket]["looking"] = looking
                 clients[websocket]["app"] = data.get("app") is True  # (then no pushes at all: has_app_open)
                 mobile = data.get("mobile") is True
                 phone_changed = mobile != clients[websocket]["mobile"]
                 clients[websocket]["mobile"] = mobile
-                if looking or phone_changed:
-                    await announce_presences()  # back from idle, or now known to be a phone: at once
+                # A phone back after its connection closed while locked: this connection takes over. Still
+                # away (Android woke it in the background)? Then away since it was locked, not since now.
+                left_at = phones_away.pop(user_id, None) if mobile else None
+                if left_at is not None and not looking:
+                    clients[websocket]["away_since"] = min(left_at, clients[websocket]["away_since"] or left_at)
+                if looking_changed or phone_changed:
+                    await announce_presences()  # back from idle, a phone locked (idle), now known to be a phone
 
             elif kind == "activity":
                 # {"type": "activity", "activity": {"kind": "playing", "name": "Hollow Knight"} or null}:
@@ -5600,7 +5635,12 @@ async def chat(websocket: WebSocket):
         pass
     finally:
         voice_room = clients[websocket]["voice"]
-        del clients[websocket]
+        gone = clients.pop(websocket)
+        # A phone's connection closing while it was locked or left (Android cuts it): still idle for a
+        # while, from when it was locked (see "Statuses"). Not when it closed with the app on screen (logging
+        # out, a dropped network in use: back in a moment, or really gone).
+        if gone["mobile"] and gone["away_since"] is not None:
+            phones_away[user_id] = max(gone["away_since"], phones_away.get(user_id, 0))
         await announce_presences()  # their last tab: they went offline (or another tab of theirs decides now)
         if voice_room in VOICE_ROOMS:  # closed the tab while in voice: they're out
             await announce_voice_members()

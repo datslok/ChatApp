@@ -446,7 +446,12 @@ the point is for me to understand how it works, not just to have it done.
   "looking" true and status changes call `announce_presences`, which sends "users" only when a shown status
   changed. dnd: `isMuted()` on every page and no pushes (`send_push`). Phones: "looking" carries `mobile`
   (notifications.js `onPhone`; never the Windows app), `on_phone_only` (every open page a phone, not offline)
-  gives "users" a `mobile`, and `makeDot(presence, mobile)` draws `.dot.mobile`, a little phone. Page: the picker in #me-popup
+  gives "users" a `mobile`, and `makeDot(presence, mobile)` draws `.dot.mobile`, a little phone.
+  Phones (since 2026-10-16, the user's rule; PCs unchanged): Android cut a locked phone's connection at once, so it went
+  grey. `device_presence`: a phone is online while looking, idle from the moment it's locked/left, gone after
+  `PHONE_AWAY_FOR` (10 min) even if still connected (in voice: stays idle); `phones_away` keeps a phone whose connection
+  closed while away (from its away_since; a reconnecting phone's "looking" takes it over); each person shows their
+  most present device. Page: the picker in #me-popup
   (people.js, `renderPresencePicker`), dots `.dot.online/.idle/.dnd/.invisible` (our own Invisible as a ring).
   The users' "status" field is still the line they write about themselves.
 - Muting (server.py, "Muting"): `chat_mutes` (user_id, channel), set over the WebSocket (`{"type": "mute",
