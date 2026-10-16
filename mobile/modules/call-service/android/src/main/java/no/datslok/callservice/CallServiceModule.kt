@@ -52,9 +52,19 @@ class CallServiceModule : Module() {
     Function("setAiNoiseSuppression") { on: Boolean ->
       MicProcessor.denoise = on
     }
-    // A call's short sound: "calling", "join" or "leave" (CuePlayer.kt).
+    // ...the noise gate's line (dB, -100 = off), and how loud the microphone is in the call right now.
+    Function("setGate") { db: Double ->
+      MicProcessor.gateDb = db.toFloat()
+    }
+    Function("getMicLevel") {
+      mapOf("level" to MicProcessor.level.toDouble(), "open" to MicProcessor.open)
+    }
+    // A call's short sound: "calling", "join", "leave", or "ring" (CuePlayer.kt); and stopping the ring.
     Function("playCue") { name: String ->
       CuePlayer.play(name)
+    }
+    Function("stopRing") {
+      CuePlayer.stopRing()
     }
     OnDestroy {
       CallService.onHangUp = null

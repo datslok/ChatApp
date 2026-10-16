@@ -30,10 +30,23 @@ export function setAiNoiseSuppression(on) {
   CallService.setAiNoiseSuppression(on);
 }
 
+// The noise gate (Settings → Voice & audio → Sensitivity): silent while quieter than this line, in dB
+// (-100: off). And in a call: {level (dB, the newest 10 ms), open (the gate lets us through)}.
+export function setGate(db) {
+  CallService.setGate(db);
+}
+export function getMicLevel() {
+  return CallService.getMicLevel();
+}
+
 // A call's short sound, "calling", "join" or "leave", played at once on the call's own sound channel
 // (CuePlayer.kt), not as media (which waits while Android switches the audio into or out of call mode).
+// "ring": someone calling us, as a ringtone (the ring volume); stopRing() cuts it off.
 export function playCue(name) {
   CallService.playCue(name);
+}
+export function stopRing() {
+  CallService.stopRing();
 }
 
 // Calls listener() when Hang up is tapped in the notification. Returns a subscription (.remove()).

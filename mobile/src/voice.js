@@ -9,21 +9,25 @@
 //
 // useVoice() keeps all of it; App.js calls it once and hands it to the screens that draw calls (the
 // sidebar's Voice list and voice bar, the Lounge page, a DM's call banner, the ringing popup, Settings).
-// What differs from the web page, for phone reasons: no RNNoise, noise gate or push to talk (those are
-// Web Audio, which React Native doesn't have: Android's own noise suppression instead), the sound goes to
-// the speaker, the earpiece, headphones or Bluetooth (`outputs`), the camera can flip, and a shared screen
-// has no sound (react-native-webrtc can't record the phone's sound).
+// What differs from the web page, for phone reasons: no push to talk; RNNoise, the mic volume and the noise
+// gate are our own native code (MicProcessor.kt), not Web Audio; the sound goes to the speaker, the earpiece,
+// headphones or Bluetooth (`outputs`), the camera can flip, and a shared screen has no sound and is always
+// recorded at 30 fps (react-native-webrtc's screen capture), so its quality menu only picks the size.
 import { useEffect, useRef, useState } from 'react';
-import { AppState, NativeEventEmitter, NativeModules, PermissionsAndroid, Platform, Vibration } from 'react-native';
+import {
+  AppState, Dimensions, NativeEventEmitter, NativeModules, PermissionsAndroid, PixelRatio, Platform, Vibration,
+} from 'react-native';
 import { Room, RoomEvent, Track, VideoPresets43 } from 'livekit-client';
 import { AndroidAudioTypePresets, AudioSession } from '@livekit/react-native';
-import { createAudioPlayer, setAudioModeAsync } from 'expo-audio';
+import { setAudioModeAsync } from 'expo-audio';
 import { File, Paths } from 'expo-file-system';
 import { SERVER } from './config';
 import { chatLabel } from './chats';
+import { GRAPH_SECONDS, STATS_SECONDS, measureCall } from './callStats';
 import { phonePushOn } from './notifications';
 import {
-  addHangUpListener, playCue, setAiNoiseSuppression, setMicVolume, startCallService, stopCallService,
+  addHangUpListener, getMicLevel, playCue, setAiNoiseSuppression, setGate, setMicVolume, startCallService,
+  stopCallService, stopRing,
 } from '../modules/call-service';
 import { clearCallNotification, isCallNotificationShowing } from '../modules/push';
 
@@ -41,6 +45,18 @@ const SPEAKING_HOLD_MS = 300;
 export const CAMERA_CAPTURE = { resolution: VideoPresets43.h720.resolution };
 const CAMERA_PUBLISH = { videoCodec: 'h264', videoEncoding: { maxBitrate: 1_700_000, maxFramerate: 30 } };
 
+// The screen share's quality menu: its size (the short side, like the web page's 720p/1080p/1440p) and how
+// much to send per second for it (the web page's SHARE_BITRATES at 30 fps: a phone's capture is always 30).
+// H.264 (the phone's video chip), one version only (no simulcast), like the web page.
+export const SHARE_HEIGHTS = [720, 1080, 1440];
+const SHARE_BITRATES = { 720: 2_500_000, 1080: 5_000_000, 1440: 8_000_000 };
+
+// The screen's own short side in pixels (a phone held upright: its width), what "full size" is.
+export function screenShortSide() {
+  const { width, height } = Dimensions.get('screen');
+  return Math.round(Math.min(width, height) * PixelRatio.get());
+}
+
 // ----- Settings → Voice & audio and Video, kept on the phone (like the web page's localStorage
 // "voiceSettings", "voicePersonVolumes" and "voiceScreenVolumes")
 
@@ -54,6 +70,9 @@ export const DEFAULT_VOICE_SETTINGS = {
   screenVolumes: {},       // {userId: percent}: the sound of their shared screen
   camera: 'user',          // which camera turns on: "user" (the front one) or "environment" (the back)
   floatCorner: 'bottom-right',  // where the floating call window sits (CallFloat.js)
+  gate: -60,               // the noise gate's line, dB (-100: off), the web page's default (MicProcessor.kt)
+  shareHeight: 1080,       // the screen share's size, the last one picked (SHARE_HEIGHTS)
+  bannerHeight: null,      // a DM's call banner's height as dragged (px), or null: 40% of the screen
 };
 
 const settingsFile = new File(Paths.document, 'voice-settings.json');
@@ -74,23 +93,14 @@ function saveVoiceSettings(settings) {
 
 // ----- Sounds (the web page generates them; here they're files made by tools/make_call_sounds.py)
 
-// The ringtone (someone calling us, before any call has started) is played as media, mixed with
-// whatever plays, never pausing it.
+// expo-audio's sounds (the message ping, notifications.js) mix with whatever plays, never pausing it.
 setAudioModeAsync({ interruptionMode: 'mixWithOthers', shouldPlayInBackground: true }).catch(() => {});
 
-let ringPlayer = null;
-// The sounds during a call ("calling", "join", "leave") go to our call-service module instead, on the
-// call's own sound channel: as media they waited seconds while Android switched into or out of call mode.
+// All of a call's sounds go to our call-service module (CuePlayer.kt): "calling", "join" and "leave" on the
+// call's own sound channel (as media they waited seconds while Android switched into or out of call mode),
+// and "ring" as a ringtone, on the ring volume.
 function playSound(name) {
-  if (name !== 'ring') {
-    playCue(name);
-    return;
-  }
-  try {
-    ringPlayer ??= createAudioPlayer(require('../assets/sounds/ring.wav'));
-    ringPlayer.seekTo(0);
-    ringPlayer.play();
-  } catch {}
+  playCue(name);
 }
 
 // ----- LiveKit's measuring of how loud a track is (what its useTrackVolume hook uses underneath)
@@ -99,6 +109,13 @@ function playSound(name) {
 // reports the track's loudness (0..1) about 100 times a second as an "LK_VOLUME_PROCESSED" event.
 const LiveKitNative = NativeModules.LivekitReactNativeModule;
 const volumeEvents = LiveKitNative ? new NativeEventEmitter(LiveKitNative) : null;
+
+// Where to allow the microphone or camera (the web page's ALLOW_HOW, for the app).
+const ALLOW_HOW = "Allow it in Android's settings: Apps, ChatApp, Permissions.";
+const NO_MIC_ALLOWED = {
+  text: 'Connected, no microphone', kind: 'error',
+  detail: `ChatApp isn't allowed to use the microphone. ${ALLOW_HOW} Then unmute.`,
+};
 
 async function askPermission(permission) {
   try {
@@ -127,12 +144,18 @@ export function useVoice(connection, onOpenChatRef) {
   const [outgoing, setOutgoingState] = useState(null);
   const [incoming, setIncoming] = useState(null);
   const [notice, setNotice] = useState(null);
+  // The connection (callStats.js): the latest measurement, or null; the pings of the last 5 minutes
+  // ({time, ping}); LiveKit's address ("voice.example.com").
+  const [stats, setStats] = useState(null);
+  const [pingSamples, setPingSamples] = useState([]);
+  const [server, setServer] = useState('');
+  const [shareMenu, setShareMenu] = useState(false);  // the screen share's quality menu is open
   const [, setTick] = useState(0);  // a new number: something in the room changed, draw again
 
   // The newest values, for the handlers LiveKit and the timers call later (see connection.js on refs).
   const room = useRef(null);  // the LiveKit Room
   const latest = useRef({});
-  latest.current = { settings, roomName, muted, deafened, outgoing, incoming, connection };
+  latest.current = { settings, roomName, muted, deafened, outgoing, incoming, connection, status };
   const joinCount = useRef(0);       // each join's number: a join that was overtaken stops
   const processors = useRef({});     // LiveKit's volume measuring, by its tag: {tag, pcId, trackId, id}
   const lastLoud = useRef({});       // id -> when they were last louder than SPEAKING_LINE
@@ -227,10 +250,16 @@ export function useVoice(connection, onOpenChatRef) {
       if (processor && event.volume > SPEAKING_LINE) lastLoud.current[processor.id] = Date.now();
     });
     // Every 50 ms (like the web page's checkSpeaking): who was loud in the last 0.3 s. Redraws only when
-    // that changes. Our own ring only while we're unmuted (the measuring hears the microphone itself).
+    // that changes. Our own ring: while the noise gate lets us through (MicProcessor.kt), like the web page,
+    // so it matches what the others hear; only while we're unmuted.
     const timer = setInterval(() => {
       const now = Date.now();
       const me = String(latest.current.connection.me?.id);
+      if (room.current?.state === 'connected' && !latest.current.muted) {
+        try {
+          if (getMicLevel().open) lastLoud.current[me] = now;
+        } catch {}
+      }
       const talking = new Set();
       for (const [id, when] of Object.entries(lastLoud.current)) {
         if (now - when > SPEAKING_HOLD_MS) continue;
@@ -258,7 +287,8 @@ export function useVoice(connection, onOpenChatRef) {
   useEffect(() => {
     setAiNoiseSuppression(settings.noiseSuppression === 'on');
     setMicVolume(settings.micVolume);
-  }, [settings.noiseSuppression, settings.micVolume]);
+    setGate(settings.gate);
+  }, [settings.noiseSuppression, settings.micVolume, settings.gate]);
 
   // Noise suppression changed in Settings: saved, and during a call the microphone opens again with it
   // (restartTrack: the same track, so it stays in the call).
@@ -325,6 +355,7 @@ export function useVoice(connection, onOpenChatRef) {
       const response = await fetch(`${SERVER}/voice-token?room=${encodeURIComponent(name)}`);
       const answer = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(typeof answer.detail === 'string' ? answer.detail : "Couldn't join.");
+      setServer(answer.url.replace(/^wss?:\/\//, '').replace(/\/.*$/, ''));  // ("wss://voice.example.com" -> its name)
       await lk.connect(answer.url, answer.token);
       if (!stillMine() || room.current !== lk) {  // left (or joined elsewhere) meanwhile
         lk.disconnect();
@@ -335,7 +366,8 @@ export function useVoice(connection, onOpenChatRef) {
       setStatus(ringing ? { text: 'Calling…', kind: 'waiting' } : { text: 'Voice connected', kind: 'ok' });
       sendVoiceState({ roomName: name });
       if (!ringing) playSound('join');
-      if (!latest.current.muted) await lk.localParticipant.setMicrophoneEnabled(true);
+      if (!micAllowed) setStatus(NO_MIC_ALLOWED);
+      else if (!latest.current.muted) await startMic(lk);  // (if it won't start: muted, and the bar says why)
       applyAllVolumes();
       redraw();
     } catch (error) {
@@ -354,6 +386,21 @@ export function useVoice(connection, onOpenChatRef) {
     }
   }
 
+  // The microphone into the call. If it won't start: muted, and the voice bar says why (the web page's
+  // showNoMicrophone). False then.
+  async function startMic(lk) {
+    try {
+      await lk.localParticipant.setMicrophoneEnabled(true);
+      return true;
+    } catch (error) {
+      setMuted(true);
+      latest.current.muted = true;
+      sendVoiceState({ muted: true });
+      setStatus({ text: 'Connected, no microphone', kind: 'error', detail: `The microphone couldn't start (${error?.message ?? 'no reason given'}). Then unmute.` });
+      return false;
+    }
+  }
+
   // LiveKit's events: anything that changes what the call looks like draws it again.
   function watchRoom(lk) {
     lk.on(RoomEvent.TrackSubscribed, (track, publication, participant) => {
@@ -365,10 +412,8 @@ export function useVoice(connection, onOpenChatRef) {
       stopMeasuring(track.sid);
       redraw();
     });
-    lk.on(RoomEvent.LocalTrackPublished, (publication) => {
-      if (publication.source === Track.Source.Microphone) measure(publication.track, lk.localParticipant.identity);
-      redraw();
-    });
+    // (Our own microphone isn't measured here: the noise gate says when we're talking, see "Who's talking".)
+    lk.on(RoomEvent.LocalTrackPublished, redraw);
     lk.on(RoomEvent.LocalTrackUnpublished, (publication) => {
       stopMeasuring(publication.track?.sid);
       // (Stopped from outside our buttons too: Android's own Stop for a screen share.)
@@ -415,7 +460,10 @@ export function useVoice(connection, onOpenChatRef) {
     setStatus(null);
     setCamera(false);
     setSharing(false);
+    setShareMenu(false);
     setOutputs([]);
+    setStats(null);
+    setPingSamples([]);
     if (lk) {
       await lk.disconnect().catch(() => {});
       connection.sendVoice({ room: null, muted: latest.current.muted, deafened: latest.current.deafened });
@@ -449,9 +497,12 @@ export function useVoice(connection, onOpenChatRef) {
       if (!next && !(await askPermission(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO))) {
         setMuted(true);
         latest.current.muted = true;
+        setStatus(NO_MIC_ALLOWED);
         return;
       }
-      await lk.localParticipant.setMicrophoneEnabled(!next).catch(() => {});
+      if (next) await lk.localParticipant.setMicrophoneEnabled(false).catch(() => {});
+      else if (!(await startMic(lk))) return;
+      else if (latest.current.status?.kind === 'error') setStatus({ text: 'Voice connected', kind: 'ok' });  // (it works now)
     }
     sendVoiceState({ muted: next });
   }
@@ -486,13 +537,20 @@ export function useVoice(connection, onOpenChatRef) {
     const lk = room.current;
     if (!lk || lk.state !== 'connected') return;
     const next = !camera;
-    if (next && !(await askPermission(PermissionsAndroid.PERMISSIONS.CAMERA))) return;
+    if (next && !(await askPermission(PermissionsAndroid.PERMISSIONS.CAMERA))) {
+      setStatus({ text: 'No camera access', kind: 'error', detail: `ChatApp isn't allowed to use the camera. ${ALLOW_HOW}` });
+      return;
+    }
     try {
       await lk.localParticipant.setCameraEnabled(next, next ? { ...CAMERA_CAPTURE, facingMode: facing } : undefined, CAMERA_PUBLISH);
       setCamera(next);
+      if (next && latest.current.status?.kind === 'error') setStatus({ text: 'Voice connected', kind: 'ok' });
       // The service's types change with it (Android lets a foreground service use the camera only if it says so).
       startCallService(latest.current.roomName === LOUNGE_ROOM ? 'In voice' : 'In a call', labelOf(latest.current.roomName), next).catch(() => {});
-    } catch {}
+    } catch (error) {
+      setCamera(false);
+      setStatus({ text: "Couldn't start the camera", kind: 'error', detail: `${error?.message ?? 'No reason given'}. Is another app using it?` });
+    }
     redraw();
   }
 
@@ -507,19 +565,81 @@ export function useVoice(connection, onOpenChatRef) {
     redraw();
   }
 
-  // Android first asks "Start recording or casting?" (its own popup); react-native-webrtc then runs its own
-  // foreground service for it ("mediaProjection").
+  // The share button: stop sharing, or open the quality menu (ShareMenu in CallParts.js), which calls startShare.
   async function toggleShare() {
     const lk = room.current;
     if (!lk || lk.state !== 'connected') return;
+    if (!sharing) {
+      setShareMenu(true);
+      return;
+    }
     try {
-      await lk.localParticipant.setScreenShareEnabled(!sharing);
-      setSharing(!sharing);
-    } catch {
-      setSharing(false);  // (said no in Android's popup)
+      await lk.localParticipant.setScreenShareEnabled(false);
+    } catch {}
+    setSharing(false);
+    redraw();
+  }
+
+  // Share at this size (the short side, SHARE_HEIGHTS; remembered for next time). Android first asks "Start
+  // recording or casting?" (its own popup); react-native-webrtc then runs its own foreground service for it
+  // ("mediaProjection"). Its capture is always the whole screen at 30 fps, so the size comes from the encoder
+  // scaling it down (the sender's scaleResolutionDownBy), and the data per second from the size.
+  async function startShare(height) {
+    setShareMenu(false);
+    setSettings({ shareHeight: height });
+    const lk = room.current;
+    if (!lk || lk.state !== 'connected') return;
+    const full = screenShortSide();
+    const size = Math.min(height, full);
+    try {
+      await lk.localParticipant.setScreenShareEnabled(true, undefined, {
+        videoCodec: 'h264',
+        simulcast: false,
+        screenShareEncoding: { maxBitrate: SHARE_BITRATES[height], maxFramerate: 30 },
+        degradationPreference: 'maintain-resolution',  // (text stays sharp; frames drop instead)
+      });
+      setSharing(true);
+      const sender = lk.localParticipant.getTrackPublication(Track.Source.ScreenShare)?.track?.sender;
+      if (sender && size < full) {
+        const parameters = sender.getParameters();
+        for (const encoding of parameters.encodings ?? []) encoding.scaleResolutionDownBy = full / size;
+        await sender.setParameters(parameters).catch(() => {});
+      }
+    } catch (error) {
+      setSharing(false);
+      // No in Android's popup is no error; anything else is.
+      if (!/denied|permission|cancel|notallowed/i.test(String(error?.name) + String(error?.message))) {
+        setStatus({ text: "Couldn't share the screen", kind: 'error', detail: error?.message });
+      }
     }
     redraw();
   }
+
+  // ----- The connection's numbers (callStats.js): every STATS_SECONDS while connected.
+
+  const connectedNow = room.current?.state === 'connected';
+  useEffect(() => {
+    if (!connectedNow) return undefined;
+    let previous = null;
+    let stopped = false;
+    async function measureNow() {
+      const lk = room.current;
+      if (!lk || lk.state !== 'connected') return;
+      const result = await measureCall(lk, previous);
+      if (stopped || !result || room.current !== lk) return;
+      previous = result;
+      setStats(result);
+      const now = Date.now();
+      setPingSamples((old) => [...old, ...(result.ping !== null ? [{ time: now, ping: result.ping }] : [])]
+        .filter((sample) => sample.time > now - GRAPH_SECONDS * 1000));
+    }
+    measureNow();
+    const timer = setInterval(measureNow, STATS_SECONDS * 1000);
+    return () => {
+      stopped = true;
+      clearInterval(timer);
+    };
+  }, [connectedNow, roomName]);
 
   // ----- Where the sound goes
 
@@ -610,6 +730,7 @@ export function useVoice(connection, onOpenChatRef) {
   function stopRinging() {
     clearInterval(ringTimer.current);
     ringTimer.current = null;
+    stopRing();
     Vibration.cancel();
     if (latest.current.incoming) clearCallNotification(latest.current.incoming.channel);
     setIncoming(null);
@@ -689,8 +810,18 @@ export function useVoice(connection, onOpenChatRef) {
   return {
     settings, setSettings, personVolume, setPersonVolume, screenVolume, setScreenVolume, screenHasSound,
     roomName, status, muted, deafened, camera, facing, sharing, speaking, outputs, output, connected,
-    outgoing, incoming, notice,
+    outgoing, incoming, notice, stats, pingSamples, server, shareMenu,
     join, leave, setNoiseSuppression, toggleMute, toggleDeafen, toggleCamera, flipCamera, toggleShare, refreshOutputs, selectOutput,
-    startCall, accept, decline, acceptFromNotification, callPeople,
+    startCall, accept, decline, acceptFromNotification, callPeople, startShare,
+    closeShareMenu: () => setShareMenu(false),
+    nameOf: (id) => latest.current.connection.users[id]?.name ?? 'Someone',
+    // In a call: the microphone as the others get it ({level in dB, open}: the gate), for Settings' meter.
+    micLevel: () => {
+      try {
+        return getMicLevel();
+      } catch {
+        return { level: -100, open: false };
+      }
+    },
   };
 }

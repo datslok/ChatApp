@@ -6,6 +6,7 @@ import { VideoTrack } from '@livekit/react-native';
 import Icon from './Icon';
 import { Avatar } from './people';
 import { Sheet, SheetItem } from './Sheet';
+import { SHARE_HEIGHTS, screenShortSide } from './voice';
 import Slider from './Slider';
 import { useStyles, useTheme } from './theme';
 
@@ -68,7 +69,8 @@ export function makeTiles({ members, people, meId, inCall, alwaysMe, extra = () 
 
 // One tile: a camera filling it (or a screen fitted inside it, on black), else the picture in the middle;
 // the name (with the mic-off or headphone-off icon) in the corner, and a green ring while they talk.
-export function CallTile({ tile, user, width, speaking, facing, onPress }) {
+// onLongPress: the user menu (the web page's right-click on a tile).
+export function CallTile({ tile, user, width, speaking, facing, onPress, onLongPress }) {
   const styles = useStyles(makeStyles);
   const height = (width * 9) / 16;
   const name = user?.name ?? '?';
@@ -78,7 +80,7 @@ export function CallTile({ tile, user, width, speaking, facing, onPress }) {
   const mirror = tile.isMe && !tile.screen && facing === 'user';
   const pictureSize = Math.max(32, Math.min(80, Math.round(height * 0.45)));
   return (
-    <Pressable onPress={onPress} style={[styles.tile, tile.screen && styles.screenTile, { width, height }]}>
+    <Pressable onPress={onPress} onLongPress={onLongPress} style={[styles.tile, tile.screen && styles.screenTile, { width, height }]}>
       {tile.screen || tile.video ? (
         // The whole picture, never cut off ("contain", like the web page's .tile-video): a phone's camera is
         // upright, and "cover" blew it up to the tile's width and cropped most of it away.
@@ -99,8 +101,8 @@ export function CallTile({ tile, user, width, speaking, facing, onPress }) {
 
 // The tiles, as big as they can be in the space they have (rooms.js, fitTiles): for each number of
 // columns, how wide can a 16:9 tile be before the row is wider than the area or the rows are taller than
-// it? The biggest wins. A tap on a tile opens it big (FocusView).
-export function TileGrid({ tiles, voice, connection, style }) {
+// it? The biggest wins. A tap on a tile opens it big (FocusView), a long press their user menu (onUserMenu).
+export function TileGrid({ tiles, voice, connection, style, onUserMenu }) {
   const styles = useStyles(makeStyles);
   const [area, setArea] = useState(null);
   const [focused, setFocused] = useState(null);  // the key of the tile shown big
@@ -120,6 +122,7 @@ export function TileGrid({ tiles, voice, connection, style }) {
         <CallTile
           key={tile.key} tile={tile} user={connection.users[tile.id]} width={Math.floor(width)}
           speaking={voice.speaking.has(tile.id)} facing={voice.facing} onPress={() => setFocused(tile.key)}
+          onLongPress={onUserMenu ? () => onUserMenu(tile.id) : undefined}
         />
       )) : null}
       {big ? (
@@ -127,6 +130,7 @@ export function TileGrid({ tiles, voice, connection, style }) {
           tile={big} user={connection.users[big.id]} speaking={voice.speaking.has(big.id)}
           facing={voice.facing} onClose={() => setFocused(null)}
           voice={big.screen && !big.isMe && voice.screenHasSound(big.id) ? voice : null}
+          onLongPress={onUserMenu ? () => onUserMenu(big.id) : undefined}
         />
       ) : null}
     </View>
@@ -136,7 +140,7 @@ export function TileGrid({ tiles, voice, connection, style }) {
 // A tile over the whole screen, on black (the web page's focus and fullscreen in one: a phone's screen is
 // small). A tap or the back button closes it. voice: given for a shared screen with sound, which then gets
 // its volume slider under it (the web page's makeScreenVolume).
-export function FocusView({ tile, user, speaking, facing, onClose, voice }) {
+export function FocusView({ tile, user, speaking, facing, onClose, voice, onLongPress }) {
   const styles = useStyles(makeStyles);
   const [size, setSize] = useState(null);
   return (
@@ -144,7 +148,7 @@ export function FocusView({ tile, user, speaking, facing, onClose, voice }) {
       <Pressable style={styles.focus} onPress={onClose} onLayout={(event) => setSize(event.nativeEvent.layout)}>
         {size ? (
           <CallTile
-            tile={tile} user={user} speaking={speaking} facing={facing} onPress={onClose}
+            tile={tile} user={user} speaking={speaking} facing={facing} onPress={onClose} onLongPress={onLongPress}
             width={Math.min(size.width - 16, ((size.height - 16) * 16) / 9)}
           />
         ) : null}
@@ -207,6 +211,35 @@ export function OutputButton({ voice }) {
       ) : null}
     </>
   );
+}
+
+// The screen share's quality menu (the web page's #share-menu), opened by the share buttons (voice.toggleShare):
+// the size, the last one ticked; bigger than the screen itself greyed out (720p always works). No frame rate:
+// a phone's screen is always recorded at 30 fps (react-native-webrtc).
+export function ShareMenu({ voice }) {
+  if (!voice.shareMenu) return null;
+  const full = screenShortSide();
+  const megabits = { 720: 2.5, 1080: 5, 1440: 8 };
+  const allowed = SHARE_HEIGHTS.filter((height) => height <= full || height === 720);
+  // The last one picked, or the biggest this screen allows.
+  const chosen = allowed.includes(voice.settings.shareHeight) ? voice.settings.shareHeight : allowed[allowed.length - 1];
+  return (
+    <Sheet title={`Share your screen (yours: ${full}p)`} onClose={voice.closeShareMenu}>
+      {allowed.map((height) => (
+        <SheetItem
+          key={height} icon={height === chosen ? 'check' : 'monitor-up'}
+          label={`${height}p · about ${megabits[height]} Mbit/s for each person watching`}
+          onPress={() => voice.startShare(height)}
+        />
+      ))}
+    </Sheet>
+  );
+}
+
+// The call's error, with why (voice.js's status.detail), under the tiles of the banner and the Lounge page.
+export function callError(voice) {
+  if (voice.status?.kind !== 'error') return null;
+  return voice.status.detail ? `${voice.status.text}: ${voice.status.detail}` : voice.status.text;
 }
 
 // The buttons while we're in a call: mute, camera (and flip while it's on), share, where the sound goes,

@@ -20,7 +20,8 @@ const MARGIN = 16;
 
 // view: the chat or page on screen. bottomGap: room to leave at the bottom (the text box). onOpen(key):
 // open the call's page.
-export default function CallFloat({ connection, voice, view, bottomGap, onOpen }) {
+// onUserMenu(id): a long press on the window (the web page's right-click on it).
+export default function CallFloat({ connection, voice, view, bottomGap, onOpen, onUserMenu }) {
   const styles = useStyles(makeStyles);
   const [area, setArea] = useState(null);  // the space it moves in: {width, height}
   const position = useRef(new Animated.ValueXY()).current;  // its top left corner, in that space
@@ -106,7 +107,7 @@ export default function CallFloat({ connection, voice, view, bottomGap, onOpen }
         <Animated.View style={[styles.float, { transform: position.getTranslateTransform() }]} {...pan.panHandlers}>
           <CallTile
             tile={tile} user={connection.users[id]} width={WIDTH} speaking={voice.speaking.has(id)}
-            facing={voice.facing} onPress={() => onOpen(page)}
+            facing={voice.facing} onPress={() => onOpen(page)} onLongPress={onUserMenu ? () => onUserMenu(id) : undefined}
           />
         </Animated.View>
       ) : null}

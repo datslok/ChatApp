@@ -10,6 +10,7 @@ import { ChatButtons, ChatTitle } from './src/ChatHeader';
 import BanDialog from './src/BanDialog';
 import CallBanner, { hasCallBanner } from './src/CallBanner';
 import CallFloat from './src/CallFloat';
+import { ShareMenu } from './src/CallParts';
 import ChatScreen from './src/ChatScreen';
 import Drawer from './src/Drawer';
 import { GroupDialog, GroupMenu, RenameDialog } from './src/GroupScreen';
@@ -287,9 +288,9 @@ function Main({ connection, voice, notifications, openChatRef, share, onShareDon
       <View style={styles.content}>
         {/* A DM's or group's call, above its messages. */}
         {view !== PEOPLE && view !== LOUNGE && hasCallBanner(view, connection, voice)
-          ? <CallBanner chatKey={view} connection={connection} voice={voice} />
+          ? <CallBanner chatKey={view} connection={connection} voice={voice} onUserMenu={openUserMenu} />
           : null}
-        {view === LOUNGE ? <LoungeScreen connection={connection} voice={voice} /> : null}
+        {view === LOUNGE ? <LoungeScreen connection={connection} voice={voice} onUserMenu={openUserMenu} /> : null}
         {view === LOUNGE ? null : view === PEOPLE
           ? (
             <PeopleScreen
@@ -301,9 +302,11 @@ function Main({ connection, voice, notifications, openChatRef, share, onShareDon
           : <ChatScreen connection={connection} backRef={chatBack} shared={toTray} onSharedTaken={() => setToTray(null)} trays={trays} setTrays={setTrays} drafts={drafts} setDrafts={setDrafts} onOpenChat={go} popup={popup} setPopup={setPopup} onProfile={openProfile} onUserMenu={openUserMenu} focusTick={focusTick} jumpRequest={jumpRequest} onJumpTaken={() => setJumpRequest(null)} />}
         {/* In a call but looking at something else: the call in a corner (above a chat's text box). */}
         <CallFloat
-          connection={connection} voice={voice} view={view} onOpen={go}
+          connection={connection} voice={voice} view={view} onOpen={go} onUserMenu={openUserMenu}
           bottomGap={view === PEOPLE || view === LOUNGE ? 0 : 72}
         />
+        {/* The screen share's quality menu, from any share button (voice.toggleShare). */}
+        <ShareMenu voice={voice} />
       </View>
 
       <Drawer side="left" open={drawer === 'left'} onClose={() => setDrawer(null)}>

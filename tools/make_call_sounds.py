@@ -7,7 +7,7 @@ Run it again after changing a sound here (keep it the same as rooms.js and notif
 
 Two also go to the push module's res/raw/ (mobile/modules/push), as the sounds of its notifications:
 the ping for messages, and the ring for calls, which Android repeats until the call stops ringing.
-And the sounds played during a call (calling, join, leave) go to the call-service module's res/raw/,
+And the ring and the sounds played during a call (calling, join, leave) go to the call-service module's res/raw/,
 which plays them natively on Android's call signal channel (CuePlayer.kt): media sounds waited
 seconds while Android switched the audio into or out of call mode.
 
@@ -60,6 +60,8 @@ for start, pitch in [(0, 660), (0.25, 880), (0.6, 660), (0.85, 880)]:
 write("ring.wav", ring)
 # The call notification's: silence after it up to 2 s, so Android's repeating keeps the same rhythm.
 write("chatapp_ring.wav", ring + [0.0] * (2 * RATE - len(ring)), RAW)
+# ...and the app's own, played while the app is open (CuePlayer.kt) as a ringtone: on the ring volume.
+write("chatapp_ring.wav", ring, CALL_RAW)
 
 # playCallingSound: A4 then C5 while our own call rings (every 1.2 s).
 calling = []

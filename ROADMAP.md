@@ -154,16 +154,16 @@ with Windows, activity detection, zoom, drag-and-drop, hover bars and keyboard s
     - [x] Reply quotes with custom emoji as pictures, mentions as chips and a paperclip for files
     - [x] Refuse empty (0-byte) files in the tray
     - [x] A long press on a search or pin card's sender opens the user menu
-- [ ] Calls
-    - [ ] The connection quality popup (ping, packet loss, the graph, screen share details)
-    - [ ] The noise gate and its sensitivity line (could go in MicProcessor.kt)
-    - [ ] A long press on a call tile or the floating window opens the user menu
-    - [ ] Say why the mic, camera or screen share couldn't start ("Connected, no microphone", "No camera access", ...)
-    - [ ] "No answer" / "Declined" wherever you are (the voice bar), not only in that DM's banner
-    - [ ] The call banner's height draggable and remembered
-    - [ ] The mic test during a call
-    - [ ] The ringtone and call sounds follow the notification volume
-    - [ ] The screen share quality menu (720/1080/1440p, 30/60 fps)
+- [x] Calls
+    - [x] The connection quality popup (ping, packet loss, the graph, screen share details)
+    - [x] The noise gate and its sensitivity line (could go in MicProcessor.kt)
+    - [x] A long press on a call tile or the floating window opens the user menu
+    - [x] Say why the mic, camera or screen share couldn't start ("Connected, no microphone", "No camera access", ...)
+    - [x] "No answer" / "Declined" wherever you are (the voice bar), not only in that DM's banner
+    - [x] The call banner's height draggable and remembered
+    - [x] The mic test during a call
+    - [x] The ringtone and call sounds follow the notification volume (the ringtone: the ring volume; the sounds in a call stay on the call's volume)
+    - [x] The screen share quality menu (720/1080/1440p, 30/60 fps) (sizes only: react-native-webrtc records a phone's screen at a fixed 30 fps)
 - [ ] People, notifications and the rest
     - [ ] Logging in with an unverified email says "check your email" (now: back to a blank login screen)
     - [ ] Links to the chat (?channel=&message=) open in the app (Android App Links)

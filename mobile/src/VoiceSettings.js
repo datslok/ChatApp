@@ -1,8 +1,8 @@
 // Settings → Voice & audio and Video (the web page's voice-settings.js), kept on the phone (voice.js's
-// settings). Noise suppression and the mic volume are the web page's, done in our own native code instead of
-// Web Audio (MicProcessor.kt, with RNNoise compiled in). Where a phone differs: no microphone or speaker lists
-// (a call's own button picks the speaker, the earpiece, headphones or Bluetooth); no sensitivity line or push
-// to talk (Web Audio's); the camera is the front or the back one.
+// settings). Noise suppression, the mic volume and the sensitivity line (the noise gate) are the web page's,
+// done in our own native code instead of Web Audio (MicProcessor.kt, with RNNoise compiled in). Where a phone
+// differs: no microphone or speaker lists (a call's own button picks the speaker, the earpiece, headphones or
+// Bluetooth); no push to talk; the camera is the front or the back one.
 import { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { RecordingPresets, requestRecordingPermissionsAsync, useAudioRecorder, useAudioRecorderState } from 'expo-audio';
@@ -30,13 +30,25 @@ export function Choices({ choices, value, onPick }) {
   );
 }
 
-// "Test microphone": how loud the microphone is, as a bar (the web page's #voice-meter), green while it's
-// loud enough to count as talking. expo-audio's recorder measures it ("metering", in dB: -160 is silence,
-// 0 the loudest); what it records is thrown away. Not during a call, which has the microphone already.
-// micVolume: the bar shows the sound as the others would get it, the mic volume included (it doesn't go
-// through MicProcessor, so the volume is added here: +6 dB is twice as loud).
-function MicTest({ inCall, micVolume }) {
+// "−52 dB", with a real minus sign (it reads better than "-"), like the web page's readout.
+const decibels = (value) => String(Math.round(value)).replace('-', '−') + ' dB';
+
+// The sensitivity line and the microphone's meter (the web page's #voice-meter with #voice-gate on it): the
+// bar is how loud the microphone is, green while it gets through; the line is the noise gate's (all the way
+// left: always on). Outside a call, "Test microphone": expo-audio's recorder measures it ("metering", in dB:
+// -160 is silence, 0 the loudest; what it records is thrown away), and the mic volume is added here (+6 dB is
+// twice as loud), as it doesn't go through MicProcessor. In a call the bar is the call's own microphone,
+// as the others get it (MicProcessor.kt's level and gate, asked 20 times a second).
+function MicTest({ voice, micVolume }) {
   const styles = useStyles(makeStyles);
+  const inCall = voice.roomName !== null;
+  const [gate, setGate] = useState(voice.settings.gate);
+  const [live, setLive] = useState({ level: -100, open: false });  // in a call: the newest from MicProcessor
+  useEffect(() => {
+    if (!inCall) return undefined;
+    const timer = setInterval(() => setLive(voice.muted ? { level: -100, open: false } : voice.micLevel()), 50);
+    return () => clearInterval(timer);
+  }, [inCall, voice.muted]);
   const recorder = useAudioRecorder({ ...RecordingPresets.LOW_QUALITY, isMeteringEnabled: true });
   const state = useAudioRecorderState(recorder, 50);  // (asked 20 times a second)
   const [testing, setTesting] = useState(false);
@@ -73,19 +85,41 @@ function MicTest({ inCall, micVolume }) {
     recorder.stop().catch(() => {});
   }, []);
 
-  // -100 dB at the left end, 0 at the right (the web page's meter); talking from -50 dB (SPEAKING_LINE).
+  // -100 dB at the left end, 0 at the right (the web page's meter).
   const boost = micVolume > 0 ? 20 * Math.log10(micVolume / 100) : -100;
-  const level = testing && typeof state.metering === 'number' ? state.metering + boost : -100;
-  const fraction = Math.min(1, Math.max(0, (level + 100) / 100));
+  const level = inCall ? live.level : testing && typeof state.metering === 'number' ? state.metering + boost : -100;
+  const open = inCall ? live.open : testing && (gate <= -100 || level > gate);
+  const at = (db) => `${Math.min(100, Math.max(0, db + 100))}%`;
+  // "Line −52 dB · Your mic −64 dB": the numbers at most 4 times a second (faster can't be read).
+  const shown = useRef({ at: 0, level: -100 });  // (a ref: changing it redraws nothing)
+  if (Date.now() - shown.current.at > 250) shown.current = { at: Date.now(), level };
+  const line = gate <= -100 ? 'Line off (always on)' : `Line ${decibels(gate)}`;
   return (
     <>
+      <Text style={styles.meterTitle}>Sensitivity: when the bar is left of the line, your microphone is silent</Text>
       <View style={styles.meter}>
-        <View style={[styles.meterLevel, level > -50 && styles.meterOpen, { width: `${fraction * 100}%` }]} />
+        <View style={[styles.meterLevel, open && styles.meterOpen, { width: at(level) }]} />
+        {gate > -100 ? <View style={[styles.gateLine, { left: at(gate) }]} /> : null}
       </View>
-      {inCall ? <Help>You're in a call: your microphone is busy there. Leave it to test.</Help> : null}
-      <View style={styles.buttonRow}>
-        <Button label={testing ? 'Stop test' : 'Test microphone'} disabled={inCall} onPress={testing ? stop : start} />
-      </View>
+      <Slider
+        value={gate} min={-100} max={0} step={1}
+        onChange={(value) => {
+          setGate(value);
+          voice.setSettings({ gate: value });  // (MicProcessor gets it at once, also mid-call)
+        }}
+      />
+      <Text style={styles.readout}>{inCall || testing ? `${line} · Your mic ${decibels(shown.current.level)}` : line}</Text>
+      <Help>
+        Stay quiet and drag the line a little right of where the bar sits, then talk: the bar turns green when
+        your voice gets through. All the way left: always on.
+      </Help>
+      {inCall ? (
+        <Help>You're in a call: the bar shows your microphone in it.</Help>
+      ) : (
+        <View style={styles.buttonRow}>
+          <Button label={testing ? 'Stop test' : 'Test microphone'} onPress={testing ? stop : start} />
+        </View>
+      )}
       {problem ? <Text style={styles.error}>{problem}</Text> : null}
     </>
   );
@@ -141,7 +175,7 @@ export function VoiceSettings({ voice }) {
       </Help>
 
       <Heading>Microphone</Heading>
-      <MicTest inCall={voice.roomName !== null} micVolume={micVolume} />
+      <MicTest voice={voice} micVolume={micVolume} />
     </View>
   );
 }
@@ -222,6 +256,10 @@ const makeStyles = (colors, size) => StyleSheet.create({
   meter: { height: 12, borderRadius: 6, overflow: 'hidden', backgroundColor: colors.bgDarkest, marginBottom: 8 },
   meterLevel: { height: '100%', backgroundColor: colors.textMuted },
   meterOpen: { backgroundColor: colors.green },
+  meterTitle: { color: colors.textSoft, fontSize: size(13.6), marginBottom: 6 },
+  // The sensitivity line on the meter (the web page's slider thumb sits there): a white bar across it.
+  gateLine: { position: 'absolute', top: 0, bottom: 0, width: 3, marginLeft: -1, backgroundColor: colors.textStrong },
+  readout: { color: colors.textMuted, fontSize: size(13.6), marginTop: 4 },
   buttonRow: { flexDirection: 'row', marginTop: 8 },
   // The camera's picture, rounded: 3:4, the shape of a 4:3 camera with the phone held upright, in the middle.
   preview: {

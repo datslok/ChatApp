@@ -169,6 +169,17 @@ the point is for me to understand how it works, not just to have it done.
   results, a reply's quote) opens the chat (App.js `go` as `onOpenChat`), loads older batches (40 at most) until the
   row is there, `scrollToIndex` (`onScrollToIndexFailed` scrolls to a guess and retries) and `Flash` fades it.
   `src/time.js`: dayName, clock, headerTime.
+  Calls parity (2026-10-16, needs the APK after 1.0.1): `MicProcessor.kt` has the noise gate after RNNoise and the
+  mic volume (`gateDb`, voice-gate.js's 0.3 s hold and 5 ms fade; settings `gate`, default -60) and publishes `level`/
+  `open`, read by `getMicLevel()` (our own speaking ring = the gate open; Settings' meter in a call). `CuePlayer.kt`
+  plays "ring" in a SoundPool of its own with USAGE_NOTIFICATION_RINGTONE (res/raw/chatapp_ring.wav from
+  make_call_sounds.py; `stopRing`); the in-call cues stay signalling. `src/callStats.js` (`measureCall`, the web's
+  measuring) every 5 s in voice.js -> `stats`, `pingSamples`, `server`; `src/ConnectionScreen.js` (SignalButton in
+  the voice bar, the popup with react-native-svg's graph). Status `detail` (why the mic/camera/share didn't start,
+  `callError` under tiles); the voice bar shows `notice` (No answer/Declined) outside calls; CallBanner's grip
+  (PanResponder, `bannerHeight`); tiles and CallFloat: long press -> user menu; `ShareMenu` (CallParts, rendered in
+  App.js): sizes from SHARE_HEIGHTS up to the screen's short side, made by the sender's `scaleResolutionDownBy`
+  (react-native-webrtc always captures the whole screen at 30 fps), H.264 without simulcast.
   Messages parity (2026-10-16): a long press on a reaction chip (Alert with the names), MessageText `onMention`
   (a tapped mention opens the profile), the menu's time (headerTime) and Copy text (expo-clipboard, readableText),
   the counter on the status line (COUNT_FROM 200, `charNote`), the NEW line live (connection.js `myId`/

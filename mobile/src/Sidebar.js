@@ -9,6 +9,7 @@ import { chatLabel, dmKey, groupName } from './chats';
 import { Avatar, GroupPicture, Person, PersonPicture } from './people';
 import { SeasonBadge } from './SeasonScreen';
 import { LOUNGE, LOUNGE_ROOM } from './voice';
+import { SignalButton } from './ConnectionScreen';
 
 // Who's in a voice channel, under it (.voice-members): picture (a green ring while they talk), name,
 // and the mic-off or headphone-off icon. A tap opens their profile.
@@ -39,9 +40,21 @@ function VoiceMembers({ members, users, speaking, onProfile }) {
 
 // The voice bar (#voice-bar) above your panel while you're in voice or joining: how it's going ("Voice
 // connected" in green), where (a tap goes there), then camera, share and leave sharing a line.
-function VoiceBar({ voice, where, onOpen }) {
+// notice: "No answer" or "Declined" after our call ended unanswered, while we're in no call: the bar shows
+// it for a few seconds (the web page's showCallNotice), without the buttons.
+function VoiceBar({ voice, where, onOpen, notice }) {
   const styles = useStyles(makeStyles);
   const { colors } = useTheme();
+  if (notice) {
+    return (
+      <View style={styles.voiceBar}>
+        <View style={styles.voiceInfo}>
+          <Text numberOfLines={1} style={[styles.voiceStatus, { color: colors.red }]}>{notice}</Text>
+          <Text numberOfLines={1} style={styles.voiceWhere}>{where}</Text>
+        </View>
+      </View>
+    );
+  }
   const statusColor = { ok: colors.green, waiting: colors.yellow, error: colors.red }[voice.status?.kind] ?? colors.green;
   const button = (icon, label, onPress, on) => (
     <Pressable
@@ -53,10 +66,14 @@ function VoiceBar({ voice, where, onOpen }) {
   );
   return (
     <View style={styles.voiceBar}>
-      <Pressable onPress={onOpen} style={styles.voiceInfo}>
-        <Text numberOfLines={1} style={[styles.voiceStatus, { color: statusColor }]}>{voice.status?.text ?? ''}</Text>
-        <Text numberOfLines={1} style={styles.voiceWhere}>{where}</Text>
-      </Pressable>
+      <View style={styles.voiceStatusRow}>
+        <Pressable onPress={onOpen} style={[styles.voiceInfo, styles.grow]}>
+          <Text numberOfLines={1} style={[styles.voiceStatus, { color: statusColor }]}>{voice.status?.text ?? ''}</Text>
+          <Text numberOfLines={1} style={styles.voiceWhere}>{where}</Text>
+        </Pressable>
+        {/* The connection's signal bars: a tap opens its details (ConnectionScreen.js). */}
+        <SignalButton voice={voice} />
+      </View>
       <View style={styles.voiceButtons}>
         {button('video', voice.camera ? 'Turn off camera' : 'Turn on camera', voice.toggleCamera, voice.camera)}
         {button('monitor-up', voice.sharing ? 'Stop sharing' : 'Share your screen', voice.toggleShare, voice.sharing)}
@@ -107,6 +124,7 @@ export default function Sidebar({
   const inLounge = voice.roomName === LOUNGE_ROOM;
   // The voice bar's "where": Lounge, or the DM's or group's name. A tap there opens it.
   const where = voice.roomName === null ? '' : inLounge ? 'Lounge' : chatLabel(voice.roomName, connection);
+  const notice = voice.roomName === null ? voice.notice : null;  // (our call ended unanswered: where it was)
   const openCall = () => onPick(inLounge ? LOUNGE : voice.roomName);
   // A panel button (mute, deafen): red with a white icon while on (.user-panel-button.off).
   const panelButton = (icon, label, onPress, off) => (
@@ -201,6 +219,7 @@ export default function Sidebar({
       </ScrollView>
 
       {voice.roomName !== null ? <VoiceBar voice={voice} where={where} onOpen={openCall} /> : null}
+      {notice ? <VoiceBar voice={voice} where={chatLabel(notice.channel, connection)} notice={notice.text} /> : null}
 
       {/* You, at the bottom (the web page's #user-panel): your picture with your status and your name
           (a tap opens your popup, MeScreen), then mute, deafen and ⚙️ Settings. (On the web page the
@@ -298,6 +317,7 @@ const makeStyles = (colors, size) => StyleSheet.create({
   // #voice-bar: a line above it, the status and where on the first line, the buttons sharing the second.
   voiceBar: { paddingHorizontal: 8, paddingVertical: 8, gap: 4, borderTopWidth: 1, borderTopColor: colors.border },
   voiceInfo: { paddingHorizontal: 4 },
+  voiceStatusRow: { flexDirection: 'row', alignItems: 'center', paddingRight: 8 },
   voiceStatus: { fontSize: size(13.6), fontWeight: '600' },
   voiceWhere: { fontSize: size(12.8), color: colors.textMuted },
   voiceButtons: { flexDirection: 'row', gap: 4 },
