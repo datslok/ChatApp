@@ -42,6 +42,9 @@ object Notifications {
   const val CALLS = "incoming_calls"
   const val MESSAGE_ID = 1
   const val CALL_ID = 2
+  // The app's blue (the icon's square, app.json's backgroundColor): Android tints the cat and the app's
+  // name in a notification's header with it, and the badge on a sender's picture.
+  const val BLUE = 0xFF0086D7.toInt()
   // What a notification tells the app when it's tapped (extras on the Intent that opens it): the chat,
   // the message, and what to do: "open" (go to it), "ring" (a call's notification: show it ringing)
   // or "accept" (its Accept button).
@@ -94,7 +97,8 @@ object Notifications {
     makeChannels(context)
     val tap = openIntent(context, channel, data["message_id"], "open")
     val builder = NotificationCompat.Builder(context, MESSAGES)
-      .setSmallIcon(R.drawable.push_message_icon)
+      .setSmallIcon(R.drawable.push_cat_icon)  // the cat (tools/make_pwa_icons.py makes it)
+      .setColor(BLUE)
       .setContentIntent(tap)
       .setAutoCancel(true)  // gone when tapped
       .setContentTitle(data["title"])
@@ -160,7 +164,8 @@ object Notifications {
       PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
     )
     val notification = NotificationCompat.Builder(context, CALLS)
-      .setSmallIcon(R.drawable.push_call_icon)
+      .setSmallIcon(R.drawable.push_cat_icon)
+      .setColor(BLUE)
       .setContentTitle(data["title"])
       .setContentText(data["body"])  // "📞 Calling you", or in a group "📞 kari is calling"
       .setStyle(NotificationCompat.CallStyle.forIncomingCall(caller, decline, accept))

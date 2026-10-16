@@ -316,7 +316,11 @@ the point is for me to understand how it works, not just to have it done.
   start the Activity can still be missing (the answer was "none" and it opened #general; fixed 2026-10-16). `adb logcat -d` (read-only) showed what went wrong each time.
   Distribution (since 2026-10-15): the icon is an adaptive icon made by `tools/make_pwa_icons.py` (the drawing on
   transparency, centred on its smallest enclosing circle and scaled to the 66/108 safe zone, the user's wish; app.json
-  backgroundColor #0086D7, a monochrome layer). Release builds are signed by `plugins/release-signing.js` with
+  backgroundColor #0086D7, a monochrome layer). Notifications' small icon (since 2026-10-16, the user's choice: "a little
+  thicker", centred, as big as fits): the same script makes `push_cat_icon.png` (modules/push) and `call_notification_icon.png`
+  (call-service) in drawable-mdpi..xxxhdpi (24..96 px): the drawing's alpha without its faint specks (<= 32, which
+  shifted it off centre), MaxFilter 19 at 1000 px wide, its box filling the 22/24 live area; `setColor` #0086D7.
+  `push_call_icon.xml` (the phone) stays for IncomingCallActivity's buttons. Release builds are signed by `plugins/release-signing.js` with
   `~/.chatapp-keys/android-release.jks` (password in `~/.gradle/gradle.properties`, CHATAPP_RELEASE_*; see my memory;
   the user keeps a copy). `plugins/dev-variant.js`: debug builds are `no.datslok.chat.dev` "ChatApp Dev" (the user's
   choice: both on the phone; google-services.json has both apps), so `adb shell am start` etc. need the .dev package.

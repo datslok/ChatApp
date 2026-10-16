@@ -128,7 +128,8 @@ class CallService : Service() {
     val hangUp = Intent(this, CallService::class.java).setAction(HANG_UP)
     val hangUpLater = PendingIntent.getService(this, 1, hangUp, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
     return NotificationCompat.Builder(this, CHANNEL)
-      .setSmallIcon(R.drawable.call_notification_icon)
+      .setSmallIcon(R.drawable.call_notification_icon)  // the cat (tools/make_pwa_icons.py makes it)
+      .setColor(0xFF0086D7.toInt())  // the app's blue, for the cat and the app's name
       .setContentTitle(title)
       .setContentText(text)
       .setContentIntent(openLater)

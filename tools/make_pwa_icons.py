@@ -21,11 +21,13 @@ The native app (mobile/assets/, named in mobile/app.json):
 - android-icon-monochrome.png: the same drawing as a plain shape, for themed icons (Android 13+ colours
   it to match the wallpaper itself; only where it isn't transparent counts).
 - icon.png: the icon as it is, for everything else that asks for one.
+- The notifications' small icon (the cat as a white shape, a little thicker): in the push and
+  call-service modules' res/drawable-*dpi, see the end of this file.
 
 Run it again after changing the icon.
 """
 from pathlib import Path
-from PIL import Image
+from PIL import Image, ImageFilter
 
 ROOT = Path(__file__).resolve().parent.parent
 ICON = Image.open(ROOT / "icon" / "chattuschattus_square.png").convert("RGBA")  # the app icon in use
@@ -119,3 +121,43 @@ monochrome.putalpha(foreground.getchannel("A"))
 monochrome.save(APP / "android-icon-monochrome.png")
 ICON.save(APP / "icon.png")
 print(f"Made the app's icons in {APP} (app.json's adaptiveIcon backgroundColor: #{BLUE[0]:02x}{BLUE[1]:02x}{BLUE[2]:02x})")
+
+# The notifications' small icon: the cat in the status bar, in a notification's header, and as the badge
+# on a sender's picture. Android draws it in one colour (only where it isn't transparent counts), so
+# it's the drawing as a white shape, its lines a little thicker (the drawing's are finer than the 2 dp of
+# Android's own icons, and looked faint next to them). The drawing filling Android's icon area as far as
+# it goes (22 dp of the 24: a 1 dp margin) and centred in it, in each density's size; Android picks the
+# one for the phone's screen. Two copies, as each module draws its own: mobile/modules/push's (messages,
+# friend requests, a ringing call) and call-service's (the ongoing call).
+WORK_WIDTH = 1000  # the drawing is thickened at this width, so the thickening is the same share of it
+THICKER = 19       # px at WORK_WIDTH, each way about 1% of the drawing's width (an odd number: MaxFilter's rule)
+DENSITIES = {"mdpi": 24, "hdpi": 36, "xhdpi": 48, "xxhdpi": 72, "xxxhdpi": 96}
+NOTIFICATION_ICONS = [
+    ROOT / "mobile" / "modules" / "push" / "android" / "src" / "main" / "res" / "drawable-{}" / "push_cat_icon.png",
+    ROOT / "mobile" / "modules" / "call-service" / "android" / "src" / "main" / "res" / "drawable-{}" / "call_notification_icon.png",
+]
+
+# The drawing has faint specks around it, nearly transparent (invisible, but thickening would grow them
+# and they'd count as drawn, putting the cat off centre): cleared first, as in_safe_zone ignores them too.
+shape = DRAWING.getchannel("A").point(lambda alpha: alpha if alpha > 32 else 0)
+shape = shape.crop(shape.getbbox())  # only the drawn part: its box is what gets centred
+shape = shape.resize((WORK_WIDTH, round(shape.height * WORK_WIDTH / shape.width)), Image.LANCZOS)
+pad = THICKER  # room for the lines to grow into at the edges
+padded = Image.new("L", (shape.width + 2 * pad, shape.height + 2 * pad), 0)
+padded.paste(shape, (pad, pad))
+shape = padded.filter(ImageFilter.MaxFilter(THICKER))  # every pixel takes the strongest around it: lines grow
+shape = shape.crop(shape.getbbox())
+
+for density, size in DENSITIES.items():
+    room = size * 22 / 24  # the live area
+    scale = room / max(shape.width, shape.height)  # as big as fits, the longer side touching the margin
+    small = shape.resize((max(1, round(shape.width * scale)), max(1, round(shape.height * scale))), Image.LANCZOS)
+    icon = Image.new("RGBA", (size, size), (255, 255, 255, 0))
+    white = Image.new("RGBA", small.size, (255, 255, 255, 255))
+    white.putalpha(small)
+    icon.alpha_composite(white, ((size - small.width) // 2, (size - small.height) // 2))
+    for pattern in NOTIFICATION_ICONS:
+        path = Path(str(pattern).format(density))
+        path.parent.mkdir(exist_ok=True)
+        icon.save(path)
+print("Made the notification icons (push_cat_icon.png, call_notification_icon.png) in the modules' res/drawable-*dpi")

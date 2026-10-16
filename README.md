@@ -88,7 +88,7 @@ the same PC, but the scripts assume two).
 | `scripts\refresh-icons.bat` | any Windows PC | double-click: Windows shows programs' new icons (after a new app icon) |
 | `tools\make_admin.py` | either | make someone an admin, or take it away (the owner can also do it in Settings → Admin → Admins) |
 | `tools\feedback.py` | either | read the bug reports and ideas, mark them done |
-| `tools\make_pwa_icons.py` | your PC | makes the phone app's icons from the app icon |
+| `tools\make_pwa_icons.py` | your PC | makes the phone app's icons from the app icon (its notification icon too) |
 | `tools\make_emoji_json.py` | your PC | makes `static\emoji.json` (every emoji, for the pickers and the server's list of allowed reactions) from Unicode's `emoji-test.txt`: `curl.exe -L -o emoji-test.txt https://unicode.org/Public/emoji/latest/emoji-test.txt`, then `python tools\make_emoji_json.py emoji-test.txt`; run it when a new emoji version comes out |
 | `tools\make_icons.py` | your PC | makes `static\js\icon-shapes.js`, the buttons' line icons (Lucide's), and the same for the phone app (`mobile\src\icon-shapes.js`); add an icon's name in it and run it again |
 | `tools\get_rnnoise.py` | your PC | puts RNNoise (the AI noise suppression, Xiph's C library) into the phone app's native code (`mobile\modules\call-service\android\src\main\cpp\rnnoise-0.2\`), checked against pinned hashes; only needed to change its version |
@@ -906,7 +906,8 @@ Put the new picture (a 1024×1024 PNG) in `icon\`, then in `desktop\`:
 the new one instead of keeping the old one for a day), point `tools\make_installer_images.py` at the
 new file (its `ICON` line), run `python tools\make_installer_images.py` (the installer's pictures and the
 update window's cat), and release a new version. The phone app's icons: `python tools\make_pwa_icons.py`
-(it reads the same `ICON` file name; change it there too).
+(it reads the same `ICON` file name; change it there too; its `DRAWING`, the line drawing on transparency, also
+makes the notifications' small icon, so that wants a drawing that reads as a white shape), then a new APK.
 
 ### The old icon is still showing after an update
 
