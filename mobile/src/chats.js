@@ -13,9 +13,9 @@ export function dmPartner(key, myId) {
 
 // May this person see this channel? The server's rule (server.py, "Who sees which channel"), like the
 // web page's seesChannel: a private channel comes with everyone who sees it ("members"; its roles may be
-// hidden from us), an open one is for everyone not limited, and admins see all. (Only for drawing.)
+// hidden from us), an open one is for everyone not limited, and the owner sees all. (Only for drawing.)
 export function seesChannel(user, channel) {
-  if (user.admin) return true;
+  if (user.owner) return true;
   if (channel.private) return (channel.members ?? []).includes(user.id);
   return !user.limited;
 }

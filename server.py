@@ -3529,19 +3529,22 @@ async def release_file(name: str):
 # Who sees which channel: a channel is open (everyone sees it) or private (only people with one of
 # its roles, in channel_roles). A role can be "limited": whoever has one sees only the private
 # channels their roles open, no open channel and no Lounge (for parents, say: their DMs and a
-# family channel). Admins see everything. Each person's pages get only the channels they may see,
-# and can_join checks the same rule, so a page asking for another channel by hand gets nothing.
+# family channel). The owner sees everything; other admins see open channels, and a private one only
+# with one of its roles (in Settings too: only those who see a private channel can rename or delete it).
+# Each person's pages get only the channels they may see, and can_join checks the same rule, so a page
+# asking for another channel by hand gets nothing.
 
 def channel_list(user_id=None):
     """The sidebar, top to bottom, as this person may see it (None: all of it):
     [{"key": "general", "name": "general", "heading": False, "private": False, "roles": []}, ...]
     "roles" (admins only, as roles can be hidden): the role ids that see a private channel. "members" (private
-    channels): the ids of everyone who sees it, for the member list. A heading with nothing visible under it goes too."""
+    channels): the ids of everyone who sees it (the owner and its roles' people), for the member list. A heading
+    with nothing visible under it goes too."""
     rows = db.execute("SELECT key, name, heading, private FROM channels ORDER BY position").fetchall()
     roles_of = {}
     for channel, role_id in db.execute("SELECT channel, role_id FROM channel_roles"):
         roles_of.setdefault(channel, []).append(role_id)
-    admins = [admin_id for (admin_id,) in db.execute("SELECT id FROM users WHERE is_admin = 1")]
+    owners = {owner_id for (owner_id,) in db.execute("SELECT id FROM users WHERE is_owner = 1")}
     holders = {}  # role id -> its people
     for holder, role_id in db.execute("SELECT user_id, role_id FROM user_roles"):
         holders.setdefault(role_id, set()).add(holder)
@@ -3549,9 +3552,9 @@ def channel_list(user_id=None):
     for key, name, heading, private in rows:
         item = {"key": key, "name": name, "heading": bool(heading), "private": bool(private), "roles": roles_of.get(key, [])}
         if private:
-            item["members"] = sorted(set(admins).union(*(holders.get(r, set()) for r in item["roles"])))
+            item["members"] = sorted(owners.union(*(holders.get(r, set()) for r in item["roles"])))
         items.append(item)
-    if user_id is None or is_admin(user_id):
+    if user_id is None or is_owner(user_id):
         return items
     mine, limited = role_ids_of(user_id), is_limited(user_id)
     shown = []
@@ -3565,6 +3568,8 @@ def channel_list(user_id=None):
             shown.append(item)
     if shown and shown[-1]["heading"]:
         shown.pop()
+    if is_admin(user_id):
+        return shown
     return [{k: v for k, v in item.items() if k != "roles"} for item in shown]  # (the role ids: admins only)
 
 
@@ -3582,8 +3587,8 @@ def is_limited(user_id):
 
 
 def sees_channel(private, channel_roles, my_roles, limited):
-    """The rule (not for admins, who see all): a private channel needs one of its roles; an open one
-    is for everyone not limited."""
+    """The rule (not for the owner, who sees all): a private channel needs one of its roles; an open one
+    is for everyone not limited (admins never are)."""
     if private:
         return any(role_id in my_roles for role_id in channel_roles)
     return not limited
@@ -3591,7 +3596,7 @@ def sees_channel(private, channel_roles, my_roles, limited):
 
 def may_see_channel(key, user_id):
     """May this person see this channel (which exists; see is_channel)?"""
-    if is_admin(user_id):
+    if is_owner(user_id):
         return True
     private = db.execute("SELECT private FROM channels WHERE key = ?", (key,)).fetchone()[0]
     roles = [role_id for (role_id,) in db.execute("SELECT role_id FROM channel_roles WHERE channel = ?", (key,))]
@@ -3648,6 +3653,13 @@ def clean_channel_name(name):
     return name
 
 
+def managed_channel(admin_id, key):
+    """Like existing_channel, for an admin changing it: one they can't see (private) is a 404 to them too."""
+    if key not in [item["key"] for item in channel_list(admin_id)]:
+        raise HTTPException(404, "That channel doesn't exist (any more).")
+    return existing_channel(key)
+
+
 def existing_channel(key):
     """(is it a heading?) for a channel or heading that exists, or a 404."""
     row = db.execute("SELECT heading FROM channels WHERE key = ?", (key,)).fetchone()
@@ -3695,8 +3707,7 @@ class ChannelRename(BaseModel):
 @app.post("/channels/{key}/rename")
 async def rename_channel(request: Request, key: str, data: ChannelRename):
     """A new name for a channel or heading (admins only). Its messages keep pointing to its key."""
-    logged_in_admin(request)
-    existing_channel(key)
+    managed_channel(logged_in_admin(request), key)
     name = clean_channel_name(data.name)
     with db:
         db.execute("UPDATE channels SET name = ? WHERE key = ?", (name, key))
@@ -3712,8 +3723,7 @@ class ChannelAccess(BaseModel):
 @app.post("/channels/{key}/access")
 async def set_channel_access(request: Request, key: str, data: ChannelAccess):
     """Who can see a channel (admins only): everyone, or only some roles."""
-    logged_in_admin(request)
-    if existing_channel(key):
+    if managed_channel(logged_in_admin(request), key):
         raise HTTPException(400, "Headings can't be private, only channels.")
     existing = {role_id for (role_id,) in db.execute("SELECT id FROM roles")}
     roles = set(data.roles) if data.private else set()
@@ -3734,15 +3744,19 @@ class ChannelOrder(BaseModel):
 @app.post("/channels/order")
 async def reorder_channels(request: Request, data: ChannelOrder):
     """Put the channels and headings in a new order (admins only). The page sends the whole list,
-    so it must have exactly the keys there are: no more, no fewer, none twice."""
-    logged_in_admin(request)
-    existing = [key for (key,) in db.execute("SELECT key FROM channels")]
-    if sorted(data.keys) != sorted(existing):
+    so it must have exactly the keys they see: no more, no fewer, none twice. (An admin who can't see a
+    private channel moves only the others: theirs take the places those had, the private one keeps its own.)"""
+    admin_id = logged_in_admin(request)
+    seen = [item["key"] for item in channel_list(admin_id)]
+    if sorted(data.keys) != sorted(seen):
         raise HTTPException(409, "The channels changed meanwhile. Try again.")
+    everything = [key for (key,) in db.execute("SELECT key FROM channels ORDER BY position")]
+    new_order = iter(data.keys)
+    order = [next(new_order) if key in seen else key for key in everything]
     with db:
         # enumerate gives each key its place: (0, "general"), (1, "memes"), ...
         db.executemany("UPDATE channels SET position = ? WHERE key = ?",
-                       [(position, key) for position, key in enumerate(data.keys)])
+                       [(position, key) for position, key in enumerate(order)])
     await announce_channels()
     return {"ok": True}
 
@@ -3751,8 +3765,7 @@ async def reorder_channels(request: Request, data: ChannelOrder):
 async def delete_channel(request: Request, key: str):
     """Delete a heading, or a channel with every message in it (admins only). There's no undo,
     except a backup, so the page asks first."""
-    logged_in_admin(request)
-    if not existing_channel(key):
+    if not managed_channel(logged_in_admin(request), key):
         if db.execute("SELECT COUNT(*) FROM channels WHERE heading = 0").fetchone()[0] <= 1:
             raise HTTPException(400, "That's the last channel: there must always be one.")
     with db:
@@ -3894,7 +3907,7 @@ async def delete_role(request: Request, role_id: int):
     existing_role(role_id)
     with db:
         db.execute("DELETE FROM user_roles WHERE role_id = ?", (role_id,))
-        # (A private channel that only this role saw stays private: then only admins see it.)
+        # (A private channel that only this role saw stays private: then only the owner sees it.)
         db.execute("DELETE FROM channel_roles WHERE role_id = ?", (role_id,))
         db.execute("DELETE FROM roles WHERE id = ?", (role_id,))
     await announce_roles()

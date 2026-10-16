@@ -358,8 +358,10 @@ the point is for me to understand how it works, not just to have it done.
   to the first one. Settings → Admin → Channels (settings.js, admins only): each row a small form (Enter/Save
   renames), ↑ ↓, 🗑 with confirm(). `can_join` uses `is_channel`; push titles use `channel_name`.
   Private channels and limited roles (since 2026-10-16; for my parents: their DMs and #family only):
-  `channels.private` + `channel_roles` (channel, role_id), `roles.limited`. `sees_channel`: admins see all; private =
-  one of its roles (none ticked or its role deleted = admins only, never public); open = not limited. `can_join` ->
+  `channels.private` + `channel_roles` (channel, role_id), `roles.limited`. `sees_channel`: the owner sees all (not other
+  admins: the user's wish; they can still give themselves a role); private = one of its roles (none ticked or its
+  role deleted = the owner only, never public); open = not limited (admins never are). Admins only manage the
+  channels they see (`managed_channel`; reordering moves only those, around the others). `can_join` ->
   `may_see_channel`, `visible_chats` and "channels" use `channel_list(user_id)` (per person; a heading with nothing
   under it is dropped; GET /channels needs login now), "channels" has `lounge` (`may_use_lounge`; `may_join_voice`
   for /voice-token and "voice"; `voice_members_message(user_id)` is empty for them, `announce_voice_members`).

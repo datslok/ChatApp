@@ -260,12 +260,12 @@ function ChannelRow({ item, index, count, roles, onRename, onMove, onDelete, onA
 }
 
 // Who can see a channel (the web page's makeChannelAccess): "Private" ticked = only the ticked roles
-// (and admins, who see everything), else everyone (but people with a limited role). Sent at once.
+// (and the owner, who sees everything), else everyone (but people with a limited role). Sent at once.
 function ChannelAccess({ item, roles, onAccess }) {
   const styles = useStyles(makeStyles);
   const toggle = (id) => onAccess(true, item.roles.includes(id) ? item.roles.filter((other) => other !== id) : [...item.roles, id]);
-  const help = roles.length === 0 ? 'Only admins see it. Make a role under Roles to let others in.'
-    : item.roles.length === 0 ? 'No role ticked: only admins see it.' : null;
+  const help = roles.length === 0 ? 'Only the owner sees it. Make a role under Roles to let others in.'
+    : item.roles.length === 0 ? 'No role ticked: only the owner sees it.' : null;
   return (
     <View style={styles.access}>
       <CheckLine checked={item.private} label="Private" onPress={() => onAccess(!item.private, item.roles)} />
@@ -312,7 +312,7 @@ function Channels({ connection }) {
     <View>
       <SectionHelp>
         The sidebar, top to bottom. A heading groups the channels under it. Everyone sees changes straight away. A private
-        channel is only for the roles ticked under it (admins see every channel).
+        channel is only for the roles ticked under it and the owner (other admins don't see it either).
       </SectionHelp>
       <View style={styles.channelList}>
         {channels.map((item, index) => (

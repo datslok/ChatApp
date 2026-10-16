@@ -300,7 +300,8 @@ they get in (and so does a new address from Settings), so password resets always
 
 **Make it your own:** a new chat starts with #general, #memes and #chattus (the AI bot's, see below).
 Admins (`tools/make_admin.py`) add, rename, move and delete channels, and headings to group them, in
-Settings → Admin → Channels. A channel ticked **Private** there is only for the roles ticked under it, and a
+Settings → Admin → Channels. A channel ticked **Private** there is only for the roles ticked under it (and the owner: other admins don't
+see it unless they have one of its roles), and a
 role ticked **Limited** (Settings → Admin → Roles) sees nothing but its private channels, DMs and groups
 (no other channels, no Lounge): for family who only need one channel with you, say. A role ticked **Hidden**
 is only known to admins (no name colour, member list section or profile tag for anyone else). The voice channel is `VOICE_ROOMS` in `server.py`; change it and update (see below). The "What's

@@ -1176,7 +1176,7 @@ function makeChannelAdminItem(item, index) {
   return box;
 }
 
-// Who can see a channel: "Private" ticked = only the ticked roles (and admins, who see everything),
+// Who can see a channel: "Private" ticked = only the ticked roles (and the owner, who sees everything),
 // else everyone (but people with a limited role: Settings → Admin → Roles). Each change is sent at once.
 function makeChannelAccess(item) {
   const access = document.createElement("div");
@@ -1186,7 +1186,7 @@ function makeChannelAccess(item) {
     { private: isPrivate, roles: [...ticked] });
 
   const privateBox = makeCheckbox("Private", item.private, (checked) => send(checked));
-  privateBox.title = "Only people with the roles ticked here can see it (admins always can)";
+  privateBox.title = "Only people with the roles ticked here can see it (and the owner)";
   access.appendChild(privateBox);
   if (!item.private) return access;
 
@@ -1205,8 +1205,8 @@ function makeChannelAccess(item) {
   const help = document.createElement("span");
   help.className = "settings-help";
   help.textContent = roles.length === 0
-    ? "Only admins see it. Make a role under Roles to let others in."
-    : ticked.size === 0 ? "No role ticked: only admins see it." : "";
+    ? "Only the owner sees it. Make a role under Roles to let others in."
+    : ticked.size === 0 ? "No role ticked: only the owner sees it." : "";
   access.appendChild(help);
   return access;
 }
