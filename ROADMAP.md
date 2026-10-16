@@ -177,5 +177,7 @@ with Windows, activity detection, zoom, drag-and-drop, hover bars and keyboard s
 
 ## Maybe later
 
+- [ ] Android developer verification, before Google enforces it in Norway (worldwide from 2027): register as a developer (the hobbyist account, if it fits 5-20 phones) and the app's package and release key, so our own APKs keep installing. No Play Store needed
+
 - [ ] Discord-style photo picker in the phone app: our own grid of recent photos under the text box (needs photo access, "limited access" included), which also gives the photos' real names
 - [ ] Soundboard in voice (short clips anyone in a call can play for everyone; uploads like custom emoji, a few built-in ones, its own volume)
