@@ -3478,6 +3478,24 @@ async def download_android():
     return RedirectResponse(f"/releases/{quote(apk)}", status_code=302)
 
 
+@app.get("/.well-known/assetlinks.json")
+async def asset_links():
+    # Android App Links: the phone app claims the chat's links (https://chat.example.com/?channel=..),
+    # so they open in the app instead of the browser. Android only lets an app do that if the website
+    # agrees, by naming the app here: its package and the fingerprint of the key that signs it. Android
+    # fetches this once, when the app is installed. Both come from android.json (scripts\app-release.ps1),
+    # so every server names its own build of the app.
+    try:
+        latest = json.loads((RELEASES_DIR / "android.json").read_text())
+        package, fingerprint = latest["package"], latest["fingerprint"]
+    except (OSError, ValueError, KeyError):
+        raise HTTPException(404, "No Android app has been released here.")
+    return [{
+        "relation": ["delegate_permission/common.handle_all_urls"],
+        "target": {"namespace": "android_app", "package_name": package, "sha256_cert_fingerprints": [fingerprint]},
+    }]
+
+
 # ---------- The phone app's JavaScript updates (expo-updates) ----------
 #
 # Most changes to the phone app are JavaScript only: those reach the phones without a new APK. At each

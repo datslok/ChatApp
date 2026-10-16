@@ -4,8 +4,8 @@
 // Like the web page: a change shows at once (setAppearance: everything that reads the theme draws
 // again), then it's saved (POST /settings/appearance), and the server sends it to our other devices.
 // While a colour or the text size is being dragged, only the screen follows; it's saved on letting go.
-// (The web page's Font choices are Windows' fonts, which Android doesn't have, and its Scale is the
-// Windows app's own zoom: so neither is here.)
+// The fonts are the web page's, as near as Android has them (theme.js, FONT_FAMILIES). (Its Scale is
+// the Windows app's own zoom, so that isn't here.)
 import { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -13,8 +13,11 @@ import ColorPicker, { HueSlider, Panel1, Preview } from 'reanimated-color-picker
 import { DialogButton, DialogButtons, Popup } from './MessageCard';
 import Slider from './Slider';
 import { Button, Heading, Help, Status, Title } from './SettingsParts';
+import { Choices } from './VoiceSettings';
 import { postJson } from './api';
-import { PICKABLE_COLOURS, THEME_CHOICES, makeTheme, useStyles, useTheme } from './theme';
+import {
+  FONT_CHOICES, FONT_FAMILIES, PICKABLE_COLOURS, THEME_CHOICES, makeTheme, useStyles, useTheme,
+} from './theme';
 
 // One theme's swatch: a circle, its top left half the theme's panel colour and the rest its
 // background (the web page's diagonal gradient), with a ring around the chosen one.
@@ -123,6 +126,18 @@ export default function AppearanceSettings() {
         ))}
       </View>
       <Button label="Reset colours" secondary small onPress={() => save({ ...appearance, colours: {} })} />
+
+      <Heading>Font</Heading>
+      {/* Each name in its own font, like the web page's choices. (System's spelled out as sans-serif:
+          left empty, it would take the chosen font from the button around it.) */}
+      <Choices
+        choices={FONT_CHOICES.map(([font, label]) => [
+          font, <Text style={{ fontFamily: FONT_FAMILIES[font] ?? 'sans-serif' }}>{label}</Text>,
+        ])}
+        value={appearance.font}
+        onPick={(font) => save({ ...appearance, font })}
+      />
+      <Help>Calibri is a Windows font: on a phone it looks like System.</Help>
 
       <Heading>Text size</Heading>
       {/* #settings label.slider-row: the words, the slider, the number. */}

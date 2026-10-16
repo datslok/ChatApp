@@ -5,6 +5,8 @@
 //     looking at the chat anywhere (server.py, send_push), and Kotlin shows them, even with the app closed.
 //   - The ping while the app is open: a DM or mention in another chat (the server's "unread" with
 //     "notify") or a friend request. Its own switch and volume, like the web page's Sound.
+//   - And a banner at the top for it (MessageBanner.js): who, where, the start of the message; a tap
+//     goes there. Its own switch, like the web page's desktop notifications.
 //   - Mute notifications for a while: both of the above (the server is told, /push/mute, for the pushes).
 //   - A chat's notification goes away when the chat is opened here (the web page's clearSeenNotifications).
 import { useEffect, useRef, useState } from 'react';
@@ -18,6 +20,7 @@ import { addTokenListener, clearChatNotification, getToken, notificationsAllowed
 export const DEFAULT_NOTIFICATION_SETTINGS = {
   push: null,     // push notifications on this phone: true, false, or null = not decided yet (asked at the first start)
   sound: true,    // the ping while the app is open
+  banner: true,   // the banner while the app is open
   volume: 100,    // its volume, 0-100 %
   mutedUntil: 0,  // muted until when (ms since 1970, like Date.now()), "forever", or 0: not muted
   muteChoice: 'off',  // the choice that muted it ("1h", ...), for Settings' highlighted button
@@ -95,6 +98,9 @@ export function useNotifications(connection) {
   const [settings, setSettingsState] = useState(loadSettings);
   const [problem, setProblem] = useState('');  // why push couldn't be turned on, for Settings
   const [busy, setBusy] = useState(false);     // turning push on or off right now
+  // The banner showing (MessageBanner.js): the server's notify ({channel, id, user_id, name, text}) or
+  // {request: true, user_id} for a friend request; with `at`, so a new one starts its own time. Or null.
+  const [banner, setBanner] = useState(null);
   const latest = useRef({});
   latest.current = { settings, connection };
   const { me } = connection;
@@ -183,22 +189,27 @@ export function useNotifications(connection) {
   // Muted here, or Do Not Disturb (our status, on every device).
   const quiet = () => isMuted(latest.current.settings) || latest.current.connection.myPresence === 'dnd';
 
-  // A DM or mention in another chat while we're open: the ping. (connection.js calls this.) Not in the
-  // background with push on: the connection may still be up for a while, but the push's notification
-  // makes its own sound (the web page's "pushOn: not twice").
-  connection.notifyListener.current = () => {
-    const { sound, volume } = latest.current.settings;
-    if (AppState.currentState !== 'active' && pushOnNow) return;
-    if (sound && !quiet()) playPing(volume);
-  };
+  // A DM or mention in another chat while we're open: the ping and the banner. (connection.js calls
+  // this with the server's notify.) Not in the background with push on: the connection may still be up
+  // for a while, but the push's notification makes its own sound (the web page's "pushOn: not twice").
+  // (No banner in the background at all: nobody would see it, and it'd still be there on coming back.)
+  function notify(item) {
+    const { sound, volume, banner: banners } = latest.current.settings;
+    const active = AppState.currentState === 'active';
+    if ((!active && pushOnNow) || quiet()) return;
+    if (sound) playPing(volume);
+    if (banners && active && item) setBanner({ ...item, at: Date.now() });
+  }
+  connection.notifyListener.current = notify;
 
-  // A new friend request: the ping too (the web page's notifyFriendRequest). Not for the ones already
-  // waiting when we connect.
+  // A new friend request: the ping and a banner too (the web page's notifyFriendRequest). Not for the
+  // ones already waiting when we connect.
   const knownRequests = useRef(null);
   useEffect(() => {
     const before = knownRequests.current;
     knownRequests.current = new Set(connection.incoming);
-    if (before && connection.incoming.some((id) => !before.has(id))) connection.notifyListener.current();
+    const added = before ? connection.incoming.find((id) => !before.has(id)) : undefined;
+    if (added !== undefined) notify({ request: true, user_id: added });
   }, [connection.incoming]);
 
   // The chat on screen has been seen: its notification goes (when it's opened, and when we come back to
@@ -215,7 +226,9 @@ export function useNotifications(connection) {
   }, []);
 
   return {
-    settings, problem, busy,
+    settings, problem, busy, banner,
+    closeBanner: () => setBanner(null),
+    setBanners: (on) => setSettings({ banner: on }),
     available: !!me?.phonePush,  // (the server has Firebase's key)
     setPush, setMute,
     setSound: (on) => {

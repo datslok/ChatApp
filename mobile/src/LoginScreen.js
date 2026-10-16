@@ -1,15 +1,32 @@
 // Logging in, drawn like the web page's login.html: a card in the middle with the same fields,
 // button and links. The same POST /login: the server answers with the session cookie, which Android
 // keeps (like a browser) and sends with the WebSocket from then on.
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ActivityIndicator, KeyboardAvoidingView, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View,
 } from 'react-native';
 import { useStyles } from './theme';
+import { getJson } from './api';
 import { SERVER } from './config';
+import VerifyScreen from './VerifyScreen';
+
+// Logged in, but is the account's email verified? If not, the server treats us as logged out until
+// it is, so: "Check your inbox" (VerifyScreen). The address it waits for, or null (verified, or not
+// logged in at all).
+async function waitingFor() {
+  const answer = await getJson('/verify/status');
+  return answer.ok && answer.data.logged_in && !answer.data.verified ? answer.data.email : null;
+}
 
 export default function LoginScreen({ onLoggedIn }) {
   const styles = useStyles(makeStyles);
+  // The address a new account's link went to, while we wait for it to be clicked (else null).
+  const [unverified, setUnverified] = useState(null);
+  // Here with a cookie already (the app started, or the connection said "not logged in"): that may be
+  // an account still waiting for its link.
+  useEffect(() => {
+    waitingFor().then(setUnverified);
+  }, []);
   // What's typed in the two boxes. A <TextInput> shows `value` and calls onChangeText with
   // every change; we store it, React redraws the box with it ("controlled input").
   const [username, setUsername] = useState('');
@@ -28,7 +45,13 @@ export default function LoginScreen({ onLoggedIn }) {
         body: JSON.stringify({ username, password }),
       });
       if (response.ok) {
-        onLoggedIn();
+        const email = await waitingFor();
+        if (email) {
+          setUnverified(email);
+          setBusy(false);
+        } else {
+          onLoggedIn();
+        }
         return;
       }
       // FastAPI puts the reason in "detail": "Wrong username or password." and the like.
@@ -38,6 +61,10 @@ export default function LoginScreen({ onLoggedIn }) {
       setError("Couldn't reach the server. Check your connection.");
     }
     setBusy(false);
+  }
+
+  if (unverified) {
+    return <VerifyScreen email={unverified} onVerified={onLoggedIn} onLogOut={() => setUnverified(null)} />;
   }
 
   return (

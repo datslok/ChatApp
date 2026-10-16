@@ -88,6 +88,10 @@ export default function NotificationSettings({ notifications }) {
 
       <Heading>While the app is open</Heading>
       <CheckRow checked={settings.sound} label="Sound" onPress={() => notifications.setSound(!settings.sound)} />
+      <CheckRow
+        checked={settings.banner} label="A banner at the top for messages in other chats"
+        onPress={() => notifications.setBanners(!settings.banner)}
+      />
       <View style={styles.sliderRow}>
         <Text style={styles.sliderLabel}>Volume</Text>
         <View style={styles.slider}>

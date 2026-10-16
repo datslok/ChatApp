@@ -5,7 +5,7 @@
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Icon from './Icon';
 import { useStyles, useTheme } from './theme';
-import { chatLabel, dmKey, groupName } from './chats';
+import { chatLabel, dmKey, groupName, groupPeople } from './chats';
 import { Avatar, GroupPicture, Person, PersonPicture } from './people';
 import { SeasonBadge } from './SeasonScreen';
 import { LOUNGE, LOUNGE_ROOM } from './voice';
@@ -197,7 +197,11 @@ export default function Sidebar({
             {(strong, bold) => (
               <View style={styles.person}>
                 <GroupPicture />
-                <Text numberOfLines={1} style={[textStyle(strong, bold), styles.grow]}>{groupName(group, users, me.id)}</Text>
+                {/* Its name, and how many people are in it under that (like a person's status line). */}
+                <View style={styles.grow}>
+                  <Text numberOfLines={1} style={textStyle(strong, bold)}>{groupName(group, users, me.id)}</Text>
+                  <Text numberOfLines={1} style={styles.groupCount}>{groupPeople(group, users).length} members</Text>
+                </View>
               </View>
             )}
           </Row>
@@ -216,17 +220,24 @@ export default function Sidebar({
             </Row>
           );
         })}
+        {/* Nobody to message yet: how to get somebody (the web page's .empty-note). */}
+        {groups.length === 0 && dms.length === 0 ? (
+          <Text style={styles.emptyNote}>Add friends to send direct messages.</Text>
+        ) : null}
       </ScrollView>
 
       {voice.roomName !== null ? <VoiceBar voice={voice} where={where} onOpen={openCall} /> : null}
       {notice ? <VoiceBar voice={voice} where={chatLabel(notice.channel, connection)} notice={notice.text} /> : null}
 
       {/* You, at the bottom (the web page's #user-panel): your picture with your status and your name
-          (a tap opens your popup, MeScreen), then mute, deafen and ⚙️ Settings. (On the web page the
+          (a tap opens your popup, MeScreen; a long press the user menu, with Profile), then mute, deafen and ⚙️ Settings. (On the web page the
           buttons are a second row; a phone's drawer has room for them beside the name.) */}
       {mine ? (
         <View style={styles.userPanel}>
-          <Pressable onPress={onMe} style={({ pressed }) => [styles.me, pressed && styles.panelPressed]}>
+          <Pressable
+            onPress={onMe} onLongPress={() => onUserMenu(me.id)}
+            style={({ pressed }) => [styles.me, pressed && styles.panelPressed]}
+          >
             {/* 4px of room around the picture (from the panel's own padding), for the seasonal badge. */}
             <View style={styles.myPicture}>
               <PersonPicture user={mine} me={me} myPresence={myPresence} size={40} ring={colors.bgPanelAlt} />
@@ -277,6 +288,10 @@ const makeStyles = (colors, size) => StyleSheet.create({
   rowTextStrong: { color: colors.textStrong },
   bold: { fontWeight: '600' },
   grow: { flex: 1 },
+  // A group's "N members" (.person-status): 0.75rem, muted.
+  groupCount: { fontSize: size(12), color: colors.textMuted },
+  // .empty-note: margin 4px 12px, 0.85rem, muted.
+  emptyNote: { marginVertical: 4, marginHorizontal: 12, fontSize: size(13.6), color: colors.textMuted },
   person: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 },
   // The unread dot: 8px, white, on the row's left edge.
   unreadDot: { position: 'absolute', left: 1, width: 8, height: 8, borderRadius: 4, backgroundColor: colors.textStrong },

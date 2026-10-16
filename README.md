@@ -82,7 +82,7 @@ the same PC, but the scripts assume two).
 | `scripts\usage.ps1` | your PC | runs `usage.ps1` on the server |
 | `scripts\backup-fetch.ps1` | your PC | copies the server's newest backup here (`-Install`: every day) |
 | `scripts\release-upload.ps1` | your PC | puts a new desktop app version on the server |
-| `scripts\app-release.ps1` | your PC | a new version of the phone app (the APK, when its native side changed): builds, signs, uploads; phones offer it at their next start |
+| `scripts\app-release.ps1` | your PC | a new version of the phone app (the APK, when its native side changed): builds, signs, uploads; phones offer it when they next connect |
 | `scripts\app-update.ps1` | your PC | the phone app's JavaScript only: phones fetch it by themselves, no new APK |
 | `scripts\seasonal-upload.ps1` | your PC | puts a seasonal easter egg's video on the server (see [Optional: a seasonal easter egg](#optional-a-seasonal-easter-egg)) |
 | `scripts\refresh-icons.bat` | any Windows PC | double-click: Windows shows programs' new icons (after a new app icon) |
@@ -770,8 +770,8 @@ install file, straight from your server, no Play Store. After that it updates it
   it when they start. Nothing to tap.
 - **Native code** (a module or package with native code, a permission, the icon, `app.json`): those need a
   new APK. `.\scripts\app-release.ps1` raises the version, builds and signs the APK and puts it on the
-  server; the app then offers "A new version" at its next start, downloads it and opens Android's
-  installer. `app-update.ps1` refuses when native code changed since the last APK, and says so.
+  server; the app then offers "A new version" (at its next start or reconnect, or after a call), downloads it
+  and opens Android's installer. `app-update.ps1` refuses when native code changed since the last APK, and says so.
 
 New JavaScript only goes to phones whose APK it was made for (the app's version is its "runtime
 version"), so an update can never break an older app.
@@ -779,7 +779,13 @@ version"), so an update can never break an older app.
 Once, before the first release:
 
 1. Your server's address in `mobile\src\config.js` (`SERVER`, for release builds) and in `mobile\app.json`
-   (`updates.url`: the same address with `/app-update`).
+   (`updates.url`: the same address with `/app-update`; and `android.intentFilters`' `host`: just the name,
+   like `chat.example.com`). That last one makes links to your chat (`https://chat.example.com/?channel=...`)
+   open in the app ("App Links"). Android only allows it if your server agrees, at
+   `/.well-known/assetlinks.json`, which it makes from the package and key fingerprint that
+   `app-release.ps1` writes into `releases\android.json`. Android checks it when the app is installed, so
+   it works from the first APK on (`adb shell pm get-app-links no.datslok.chat` on a phone shows
+   "verified").
 2. The **release signing key**. Android only installs an update over an app signed with the same key,
    so every APK is signed with this one, kept for good: **losing it means everyone uninstalling the app
    and installing it again.** Keep a copy of both files below somewhere safe outside your PC.

@@ -114,9 +114,15 @@ object Notifications {
       style.isGroupConversation = data["chat"] != null
       style.addMessage(data["body"] ?: "", System.currentTimeMillis(), sender)
       builder.setStyle(style).setCategory(NotificationCompat.CATEGORY_MESSAGE)
+      // The unread count on the app's icon. Android has no "put a number on my icon": launchers draw it
+      // from the notifications showing, adding up their numbers (Samsung: with "Show number" on in its
+      // settings, else a dot). So each chat's notification counts the messages stacked in it, and the
+      // number goes when the notification does (tapped, or the chat opened in the app).
+      builder.setNumber(style.messages.size)
     } else {
       picture(context, data["icon"])?.let { builder.setLargeIcon(it) }
       builder.setCategory(NotificationCompat.CATEGORY_SOCIAL)
+      builder.setNumber(1)
     }
     post(context, channel, MESSAGE_ID, builder.build())
   }

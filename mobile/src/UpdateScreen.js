@@ -1,6 +1,6 @@
 // "A new version of ChatApp": the popup when a newer APK is out (appUpdate.js), over everything, even
-// the login screen. Update downloads it (a bar) and opens Android's installer; Later closes it until the
-// next start.
+// the login screen. Update downloads it (a bar) and opens Android's installer; Later closes it (that
+// version isn't offered again until the next start).
 import { StyleSheet, Text, View } from 'react-native';
 import { DialogButton, DialogButtons, Popup } from './MessageCard';
 import { useApkUpdate } from './appUpdate';

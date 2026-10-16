@@ -112,6 +112,19 @@ export const letterColors = ['#5865f2', '#3ba55c', '#faa61a', '#ed4245', '#eb459
 
 export const DEFAULT_APPEARANCE = { theme: 'dark', colours: {}, font: 'system', font_size: 16, scale: 100 };
 
+// The web page's fonts (appearance.js, APPEARANCE_FONTS) as Android has them. Its choices are Windows'
+// fonts; Android's own come close for three: its serif (Noto Serif) for Georgia, its monospace (Droid Sans
+// Mono) for Consolas, and "casual" (Coming Soon, a handwriting font) for Comic Sans. Calibri has none,
+// so it stays the phone's own font, like System. (undefined: the phone's font, Roboto or Samsung's.)
+export const FONT_FAMILIES = {
+  system: undefined, calibri: undefined, georgia: 'serif', consolas: 'monospace', comic: 'casual',
+};
+
+// Settings → Appearance's choices, with the web page's names.
+export const FONT_CHOICES = [
+  ['system', 'System'], ['calibri', 'Calibri'], ['georgia', 'Georgia'], ['consolas', 'Consolas'], ['comic', 'Comic Sans'],
+];
+
 // "bg-panel" -> "bgPanel"
 const camel = (name) => name.replace(/-(\w)/g, (whole, letter) => letter.toUpperCase());
 
@@ -159,7 +172,7 @@ function readable(candidates, backgrounds) {
   return worst('#ffffff') >= worst('#000000') ? '#ffffff' : '#000000';
 }
 
-// ----- A whole theme from an appearance: {appearance, colors, size, light, presence}
+// ----- A whole theme from an appearance: {appearance, colors, size, light, presence, font}
 
 export function makeTheme(saved) {
   const appearance = { ...DEFAULT_APPEARANCE, ...saved };
@@ -190,7 +203,8 @@ export function makeTheme(saved) {
   };
   // A light theme (by its background): the phone's status bar then needs dark icons.
   const light = luminance(colors.bgMain) > 0.5;
-  return { appearance, colors, size, light, presence };
+  const font = FONT_FAMILIES[appearance.font];
+  return { appearance, colors, size, light, presence, font };
 }
 
 // ----- Kept on the phone too, for the first drawing (before the server has said anything).
@@ -226,6 +240,19 @@ export function useTheme() {
 // the hundreds of message rows that ask for the same styles share one copy.
 const styleCache = new WeakMap();
 
+// The chosen font, put into every style that has a text size (the web page sets it once, on the
+// whole page, with --font; React Native has no such thing, and a font is per Text). So the files' own
+// styles needn't think about it: they're written as before, and this adds `fontFamily` to each one
+// with a fontSize, unless it has its own (code is monospace whatever the font).
+function withFont(styles, font) {
+  if (!font) return styles;
+  const result = {};
+  for (const [name, style] of Object.entries(styles)) {
+    result[name] = style && style.fontSize !== undefined && style.fontFamily === undefined ? { ...style, fontFamily: font } : style;
+  }
+  return result;
+}
+
 export function useStyles(makeStyles) {
   const theme = useTheme();
   let made = styleCache.get(theme);
@@ -233,6 +260,6 @@ export function useStyles(makeStyles) {
     made = new Map();
     styleCache.set(theme, made);
   }
-  if (!made.has(makeStyles)) made.set(makeStyles, makeStyles(theme.colors, theme.size));
+  if (!made.has(makeStyles)) made.set(makeStyles, withFont(makeStyles(theme.colors, theme.size), theme.font));
   return made.get(makeStyles);
 }

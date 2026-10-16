@@ -164,16 +164,16 @@ with Windows, activity detection, zoom, drag-and-drop, hover bars and keyboard s
     - [x] The mic test during a call
     - [x] The ringtone and call sounds follow the notification volume (the ringtone: the ring volume; the sounds in a call stay on the call's volume)
     - [x] The screen share quality menu (720/1080/1440p, 30/60 fps) (sizes only: react-native-webrtc records a phone's screen at a fixed 30 fps)
-- [ ] People, notifications and the rest
-    - [ ] Logging in with an unverified email says "check your email" (now: back to a blank login screen)
-    - [ ] Links to the chat (?channel=&message=) open in the app (Android App Links)
-    - [ ] A banner for messages in other chats while the app is open (now only the ping)
-    - [ ] An unread count on the app icon
-    - [ ] Check for new APKs after reconnects and after calls too, not only at start
-    - [ ] Fonts in Settings → Appearance where Android has one (serif, monospace)
-    - [ ] Group rows in the sidebar show "N members"
-    - [ ] Profile in your own panel's menu
-    - [ ] "Add friends to send direct messages." when the DM list is empty
+- [x] People, notifications and the rest
+    - [x] Logging in with an unverified email says "check your email" (now: back to a blank login screen)
+    - [x] Links to the chat (?channel=&message=) open in the app (Android App Links)
+    - [x] A banner for messages in other chats while the app is open (now only the ping)
+    - [x] An unread count on the app icon (from the notifications' numbers: Android has no other way)
+    - [x] Check for new APKs after reconnects and after calls too, not only at start
+    - [x] Fonts in Settings → Appearance where Android has one (serif, monospace)
+    - [x] Group rows in the sidebar show "N members"
+    - [x] Profile in your own panel's menu
+    - [x] "Add friends to send direct messages." when the DM list is empty
 
 ## Maybe later
 

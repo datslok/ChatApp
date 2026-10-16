@@ -195,6 +195,16 @@ the point is for me to understand how it works, not just to have it done.
   30 s or "not_sent"; ChatScreen `PendingMessage` faded, "Sending…" after 1.5 s, Retry / Delete). server.py:
   "ping" -> "pong", a message may name its `channel`, `recent_nonces` (10 min, memory) confirms a repeat
   without saving it twice, "sent"/"not_sent" to the sending page, `nonce` in "message". The web page doesn't use them. Expo's dev-menu gear can cover the top bar's buttons in development builds: drag it.
+  The rest of parity (2026-10-16, needs the APK after 1.0.2): `src/VerifyScreen.js` (verify.html; LoginScreen asks
+  /verify/status at mount and after logging in, polls every 5 s); `src/MessageBanner.js` (notifications.js `banner` from
+  "unread"'s notify and new requests, only while active and not quiet; setting `banner`; tap -> App.js `goToNotice`,
+  swipe up, 5 s); App Links (app.json `intentFilters` https chat.datslok.no path "/" autoVerify; App.js `linkTarget`
+  via Linking -> `opened`; server `/.well-known/assetlinks.json` from android.json's `package`/`fingerprint`, which
+  app-release.ps1 adds from apksigner); the icon badge = Notifications.kt `setNumber` (messages stacked per chat;
+  Android has no badge API); appUpdate.js `checkForApk` at every welcome and after a call, `setApkCheckPaused` in
+  calls, Later = that version not again until restart; fonts (theme.js `FONT_FAMILIES`: georgia serif, consolas
+  monospace, comic casual, calibri/system the phone's; `useStyles`' `withFont` adds fontFamily to every style with a
+  fontSize and none of its own); Sidebar's "N members", the empty-DM note, a long press on your panel = your user menu.
   People and groups (since 2026-10-15): App.js's `dialog` state draws them over everything: `src/ProfileScreen.js`
   (#profile: Banner, roles, Activity with activityDuration, bio, the friend buttons), `src/UserMenu.js` (userMenuItems
   as a `src/Sheet.js` bottom sheet; no Call, Ban or Make admin yet; Mention appends "@name " to `drafts` and bumps
@@ -214,7 +224,7 @@ the point is for me to understand how it works, not just to have it done.
   (cached per theme in a WeakMap); colours in JSX come from `useTheme().colors`; never a module-level colour.
   App.js holds the appearance (useMemo -> Provider; `Frame` draws the safe area and a dark/light StatusBar);
   `appearance.json` in Paths.document is the first-paint copy (read with textSync); connection.js's `appearance`
-  comes from "welcome" and "appearance". Fonts and Scale aren't in the app (Windows fonts; the Windows app's zoom).
+  comes from "welcome" and "appearance". Scale isn't in the app (the Windows app's zoom); fonts are, as near as Android has them (see "The rest of parity").
   Settings (since 2026-10-15): `src/SettingsScreen.js` (full screen, the phone layout's tab row and ×; remembers the
   last tab), `src/AccountSettings.js` (username, email with its pending link, password; /me), `src/ProfileSettings.js`
   (expo-image-picker's own crop, then **expo-image-manipulator** to 256x256 / 960x320 WebP, `uploadPicture` in
@@ -323,7 +333,7 @@ the point is for me to understand how it works, not just to have it done.
   app:assembleRelease, apksigner must say CN=ChatApp, `releases/ChatApp-android-<v>.apk` + `releases/android.json`
   {version, versionCode, apk, commit}, scp, removes old APKs; hyphens keep them out of release-upload.ps1's
   `ChatApp_*` clean-up). The app: `src/appUpdate.js` + `src/UpdateScreen.js` (release builds: android.json newer
-  than Updates.runtimeVersion -> "A new version" popup, download into cache/apk with a bar, ACTION_VIEW to Android's
+  than Updates.runtimeVersion (at start, every connect and after calls) -> "A new version" popup, download into cache/apk with a bar, ACTION_VIEW to Android's
   installer; REQUEST_INSTALL_PACKAGES in app.json). `/download/android` redirects to the newest APK (served as
   application/vnd.android.package-archive); download.html shows the Android section on Android (#android/#windows);
   login and landing pages say "Get the Android app" on Android (`data-android`), nothing on iPhones.

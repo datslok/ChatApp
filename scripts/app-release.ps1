@@ -11,9 +11,11 @@
 # 2. Builds the release APK, signed with the release key (mobile\plugins\release-signing.js; the key and
 #    its password are in your user folder, never in git), and checks who signed it.
 # 3. Puts it in releases\ as ChatApp-android-<version>.apk, with releases\android.json naming it (and
-#    the commit it was built from, so app-update.ps1 knows what native code the phones have).
+#    the commit it was built from, so app-update.ps1 knows what native code the phones have; and the
+#    package and the key's fingerprint, from which the server makes /.well-known/assetlinks.json, the
+#    file that lets the app open the chat's links).
 # 4. Copies both to the server (the APK first, android.json last, like release-upload.ps1) and removes
-#    older APKs there and here. Phones offer the update at their next start; /download/android gives it.
+#    older APKs there and here. Phones offer the update when they next connect; /download/android gives it.
 
 param([switch]$NoUpload)
 
@@ -80,9 +82,14 @@ $built = "mobile\android\app\build\outputs\apk\release\app-release.apk"
 
 # Who signed it: must be our key (CN=ChatApp), not Android's debug key.
 $buildTools = Get-ChildItem "$env:ANDROID_HOME\build-tools" -Directory | Sort-Object Name | Select-Object -Last 1
-$signer = & "$($buildTools.FullName)\apksigner.bat" verify --print-certs $built | Select-String "Signer #1 certificate DN"
+$certificates = & "$($buildTools.FullName)\apksigner.bat" verify --print-certs $built
+$signer = $certificates | Select-String "Signer #1 certificate DN"
 if ($signer -notmatch "CN=ChatApp") { git checkout mobile/app.json; Write-Host "Not signed with the release key: $signer"; exit 1 }
 Write-Host "Signed: $signer"
+# The key's SHA-256 fingerprint as App Links want it, "AB:CD:..." (apksigner prints "abcd..."), and the package.
+$digest = ($certificates | Select-String "Signer #1 certificate SHA-256 digest: ([0-9a-f]{64})").Matches[0].Groups[1].Value
+$fingerprint = (($digest.ToUpper() -split '(..)') -ne '') -join ':'
+$package = (Get-Content mobile\app.json -Raw | ConvertFrom-Json).expo.android.package
 
 # 3. Commit the version, then releases\: the APK and android.json.
 git add mobile/app.json
@@ -91,7 +98,10 @@ git push -q
 $apk = "ChatApp-android-$version.apk"
 New-Item -ItemType Directory releases -Force | Out-Null
 Copy-Item $built "releases\$apk"
-@{ version = $version; versionCode = [int]$versionCode; apk = $apk; commit = (git rev-parse HEAD) } |
+@{
+    version = $version; versionCode = [int]$versionCode; apk = $apk; commit = (git rev-parse HEAD)
+    package = $package; fingerprint = $fingerprint
+} |
     ConvertTo-Json | Set-Content releases\android.json -Encoding ascii
 Get-ChildItem releases -File -Filter "ChatApp-android-*.apk" | Where-Object Name -ne $apk | Remove-Item
 $size = [math]::Round((Get-Item "releases\$apk").Length / 1MB, 1)
@@ -104,4 +114,4 @@ if ($LASTEXITCODE -ne 0) { Write-Host "Copying the APK failed (see above)."; exi
 scp releases\android.json "chatserver:$ServerFolder/releases/"
 if ($LASTEXITCODE -ne 0) { Write-Host "Copying android.json failed (see above)."; exit 1 }
 ssh chatserver "Get-ChildItem $ServerFolder/releases -File -Filter 'ChatApp-android-*.apk' | Where-Object { `$_.Name -ne '$apk' } | Remove-Item -Verbose"
-Write-Host "Done: phones offer version $version at their next start, and /download/android gives it." -ForegroundColor Green
+Write-Host "Done: phones offer version $version when they next connect, and /download/android gives it." -ForegroundColor Green

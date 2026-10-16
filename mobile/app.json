@@ -24,6 +24,23 @@
         "android.permission.REQUEST_INSTALL_PACKAGES"
       ],
       "googleServicesFile": "./google-services.json",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "chat.datslok.no",
+              "path": "/"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#0086D7",
         "foregroundImage": "./assets/android-icon-foreground.png",

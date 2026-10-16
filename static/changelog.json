@@ -76,6 +76,8 @@
       "items": [
         "Android: get the ChatApp app at chat.datslok.no/download (on your phone, the chat offers it in a popup too). Notifications for DMs, mentions and friend requests, calls that ring with the phone locked (Accept and Decline right there; Accept asks you to unlock first) and keep going in your pocket. It updates itself. Its Settings → Notifications: notifications on or off, the sound while it's open, and mute for a while",
         "On a bad connection the Android app reconnects by itself, and your messages wait until they're through: faded with \"Sending…\", or red with Retry and Delete if they can't get there",
+        "In the Android app, a DM or mention in another chat shows a banner at the top: tap it to go there, swipe it up to put it away (turn it off in Settings → Notifications). The app's icon shows how many messages are waiting in its notifications (on Samsung phones, if the icon badges are set to show numbers)",
+        "Links to the chat open in the Android app",
         "iPhone: install the chat as an app: in Safari, Share, Add to Home Screen. Its own icon and window, no address bar"
       ]
     },
@@ -119,6 +121,7 @@
       "date": "2026-10-16",
       "items": [
         "📞 Calls in the Android app (a new version: install it when the app offers it): the signal bars in the voice bar show the connection, with a tap for the details; Settings → Voice & audio has the sensitivity line, like on PC, and the meter works in calls too; the ringtone follows your ring volume; it says why the microphone or camera didn't start; hold a call tile for the user menu; drag the bottom of a call banner to resize it; and pick the size when sharing your screen",
+        "📱 The Android app's last missing pieces (a new version: install it when the app offers it): a banner at the top for DMs and mentions in other chats, an unread count on the app's icon, links to the chat open in the app, the fonts from Settings → Appearance (Georgia, Consolas and Comic Sans, as near as Android has them), \"N members\" under groups, and logging in before your email is confirmed shows \"Check your inbox\" instead of nothing",
         "↩️ The chat, the Windows app and the Android app open where you left off: the chat you had open when you closed them (each device remembers its own)",
         "📶 The Android app copes better with a bad connection: it notices a dropped connection within seconds and reconnects by itself, and a message never gets lost. It shows faded with \"Sending…\" until it's through, and if it really can't get there it turns red with Retry and Delete",
         "📱 Tapping a notification when the Android app was closed opens that chat again, not #general",

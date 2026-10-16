@@ -4,7 +4,9 @@
 import { File, Paths } from 'expo-file-system';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, BackHandler, KeyboardAvoidingView, Pressable, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator, BackHandler, KeyboardAvoidingView, Linking, Pressable, StyleSheet, Text, View,
+} from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { ChatButtons, ChatTitle } from './src/ChatHeader';
 import BanDialog from './src/BanDialog';
@@ -20,6 +22,7 @@ import InviteScreen from './src/InviteScreen';
 import LoginScreen from './src/LoginScreen';
 import LoungeScreen from './src/LoungeScreen';
 import MeScreen from './src/MeScreen';
+import MessageBanner from './src/MessageBanner';
 import Members from './src/Members';
 import PeopleScreen from './src/PeopleScreen';
 import ProfileScreen from './src/ProfileScreen';
@@ -37,6 +40,7 @@ import { LOUNGE, LOUNGE_ROOM, useVoice } from './src/voice';
 import { clearOldCopies } from './src/files';
 import { isMuted, useNotifications } from './src/notifications';
 import { restored, useLiveUpdates } from './src/liveUpdates';
+import { checkForApk, setApkCheckPaused } from './src/appUpdate';
 import { addShareListener, getInitialShare } from './modules/shared-files';
 import { addOpenListener, getInitialOpen } from './modules/push';
 
@@ -58,6 +62,24 @@ function rememberChat(key) {
     if (!lastChatFile.exists) lastChatFile.create();
     lastChatFile.write(key);
   } catch {}  // (just not kept: the next start opens the first channel)
+}
+
+// A link to the chat that opened the app (Android App Links: app.json's intentFilters, and the server's
+// /.well-known/assetlinks.json): "https://chat.example.com/?channel=memes&message=57", the same links
+// the web page opens (core.js). As a tapped notification's {channel, messageId, action}, or null (no
+// chat in it: then the app just opens). Read by hand: React Native's URLSearchParams can't .get().
+function linkTarget(url) {
+  const query = url?.match(/^https:[/][/][^/?#]+[/]?[?]([^#]*)/)?.[1];
+  if (!query) return null;
+  const params = {};
+  for (const pair of query.split('&')) {
+    const [name, value = ''] = pair.split('=');
+    try {
+      params[name] = decodeURIComponent(value.replace(/[+]/g, ' '));
+    } catch {}  // (a broken %-code: that one's left out)
+  }
+  if (!params.channel) return null;
+  return { channel: params.channel, messageId: Number(params.message) || null, action: 'open' };
 }
 
 // share: something shared to the app from another one, waiting for "Share to…" (or null);
@@ -212,16 +234,21 @@ function Main({ connection, voice, notifications, openChatRef, share, onShareDon
     if (!opened || view === null) return;
     onOpenedDone();
     const { channel, messageId, action } = opened;
-    if (action === 'accept') {
-      voice.acceptFromNotification(channel);
-    } else if (channel === 'friends') {
+    if (action === 'accept') voice.acceptFromNotification(channel);
+    else goToNotice(channel, messageId);
+  }, [opened, view === null]);
+
+  // Going where a notification (or the banner, or a link) points: a friend request's to People →
+  // Requests, a message's to its chat and the message itself (the web page's openMessage).
+  function goToNotice(channel, messageId) {
+    if (channel === 'friends') {
       setPeopleTab({ tab: 'requests', at: Date.now() });
       go(PEOPLE);
     } else if (channel) {
       go(channel);
       if (messageId) setJumpRequest({ chat: channel, id: messageId });
     }
-  }, [opened, view === null]);
+  }
 
   // Something shared to the app while it was open, in a chat: straight into that chat (the chat screen
   // takes the files into its tray and the text into the text box).
@@ -307,6 +334,11 @@ function Main({ connection, voice, notifications, openChatRef, share, onShareDon
         />
         {/* The screen share's quality menu, from any share button (voice.toggleShare). */}
         <ShareMenu voice={voice} />
+        {/* A DM, mention or friend request elsewhere (notifications.js): a banner over the top. */}
+        <MessageBanner
+          banner={notifications.banner} connection={connection} onClose={notifications.closeBanner}
+          onOpen={(banner) => (banner.request ? goToNotice('friends') : goToNotice(banner.channel, banner.id))}
+        />
       </View>
 
       <Drawer side="left" open={drawer === 'left'} onClose={() => setDrawer(null)}>
@@ -413,6 +445,21 @@ function Screen({ share, onShareDone, opened, onOpenedDone }) {
   useEffect(() => {
     if (connection.appearance) setAppearance(connection.appearance);
   }, [connection.appearance]);
+  // A newer APK? Asked again at every connect (a new release restarts the server, so we reconnect) and
+  // when a call ends; never offered in the middle of a call or while it rings (appUpdate.js).
+  const inCall = !!(voice.roomName || voice.incoming || voice.outgoing);
+  useEffect(() => {
+    setApkCheckPaused(inCall);
+  }, [inCall]);
+  useEffect(() => {
+    if (me) checkForApk();
+  }, [me]);
+  const wasInCall = useRef(false);
+  useEffect(() => {
+    if (wasInCall.current && !voice.roomName) checkForApk();
+    wasInCall.current = !!voice.roomName;
+  }, [voice.roomName]);
+
   if (status === 'logged-out') return <LoginScreen onLoggedIn={connection.reconnect} />;
   // Not connected yet (we don't know who we are until "welcome").
   if (me === null) return <Loading text={status === 'offline' ? "Can't reach the server, trying again…" : null} />;
@@ -484,6 +531,19 @@ export default function App() {
       stopped = true;
       subscription.remove();
     };
+  }, []);
+  // A link to the chat (linkTarget): the one that started the app, and those tapped while it's open.
+  // They go the same way as a tapped notification.
+  useEffect(() => {
+    Linking.getInitialURL().then((url) => {
+      const target = linkTarget(url);
+      if (target) setOpened(target);
+    }).catch(() => {});
+    const subscription = Linking.addEventListener('url', ({ url }) => {
+      const target = linkTarget(url);
+      if (target) setOpened(target);
+    });
+    return () => subscription.remove();
   }, []);
   // Android draws apps "edge to edge", under the status bar and the navigation bar.
   // SafeAreaView adds padding the size of those bars, so nothing ends up behind them.
