@@ -2,7 +2,7 @@
   "expo": {
     "name": "ChatApp",
     "slug": "chatapp",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "runtimeVersion": {
       "policy": "appVersion"
     },
@@ -19,7 +19,7 @@
     },
     "android": {
       "package": "no.datslok.chat",
-      "versionCode": 2,
+      "versionCode": 3,
       "permissions": [
         "android.permission.REQUEST_INSTALL_PACKAGES"
       ],
