@@ -16,6 +16,9 @@ class PushService : FirebaseMessagingService() {
       "message", "friend" -> Notifications.showMessage(this, data)
       "call" -> Notifications.showCall(this, data)
       "call_end" -> data["channel"]?.let { Notifications.cancelCall(this, it) }
+      // The chat was seen on another device (or the People page, "friends"): its notification goes,
+      // and with it its number on the app's icon.
+      "read" -> data["channel"]?.let { Notifications.cancelChat(this, it) }
     }
   }
 

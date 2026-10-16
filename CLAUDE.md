@@ -296,7 +296,10 @@ the point is for me to understand how it works, not just to have it done.
   token in push_subscriptions as `fcm:<token>` (an upsert that keeps the mute), `send_push` sends data messages through
   `send_fcm` (FCM HTTP v1; the access token from an RS256 JWT we sign with `cryptography`, cached an hour; 404 deletes),
   `always=True` (phones only, ignoring looking/mute) for `stop_ringing`'s `call_end` (answer_call, ring_timeout, end_call),
-  `/calls/decline`, "welcome" has `phone_push`. App: our module `mobile/modules/push` (Kotlin; firebase-messaging 25.1.3,
+  `/calls/decline`, "welcome" has `phone_push`. "read" (since 2026-10-16; FCM priority NORMAL): `on_phones` (memory) holds
+  (user, chat) for every message/friend push a phone got; `clear_on_phones` sends "read" once that chat is seen elsewhere
+  (join while looking, "looking" true on it; "friends" = channel None or accept/decline), PushService cancels it (the
+  icon's number is the sum of the notifications showing); the app clears "friends" itself on the People page (App.js). App: our module `mobile/modules/push` (Kotlin; firebase-messaging 25.1.3,
   whose getToken/onNewToken are deprecated since 25.1 for installation IDs but still work): `PushService` (Firebase's
   MESSAGING_EVENT), `Notifications.kt` (channels "messages" with the ping and "incoming_calls" with the looping ring
   (FLAG_INSISTENT); MessagingStyle stacked per chat (tag = chat key) with avatars fetched with CookieManager's cookie;

@@ -2622,8 +2622,9 @@ def send_fcm(token, payload, ttl):
         "token": token,
         "data": {key: str(value) for key, value in payload.items() if value is not None},
         # HIGH: deliver at once, even to a sleeping phone (Google allows it for pushes that show a
-        # notification, which ours do). ttl: how long FCM keeps trying a phone that's off.
-        "android": {"priority": "HIGH", "ttl": f"{ttl}s"},
+        # notification). "read" shows nothing (it takes one away), so it's NORMAL: Google may hold it
+        # until the phone wakes, which is soon enough. ttl: how long FCM keeps trying a phone that's off.
+        "android": {"priority": "NORMAL" if payload.get("kind") == "read" else "HIGH", "ttl": f"{ttl}s"},
     }
     request = urllib.request.Request(
         f"https://fcm.googleapis.com/v1/projects/{firebase_account['project_id']}/messages:send",
@@ -2704,17 +2705,19 @@ async def send_push(user_ids, payload, ttl=24 * 60 * 60, urgency="normal", alway
         return
     marks = ",".join("?" * len(user_ids))  # "?,?,?": one placeholder per person
     rows = db.execute(
-        f"SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE user_id IN ({marks})"
+        f"SELECT endpoint, p256dh, auth, user_id FROM push_subscriptions WHERE user_id IN ({marks})"
         + ("" if always else " AND (muted_until IS NULL OR muted_until < ?)"),
         (*user_ids,) if always else (*user_ids, time.time()),
     ).fetchall()
     data = json.dumps(payload)
-    for endpoint, p256dh, auth in rows:
+    for endpoint, p256dh, auth, user_id in rows:
         if endpoint.startswith("fcm:"):  # the phone app
             if firebase_account is None:
                 continue
             try:
                 await asyncio.to_thread(send_fcm, endpoint.removeprefix("fcm:"), payload, ttl)
+                if payload.get("kind") in ("message", "friend"):
+                    on_phones.add((user_id, payload["channel"]))
             except FcmTokenGone:
                 with db:
                     db.execute("DELETE FROM push_subscriptions WHERE endpoint = ?", (endpoint,))
@@ -2752,6 +2755,21 @@ def push_in_background(user_ids, payload, **options):
     task = asyncio.create_task(send_push(user_ids, payload, **options))
     background_tasks.add(task)
     task.add_done_callback(background_tasks.discard)
+
+
+# A phone's notification stays until it's tapped or swiped, or the chat is opened in the app; and the
+# number on the app's icon is the sum of the notifications showing. So when a chat is seen anywhere else
+# (the PC, the web page), its phones get a "read" push that takes the notification away. on_phones:
+# (user id, chat key) for every chat a phone was notified about since, so only those get one. In memory
+# only: after a restart, notifications from before it go the old way.
+on_phones = set()
+
+
+def clear_on_phones(user_id, channel):
+    """This person has seen this chat (or the People page, "friends"): its notification leaves their phones."""
+    if (user_id, channel) in on_phones:
+        on_phones.discard((user_id, channel))
+        push_in_background([user_id], {"kind": "read", "channel": channel}, always=True)
 
 
 def push_message(people, message):
@@ -3191,6 +3209,7 @@ async def friend_accept(data: FriendAction, request: Request):
         )
     if cursor.rowcount != 1:
         raise HTTPException(400, "There's no friend request from them.")
+    clear_on_phones(me, "friends")
     await send_friends_update(me, other)
     return {"ok": True}
 
@@ -3204,6 +3223,7 @@ async def friend_remove(data: FriendAction, request: Request):
         raise HTTPException(400, "Bots stay everyone's friend.")
     with db:
         db.execute("DELETE FROM friendships WHERE user_a = ? AND user_b = ?", pair(me, other))
+    clear_on_phones(me, "friends")  # (a declined request; harmless for the other two)
     await send_friends_update(me, other)
     return {"ok": True}
 
@@ -5358,6 +5378,8 @@ async def chat(websocket: WebSocket):
                 if new_channel is None:
                     # Looking at no channel (the Friends page): new messages anywhere count as unread.
                     clients[websocket]["channel"] = None
+                    if clients[websocket]["looking"]:
+                        clear_on_phones(user_id, "friends")  # (the friend requests are on that page)
                     continue
                 if not can_join(new_channel, user_id):
                     continue
@@ -5371,6 +5393,10 @@ async def chat(websocket: WebSocket):
                     "SELECT message_id FROM last_read WHERE user_id = ? AND channel = ?", (user_id, new_channel)
                 ).fetchone()
                 mark_read(user_id, new_channel)  # opening a channel means you've seen it
+                # Seen, if the page is in sight (a page in the background also rejoins after a dropped
+                # connection: then it's when they look at it, "looking" below).
+                if clients[websocket]["looking"]:
+                    clear_on_phones(user_id, new_channel)
                 # "more": a full batch, so there may be older messages to load by scrolling up.
                 more = len(history) == HISTORY_LIMIT
                 await send(websocket, {
@@ -5633,6 +5659,8 @@ async def chat(websocket: WebSocket):
                     clients[websocket]["away_since"] = min(left_at, clients[websocket]["away_since"] or left_at)
                 if looking_changed or phone_changed:
                     await announce_presences()  # back from idle, a phone locked (idle), now known to be a phone
+                if looking:  # back at the page: the chat on it has been seen (or the People page)
+                    clear_on_phones(user_id, clients[websocket]["channel"] or "friends")
 
             elif kind == "activity":
                 # {"type": "activity", "activity": {"kind": "playing", "name": "Hollow Knight"} or null}:

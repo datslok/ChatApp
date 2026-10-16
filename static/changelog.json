@@ -121,6 +121,7 @@
     {
       "date": "2026-10-16",
       "items": [
+        "🔔 The Android app's notifications (and the number on its icon) go away when you read the chat on your PC or anywhere else, and a friend request's when you open the People page (a new version: install it when the app offers it)",
         "📞 Calls in the Android app (a new version: install it when the app offers it): the signal bars in the voice bar show the connection, with a tap for the details; Settings → Voice & audio has the sensitivity line, like on PC, and the meter works in calls too; the ringtone follows your ring volume; it says why the microphone or camera didn't start; hold a call tile for the user menu; drag the bottom of a call banner to resize it; and pick the size when sharing your screen",
         "📌 Direct messages are sorted by the latest message, newest at the top, and you can pin your favourites above the rest: right-click someone (hold on a phone) → Pin DM, or Pin at the top of a group",
         "📱 Someone on the Android app shows as idle as soon as they lock their phone or leave the app, and offline 10 minutes later (before, they went offline at once). On a PC nothing changes",

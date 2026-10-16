@@ -5,7 +5,7 @@ import { File, Paths } from 'expo-file-system';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator, BackHandler, KeyboardAvoidingView, Linking, Pressable, StyleSheet, Text, View,
+  ActivityIndicator, AppState, BackHandler, KeyboardAvoidingView, Linking, Pressable, StyleSheet, Text, View,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { ChatButtons, ChatTitle } from './src/ChatHeader';
@@ -43,7 +43,7 @@ import { isMuted, useNotifications } from './src/notifications';
 import { restored, useLiveUpdates } from './src/liveUpdates';
 import { checkForApk, setApkCheckPaused } from './src/appUpdate';
 import { addShareListener, getInitialShare } from './modules/shared-files';
-import { addOpenListener, getInitialOpen } from './modules/push';
+import { addOpenListener, clearChatNotification, getInitialOpen } from './modules/push';
 
 const PEOPLE = 'people';  // the People page's name among the chats' keys (like the web page's FRIENDS)
 
@@ -174,6 +174,17 @@ function Main({ connection, voice, notifications, openChatRef, share, onShareDon
     const before = restored?.view;
     go((before && before !== LOUNGE ? before : lastChat()) ?? first, false);
   }, [channels, connection.lounge]);
+
+  // The People page has the friend requests: their notification ("friends") goes when it's on screen
+  // (opened, or the app come back to with it open), like a chat's (notifications.js).
+  useEffect(() => {
+    const clear = () => {
+      if (view === PEOPLE && AppState.currentState === 'active') clearChatNotification('friends');
+    };
+    clear();
+    const subscription = AppState.addEventListener('change', clear);
+    return () => subscription.remove();
+  }, [view]);
 
   // New JavaScript from the server while we're open (liveUpdates.js): only switched to when nothing would
   // be lost or cut off. Not in or ringing for a call, no files waiting in any chat's tray (or on their way
