@@ -77,6 +77,7 @@
     - [x] Muting a channel or DM (and groups; admins can't be muted: their messages always get through)
     - [x] Blocking someone (admins can't be blocked, nor bots)
     - [x] Roles with colours (coloured names and headings in the member list; Settings → Roles)
+    - [x] Private channels for chosen roles, and limited roles that see only those (plus DMs and groups; no Lounge)
     - [x] A user menu on right-click (profile, mention, message, call, friends, mute, block), like Discord's
 - [ ] **18.** Smaller polish
     - [x] Clicking a reply's quote jumps to the original message (was already there)

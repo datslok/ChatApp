@@ -10,6 +10,7 @@ import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-nativ
 import { ColourDialog } from './AppearanceSettings';
 import BanDialog, { mayBan } from './BanDialog';
 import Icon from './Icon';
+import { Checkbox } from './GroupScreen';
 import { InviteRow } from './InviteScreen';
 import PersonPicker from './PersonPicker';
 import { Button, Form, Heading, Help, Status, Title } from './SettingsParts';
@@ -108,6 +109,18 @@ async function adminRequest(path, data, setStatus) {
   const result = await postJson(path, data);
   setStatus(result.ok ? null : { text: result.error, error: true });
   return result.ok;
+}
+
+// A checkbox and its words, all of it tappable (the web page's makeCheckbox), with a role's dot if given.
+function CheckLine({ checked, label, onPress, dot }) {
+  const styles = useStyles(makeStyles);
+  return (
+    <Pressable onPress={onPress} style={({ pressed }) => [styles.checkLine, pressed && styles.pressed]}>
+      <Checkbox checked={checked} />
+      {dot ? <View style={[styles.roleDot, { backgroundColor: dot }]} /> : null}
+      <Text style={styles.checkText}>{label}</Text>
+    </Pressable>
+  );
 }
 
 // ---------- Inbox ----------
@@ -214,14 +227,14 @@ function Report({ report, connection, onDone }) {
 // ---------- Channels ----------
 
 // One channel or heading: "#" (or an arrow), its name in a box (Save shows once it's changed; the
-// keyboard's Enter saves too), ↑ ↓ and 🗑.
-function ChannelRow({ item, index, count, onRename, onMove, onDelete }) {
+// keyboard's Enter saves too), ↑ ↓ and 🗑. A channel also gets who can see it under its row.
+function ChannelRow({ item, index, count, roles, onRename, onMove, onDelete, onAccess }) {
   const styles = useStyles(makeStyles);
   const { colors } = useTheme();
   const [name, setName] = useState(item.name);
   useEffect(() => setName(item.name), [item.name]);  // renamed (here or elsewhere): the box follows
   const changed = name.trim() !== item.name;
-  return (
+  const row = (
     <View style={[styles.adminRow, item.heading && styles.headingRow]}>
       <View style={styles.mark}>
         {item.heading ? <Icon name="chevron-down" size={16} color={colors.textMuted} /> : <Text style={styles.markText}>#</Text>}
@@ -237,12 +250,37 @@ function ChannelRow({ item, index, count, onRename, onMove, onDelete }) {
       <IconButton icon="trash-2" label="Delete" onPress={onDelete} />
     </View>
   );
+  if (item.heading) return row;
+  return (
+    <View>
+      {row}
+      <ChannelAccess item={item} roles={roles} onAccess={onAccess} />
+    </View>
+  );
+}
+
+// Who can see a channel (the web page's makeChannelAccess): "Private" ticked = only the ticked roles
+// (and admins, who see everything), else everyone (but people with a limited role). Sent at once.
+function ChannelAccess({ item, roles, onAccess }) {
+  const styles = useStyles(makeStyles);
+  const toggle = (id) => onAccess(true, item.roles.includes(id) ? item.roles.filter((other) => other !== id) : [...item.roles, id]);
+  const help = roles.length === 0 ? 'Only admins see it. Make a role under Roles to let others in.'
+    : item.roles.length === 0 ? 'No role ticked: only admins see it.' : null;
+  return (
+    <View style={styles.access}>
+      <CheckLine checked={item.private} label="Private" onPress={() => onAccess(!item.private, item.roles)} />
+      {item.private ? roles.map((role) => (
+        <CheckLine key={role.id} checked={item.roles.includes(role.id)} label={role.name} dot={role.colour} onPress={() => toggle(role.id)} />
+      )) : null}
+      {item.private && help ? <Help>{help}</Help> : null}
+    </View>
+  );
 }
 
 function Channels({ connection }) {
   const styles = useStyles(makeStyles);
   const { colors } = useTheme();
-  const { channels } = connection;
+  const { channels, roles } = connection;
   const [newName, setNewName] = useState('');
   const [status, setStatus] = useState(null);
 
@@ -272,12 +310,18 @@ function Channels({ connection }) {
 
   return (
     <View>
-      <SectionHelp>The sidebar, top to bottom. A heading groups the channels under it. Everyone sees changes straight away.</SectionHelp>
+      <SectionHelp>
+        The sidebar, top to bottom. A heading groups the channels under it. Everyone sees changes straight away. A private
+        channel is only for the roles ticked under it (admins see every channel).
+      </SectionHelp>
       <View style={styles.channelList}>
         {channels.map((item, index) => (
           <ChannelRow
-            key={item.key} item={item} index={index} count={channels.length} onMove={move} onDelete={() => remove(item)}
+            key={item.key} item={item} index={index} count={channels.length} roles={roles} onMove={move}
+            onDelete={() => remove(item)}
             onRename={(name) => adminRequest(`/channels/${encodeURIComponent(item.key)}/rename`, { name }, setStatus)}
+            onAccess={(isPrivate, ids) => adminRequest(`/channels/${encodeURIComponent(item.key)}/access`,
+              { private: isPrivate, roles: ids }, setStatus)}
           />
         ))}
       </View>
@@ -300,8 +344,8 @@ function Channels({ connection }) {
 // ---------- Roles ----------
 
 // One role: its colour (tap to pick), its name (Save once changed), ↑ ↓ 🗑, and under it its people,
-// each with × to take it away, and "+ Add someone" to give it to someone else.
-function RoleRow({ role, index, count, connection, onEdit, onMove, onDelete, onMember, onPickColour }) {
+// each with × to take it away, and "+ Add someone" to give it to someone else. Then Limited.
+function RoleRow({ role, index, count, connection, onEdit, onMove, onDelete, onMember, onPickColour, onLimited }) {
   const styles = useStyles(makeStyles);
   const { colors } = useTheme();
   const [name, setName] = useState(role.name);
@@ -338,6 +382,10 @@ function RoleRow({ role, index, count, connection, onEdit, onMove, onDelete, onM
         candidates={everyone.filter((user) => !(user.roles ?? []).includes(role.id))}
         onPick={(user) => onMember(user, true)}
       />
+      <CheckLine
+        checked={role.limited} onPress={() => onLimited(!role.limited)}
+        label="Limited: sees only the private channels it's ticked in, no other channels and no Lounge"
+      />
     </View>
   );
 }
@@ -370,7 +418,8 @@ function Roles({ connection }) {
     <View>
       <SectionHelp>
         A role colours its people's names and gives them a section in the member list. Someone with several roles gets
-        the one highest in this list. Everyone sees changes straight away.
+        the one highest in this list. Everyone sees changes straight away. A limited role's people only see their DMs,
+        groups and the private channels it's ticked in (Channels).
       </SectionHelp>
       <View style={styles.roleList}>
         {roles.map((role, index) => (
@@ -380,6 +429,7 @@ function Roles({ connection }) {
             onDelete={() => confirm('Delete this role?', `"${role.name}": everyone who has it loses it.`, 'Delete',
               () => adminRequest(`/roles/${role.id}/delete`, {}, setStatus))}
             onMember={(user, member) => adminRequest(`/roles/${role.id}/members`, { user_id: user.id, member }, setStatus)}
+            onLimited={(limited) => adminRequest(`/roles/${role.id}/limited`, { limited }, setStatus)}
           />
         ))}
       </View>
@@ -617,6 +667,11 @@ const makeStyles = (colors, size) => StyleSheet.create({
   // Roles: each role, its people as chips (.role-member: padding 2px 4px 2px 6px, radius 6px, 0.85rem).
   roleList: { gap: 16, marginTop: 12 },
   role: { gap: 8 },
+  // .channel-access: under a channel's row, lined up with its name; label.checkbox at 0.85rem.
+  access: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 14, rowGap: 4, marginLeft: 26, marginVertical: 4 },
+  checkLine: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 4 },
+  checkText: { flexShrink: 1, fontSize: size(13.6), color: colors.text },
+  roleDot: { width: 10, height: 10, borderRadius: 5 },
   colourBox: { width: 36, height: 30, borderRadius: 4, borderWidth: 1, borderColor: colors.line },
   members: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   member: {

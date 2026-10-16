@@ -5,20 +5,22 @@
 // user menu.
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useStyles, useTheme } from './theme';
-import { dmPartner } from './chats';
+import { dmPartner, seesChannel } from './chats';
 import { Person, topRole } from './people';
 
 export default function Members({ connection, view, onProfile, onUserMenu }) {
   const styles = useStyles(makeStyles);
   const { colors } = useTheme();
-  const { users, roles, groups, me, myPresence } = connection;
+  const { users, roles, groups, channels, me, myPresence } = connection;
   const everyone = Object.values(users).sort((a, b) => a.name.localeCompare(b.name));
 
   const partner = dmPartner(view, me.id);
   const group = groups.find((g) => g.key === view);
+  const channel = channels.find((item) => item.key === view && !item.heading);
   let members = everyone;
   if (partner !== null) members = everyone.filter((user) => user.id === me.id || user.id === partner);
   else if (group) members = everyone.filter((user) => group.members.includes(user.id));
+  else if (channel) members = everyone.filter((user) => seesChannel(user, channel, roles));
 
   const bots = members.filter((user) => user.bot);
   const humans = members.filter((user) => !user.bot);

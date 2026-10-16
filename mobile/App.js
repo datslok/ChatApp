@@ -121,12 +121,13 @@ function Main({ connection, voice, notifications, openChatRef, share, onShareDon
 
   // At the start: the first channel (the web page opens one too), or after a switch to new JavaScript,
   // the chat that was open (not the Lounge, which would mean being in a call: then there's no switch).
+  // (No channel at all, which can happen to someone with a limited role: the People page.)
   useEffect(() => {
-    const first = channels.find((channel) => !channel.heading);
-    if (view !== null || !first) return;
+    if (view !== null || connection.lounge === null) return;  // (null: no channel list yet)
+    const first = channels.find((channel) => !channel.heading)?.key ?? PEOPLE;
     const before = restored?.view;
-    go(before && before !== LOUNGE ? before : first.key, false);
-  }, [channels]);
+    go(before && before !== LOUNGE ? before : first, false);
+  }, [channels, connection.lounge]);
 
   // New JavaScript from the server while we're open (liveUpdates.js): only switched to when nothing would
   // be lost or cut off. Not in or ringing for a call, no files waiting in any chat's tray (or on their way
@@ -139,20 +140,22 @@ function Main({ connection, voice, notifications, openChatRef, share, onShareDon
   });
 
   // Looking at a DM with someone who's no longer a friend (removed, blocked), a group we're no
-  // longer in, or a channel an admin deleted? Then it's gone: off to the first channel, like the web page.
+  // longer in, or a channel an admin deleted (or made private, or the Lounge for someone with a limited
+  // role)? Then it's gone: off to the first channel (or People), like the web page.
   useEffect(() => {
-    const first = channels.find((channel) => !channel.heading);
-    if (!first) return;  // (no channel list yet: nothing can be judged gone)
+    if (connection.lounge === null) return;  // (no channel list yet: nothing can be judged gone)
+    const first = channels.find((channel) => !channel.heading)?.key ?? PEOPLE;
     const partner = dmPartner(view, connection.me.id);
     const goneDm = partner !== null && !connection.friends.includes(partner);
     const goneGroup = view?.startsWith('g:') && !connection.groups.some((group) => group.key === view);
     const isChannel = view !== null && partner === null && !view.startsWith('g:') && view !== PEOPLE && view !== LOUNGE;
     const goneChannel = isChannel && !channels.some((channel) => channel.key === view && !channel.heading);
-    if (goneDm || goneGroup || goneChannel) {
+    const goneLounge = view === LOUNGE && !connection.lounge;
+    if (goneDm || goneGroup || goneChannel || goneLounge) {
       history.current = history.current.filter((key) => key !== view);
-      go(first.key, false);
+      go(first, false);
     }
-  }, [connection.friends, connection.groups, channels]);
+  }, [connection.friends, connection.groups, channels, connection.lounge]);
 
   // Android's back button, the web page's way: close an open drawer, else back to the chat before.
   // With nowhere left to go, returning false lets Android do its own thing (leave the app).

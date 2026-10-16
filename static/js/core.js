@@ -114,6 +114,9 @@ let firstChannel = null;    // where to start: the first channel in the list
 // [{key: "general", name: "general", heading: false}, {key: "h:9c1e...", name: "Games", heading: true}, ...]
 // A channel's key never changes (messages point to it); its name is what we show.
 let channels = [];
+let loungeAllowed = true;  // false for someone with a limited role: no Lounge (channelsChanged)
+const voiceHeading = document.getElementById("voice-heading");
+const voiceList = document.getElementById("voice-list");
 // The People page (called Friends before it got its Everyone tab, hence the name) counts as a
 // "channel" of its own here: it's highlighted in the sidebar and is a step for the back button like
 // any channel. (The server never hears this name.)
@@ -168,8 +171,8 @@ function restoreDraft() {
 // Ask the server which channels exist, show them in the sidebar, then connect.
 async function start() {
   restoreDraft();
-  const response = await fetch("/channels");
-  showChannels(await response.json());
+  const response = await fetch("/channels");  // (only the ones we may see)
+  showChannels(response.ok ? await response.json() : []);  // (not logged in: the WebSocket sends us to the login page)
   connect();
   ensureEmojiData();  // in the background (no await): the autocomplete needs the emoji names
 }
@@ -188,7 +191,8 @@ function channelName(key) {
 // message, to every page). A heading is a small title over the channels below it.
 function showChannels(list) {
   channels = list;
-  firstChannel = channels.find((item) => !item.heading)?.key ?? null;
+  // (No channel at all, which can happen to someone with a limited role: the People page.)
+  firstChannel = channels.find((item) => !item.heading)?.key ?? FRIENDS;
   channelList.replaceChildren();  // the old buttons and headings out
   for (const item of channels) {
     if (item.heading) {
@@ -208,15 +212,20 @@ function showChannels(list) {
   updateSidebar();  // new buttons: mark where we are and what's unread again
 }
 
-// The server's "channels": an admin changed them (or we just connected).
-function channelsChanged(list) {
+// The server's "channels": an admin changed them (or we just connected). Only the channels we may
+// see (a private one needs one of its roles), and `lounge`: false for someone with a limited role,
+// who has no Lounge (server.py, "Who sees which channel").
+function channelsChanged(list, lounge) {
   showChannels(list);
+  loungeAllowed = lounge !== false;
+  voiceHeading.hidden = voiceList.hidden = !loungeAllowed;
   renderChannelAdmin();  // Settings → Channels, in case an admin has it open (settings.js)
+  renderMembers();       // (who sees this channel may have changed; people.js)
   if (currentChannel === null) return;  // not started yet: connect's "open" picks one
-  const special = currentChannel === FRIENDS || currentChannel === LOUNGE || currentChannel.startsWith("dm:")
-    || isGroup(currentChannel);
+  const special = currentChannel === FRIENDS || (currentChannel === LOUNGE && loungeAllowed)
+    || currentChannel.startsWith("dm:") || isGroup(currentChannel);
   if (!special && !isChannel(currentChannel)) {
-    switchChannel(firstChannel, channelLabel(firstChannel));  // ours was deleted
+    switchChannel(firstChannel, channelLabel(firstChannel));  // ours was deleted (or we may not see it any more)
   } else {
     setLabel(channelLabel(currentChannel));  // (it may have been renamed)
   }
@@ -339,7 +348,7 @@ function handleServerMessage(event) {
     return;
   }
   if (data.type === "channels") {
-    channelsChanged(data.channels);
+    channelsChanged(data.channels, data.lounge);
     return;
   }
   if (data.type === "blocks") {
@@ -407,6 +416,7 @@ function handleServerMessage(event) {
     showUsers([...people.values()]);  // (people.js: the same people, drawn again with the new roles)
     redrawMessages();                 // (names above messages take their colour from roles)
     renderRoleAdmin();                // (settings.js)
+    renderChannelAdmin();             // (its private channels list the roles)
     return;
   }
   if (data.type === "users") {

@@ -357,6 +357,18 @@ the point is for me to understand how it works, not just to have it done.
   (also sent at each connect); core.js `showChannels` redraws the sidebar, a page in a deleted channel goes
   to the first one. Settings → Admin → Channels (settings.js, admins only): each row a small form (Enter/Save
   renames), ↑ ↓, 🗑 with confirm(). `can_join` uses `is_channel`; push titles use `channel_name`.
+  Private channels and limited roles (since 2026-10-16; for my parents: their DMs and #family only):
+  `channels.private` + `channel_roles` (channel, role_id), `roles.limited`. `sees_channel`: admins see all; private =
+  one of its roles (none ticked or its role deleted = admins only, never public); open = not limited. `can_join` ->
+  `may_see_channel`, `visible_chats` and "channels" use `channel_list(user_id)` (per person; a heading with nothing
+  under it is dropped; GET /channels needs login now), "channels" has `lounge` (`may_use_lounge`; `may_join_voice`
+  for /voice-token and "voice"; `voice_members_message(user_id)` is empty for them, `announce_voice_members`).
+  `announce_channels` sends each page its own list after channel, role, role-member, limited and admin changes,
+  sets a page's channel to None if it lost it and takes them out of the Lounge (remove_from_voice). Admin:
+  `POST /channels/{key}/access {private, roles}`, `/roles/{id}/limited {limited}`; Private + role boxes under each
+  channel row, Limited under each role (web settings.js `makeChannelAccess`; phone AdminSettings.js `ChannelAccess`).
+  Pages: `seesChannel` (people.js; phone chats.js) filters a channel's member list; no channels -> People; the
+  Voice section hidden (`loungeAllowed`; phone `connection.lounge`, null until the first "channels").
   `delete_messages_in(key)` removes a channel's or group's messages with everything belonging to them.
 - Group DMs (server.py, "Group DMs"; people.js, "Group DMs"): `group_dms` (key `g:` + 8 hex, name or NULL =
   the members' names) and `group_members`. Their messages are saved under the key, so `can_join`

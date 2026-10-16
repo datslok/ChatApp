@@ -1111,6 +1111,7 @@ function showChannelAdmin() {
 
 // One row per channel or heading, in the sidebar's order. (map passes each item and its index.)
 function renderChannelAdmin() {
+  if (!amAdmin()) return;  // (only admins see it; Settings draws it when it opens)
   channelAdminList.replaceChildren(...channels.map(makeChannelAdminItem));
 }
 
@@ -1168,7 +1169,58 @@ function makeChannelAdminItem(item, index) {
   remove.addEventListener("click", () => deleteChannel(item));
 
   row.append(mark, name, save, up, down, remove);
-  return row;
+  if (item.heading) return row;
+  // A channel also gets who can see it, under its row.
+  const box = document.createElement("div");
+  box.append(row, makeChannelAccess(item));
+  return box;
+}
+
+// Who can see a channel: "Private" ticked = only the ticked roles (and admins, who see everything),
+// else everyone (but people with a limited role: Settings → Admin → Roles). Each change is sent at once.
+function makeChannelAccess(item) {
+  const access = document.createElement("div");
+  access.className = "channel-access";
+  const ticked = new Set(item.roles);  // the roles that see it now (a Set: has, add, delete)
+  const send = (isPrivate) => channelAdminRequest(`/channels/${encodeURIComponent(item.key)}/access`,
+    { private: isPrivate, roles: [...ticked] });
+
+  const privateBox = makeCheckbox("Private", item.private, (checked) => send(checked));
+  privateBox.title = "Only people with the roles ticked here can see it (admins always can)";
+  access.appendChild(privateBox);
+  if (!item.private) return access;
+
+  for (const role of roles) {
+    const label = makeCheckbox(role.name, ticked.has(role.id), (checked) => {
+      if (checked) ticked.add(role.id);
+      else ticked.delete(role.id);
+      send(true);
+    });
+    const dot = document.createElement("span");
+    dot.className = "role-dot";
+    dot.style.background = role.colour;  // (a colour the server checked: "#rrggbb")
+    label.insertBefore(dot, label.lastChild);  // before its name
+    access.appendChild(label);
+  }
+  const help = document.createElement("span");
+  help.className = "settings-help";
+  help.textContent = roles.length === 0
+    ? "Only admins see it. Make a role under Roles to let others in."
+    : ticked.size === 0 ? "No role ticked: only admins see it." : "";
+  access.appendChild(help);
+  return access;
+}
+
+// <label class="checkbox"><input type="checkbox"> text</label>, calling onChange(checked) when clicked.
+function makeCheckbox(text, checked, onChange) {
+  const label = document.createElement("label");
+  label.className = "checkbox";
+  const box = document.createElement("input");
+  box.type = "checkbox";
+  box.checked = checked;
+  box.addEventListener("change", () => onChange(box.checked));
+  label.append(box, document.createTextNode(text));  // (a text node: a name is never read as HTML)
+  return label;
 }
 
 // Send a change. The new list comes back through the WebSocket (to every page), so here we only
@@ -1282,6 +1334,12 @@ function makeRoleAdminItem(role, index) {
   });
   row.append(colour, name, save, up, down, remove);
   box.appendChild(row);
+
+  // Limited: its people only see the private channels it (or another of their roles) opens.
+  const limited = makeCheckbox("Limited: sees only the private channels it's ticked in, no other channels and no Lounge",
+    role.limited, (checked) => roleAdminRequest(`/roles/${role.id}/limited`, { limited: checked }));
+  limited.classList.add("role-limited");
+  box.appendChild(limited);
 
   // Its people, each with × to take the role away, and a list to give it to someone else.
   const members = document.createElement("div");

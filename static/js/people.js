@@ -194,7 +194,18 @@ function chatMembers() {
     const members = groups.get(currentChannel)?.members ?? [];
     return everyone.filter((user) => members.includes(user.id));
   }
-  return everyone;
+  const channel = channels.find((item) => item.key === currentChannel);
+  return channel ? everyone.filter((user) => seesChannel(user, channel)) : everyone;
+}
+
+// May this person see this channel? The server's rule (server.py, "Who sees which channel"):
+// admins see all; a private channel needs one of its roles; an open one is for everyone whose
+// roles aren't limited. (Only for drawing: the server decides who really gets in.)
+function seesChannel(user, channel) {
+  if (user.admin) return true;
+  const theirs = user.roles ?? [];
+  if (channel.private) return channel.roles.some((id) => theirs.includes(id));
+  return !roles.some((role) => role.limited && theirs.includes(role.id));
 }
 
 // The right column, for the chat we're in (chatMembers): redrawn when people change (showUsers),

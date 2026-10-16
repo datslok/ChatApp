@@ -148,19 +148,24 @@ export default function Sidebar({
           </Row>
         )))}
 
-        {/* Voice: the Lounge (green while we're in it; a tap opens its page and joins), and who's in it. */}
-        <Text style={styles.heading}>Voice</Text>
-        <Row {...marks} active={view === LOUNGE} onPress={() => onPick(LOUNGE)}>
-          {(strong) => (
-            <>
-              <Icon name="volume-2" color={inLounge ? colors.green : strong ? colors.iconStrong : colors.icon} />
-              <Text numberOfLines={1} style={[textStyle(strong), styles.grow, inLounge && styles.inVoice]}>Lounge</Text>
-            </>
-          )}
-        </Row>
-        <VoiceMembers
-          members={connection.voiceMembers[LOUNGE_ROOM] ?? []} users={users} speaking={voice.speaking} onProfile={onProfile}
-        />
+        {/* Voice: the Lounge (green while we're in it; a tap opens its page and joins), and who's in it.
+            Not for someone with a limited role (connection.lounge false). */}
+        {connection.lounge === false ? null : (
+          <>
+            <Text style={styles.heading}>Voice</Text>
+            <Row {...marks} active={view === LOUNGE} onPress={() => onPick(LOUNGE)}>
+              {(strong) => (
+                <>
+                  <Icon name="volume-2" color={inLounge ? colors.green : strong ? colors.iconStrong : colors.icon} />
+                  <Text numberOfLines={1} style={[textStyle(strong), styles.grow, inLounge && styles.inVoice]}>Lounge</Text>
+                </>
+              )}
+            </Row>
+            <VoiceMembers
+              members={connection.voiceMembers[LOUNGE_ROOM] ?? []} users={users} speaking={voice.speaking} onProfile={onProfile}
+            />
+          </>
+        )}
 
         {/* "Direct messages" and its + for a new group (the web page's #new-group). */}
         <View style={styles.headingRow}>

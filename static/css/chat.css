@@ -491,6 +491,11 @@ body {
   gap: 2px;
 }
 
+/* No Lounge for someone with a limited role (core.js, channelsChanged). */
+#voice-list[hidden] {
+  display: none;
+}
+
 /* The voice channel you're in: green, like Discord's. */
 .voice-channel.in-voice {
   color: var(--green);
@@ -2951,6 +2956,26 @@ button.download-button {
 
 #settings .channel-admin-item button.delete:hover:not(:disabled) {
   background: var(--red);
+}
+
+/* Under each channel's row: Private, and (when ticked) a checkbox per role that sees it. */
+.channel-access {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 14px;
+  margin: 4px 0 4px calc(1.2em + 6px);  /* lined up with the name, past the # */
+}
+#settings .channel-access label.checkbox,
+#settings .role-limited {
+  gap: 6px;
+  font-size: 0.85rem;
+}
+#settings .channel-access .settings-help {
+  margin: 0;
+}
+#settings .role-limited {
+  margin-top: 8px;
 }
 
 /* Add channel and Add heading, side by side, each as wide as its text. */

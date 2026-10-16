@@ -31,7 +31,7 @@
         People <span id="request-badge" class="badge" hidden></span>
       </button>
       <div id="channel-list"></div>
-      <h2 class="section-heading">Voice</h2>
+      <h2 id="voice-heading" class="section-heading">Voice</h2>
       <div id="voice-list">
         <button class="channel voice-channel" data-room="lounge" data-channel="voice:lounge" data-icon="volume-2">Lounge</button>
         <div class="voice-members" data-room="lounge"></div>
@@ -790,6 +790,7 @@
         <div class="admin-section" data-section="channels">
           <p class="settings-help">
             The sidebar, top to bottom. A heading groups the channels under it. Everyone sees changes straight away.
+            A private channel is only for the roles ticked under it (admins see every channel).
           </p>
           <div id="channel-admin-list"></div>
           <h3>Add</h3>
@@ -811,7 +812,8 @@
         <div class="admin-section" data-section="roles">
           <p class="settings-help">
             A role colours its people's names and gives them a section in the member list. Someone with several
-            roles gets the one highest in this list. Everyone sees changes straight away.
+            roles gets the one highest in this list. Everyone sees changes straight away. A limited role's people
+            only see their DMs, groups and the private channels it's ticked in (Channels).
           </p>
           <div id="role-admin-list"></div>
           <h3>Add a role</h3>

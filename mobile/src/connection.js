@@ -42,7 +42,9 @@ export function useConnection() {
   // "connecting", "online", "offline" (dropped: trying again) or "logged-out".
   const [status, setStatus] = useState('connecting');
   const [me, setMe] = useState(null);            // {id, username}
-  const [channels, setChannels] = useState([]);  // the server's channels and headings, in order
+  const [channels, setChannels] = useState([]);  // the server's channels and headings, in order (only ours)
+  // false for someone with a limited role: no Lounge. null until the first "channels" (App.js waits for it).
+  const [lounge, setLounge] = useState(null);
   const [groups, setGroups] = useState([]);      // our group DMs
   const [friends, setFriends] = useState([]);    // our friends' ids (each has a DM with us)
   const [incoming, setIncoming] = useState([]);  // ids of people who sent us a friend request
@@ -143,6 +145,7 @@ export function useConnection() {
         break;
       case 'channels':
         setChannels(data.channels);
+        setLounge(data.lounge !== false);
         break;
       case 'groups':
         setGroups(data.groups);
@@ -527,7 +530,7 @@ export function useConnection() {
   }
 
   return {
-    status, me, myPresence, appearance, channels, groups, friends, incoming, outgoing, blocked, users, roles, emoji,
+    status, me, myPresence, appearance, channels, lounge, groups, friends, incoming, outgoing, blocked, users, roles, emoji,
     emojiGroups, unread, mentions, current, messages, lastRead, more, typing, mutedChats, pins, pinsFull,
     searchResults, voiceMembers, dmCalls, callListener, notifyListener,
     openChat, closeChat, loadOlder, sendMessage, sendTyping, react, pin, editMessage, deleteMessage,

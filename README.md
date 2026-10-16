@@ -300,7 +300,9 @@ they get in (and so does a new address from Settings), so password resets always
 
 **Make it your own:** a new chat starts with #general, #memes and #chattus (the AI bot's, see below).
 Admins (`tools/make_admin.py`) add, rename, move and delete channels, and headings to group them, in
-Settings → Admin → Channels. The voice channel is `VOICE_ROOMS` in `server.py`; change it and update (see below). The "What's
+Settings → Admin → Channels. A channel ticked **Private** there is only for the roles ticked under it, and a
+role ticked **Limited** (Settings → Admin → Roles) sees nothing but its private channels, DMs and groups
+(no other channels, no Lounge): for family who only need one channel with you, say. The voice channel is `VOICE_ROOMS` in `server.py`; change it and update (see below). The "What's
 new" page is yours to write (see [What's new](#whats-new)), and the icon should be your own too (see
 [License](#license)).
 

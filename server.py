@@ -676,6 +676,24 @@ if "banned_at" not in table_columns("users"):
         db.execute("ALTER TABLE users ADD COLUMN banned_by INTEGER REFERENCES users(id)")
         db.execute("ALTER TABLE users ADD COLUMN ban_reason TEXT")
 
+# Private channels and limited roles (see "Who sees which channel").
+if "private" not in table_columns("channels"):
+    # From before private channels: every channel is open to everyone (0).
+    with db:
+        db.execute("ALTER TABLE channels ADD COLUMN private INTEGER NOT NULL DEFAULT 0")
+if "limited" not in table_columns("roles"):
+    # From before limited roles: no role limits anyone (0).
+    with db:
+        db.execute("ALTER TABLE roles ADD COLUMN limited INTEGER NOT NULL DEFAULT 0")
+# Which roles see a private channel: one row per channel per role. (An open channel has none.)
+db.execute("""
+    CREATE TABLE IF NOT EXISTS channel_roles (
+        channel TEXT NOT NULL REFERENCES channels(key),
+        role_id INTEGER NOT NULL REFERENCES roles(id),
+        PRIMARY KEY (channel, role_id)
+    )
+""")
+
 # "Banned right now", as SQL about a row of users: banned, and either for good or not over yet.
 # (Times in SQLite's own form, "2026-10-21 14:30:00" in UTC, so they compare as text.)
 BANNED_NOW = "(users.banned_at IS NOT NULL AND (users.banned_until IS NULL OR users.banned_until > datetime('now')))"
@@ -1043,7 +1061,7 @@ MAX_SEARCH_WORDS = 10
 
 def visible_chats(user_id):
     """Every chat this person may read (see can_join): the channels, their DMs with friends, their groups."""
-    chats = [key for (key,) in db.execute("SELECT key FROM channels WHERE heading = 0")]
+    chats = [item["key"] for item in channel_list(user_id) if not item["heading"]]
     chats += [f"dm:{min(user_id, friend)}:{max(user_id, friend)}" for friend in friends_message(user_id)["friends"]]
     chats += [key for (key,) in db.execute("SELECT group_key FROM group_members WHERE user_id = ?", (user_id,))]
     return chats
@@ -1922,6 +1940,7 @@ async def set_admin(data: AdminChange, request: Request):
     with db:
         db.execute("UPDATE users SET is_admin = ? WHERE id = ?", (int(data.admin), data.user_id))
     await send_to_everyone(users_message())  # every page knows who's an admin (badges, menus, Settings)
+    await announce_channels()  # (admins see every channel)
     return {"ok": True}
 
 
@@ -3502,11 +3521,72 @@ async def release_file(name: str):
 # The sidebar is one list, top to bottom, of channels and headings: a heading groups the channels
 # under it, until the next heading. Admins change it in Settings → Channels; every change goes
 # out to every open page at once ({"type": "channels"}), which redraws its sidebar.
+#
+# Who sees which channel: a channel is open (everyone sees it) or private (only people with one of
+# its roles, in channel_roles). A role can be "limited": whoever has one sees only the private
+# channels their roles open, no open channel and no Lounge (for parents, say: their DMs and a
+# family channel). Admins see everything. Each person's pages get only the channels they may see,
+# and can_join checks the same rule, so a page asking for another channel by hand gets nothing.
 
-def channel_list():
-    """The sidebar, top to bottom: [{"key": "general", "name": "general", "heading": False}, ...]"""
-    rows = db.execute("SELECT key, name, heading FROM channels ORDER BY position").fetchall()
-    return [{"key": key, "name": name, "heading": bool(heading)} for key, name, heading in rows]
+def channel_list(user_id=None):
+    """The sidebar, top to bottom, as this person may see it (None: all of it):
+    [{"key": "general", "name": "general", "heading": False, "private": False, "roles": []}, ...]
+    "roles": the role ids that see a private channel. A heading with nothing visible under it goes too."""
+    rows = db.execute("SELECT key, name, heading, private FROM channels ORDER BY position").fetchall()
+    roles_of = {}
+    for channel, role_id in db.execute("SELECT channel, role_id FROM channel_roles"):
+        roles_of.setdefault(channel, []).append(role_id)
+    items = [{"key": key, "name": name, "heading": bool(heading), "private": bool(private), "roles": roles_of.get(key, [])}
+             for key, name, heading, private in rows]
+    if user_id is None or is_admin(user_id):
+        return items
+    mine, limited = role_ids_of(user_id), is_limited(user_id)
+    shown = []
+    for item in items:
+        if item["heading"]:
+            # Kept for now; dropped below if no channel of its own made it.
+            if shown and shown[-1]["heading"]:
+                shown.pop()
+            shown.append(item)
+        elif sees_channel(item["private"], item["roles"], mine, limited):
+            shown.append(item)
+    if shown and shown[-1]["heading"]:
+        shown.pop()
+    return shown
+
+
+def role_ids_of(user_id):
+    return {role_id for (role_id,) in db.execute("SELECT role_id FROM user_roles WHERE user_id = ?", (user_id,))}
+
+
+def is_limited(user_id):
+    """Does this person have a limited role (only their private channels, no Lounge)? Never admins."""
+    if is_admin(user_id):
+        return False
+    row = db.execute("SELECT 1 FROM user_roles JOIN roles ON roles.id = user_roles.role_id"
+                     " WHERE user_roles.user_id = ? AND roles.limited = 1", (user_id,)).fetchone()
+    return row is not None
+
+
+def sees_channel(private, channel_roles, my_roles, limited):
+    """The rule (not for admins, who see all): a private channel needs one of its roles; an open one
+    is for everyone not limited."""
+    if private:
+        return any(role_id in my_roles for role_id in channel_roles)
+    return not limited
+
+
+def may_see_channel(key, user_id):
+    """May this person see this channel (which exists; see is_channel)?"""
+    if is_admin(user_id):
+        return True
+    private = db.execute("SELECT private FROM channels WHERE key = ?", (key,)).fetchone()[0]
+    roles = [role_id for (role_id,) in db.execute("SELECT role_id FROM channel_roles WHERE channel = ?", (key,))]
+    return sees_channel(bool(private), roles, role_ids_of(user_id), is_limited(user_id))
+
+
+def may_use_lounge(user_id):
+    return not is_limited(user_id)
 
 
 def is_channel(key):
@@ -3522,8 +3602,27 @@ def channel_name(key):
     return row[0] if row else key
 
 
+def channels_message(user_id):
+    """{"type": "channels", "channels": [...], "lounge": True}: their sidebar, and whether it has the Lounge."""
+    return {"type": "channels", "channels": channel_list(user_id), "lounge": may_use_lounge(user_id)}
+
+
 async def announce_channels():
-    await send_to_everyone({"type": "channels", "channels": channel_list()})
+    """After any change to the channels, roles or who has which: each page gets its own list. A page
+    in a channel it may no longer see stops getting its messages (and moves to the first channel when
+    it hears), and someone who lost the Lounge is taken out of it."""
+    lounge_changed = False
+    for websocket, client in list(clients.items()):
+        user_id = client["user_id"]
+        if is_channel(client["channel"]) and not may_see_channel(client["channel"], user_id):
+            client["channel"] = None
+        if client["voice"] in VOICE_ROOMS and not may_use_lounge(user_id):
+            client["voice"] = None
+            lounge_changed = True
+            asyncio.create_task(asyncio.to_thread(remove_from_voice, "lounge", user_id))
+        await send(websocket, channels_message(user_id))
+    if lounge_changed:
+        await announce_voice_members()
 
 
 def clean_channel_name(name):
@@ -3545,8 +3644,10 @@ def existing_channel(key):
 
 
 @app.get("/channels")
-async def channels():
-    return channel_list()
+async def channels(request: Request):
+    """The sidebar's channels, as this person may see them (for the page's first draw)."""
+    user_id = logged_in_user(request)[0]
+    return channel_list(user_id)
 
 
 class NewChannel(BaseModel):
@@ -3590,6 +3691,29 @@ async def rename_channel(request: Request, key: str, data: ChannelRename):
     return {"ok": True}
 
 
+class ChannelAccess(BaseModel):
+    private: bool          # False: everyone (not limited) sees it
+    roles: list[int] = []  # a private one: the roles that see it (none: only admins)
+
+
+@app.post("/channels/{key}/access")
+async def set_channel_access(request: Request, key: str, data: ChannelAccess):
+    """Who can see a channel (admins only): everyone, or only some roles."""
+    logged_in_admin(request)
+    if existing_channel(key):
+        raise HTTPException(400, "Headings can't be private, only channels.")
+    existing = {role_id for (role_id,) in db.execute("SELECT id FROM roles")}
+    roles = set(data.roles) if data.private else set()
+    if not roles <= existing:  # (<= on sets: "is a subset of")
+        raise HTTPException(409, "The roles changed meanwhile. Try again.")
+    with db:
+        db.execute("UPDATE channels SET private = ? WHERE key = ?", (int(data.private), key))
+        db.execute("DELETE FROM channel_roles WHERE channel = ?", (key,))
+        db.executemany("INSERT INTO channel_roles (channel, role_id) VALUES (?, ?)", [(key, role_id) for role_id in roles])
+    await announce_channels()
+    return {"ok": True}
+
+
 class ChannelOrder(BaseModel):
     keys: list[str]  # every channel and heading, in their new order
 
@@ -3620,6 +3744,7 @@ async def delete_channel(request: Request, key: str):
             raise HTTPException(400, "That's the last channel: there must always be one.")
     with db:
         db.execute("DELETE FROM channels WHERE key = ?", (key,))
+        db.execute("DELETE FROM channel_roles WHERE channel = ?", (key,))
     delete_messages_in(key)
     for client in clients.values():
         if client["channel"] == key:
@@ -3661,14 +3786,17 @@ MAX_ROLE_NAME = 30
 
 
 def roles_message():
-    """{"type": "roles", "roles": [{"id": 1, "name": "Gamers", "colour": "#3ba55c"}, ...]}, the top one first."""
-    rows = db.execute("SELECT id, name, colour FROM roles ORDER BY position")
-    return {"type": "roles", "roles": [{"id": role_id, "name": name, "colour": colour} for role_id, name, colour in rows]}
+    """{"type": "roles", "roles": [{"id": 1, "name": "Gamers", "colour": "#3ba55c", "limited": False}, ...]},
+    the top one first. "limited": its people only see the private channels their roles open (see "Channels")."""
+    rows = db.execute("SELECT id, name, colour, limited FROM roles ORDER BY position")
+    return {"type": "roles", "roles": [{"id": role_id, "name": name, "colour": colour, "limited": bool(limited)}
+                                       for role_id, name, colour, limited in rows]}
 
 
 async def announce_roles():
     await send_to_everyone(roles_message())
     await send_to_everyone(users_message())
+    await announce_channels()  # (who sees which channel can depend on the roles)
 
 
 def clean_role(name, colour):
@@ -3743,7 +3871,24 @@ async def delete_role(request: Request, role_id: int):
     existing_role(role_id)
     with db:
         db.execute("DELETE FROM user_roles WHERE role_id = ?", (role_id,))
+        # (A private channel that only this role saw stays private: then only admins see it.)
+        db.execute("DELETE FROM channel_roles WHERE role_id = ?", (role_id,))
         db.execute("DELETE FROM roles WHERE id = ?", (role_id,))
+    await announce_roles()
+    return {"ok": True}
+
+
+class RoleLimited(BaseModel):
+    limited: bool
+
+
+@app.post("/roles/{role_id}/limited")
+async def set_role_limited(request: Request, role_id: int, data: RoleLimited):
+    """Make a role limited (its people only see their private channels, no Lounge), or not (admins only)."""
+    logged_in_admin(request)
+    existing_role(role_id)
+    with db:
+        db.execute("UPDATE roles SET limited = ? WHERE id = ?", (int(data.limited), role_id))
     await announce_roles()
     return {"ok": True}
 
@@ -3766,6 +3911,7 @@ async def set_role_member(request: Request, role_id: int, data: RoleMember):
         else:
             db.execute("DELETE FROM user_roles WHERE user_id = ? AND role_id = ?", (data.user_id, role_id))
     await send_to_everyone(users_message())
+    await announce_channels()  # (their roles may open or close channels for them)
     return {"ok": True}
 
 
@@ -4133,7 +4279,7 @@ def can_join(channel, user_id):
     DMs ("dm:3:7", the two user ids, smallest first): the two people in it, while they're
     friends; and the AI bot for an hour after one of them mentioned it there."""
     if is_channel(channel):
-        return True
+        return may_see_channel(channel, user_id)  # (a private channel: only its roles; see "Channels")
     if is_dm_member(channel, user_id) or is_group_member(channel, user_id):
         return True
     people = dm_people(channel)  # (a member who's no longer friends stays out, even a bot)
@@ -4189,9 +4335,23 @@ def members_in(room):
     return list(members.values())
 
 
-def voice_members_message():
-    """Who's in each voice channel: {"type": "voice_members", "rooms": {"lounge": [...members_in]}}."""
-    return {"type": "voice_members", "rooms": {room: members_in(room) for room in VOICE_ROOMS}}
+def voice_members_message(user_id):
+    """Who's in each voice channel: {"type": "voice_members", "rooms": {"lounge": [...members_in]}}.
+    Nothing for someone limited (see "Channels"), who has no Lounge."""
+    rooms = {room: members_in(room) for room in VOICE_ROOMS} if may_use_lounge(user_id) else {}
+    return {"type": "voice_members", "rooms": rooms}
+
+
+async def announce_voice_members():
+    for websocket, client in list(clients.items()):
+        await send(websocket, voice_members_message(client["user_id"]))
+
+
+def may_join_voice(room, user_id):
+    """The Lounge: anyone not limited. A DM's or group's call: only its people (see is_call_member)."""
+    if room in VOICE_ROOMS:
+        return may_use_lounge(user_id)
+    return is_call_member(room, user_id)
 
 
 # ---------- Calls in DMs and group DMs ----------
@@ -4396,8 +4556,7 @@ async def voice_token(room: str, request: Request):
     user_id, username, password_hash, email = logged_in_user(request)
     if not (LIVEKIT_URL and LIVEKIT_API_KEY and LIVEKIT_API_SECRET):
         raise HTTPException(503, "Voice isn't set up on this server.")
-    # Lounge: anyone logged in. A DM's or group's call: only its people (see is_call_member).
-    if room not in VOICE_ROOMS and not is_call_member(room, user_id):
+    if not may_join_voice(room, user_id):
         raise HTTPException(403, "You can't join that voice room.")
     return {"url": LIVEKIT_URL, "token": make_voice_token(user_id, username, room)}
 
@@ -4972,7 +5131,7 @@ async def chat(websocket: WebSocket):
             "phone_push": firebase_account is not None,  # can the phone app get pushes (FCM)?
             "season": current_season(),  # the seasonal easter egg ("Seasons"; None: none now)
         })
-        await send(websocket, {"type": "channels", "channels": channel_list()})  # (they may have changed while away)
+        await send(websocket, channels_message(user_id))  # (they may have changed while away)
         await send(websocket, friends_message(user_id))
         await send(websocket, groups_message(user_id))
         await send(websocket, mutes_message(user_id))
@@ -4984,7 +5143,7 @@ async def chat(websocket: WebSocket):
         })
         await send(websocket, users_message())  # this tab
         await announce_presences()  # and everyone, if this changed what they see (they came online)
-        await send(websocket, voice_members_message())  # who's in the voice channels right now
+        await send(websocket, voice_members_message(user_id))  # who's in the voice channels right now
         # Their DM and group calls that someone is in right now (so the banner can offer "Join call").
         private_rooms = {c["voice"] for c in clients.values() if is_private_room(c["voice"])}
         for room in private_rooms:
@@ -5233,7 +5392,7 @@ async def chat(websocket: WebSocket):
                 # muted, unmuted or deafened ({"muted": true, "deafened": false}). Only for showing
                 # who's in voice: getting into the audio itself still needs a ticket from /voice-token.
                 room = data.get("room")
-                if room is not None and room not in VOICE_ROOMS and not is_call_member(room, user_id):
+                if room is not None and not may_join_voice(room, user_id):
                     continue  # not a room they may be in
                 old_room = clients[websocket]["voice"]
                 clients[websocket]["voice"] = room
@@ -5241,7 +5400,7 @@ async def chat(websocket: WebSocket):
                 clients[websocket]["deafened"] = data.get("deafened") is True
                 # Everyone sees who's in the voice channels; DM and group calls stay private.
                 if old_room in VOICE_ROOMS or room in VOICE_ROOMS:
-                    await send_to_everyone(voice_members_message())
+                    await announce_voice_members()
                 for changed in {old_room, room}:
                     if is_private_room(changed):
                         await announce_dm_call(changed)  # its people see who's in their call
@@ -5320,7 +5479,7 @@ async def chat(websocket: WebSocket):
         del clients[websocket]
         await announce_presences()  # their last tab: they went offline (or another tab of theirs decides now)
         if voice_room in VOICE_ROOMS:  # closed the tab while in voice: they're out
-            await send_to_everyone(voice_members_message())
+            await announce_voice_members()
         if is_private_room(voice_room):  # ...or out of a DM's or group's call
             await announce_dm_call(voice_room)
         if voice_room in calls:

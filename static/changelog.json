@@ -105,7 +105,8 @@
         "Settings: the ⚙️ at the bottom left, next to your name. Its tabs: My Account, Profile, Appearance, Emoji, Notifications, Voice & audio, Video, App behaviour (only in the Windows app), What's new and Bugs & ideas (and Admin, for admins)",
         "Admin (admins only): Settings → Admin has the Inbox (bug reports and ideas), Channels, Roles, Invites (everyone's open invite links, with × to cancel one, and who joined with whose link), Bans and, for the owner, Admins (make someone an admin, or remove it; also by right-clicking them)",
         "Banning (admins only): right-click someone → Ban…, or Settings → Admin → Bans. Choose how long (a day, a week, a month or for good) and an optional reason they'll see. They're logged out straight away, can't log in until it ends, and disappear from the lists; their messages stay. Unban in Settings → Admin → Bans. Only the owner (the first account) can ban an admin, and nobody can ban the owner or a bot",
-        "Channels: admins add, rename, move and delete channels in Settings → Admin → Channels, and add headings that group the channels under them in the sidebar",
+        "Channels: admins add, rename, move and delete channels in Settings → Admin → Channels, and add headings that group the channels under them in the sidebar. Tick Private under a channel to keep it for the roles ticked next to it (admins see every channel)",
+        "Limited roles: a role ticked Limited in Settings → Admin → Roles only sees the private channels it's ticked in, plus DMs and groups: no other channels and no Lounge",
         "My Account: change your username, email and password. A new email address only takes over once you click the link we send to it. Forgot your password? There's a link on the login page",
         "Appearance: eight themes (Dark, Darker, Light, Blue, Purple, Green, Pink, Light pink), your own colours on top, a font and a text size, and in the Windows app a scale (everything bigger or smaller). Saved with your account, so it's the same on every device",
         "What's new: what changed lately (a red dot on ⚙️ means something new), and everything the chat can do",
@@ -114,6 +115,12 @@
     }
   ],
   "changes": [
+    {
+      "date": "2026-10-16",
+      "items": [
+        "🔒 Private channels: admins can make a channel only for some roles (Settings → Admin → Channels, tick Private and the roles). A role can also be limited (Settings → Admin → Roles): its people only see their DMs, groups and their private channels, no other channels and no Lounge"
+      ]
+    },
     {
       "date": "2026-10-15",
       "items": [
