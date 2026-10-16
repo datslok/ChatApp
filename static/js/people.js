@@ -265,25 +265,41 @@ function fillPeopleList(list, users) {
   }
 }
 
-// DM list in the sidebar: our group DMs first, then friends (DMs are only allowed between friends).
+// The DM list's order (the server's "Recent and pinned DMs"): pinned ones first, then by their newest
+// message, newest first (chatActivity, core.js); chats without any messages last, alphabetically. Groups
+// and DMs mixed. (DMs are only allowed between friends.) The keys, in order.
+function sortedDmKeys() {
+  const keys = [...groups.keys()];
+  for (const user of people.values()) {  // a Map remembers the order: alphabetical, from the server
+    if (friendIds.has(user.id)) keys.push(dmChannel(user.id));
+  }
+  // (sort keeps the alphabetical order among equals: chats without messages stay as they were.)
+  return keys.sort((a, b) => (pinnedChats.has(b) - pinnedChats.has(a))
+    || ((chatActivity.get(b) ?? 0) - (chatActivity.get(a) ?? 0)));
+}
+
+// DM list in the sidebar: our groups and our DMs with friends, in sortedDmKeys' order.
 function renderDmList() {
   dmList.replaceChildren();
-  for (const group of groups.values()) {
+  for (const key of sortedDmKeys()) {
     const button = document.createElement("button");
     button.className = "channel";
-    button.dataset.channel = group.key;
-    button.appendChild(makeGroupRow(group));
-    button.addEventListener("click", () => switchChannel(group.key, channelLabel(group.key)));
-    dmList.appendChild(button);
-  }
-  for (const user of people.values()) {  // a Map remembers the order: alphabetical, from the server
-    if (!friendIds.has(user.id)) continue;
-    const button = document.createElement("button");
-    button.className = "channel";
-    button.dataset.channel = dmChannel(user.id);
-    button.dataset.userMenu = user.id;  // (right-click: the user menu)
-    button.appendChild(makePerson(user));
-    button.addEventListener("click", () => switchChannel(dmChannel(user.id), "@" + user.name));
+    button.dataset.channel = key;
+    if (isGroup(key)) {
+      button.appendChild(makeGroupRow(groups.get(key)));
+      button.addEventListener("click", () => switchChannel(key, channelLabel(key)));
+    } else {
+      const user = people.get(dmPartner(key));
+      button.dataset.userMenu = user.id;  // (right-click: the user menu)
+      button.appendChild(makePerson(user));
+      button.addEventListener("click", () => switchChannel(key, "@" + user.name));
+    }
+    if (pinnedChats.has(key)) {  // a small pin at its right end (hidden under a red count, see chat.css)
+      button.classList.add("pinned");
+      const pin = makeIcon("pin");
+      pin.classList.add("dm-pin");
+      button.appendChild(pin);
+    }
     dmList.appendChild(button);
   }
   if (friendIds.size === 0 && groups.size === 0) {
@@ -702,6 +718,7 @@ function showGroupHeader() {
   const inGroup = isGroup(currentChannel) && groups.has(currentChannel);
   groupMembersLine.hidden = groupButtons.hidden = !inGroup;
   if (!inGroup) return;
+  groupPinButton.textContent = pinnedChats.has(currentChannel) ? "Unpin" : "Pin";
   const names = groups.get(currentChannel).members.map((id) => (id === myId ? "you" : people.get(id)?.name ?? "someone"));
   groupMembersLine.textContent = names.join(", ");
 }
@@ -800,6 +817,12 @@ groupFilter.addEventListener("keydown", (event) => {
 });
 document.getElementById("new-group").addEventListener("click", () => openGroupDialog(null));
 document.getElementById("group-add").addEventListener("click", () => openGroupDialog(currentChannel));
+
+// Pin: the group to the top of our DM list (or not any more).
+const groupPinButton = document.getElementById("group-pin");
+groupPinButton.addEventListener("click", () => {
+  sendToServer({ type: "pin_chat", channel: currentChannel, pinned: !pinnedChats.has(currentChannel) });
+});
 
 // Rename: the browser's own question box. prompt() gives back the text, or null for Cancel.
 document.getElementById("group-rename").addEventListener("click", async () => {
@@ -1191,6 +1214,10 @@ function userMenuItems(userId) {
       const muted = mutedChats.has(dm);
       items.push([muted ? "Unmute DM" : "Mute DM", () => sendToServer({ type: "mute", channel: dm, muted: !muted })]);
     }
+    // Pin it to the top of the DM list (or not any more). Kept with the account, like muting.
+    const dm = dmChannel(userId);
+    const pinned = pinnedChats.has(dm);
+    items.push([pinned ? "Unpin DM" : "Pin DM", () => sendToServer({ type: "pin_chat", channel: dm, pinned: !pinned })]);
   } else if (incomingIds.has(userId)) {
     items.push(["Accept friend request", () => friendAction("accept", userId, peopleStatus)]);
     items.push(["Decline friend request", () => friendAction("remove", userId, peopleStatus)]);

@@ -5,7 +5,7 @@
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Icon from './Icon';
 import { useStyles, useTheme } from './theme';
-import { chatLabel, dmKey, groupName, groupPeople } from './chats';
+import { chatLabel, dmPartner, groupName, groupPeople, sortedDmKeys } from './chats';
 import { Avatar, GroupPicture, Person, PersonPicture } from './people';
 import { SeasonBadge } from './SeasonScreen';
 import { LOUNGE, LOUNGE_ROOM } from './voice';
@@ -89,8 +89,10 @@ function VoiceBar({ voice, where, onOpen, notice }) {
 // (Defined out here, not inside Sidebar: a component defined inside another is a new one at every
 // redraw, so React would rebuild every row each time, pictures included.)
 // A muted chat is faded and has no unread dot (a red count still shows: a mention by name).
-function Row({ chatKey, active, unread, mentions, mutedChats, onPress, onLongPress, children }) {
+// pinned: a pinned DM or group, with a small pin at the right end (where a red count goes instead).
+function Row({ chatKey, active, unread, mentions, mutedChats, onPress, onLongPress, pinned, children }) {
   const styles = useStyles(makeStyles);
+  const { colors } = useTheme();
   const muted = chatKey && mutedChats.has(chatKey);
   const isUnread = chatKey && unread.has(chatKey) && !active && !muted;
   const count = (chatKey && mentions[chatKey]) || 0;
@@ -104,23 +106,24 @@ function Row({ chatKey, active, unread, mentions, mutedChats, onPress, onLongPre
     >
       {isUnread ? <View style={styles.unreadDot} /> : null}
       <View style={styles.rowInside}>{children(active || isUnread, isUnread)}</View>
-      {count > 0 ? <View style={styles.mentionBadge}><Text style={styles.badgeText}>{count}</Text></View> : null}
+      {count > 0 ? <View style={styles.mentionBadge}><Text style={styles.badgeText}>{count}</Text></View>
+        : pinned ? <View style={styles.pin}><Icon name="pin" size={14} color={colors.icon} /></View> : null}
     </Pressable>
   );
 }
 
-// onUserMenu(id): a DM's long press. onNewGroup: the + by "Direct messages". onMe: your panel at the
+// onUserMenu(id): a DM's long press; onGroupMenu(key): a group's. onNewGroup: the + by "Direct messages". onMe: your panel at the
 // bottom. onSettings: its ⚙️ (settingsDot: a red dot on it, What's new has news; notificationsMuted:
 // a bell-off on it). onSeason: the
 // seasonal easter egg on your picture. voice: useVoice()'s (the Voice list, the voice bar, mute and
 // deafen); onProfile(id): someone in voice was tapped.
 export default function Sidebar({
-  connection, voice, view, onPick, onPeople, onUserMenu, onNewGroup, onMe, onSettings, settingsDot, notificationsMuted,
+  connection, voice, view, onPick, onPeople, onUserMenu, onGroupMenu, onNewGroup, onMe, onSettings, settingsDot, notificationsMuted,
   onSeason, onProfile,
 }) {
   const styles = useStyles(makeStyles);
   const { colors } = useTheme();
-  const { channels, groups, friends, users, roles, me, myPresence, unread, mentions, mutedChats, incoming } = connection;
+  const { channels, groups, users, roles, me, myPresence, unread, mentions, mutedChats, incoming } = connection;
   const inLounge = voice.roomName === LOUNGE_ROOM;
   // The voice bar's "where": Lounge, or the DM's or group's name. A tap there opens it.
   const where = voice.roomName === null ? '' : inLounge ? 'Lounge' : chatLabel(voice.roomName, connection);
@@ -140,7 +143,8 @@ export default function Sidebar({
   // The text colour of a row: white when it's the open chat or unread, else muted.
   const textStyle = (strong, bold) => [styles.rowText, strong && styles.rowTextStrong, bold && styles.bold];
 
-  const dms = friends.map((id) => users[id]).filter(Boolean).sort((a, b) => a.name.localeCompare(b.name));
+  const dmKeys = sortedDmKeys(connection);  // groups and DMs: pinned, then the most recent first
+  const pinned = connection.pinnedChats;
   const mine = users[me.id];
 
   return (
@@ -192,24 +196,33 @@ export default function Sidebar({
             {({ pressed }) => <Icon name="plus" size={18} color={pressed ? colors.iconStrong : colors.icon} />}
           </Pressable>
         </View>
-        {groups.map((group) => (
-          <Row {...marks} key={group.key} chatKey={group.key} active={view === group.key} onPress={() => onPick(group.key)}>
-            {(strong, bold) => (
-              <View style={styles.person}>
-                <GroupPicture />
-                {/* Its name, and how many people are in it under that (like a person's status line). */}
-                <View style={styles.grow}>
-                  <Text numberOfLines={1} style={textStyle(strong, bold)}>{groupName(group, users, me.id)}</Text>
-                  <Text numberOfLines={1} style={styles.groupCount}>{groupPeople(group, users).length} members</Text>
-                </View>
-              </View>
-            )}
-          </Row>
-        ))}
-        {dms.map((user) => {
-          const key = dmKey(me.id, user.id);
+        {dmKeys.map((key) => {
+          const group = groups.find((g) => g.key === key);
+          if (group) {
+            return (
+              <Row
+                {...marks} key={key} chatKey={key} active={view === key} pinned={pinned.has(key)}
+                onPress={() => onPick(key)} onLongPress={() => onGroupMenu(key)}
+              >
+                {(strong, bold) => (
+                  <View style={styles.person}>
+                    <GroupPicture />
+                    {/* Its name, and how many people are in it under that (like a person's status line). */}
+                    <View style={styles.grow}>
+                      <Text numberOfLines={1} style={textStyle(strong, bold)}>{groupName(group, users, me.id)}</Text>
+                      <Text numberOfLines={1} style={styles.groupCount}>{groupPeople(group, users).length} members</Text>
+                    </View>
+                  </View>
+                )}
+              </Row>
+            );
+          }
+          const user = users[dmPartner(key, me.id)];
           return (
-            <Row {...marks} key={key} chatKey={key} active={view === key} onPress={() => onPick(key)} onLongPress={() => onUserMenu(user.id)}>
+            <Row
+              {...marks} key={key} chatKey={key} active={view === key} pinned={pinned.has(key)}
+              onPress={() => onPick(key)} onLongPress={() => onUserMenu(user.id)}
+            >
               {(strong, bold) => (
                 <Person
                   user={user} roles={roles} me={me} myPresence={myPresence} bold={bold}
@@ -221,7 +234,7 @@ export default function Sidebar({
           );
         })}
         {/* Nobody to message yet: how to get somebody (the web page's .empty-note). */}
-        {groups.length === 0 && dms.length === 0 ? (
+        {dmKeys.length === 0 ? (
           <Text style={styles.emptyNote}>Add friends to send direct messages.</Text>
         ) : null}
       </ScrollView>
@@ -306,6 +319,7 @@ const makeStyles = (colors, size) => StyleSheet.create({
     backgroundColor: colors.red, alignItems: 'center', justifyContent: 'center',
   },
   badgeText: { color: '#ffffff', fontSize: size(11), fontWeight: '700' },
+  pin: { marginLeft: 6 },
   panelPressed: { backgroundColor: colors.bgHover },
   // The heading with the + at its right end (the + sits where the heading's text would end).
   headingRow: { flexDirection: 'row', alignItems: 'center' },

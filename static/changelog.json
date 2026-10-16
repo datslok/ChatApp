@@ -28,6 +28,7 @@
         "People (at the top of the sidebar): your Friends, Everyone on the chat (with a search box, to find someone and add them), friend Requests and the people you Blocked",
         "Friends: send requests and accept them on the People page. DMs are between friends. A new request pings you (and your phone, with notifications on)",
         "Block someone: Block in their profile (click their name or picture). You stop being friends, they can't send you requests or reach you, and their messages are hidden for you (\"Show\" to see one). They aren't told. Unblock them in their profile or on the People page's Blocked tab. Admins and bots can't be blocked",
+        "Direct messages are sorted by the latest message, newest at the top. Pin your favourites to the top: right-click someone (hold on a phone) → Pin DM, or Pin at the top of a group (on a phone: hold the group in the list, or its ⋯ button)",
         "Group DMs: the + next to \"Direct messages\" starts a private chat with 2 to 9 friends. At the top of a group: Add people (your own friends), Rename and Leave. Every message there notifies the others, like a DM. 📞 Call rings everyone in the group; whoever answers joins, and the rest can join later from the call banner. Chattus is in every group: write @Chattus to ask him something there",
         "Online and offline people on the right, and \"is typing…\" under the messages",
         "Roles: admins make roles with a colour in Settings → Admin → Roles and give them to people. A role colours its people's names and gives them a section in the member list; the roles show in their profile",
@@ -121,6 +122,7 @@
       "date": "2026-10-16",
       "items": [
         "📞 Calls in the Android app (a new version: install it when the app offers it): the signal bars in the voice bar show the connection, with a tap for the details; Settings → Voice & audio has the sensitivity line, like on PC, and the meter works in calls too; the ringtone follows your ring volume; it says why the microphone or camera didn't start; hold a call tile for the user menu; drag the bottom of a call banner to resize it; and pick the size when sharing your screen",
+        "📌 Direct messages are sorted by the latest message, newest at the top, and you can pin your favourites above the rest: right-click someone (hold on a phone) → Pin DM, or Pin at the top of a group",
         "📱 Someone on the Android app shows as idle as soon as they lock their phone or leave the app, and offline 10 minutes later (before, they went offline at once). On a PC nothing changes",
         "📞 Android turns off calls on the lock screen with every update of the Android app, so the app now asks once after each update to allow them again (Allow it opens the right Android setting)",
         "🐱 The Android app's notifications show the ChatApp cat (in the status bar and on each notification) instead of a plain speech bubble",

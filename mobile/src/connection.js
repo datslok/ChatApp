@@ -79,6 +79,10 @@ export function useConnection() {
   const [more, setMore] = useState(false);
   const loadingOlder = useRef(false);  // asked for older ones, waiting for them
   const [mutedChats, setMutedChats] = useState(new Set());  // chats we muted: no unread dot, faded
+  // DMs and groups pinned to the top of the list, and each one's newest message id (the list is sorted
+  // by it, newest first): the server's "Recent and pinned DMs".
+  const [pinnedChats, setPinnedChats] = useState(new Set());
+  const [chatActivity, setChatActivity] = useState({});
   // The open chat's pinned messages while the 📌 list is open (null: on their way), and whether it
   // is open (a ref: the socket's handlers need it, to ask again when a pin changes).
   const [pins, setPins] = useState(null);
@@ -197,6 +201,18 @@ export function useConnection() {
       case 'mutes':
         // Our muted chats (at connect, and after muting or unmuting here or on another device).
         setMutedChats(new Set(data.channels));
+        break;
+      case 'pinned_chats':
+        // Our pinned DMs and groups (at connect, and after pinning or unpinning here or elsewhere).
+        setPinnedChats(new Set(data.channels));
+        break;
+      case 'chat_activity':
+        // {chats: {key: newest message id}}: all our DMs and groups at connect, then one per new message.
+        setChatActivity((old) => {
+          const next = { ...old };
+          for (const [key, id] of Object.entries(data.chats)) next[key] = Math.max(id, old[key] ?? 0);
+          return next;
+        });
         break;
       case 'pins':
         if (pinsOpen.current && data.channel === currentRef.current) setPins(data.messages);
@@ -572,6 +588,9 @@ export function useConnection() {
   function mute(key, muted) {
     send({ type: 'mute', channel: key, muted });
   }
+  function pinChat(key, pinned) {
+    send({ type: 'pin_chat', channel: key, pinned });
+  }
   // The 📌 list of the chat we're in: asked when it opens, and again whenever a pin changes while
   // it's open (see "pinned" and "deleted" above). The answer comes as `pins`.
   function openPins() {
@@ -640,11 +659,11 @@ export function useConnection() {
 
   return {
     status, me, myPresence, appearance, channels, lounge, groups, groupsKnown, friends, incoming, outgoing, blocked, users, roles, emoji,
-    emojiGroups, unread, mentions, current, messages, lastRead, more, typing, mutedChats, pins, pinsFull,
+    emojiGroups, unread, mentions, current, messages, lastRead, more, typing, mutedChats, pinnedChats, chatActivity, pins, pinsFull,
     searchResults, voiceMembers, dmCalls, callListener, notifyListener,
     outbox, retryMessage, discardMessage,
     openChat, closeChat, loadOlder, sendMessage, sendTyping, react, pin, editMessage, deleteMessage,
-    friendAction, mute, openPins, closePins, search, setPresence, logout, sendVoice, ring, answerCall, cancelCall,
+    friendAction, mute, pinChat, openPins, closePins, search, setPresence, logout, sendVoice, ring, answerCall, cancelCall,
     reconnect: connect,  // after logging in
   };
 }

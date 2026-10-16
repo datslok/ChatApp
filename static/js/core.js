@@ -133,6 +133,9 @@ let reconnectDelay = 1000;  // milliseconds to wait before the next reconnect at
 const unread = new Set();   // channels and DMs with messages we haven't seen
 const mentionCounts = new Map();  // channel -> how many unread messages there mention us
 const mutedChats = new Set();  // chats we muted (the server's "mutes"): no unread dot, greyed out
+const pinnedChats = new Set();  // DMs and groups we pinned to the top of the list (the server's "pinned_chats")
+// Each DM's and group's newest message id ("chat_activity"): the DM list is sorted by it, newest first.
+const chatActivity = new Map();
 let friendsKnown = false;      // has the first "friends" list arrived? (after it, new requests notify)
 
 // ----- Reloading by itself after an update to the page (like pressing F5)
@@ -373,6 +376,21 @@ function handleServerMessage(event) {
     setAll(blockedIds, data.blocked);
     friendsChanged();  // (the Friends page's Blocked tab, and a profile that's open)
     if (shownMessages.length) redrawMessages();  // their messages hidden, or shown again
+    return;
+  }
+  if (data.type === "pinned_chats") {
+    // Our pinned DMs and groups (at the start, and after pinning or unpinning here or on another device).
+    setAll(pinnedChats, data.channels);
+    renderDmList();  // (people.js)
+    if (currentChannel !== null) showGroupHeader();  // (a group's Pin / Unpin button)
+    return;
+  }
+  if (data.type === "chat_activity") {
+    // The newest message in our DMs and groups: all of them at the start, then one after each new message.
+    // The list only needs drawing again when that changes its order.
+    const before = sortedDmKeys().join();
+    for (const [key, id] of Object.entries(data.chats)) chatActivity.set(key, Math.max(id, chatActivity.get(key) ?? 0));
+    if (sortedDmKeys().join() !== before) renderDmList();
     return;
   }
   if (data.type === "mutes") {

@@ -177,7 +177,8 @@ export function RenameDialog({ connection, groupKey, onClose }) {
 // The ⋯ in a group's top bar: Add people, Rename, Leave (the web page's three buttons in the bar,
 // which a phone's top bar has no room for). onAdd, onRename: open those popups.
 export function GroupMenu({ connection, groupKey, onAdd, onRename, onClose }) {
-  const { groups, users, me } = connection;
+  const { groups, users, me, pinnedChats } = connection;
+  const pinned = pinnedChats.has(groupKey);
   const group = groups.find((g) => g.key === groupKey);
   if (!group) return null;
 
@@ -210,6 +211,11 @@ export function GroupMenu({ connection, groupKey, onAdd, onRename, onClose }) {
     <Sheet title={groupName(group, users, me.id)} onClose={onClose}>
       <SheetItem icon="user-plus" label="Add people" onPress={choose(onAdd)} />
       <SheetItem icon="pencil" label="Rename" onPress={choose(onRename)} />
+      {/* To the top of the DM list (or not any more), like the web page's Pin button. */}
+      <SheetItem
+        icon="pin" label={pinned ? 'Unpin group' : 'Pin group'}
+        onPress={choose(() => connection.pinChat(groupKey, !pinned))}
+      />
       <SheetLine />
       <SheetItem icon="log-out" label="Leave group" danger onPress={leave} />
     </Sheet>

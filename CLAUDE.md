@@ -454,6 +454,13 @@ the point is for me to understand how it works, not just to have it done.
   most present device. Page: the picker in #me-popup
   (people.js, `renderPresencePicker`), dots `.dot.online/.idle/.dnd/.invisible` (our own Invisible as a ring).
   The users' "status" field is still the line they write about themselves.
+- Recent and pinned DMs (server.py, "Recent and pinned DMs"; since 2026-10-16): the Direct messages list (web
+  people.js `sortedDmKeys`/`renderDmList`, phone chats.js `sortedDmKeys` in Sidebar and ShareScreen) is groups and DMs
+  mixed: pinned first, then newest message first (no messages: last, alphabetical). "chat_activity" {chats: {key:
+  newest message id}}: all at connect, then one from `announce_new_message` (`announce_chat_activity`) to every member's
+  pages. `pinned_chats` table, `{"type": "pin_chat", "channel", "pinned"}` (DMs and groups only) -> "pinned_chats" to
+  all their pages (also at connect). Pin: the user menu's Pin DM, a group's Pin button (web #group-pin) / GroupMenu
+  (phone; also a long press on a group in the sidebar); a pin icon on the row (`.dm-pin`, hidden under a red count).
 - Muting (server.py, "Muting"): `chat_mutes` (user_id, channel), set over the WebSocket (`{"type": "mute",
   "channel", "muted"}` -> "mutes" to all their pages; also at connect). `save_mentions` leaves out people who
   muted the chat unless they're named in it (`<@id>`) or the sender is an admin, so no red count, notification

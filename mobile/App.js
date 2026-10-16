@@ -346,6 +346,10 @@ function Main({ connection, voice, notifications, openChatRef, share, onShareDon
         <Sidebar
           connection={connection} voice={voice} view={view} onPick={pick} onPeople={() => go(PEOPLE)}
           onUserMenu={openUserMenu} onProfile={openProfile}
+          onGroupMenu={(key) => {
+            setDrawer(null);  // (like the user menu: it goes over the chat)
+            setDialog({ type: 'groupMenu', key });
+          }}
           onNewGroup={() => {
             setDrawer(null);  // (the web page closes the drawer too)
             setDialog({ type: 'group', key: null });

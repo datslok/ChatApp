@@ -11,7 +11,7 @@ import { askToBlock, askToRemove } from './friends';
 // (null on the People page, where there's none). onEditProfile: Settings → Profile (our own menu).
 // onBan(id): the ban popup. onCall(key): open our DM with them and ring them. onClose: close the menu.
 export default function UserMenu({ connection, userId, onProfile, onOpen, onMention, onEditProfile, onBan, onCall, onClose }) {
-  const { users, me, friends, incoming, outgoing, blocked, mutedChats } = connection;
+  const { users, me, friends, incoming, outgoing, blocked, mutedChats, pinnedChats } = connection;
   const user = users[userId];
   if (!user) return null;
 
@@ -71,6 +71,11 @@ export default function UserMenu({ connection, userId, onProfile, onOpen, onMent
         <SheetItem key="mute" label={muted ? 'Unmute DM' : 'Mute DM'} onPress={choose(() => connection.mute(dm, !muted))} />,
       );
     }
+    // Pin it to the top of the DM list (or not any more). Kept with the account, like muting.
+    const pinned = pinnedChats.has(dm);
+    items.push(
+      <SheetItem key="pin" label={pinned ? 'Unpin DM' : 'Pin DM'} onPress={choose(() => connection.pinChat(dm, !pinned))} />,
+    );
   } else if (incoming.includes(userId)) {
     items.push(<SheetItem key="accept" label="Accept friend request" onPress={choose(() => act('accept', userId))} />);
     items.push(<SheetItem key="decline" label="Decline friend request" onPress={choose(() => act('remove', userId))} />);

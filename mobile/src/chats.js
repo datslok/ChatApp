@@ -32,6 +32,18 @@ export function groupName(group, users, myId) {
   return others.length ? others.join(', ') : 'Just you';
 }
 
+// The Direct messages list's order, like the web page's sortedDmKeys (the server's "Recent and pinned
+// DMs"): pinned ones first, then by their newest message, newest first; chats without any messages last,
+// alphabetically. Groups and DMs mixed. The keys, in order.
+export function sortedDmKeys({ groups, friends, users, me, pinnedChats, chatActivity }) {
+  const friendKeys = friends.map((id) => users[id]).filter(Boolean)
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map((user) => dmKey(me.id, user.id));
+  // (sort keeps the order among equals: chats without messages stay alphabetical.)
+  return [...groups.map((group) => group.key), ...friendKeys].sort((a, b) => (pinnedChats.has(b) - pinnedChats.has(a))
+    || ((chatActivity[b] ?? 0) - (chatActivity[a] ?? 0)));
+}
+
 // What a chat is called in the top bar and the text box: "#memes", "@kari", or a group's name
 // (the web page's labels: "Message #memes", "Message @kari").
 export function chatLabel(key, { channels, groups, users, me }) {

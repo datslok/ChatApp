@@ -393,6 +393,26 @@ body {
   position: relative;  /* so the unread dot can be placed against its left edge */
 }
 
+/* A pinned DM or group (people.js, renderDmList): a small pin at its right end, room kept for it. Under a
+   red count (.mention-badge sits in the same place), only the count shows. */
+.channel.pinned {
+  padding-right: 32px;
+}
+
+.channel .dm-pin {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  transform: translateY(-50%);
+  width: 14px;
+  height: 14px;
+  color: var(--icon);
+}
+
+.channel:has(.mention-badge) .dm-pin {
+  visibility: hidden;
+}
+
 .channel.unread {
   color: var(--text-strong);
   font-weight: 600;  /* bold */

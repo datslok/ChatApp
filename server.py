@@ -413,6 +413,15 @@ db.execute("""
         PRIMARY KEY (user_id, channel)
     )
 """)
+# Pinned DMs and groups: one row per person per chat they pinned to the top of their list (see
+# "Recent and pinned DMs").
+db.execute("""
+    CREATE TABLE IF NOT EXISTS pinned_chats (
+        user_id INTEGER NOT NULL REFERENCES users(id),
+        channel TEXT NOT NULL,  -- a DM ("dm:3:7") or a group ("g:...")
+        PRIMARY KEY (user_id, channel)
+    )
+""")
 if db.execute("SELECT COUNT(*) FROM channels").fetchone()[0] == 0:
     # The first start with this table (or a brand new database): the channels that used to be
     # written in the code. Their keys are their old names, so every message stays where it was.
@@ -3825,6 +3834,7 @@ def delete_messages_in(key):
         db.execute("DELETE FROM attachments WHERE channel = ?", (key,))
         db.execute("DELETE FROM last_read WHERE channel = ?", (key,))
         db.execute("DELETE FROM chat_mutes WHERE channel = ?", (key,))
+        db.execute("DELETE FROM pinned_chats WHERE channel = ?", (key,))
     # The files on disk, only once the database change has been saved (as for one message).
     for file in files:
         (UPLOAD_DIR / file).unlink(missing_ok=True)
@@ -4145,6 +4155,7 @@ async def leave_group(request: Request, key: str):
         db.execute("DELETE FROM group_members WHERE group_key = ? AND user_id = ?", (key, user_id))
         db.execute("DELETE FROM last_read WHERE user_id = ? AND channel = ?", (user_id, key))
         db.execute("DELETE FROM chat_mutes WHERE user_id = ? AND channel = ?", (user_id, key))
+        db.execute("DELETE FROM pinned_chats WHERE user_id = ? AND channel = ?", (user_id, key))
     remaining = group_members(key)
     if not group_people(key):  # the last person out (only bots left): nobody will see it again, so it goes
         with db:
@@ -4354,6 +4365,46 @@ def mutes_message(user_id):
     """Someone's muted chats, for their pages: {"type": "mutes", "channels": ["memes", "dm:3:7"]}."""
     rows = db.execute("SELECT channel FROM chat_mutes WHERE user_id = ?", (user_id,))
     return {"type": "mutes", "channels": [channel for (channel,) in rows]}
+
+
+# ---------- Recent and pinned DMs ----------
+#
+# The Direct messages list (the sidebar, on the web page and the phone) is sorted by when each DM or group
+# last had a message, newest first, with the ones someone pinned on top. The pages learn the newest message
+# id of each of their DMs and groups at connect ("chat_activity" with all of them), and after each new
+# message in one ("chat_activity" with that one, to every member's pages, their own other devices too).
+# Ids only grow, so a bigger id is a more recent chat: no times needed. Pins are kept per person, like mutes.
+
+def is_dm_or_group(channel):
+    return isinstance(channel, str) and (channel.startswith("dm:") or channel.startswith("g:"))
+
+
+def chat_activity_message(user_id):
+    """{"type": "chat_activity", "chats": {"dm:3:7": 512, "g:5f3a9b21": 498}}: the newest message in each of
+    this person's DMs and groups (those without messages are left out: they go at the bottom)."""
+    rows = db.execute(
+        "SELECT channel, MAX(id) FROM messages WHERE channel LIKE 'dm:%' OR channel LIKE 'g:%' GROUP BY channel"
+    )
+    return {"type": "chat_activity", "chats": {channel: newest for channel, newest in rows if can_join(channel, user_id)}}
+
+
+async def announce_chat_activity(channel):
+    """A new message in a DM or group: every member's pages move it up their list."""
+    if not is_dm_or_group(channel):
+        return
+    newest = db.execute("SELECT MAX(id) FROM messages WHERE channel = ?", (channel,)).fetchone()[0]
+    if newest is None:
+        return
+    update = {"type": "chat_activity", "chats": {channel: newest}}
+    for websocket, client in list(clients.items()):
+        if can_join(channel, client["user_id"]):
+            await send(websocket, update)
+
+
+def pinned_chats_message(user_id):
+    """Someone's pinned DMs and groups, for their pages: {"type": "pinned_chats", "channels": ["dm:3:7"]}."""
+    rows = db.execute("SELECT channel FROM pinned_chats WHERE user_id = ?", (user_id,))
+    return {"type": "pinned_chats", "channels": [channel for (channel,) in rows]}
 
 
 def can_mute(channel, user_id):
@@ -5168,6 +5219,7 @@ async def announce_new_message(channel, mentioned=(), message=None):
     """After a new message: it counts as read for whoever is looking at the channel, and
     everyone else who can see the channel gets an "unread" for it. People it mentioned also
     get their new count of unread mentions there, and a short preview for a notification."""
+    await announce_chat_activity(channel)  # (a DM or group: up to the top of its members' lists)
     viewers = {client["user_id"] for client in clients.values() if client["channel"] == channel}
     for user_id in viewers:
         mark_read(user_id, channel)
@@ -5269,6 +5321,8 @@ async def chat(websocket: WebSocket):
         await send(websocket, friends_message(user_id))
         await send(websocket, groups_message(user_id))
         await send(websocket, mutes_message(user_id))
+        await send(websocket, pinned_chats_message(user_id))  # (see "Recent and pinned DMs")
+        await send(websocket, chat_activity_message(user_id))
         await send(websocket, blocks_message(user_id))
         await send(websocket, roles_message(user_id))  # (before "users", whose roles refer to these)
         await send(websocket, custom_emoji_message())
@@ -5608,6 +5662,22 @@ async def chat(websocket: WebSocket):
                     with db:
                         db.execute("DELETE FROM chat_mutes WHERE user_id = ? AND channel = ?", (user_id, chat))
                 await send_to_user(user_id, mutes_message(user_id))
+
+            elif kind == "pin_chat":
+                # {"type": "pin_chat", "channel": "dm:3:7", "pinned": true}: pin a DM or group to the top of
+                # our list (or unpin it). All our pages hear the new list.
+                chat = data.get("channel")
+                if not is_dm_or_group(chat):
+                    continue
+                if data.get("pinned") is True:
+                    if not can_join(chat, user_id):
+                        continue  # not a chat of theirs
+                    with db:
+                        db.execute("INSERT OR IGNORE INTO pinned_chats (user_id, channel) VALUES (?, ?)", (user_id, chat))
+                else:
+                    with db:
+                        db.execute("DELETE FROM pinned_chats WHERE user_id = ? AND channel = ?", (user_id, chat))
+                await send_to_user(user_id, pinned_chats_message(user_id))
 
             elif kind == "presence":
                 # {"type": "presence", "presence": "dnd"}: the status they choose. All their pages hear it,

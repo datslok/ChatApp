@@ -7,23 +7,29 @@ import { useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import Icon from './Icon';
 import { useStyles, useTheme } from './theme';
-import { dmKey, groupName } from './chats';
+import { dmPartner, groupName, sortedDmKeys } from './chats';
 import { GroupPicture, Person } from './people';
 
 // share: {files, text} (modules/shared-files). onPick(key): a chat was chosen; onCancel: the ×.
 export default function ShareScreen({ connection, share, onPick, onCancel }) {
   const styles = useStyles(makeStyles);
   const { colors } = useTheme();
-  const { channels, groups, friends, users, roles, me, myPresence } = connection;
+  const { channels, groups, users, roles, me, myPresence } = connection;
   const [query, setQuery] = useState('');
 
   // Every chat as a row: {key, name (what the search looks in), heading (a heading, not a chat)}.
-  const dms = friends.map((id) => users[id]).filter(Boolean).sort((a, b) => a.name.localeCompare(b.name));
+  // Groups and DMs in the sidebar's order (pinned, then the most recent first): sharing usually goes to
+  // whoever you just talked to.
+  const dmRows = sortedDmKeys(connection).map((key) => {
+    const group = groups.find((g) => g.key === key);
+    if (group) return { key, name: groupName(group, users, me.id), group: true };
+    const user = users[dmPartner(key, me.id)];
+    return { key, name: user.name, user };
+  });
   const all = [
     ...channels.map((channel) => ({ key: channel.key, name: channel.name, heading: !!channel.heading })),
     { key: 'dm-heading', name: 'Direct messages', heading: true },
-    ...groups.map((group) => ({ key: group.key, name: groupName(group, users, me.id), group: true })),
-    ...dms.map((user) => ({ key: dmKey(me.id, user.id), name: user.name, user })),
+    ...dmRows,
   ];
   // While searching: only the chats whose names contain the words, without headings.
   const words = query.trim().toLowerCase();
