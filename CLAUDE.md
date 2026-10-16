@@ -272,7 +272,8 @@ the point is for me to understand how it works, not just to have it done.
   `src/NotificationSettings.js`, voice.js (no own ringing in the background with push on, nor while the call's
   notification is showing: Android's loop keeps going when the app is paused; `acceptFromNotification`), App.js (`opened`
   -> go/jumpRequest/People's Requests tab). A tap that starts a closed app can't be tested in development builds (the dev
-  launcher drops the extras, as with shares). `adb logcat -d` (read-only) showed what went wrong each time.
+  launcher drops the extras, as with shares). App.js asks `getInitialOpen` again at 0/0.3/1/2.5 s: at a cold
+  start the Activity can still be missing (the answer was "none" and it opened #general; fixed 2026-10-16). `adb logcat -d` (read-only) showed what went wrong each time.
   Distribution (since 2026-10-15): the icon is an adaptive icon made by `tools/make_pwa_icons.py` (the drawing on
   transparency, centred on its smallest enclosing circle and scaled to the 66/108 safe zone, the user's wish; app.json
   backgroundColor #0086D7, a monochrome layer). Release builds are signed by `plugins/release-signing.js` with
