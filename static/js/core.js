@@ -252,8 +252,9 @@ function connect() {
       history.replaceState(null, "", "/");
       openMessage(opened.get("channel"), opened.has("message") ? Number(opened.get("message")) : null);
     } else if (currentChannel === null) {
-      // First time: the channel we were in before a reload (F5), else the first channel.
-      const start = channelBeforeReload() ?? firstChannel;
+      // First time: the channel we were in before a reload (F5), else the chat open when this browser
+      // (or the Windows app) was last closed, else the first channel.
+      const start = channelBeforeReload() ?? lastChat() ?? firstChannel;
       switchChannel(start, channelLabel(start));
     } else {
       joinCurrentChannel();  // reconnected: rejoin where we were, which reloads the history
@@ -289,7 +290,23 @@ function checkForAppUpdate() {
 // a reload. Only something that still exists counts: a channel the server lists, Friends, Lounge,
 // a DM or a group (one we're no longer in is left again once the friend or group list arrives).
 function channelBeforeReload() {
-  const channel = history.state?.channel;
+  return stillThere(history.state?.channel);
+}
+
+// The chat that was open when this browser or the Windows app was last closed (switchChannel saves it
+// in localStorage, which stays on this device, each its own; the user's wish), or null.
+function lastChat() {
+  try {
+    return stillThere(localStorage.getItem("lastChat"));
+  } catch {
+    return null;  // (storage blocked: start in the first channel)
+  }
+}
+
+// The chat itself, if it can still be opened, else null: a channel the server lists (it lists only those
+// we may see), People, the Lounge, a DM or a group. (A DM or group we're no longer in, or the Lounge for
+// someone limited, is left again once the server's lists arrive.)
+function stillThere(channel) {
   if (typeof channel !== "string") return null;
   if (isChannel(channel) || channel === FRIENDS || channel === LOUNGE || channel.startsWith("dm:") || isGroup(channel)) {
     return channel;
@@ -602,6 +619,9 @@ function switchChannel(channel, label, fromHistory = false) {
   }
   switchDraft(currentChannel, channel);  // each chat keeps its own text and tray (messages.js)
   currentChannel = channel;
+  try {
+    localStorage.setItem("lastChat", channel);  // to open it again next time (lastChat)
+  } catch {}
   setLabel(label);
   unread.delete(channel);  // opening it means we've seen it
   mentionCounts.delete(channel);

@@ -118,6 +118,7 @@
     {
       "date": "2026-10-16",
       "items": [
+        "↩️ The chat, the Windows app and the Android app open where you left off: the chat you had open when you closed them (each device remembers its own)",
         "📶 The Android app copes better with a bad connection: it notices a dropped connection within seconds and reconnects by itself, and a message never gets lost. It shows faded with \"Sending…\" until it's through, and if it really can't get there it turns red with Retry and Delete",
         "📱 Tapping a notification when the Android app was closed opens that chat again, not #general",
         "📱 More of the chat in the Android app: hold a reaction to see who reacted, tap an @mention for their profile, Copy text and the time in a message's menu, the character counter near the limit, @everyone in DMs and groups, recently used emoji that stay after a restart, and reply quotes with custom emoji. The NEW line moves to what came in while you were away, and starts you there when there's a lot"

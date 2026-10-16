@@ -1,6 +1,7 @@
 // The whole app: one connection to the server, and the web page's phone layout. A top bar (menu,
 // the chat's name, the member list), the chat under it, and two drawers that slide over it: the
 // channels on the left, the chat's members on the right.
+import { File, Paths } from 'expo-file-system';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, BackHandler, KeyboardAvoidingView, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -39,6 +40,24 @@ import { addShareListener, getInitialShare } from './modules/shared-files';
 import { addOpenListener, getInitialOpen } from './modules/push';
 
 const PEOPLE = 'people';  // the People page's name among the chats' keys (like the web page's FRIENDS)
+
+// The chat that was open when the app was last closed, kept on this phone (each device its own, the
+// user's wish; the web page keeps its own in localStorage). Written by go(), read at the start.
+const lastChatFile = new File(Paths.document, 'last-chat.txt');
+
+function lastChat() {
+  try {
+    if (lastChatFile.exists) return lastChatFile.textSync() || null;
+  } catch {}
+  return null;
+}
+
+function rememberChat(key) {
+  try {
+    if (!lastChatFile.exists) lastChatFile.create();
+    lastChatFile.write(key);
+  } catch {}  // (just not kept: the next start opens the first channel)
+}
 
 // share: something shared to the app from another one, waiting for "Share to…" (or null);
 // onShareDone: it's been dealt with (sent to a chat or cancelled). voice: useVoice()'s (calls);
@@ -84,6 +103,7 @@ function Main({ connection, voice, notifications, openChatRef, share, onShareDon
   function go(key, remember = true) {
     if (remember && view !== null && view !== key) history.current.push(view);
     setView(key);
+    rememberChat(key);
     setDrawer(null);  // picking a chat closes the drawer, like the web page's switchChannel
     if (key !== PEOPLE) setPeopleTab(null);  // (Requests was for that one visit)
     // The People page and the Lounge are in no chat: new messages anywhere count as unread.
@@ -119,14 +139,16 @@ function Main({ connection, voice, notifications, openChatRef, share, onShareDon
     setFocusTick((n) => n + 1);
   }
 
-  // At the start: the first channel (the web page opens one too), or after a switch to new JavaScript,
-  // the chat that was open (not the Lounge, which would mean being in a call: then there's no switch).
+  // At the start: after a switch to new JavaScript, the chat that was open (not the Lounge, which would
+  // mean being in a call: then there's no switch); else the one open when the app was last closed (the
+  // Lounge's page too, without joining: that takes a tap); else the first channel (the web page's way).
+  // One that's gone (a group we left, a channel we may no longer see) is left by the effect below.
   // (No channel at all, which can happen to someone with a limited role: the People page.)
   useEffect(() => {
     if (view !== null || connection.lounge === null) return;  // (null: no channel list yet)
     const first = channels.find((channel) => !channel.heading)?.key ?? PEOPLE;
     const before = restored?.view;
-    go(before && before !== LOUNGE ? before : first, false);
+    go((before && before !== LOUNGE ? before : lastChat()) ?? first, false);
   }, [channels, connection.lounge]);
 
   // New JavaScript from the server while we're open (liveUpdates.js): only switched to when nothing would

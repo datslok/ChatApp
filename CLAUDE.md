@@ -54,6 +54,10 @@ the point is for me to understand how it works, not just to have it done.
   `/`. The server hashes the page's files at startup (`PAGE_VERSION`, sent in "welcome"); a page that
   reconnects to a different one reloads itself (core.js, `reloadIfOutdated`; not in a call, with files
   in any tray, or while sending or editing; every chat's text is kept through sessionStorage "drafts").
+  The last open chat (since 2026-10-16, each device its own, the user's choice): core.js `switchChannel` saves
+  localStorage "lastChat", `lastChat()` reopens it at start (after a reload's history.state; `stillThere` checks
+  both); the phone's App.js writes `last-chat.txt` in go() and opens it after a live update's `restored`, the Lounge
+  as a page only. Gone ones (left groups, ex-friends, private channels) are left by the usual checks.
   Each chat keeps its own tray and half-written text, like Discord (the user's wish, 2026-10-15): messages.js
   `trays` / `drafts` by chat key, `tray` = the open chat's list, `switchDraft` (called by switchChannel) swaps
   them; `sendTray` stops if the chat changes mid-upload (messages go to the open chat). The phone app: App.js's
