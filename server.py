@@ -685,6 +685,10 @@ if "limited" not in table_columns("roles"):
     # From before limited roles: no role limits anyone (0).
     with db:
         db.execute("ALTER TABLE roles ADD COLUMN limited INTEGER NOT NULL DEFAULT 0")
+if "hidden" not in table_columns("roles"):
+    # From before hidden roles: every role shows (0).
+    with db:
+        db.execute("ALTER TABLE roles ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0")
 # Which roles see a private channel: one row per channel per role. (An open channel has none.)
 db.execute("""
     CREATE TABLE IF NOT EXISTS channel_roles (
@@ -1553,7 +1557,7 @@ async def verify(token: str, background_tasks: BackgroundTasks):
             db.execute("UPDATE users SET email_verified = 1 WHERE id = ?", (user_id,))
             db.execute("DELETE FROM email_verifications WHERE user_id = ?", (user_id,))
         befriend_bots()
-        await send_to_everyone(users_message())
+        await announce_users()
         return RedirectResponse("/verify-email?result=verified")
 
     if verified and address == pending:
@@ -1891,7 +1895,7 @@ async def ban(data: BanRequest, request: Request):
     for room in rooms:
         await asyncio.to_thread(remove_from_voice, room, data.user_id)
     await disconnect_user(data.user_id)
-    await send_to_everyone(users_message())  # out of everyone's lists
+    await announce_users()  # out of everyone's lists
     return ban_list()
 
 
@@ -1907,7 +1911,7 @@ async def unban(data: UserChoice, request: Request):
             "UPDATE users SET banned_at = NULL, banned_until = NULL, banned_by = NULL, ban_reason = NULL WHERE id = ?",
             (data.user_id,),
         )
-    await send_to_everyone(users_message())  # back in the lists (they log in again by themselves)
+    await announce_users()  # back in the lists (they log in again by themselves)
     return ban_list()
 
 
@@ -1939,8 +1943,8 @@ async def set_admin(data: AdminChange, request: Request):
         raise HTTPException(400, "Unban them first.")
     with db:
         db.execute("UPDATE users SET is_admin = ? WHERE id = ?", (int(data.admin), data.user_id))
-    await send_to_everyone(users_message())  # every page knows who's an admin (badges, menus, Settings)
-    await announce_channels()  # (admins see every channel)
+    # Every page knows who's an admin (badges, menus, Settings); admins also see hidden roles and every channel.
+    await announce_roles()
     return {"ok": True}
 
 
@@ -2091,7 +2095,7 @@ async def change_username(data: UsernameChange, request: Request):
 
     # Tell every open page: the DM list and online list get the new name, and pages reload
     # the messages they're showing, so the new name appears on old messages too.
-    await send_to_everyone(users_message())
+    await announce_users()
     await send_to_everyone({"type": "renamed", "id": user_id, "username": new_username})
     return {"ok": True, "username": new_username}
 
@@ -2325,7 +2329,7 @@ async def set_picture(request, kind):
         db.execute(f"UPDATE users SET {settings['column']} = ? WHERE id = ?", (picture_id, user_id))
     if old:
         (settings["folder"] / old).unlink(missing_ok=True)
-    await send_to_everyone(users_message())  # everyone's page shows the new picture
+    await announce_users()  # everyone's page shows the new picture
     return {"ok": True, kind: picture_id}
 
 
@@ -2337,7 +2341,7 @@ async def remove_picture(request, kind):
         db.execute(f"UPDATE users SET {settings['column']} = NULL WHERE id = ?", (user_id,))
     if old:
         (settings["folder"] / old).unlink(missing_ok=True)
-    await send_to_everyone(users_message())
+    await announce_users()
     return {"ok": True}
 
 
@@ -2412,7 +2416,7 @@ async def change_profile(data: ProfileChange, request: Request):
     with db:
         # `status or None`: an empty text is stored as NULL, meaning "none".
         db.execute("UPDATE users SET status = ?, bio = ? WHERE id = ?", (status or None, bio or None, user_id))
-    await send_to_everyone(users_message())
+    await announce_users()
     return {"ok": True}
 
 
@@ -3531,13 +3535,22 @@ async def release_file(name: str):
 def channel_list(user_id=None):
     """The sidebar, top to bottom, as this person may see it (None: all of it):
     [{"key": "general", "name": "general", "heading": False, "private": False, "roles": []}, ...]
-    "roles": the role ids that see a private channel. A heading with nothing visible under it goes too."""
+    "roles" (admins only, as roles can be hidden): the role ids that see a private channel. "members" (private
+    channels): the ids of everyone who sees it, for the member list. A heading with nothing visible under it goes too."""
     rows = db.execute("SELECT key, name, heading, private FROM channels ORDER BY position").fetchall()
     roles_of = {}
     for channel, role_id in db.execute("SELECT channel, role_id FROM channel_roles"):
         roles_of.setdefault(channel, []).append(role_id)
-    items = [{"key": key, "name": name, "heading": bool(heading), "private": bool(private), "roles": roles_of.get(key, [])}
-             for key, name, heading, private in rows]
+    admins = [admin_id for (admin_id,) in db.execute("SELECT id FROM users WHERE is_admin = 1")]
+    holders = {}  # role id -> its people
+    for holder, role_id in db.execute("SELECT user_id, role_id FROM user_roles"):
+        holders.setdefault(role_id, set()).add(holder)
+    items = []
+    for key, name, heading, private in rows:
+        item = {"key": key, "name": name, "heading": bool(heading), "private": bool(private), "roles": roles_of.get(key, [])}
+        if private:
+            item["members"] = sorted(set(admins).union(*(holders.get(r, set()) for r in item["roles"])))
+        items.append(item)
     if user_id is None or is_admin(user_id):
         return items
     mine, limited = role_ids_of(user_id), is_limited(user_id)
@@ -3552,7 +3565,7 @@ def channel_list(user_id=None):
             shown.append(item)
     if shown and shown[-1]["heading"]:
         shown.pop()
-    return shown
+    return [{k: v for k, v in item.items() if k != "roles"} for item in shown]  # (the role ids: admins only)
 
 
 def role_ids_of(user_id):
@@ -3785,17 +3798,27 @@ MAX_ROLES = 20
 MAX_ROLE_NAME = 30
 
 
-def roles_message():
-    """{"type": "roles", "roles": [{"id": 1, "name": "Gamers", "colour": "#3ba55c", "limited": False}, ...]},
-    the top one first. "limited": its people only see the private channels their roles open (see "Channels")."""
-    rows = db.execute("SELECT id, name, colour, limited FROM roles ORDER BY position")
-    return {"type": "roles", "roles": [{"id": role_id, "name": name, "colour": colour, "limited": bool(limited)}
-                                       for role_id, name, colour, limited in rows]}
+def roles_message(user_id):
+    """{"type": "roles", "roles": [{"id": 1, "name": "Gamers", "colour": "#3ba55c", "limited": False, "hidden": False}, ...]},
+    the top one first. "limited": its people only see the private channels their roles open (see "Channels").
+    "hidden": only admins know it exists (no colour, member list section or profile tag): everyone else's
+    pages never get it, nor see anyone have it (users_for)."""
+    rows = db.execute("SELECT id, name, colour, limited, hidden FROM roles ORDER BY position").fetchall()
+    admin = is_admin(user_id)
+    return {"type": "roles", "roles": [
+        {"id": role_id, "name": name, "colour": colour, "limited": bool(limited), "hidden": bool(hidden)}
+        for role_id, name, colour, limited, hidden in rows if admin or not hidden
+    ]}
+
+
+def hidden_role_ids():
+    return {role_id for (role_id,) in db.execute("SELECT id FROM roles WHERE hidden = 1")}
 
 
 async def announce_roles():
-    await send_to_everyone(roles_message())
-    await send_to_everyone(users_message())
+    for websocket, client in list(clients.items()):
+        await send(websocket, roles_message(client["user_id"]))
+    await announce_users()
     await announce_channels()  # (who sees which channel can depend on the roles)
 
 
@@ -3893,6 +3916,21 @@ async def set_role_limited(request: Request, role_id: int, data: RoleLimited):
     return {"ok": True}
 
 
+class RoleHidden(BaseModel):
+    hidden: bool
+
+
+@app.post("/roles/{role_id}/hidden")
+async def set_role_hidden(request: Request, role_id: int, data: RoleHidden):
+    """Hide a role from everyone but admins (no colour, section or tag; see roles_message), or show it (admins only)."""
+    logged_in_admin(request)
+    existing_role(role_id)
+    with db:
+        db.execute("UPDATE roles SET hidden = ? WHERE id = ?", (int(data.hidden), role_id))
+    await announce_roles()
+    return {"ok": True}
+
+
 class RoleMember(BaseModel):
     user_id: int
     member: bool  # True: give them the role; False: take it away
@@ -3910,7 +3948,7 @@ async def set_role_member(request: Request, role_id: int, data: RoleMember):
             db.execute("INSERT OR IGNORE INTO user_roles (user_id, role_id) VALUES (?, ?)", (data.user_id, role_id))
         else:
             db.execute("DELETE FROM user_roles WHERE user_id = ? AND role_id = ?", (data.user_id, role_id))
-    await send_to_everyone(users_message())
+    await announce_users()
     await announce_channels()  # (their roles may open or close channels for them)
     return {"ok": True}
 
@@ -4169,6 +4207,11 @@ def users_message():
         " JOIN roles ON roles.id = user_roles.role_id ORDER BY roles.position"
     ):
         roles_of.setdefault(user_id, []).append(role_id)
+    # Who has a limited role (not admins): left out of open channels' member lists (see "Channels").
+    limited = {user_id for (user_id,) in db.execute(
+        "SELECT user_roles.user_id FROM user_roles JOIN roles ON roles.id = user_roles.role_id"
+        " JOIN users ON users.id = user_roles.user_id WHERE roles.limited = 1 AND users.is_admin = 0"
+    )}
     users = []
     for user_id, name, avatar, banner, status, bio, admin, bot, chosen, owner in rows:
         presence = shown_presence(user_id, chosen, bool(bot))
@@ -4179,9 +4222,27 @@ def users_message():
             "avatar": avatar, "banner": banner, "status": status, "bio": bio, "admin": bool(admin),
             "bot": bool(bot),  # the AI bot: the page offers it in DMs' @ suggestions too
             "owner": bool(owner),  # the server's owner (see "Bans and admins")
-            "roles": roles_of.get(user_id, []),  # role ids, the top one first (see "roles")
+            "roles": roles_of.get(user_id, []),  # role ids, the top one first (see "roles"; hidden: users_for)
+            "limited": user_id in limited,  # sees only their private channels (see "Channels")
         })
     return {"type": "users", "users": users}
+
+
+def users_for(user_id, message):
+    """The users message as this person may see it: hidden roles (see "Roles") left out, but for admins."""
+    if is_admin(user_id):
+        return message
+    hidden = hidden_role_ids()
+    if not hidden:
+        return message
+    return {**message, "users": [{**user, "roles": [r for r in user["roles"] if r not in hidden]} for user in message["users"]]}
+
+
+async def announce_users(message=None):
+    """Send every page the users list (each its own, see users_for)."""
+    message = message or users_message()
+    for websocket, client in list(clients.items()):
+        await send(websocket, users_for(client["user_id"], message))
 
 
 shown_presences = {}  # what everyone was last told: {user_id: ("idle", False, None), ...} (see announce_presences)
@@ -4194,7 +4255,7 @@ async def announce_presences():
     now = {user["id"]: (user["presence"], user["mobile"], user["activity"]) for user in message["users"]}
     if now != shown_presences:
         shown_presences = now
-        await send_to_everyone(message)
+        await announce_users(message)
 
 
 async def watch_presences():
@@ -5136,12 +5197,12 @@ async def chat(websocket: WebSocket):
         await send(websocket, groups_message(user_id))
         await send(websocket, mutes_message(user_id))
         await send(websocket, blocks_message(user_id))
-        await send(websocket, roles_message())  # (before "users", whose roles refer to these)
+        await send(websocket, roles_message(user_id))  # (before "users", whose roles refer to these)
         await send(websocket, custom_emoji_message())
         await send(websocket, {
             "type": "unread", "channels": unread_channels(user_id), "mentions": unread_mentions(user_id),
         })
-        await send(websocket, users_message())  # this tab
+        await send(websocket, users_for(user_id, users_message()))  # this tab
         await announce_presences()  # and everyone, if this changed what they see (they came online)
         await send(websocket, voice_members_message(user_id))  # who's in the voice channels right now
         # Their DM and group calls that someone is in right now (so the banner can offer "Join call").

@@ -369,6 +369,11 @@ the point is for me to understand how it works, not just to have it done.
   channel row, Limited under each role (web settings.js `makeChannelAccess`; phone AdminSettings.js `ChannelAccess`).
   Pages: `seesChannel` (people.js; phone chats.js) filters a channel's member list; no channels -> People; the
   Voice section hidden (`loungeAllowed`; phone `connection.lounge`, null until the first "channels").
+  Hidden roles (`roles.hidden`, `/roles/{id}/hidden`; the user's wish: nobody but admins should know the Parents
+  role): `roles_message(user_id)` leaves them out for non-admins and `users_for` strips them from each person's
+  roles (every "users" goes through `announce_users`); so non-admins get a channel's `members` (private) and each
+  user's `limited` instead of role ids ("roles" in channel items is admin-only). `topRole` skips hidden roles on
+  both pages (no colour or member list section, even for admins; only the profile tag shows, to admins).
   `delete_messages_in(key)` removes a channel's or group's messages with everything belonging to them.
 - Group DMs (server.py, "Group DMs"; people.js, "Group DMs"): `group_dms` (key `g:` + 8 hex, name or NULL =
   the members' names) and `group_members`. Their messages are saved under the key, so `can_join`

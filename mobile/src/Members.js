@@ -20,7 +20,7 @@ export default function Members({ connection, view, onProfile, onUserMenu }) {
   let members = everyone;
   if (partner !== null) members = everyone.filter((user) => user.id === me.id || user.id === partner);
   else if (group) members = everyone.filter((user) => group.members.includes(user.id));
-  else if (channel) members = everyone.filter((user) => seesChannel(user, channel, roles));
+  else if (channel) members = everyone.filter((user) => seesChannel(user, channel));
 
   const bots = members.filter((user) => user.bot);
   const humans = members.filter((user) => !user.bot);

@@ -12,13 +12,12 @@ export function dmPartner(key, myId) {
 }
 
 // May this person see this channel? The server's rule (server.py, "Who sees which channel"), like the
-// web page's seesChannel: admins see all; a private channel needs one of its roles; an open one is for
-// everyone whose roles aren't limited. (Only for drawing: the server decides who really gets in.)
-export function seesChannel(user, channel, roles) {
+// web page's seesChannel: a private channel comes with everyone who sees it ("members"; its roles may be
+// hidden from us), an open one is for everyone not limited, and admins see all. (Only for drawing.)
+export function seesChannel(user, channel) {
   if (user.admin) return true;
-  const theirs = user.roles ?? [];
-  if (channel.private) return channel.roles.some((id) => theirs.includes(id));
-  return !roles.some((role) => role.limited && theirs.includes(role.id));
+  if (channel.private) return (channel.members ?? []).includes(user.id);
+  return !user.limited;
 }
 
 // A group's people: its members without the bots (every bot is in every group, see server.py).

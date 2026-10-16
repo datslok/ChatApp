@@ -24,14 +24,15 @@ function makeDot(presence, mobile = false) {
 // up the picture here, so a changed picture shows up everywhere at once.
 const people = new Map();
 
-// The roles, from the server's "roles", the top one first: [{id, name, colour}, ...]. Each person
-// has the ids of theirs (top first) in their "roles"; the top one colours their name.
+// The roles, from the server's "roles", the top one first: [{id, name, colour, limited, hidden}, ...].
+// Each person has the ids of theirs (top first) in their "roles"; the top one colours their name.
+// A hidden role only reaches admins' pages, and colours nothing even there (only its profile tag shows).
 let roles = [];
 
-// Someone's top role, or undefined (no roles, or one that's just been deleted).
+// Someone's top role that shows (not hidden), or undefined (none, or one that's just been deleted).
 function topRole(userId) {
   const ids = people.get(userId)?.roles ?? [];
-  return roles.find((role) => ids.includes(role.id));  // (roles is in order: the first found is the top one)
+  return roles.find((role) => !role.hidden && ids.includes(role.id));  // (in order: the first found is the top one)
 }
 
 // The colour for someone's name: their top role's, or "" (the theme's own).
@@ -198,14 +199,13 @@ function chatMembers() {
   return channel ? everyone.filter((user) => seesChannel(user, channel)) : everyone;
 }
 
-// May this person see this channel? The server's rule (server.py, "Who sees which channel"):
-// admins see all; a private channel needs one of its roles; an open one is for everyone whose
-// roles aren't limited. (Only for drawing: the server decides who really gets in.)
+// May this person see this channel? The server's rule (server.py, "Who sees which channel"): a
+// private channel comes with everyone who sees it ("members"; its roles may be hidden from us), an
+// open one is for everyone not limited, and admins see all. (Only for drawing: the server decides.)
 function seesChannel(user, channel) {
   if (user.admin) return true;
-  const theirs = user.roles ?? [];
-  if (channel.private) return channel.roles.some((id) => theirs.includes(id));
-  return !roles.some((role) => role.limited && theirs.includes(role.id));
+  if (channel.private) return (channel.members ?? []).includes(user.id);
+  return !user.limited;
 }
 
 // The right column, for the chat we're in (chatMembers): redrawn when people change (showUsers),

@@ -1340,6 +1340,11 @@ function makeRoleAdminItem(role, index) {
     role.limited, (checked) => roleAdminRequest(`/roles/${role.id}/limited`, { limited: checked }));
   limited.classList.add("role-limited");
   box.appendChild(limited);
+  // Hidden: only admins know it (no colour, no section in the member list; only admins see its tag).
+  const hidden = makeCheckbox("Hidden: only admins see this role, and it doesn't colour names or get a section",
+    role.hidden, (checked) => roleAdminRequest(`/roles/${role.id}/hidden`, { hidden: checked }));
+  hidden.classList.add("role-limited");
+  box.appendChild(hidden);
 
   // Its people, each with × to take the role away, and a list to give it to someone else.
   const members = document.createElement("div");

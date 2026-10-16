@@ -345,7 +345,7 @@ function Channels({ connection }) {
 
 // One role: its colour (tap to pick), its name (Save once changed), ↑ ↓ 🗑, and under it its people,
 // each with × to take it away, and "+ Add someone" to give it to someone else. Then Limited.
-function RoleRow({ role, index, count, connection, onEdit, onMove, onDelete, onMember, onPickColour, onLimited }) {
+function RoleRow({ role, index, count, connection, onEdit, onMove, onDelete, onMember, onPickColour, onLimited, onHidden }) {
   const styles = useStyles(makeStyles);
   const { colors } = useTheme();
   const [name, setName] = useState(role.name);
@@ -386,6 +386,10 @@ function RoleRow({ role, index, count, connection, onEdit, onMove, onDelete, onM
         checked={role.limited} onPress={() => onLimited(!role.limited)}
         label="Limited: sees only the private channels it's ticked in, no other channels and no Lounge"
       />
+      <CheckLine
+        checked={role.hidden} onPress={() => onHidden(!role.hidden)}
+        label="Hidden: only admins see this role, and it doesn't colour names or get a section"
+      />
     </View>
   );
 }
@@ -419,7 +423,7 @@ function Roles({ connection }) {
       <SectionHelp>
         A role colours its people's names and gives them a section in the member list. Someone with several roles gets
         the one highest in this list. Everyone sees changes straight away. A limited role's people only see their DMs,
-        groups and the private channels it's ticked in (Channels).
+        groups and the private channels it's ticked in (Channels). A hidden role is only known to admins.
       </SectionHelp>
       <View style={styles.roleList}>
         {roles.map((role, index) => (
@@ -430,6 +434,7 @@ function Roles({ connection }) {
               () => adminRequest(`/roles/${role.id}/delete`, {}, setStatus))}
             onMember={(user, member) => adminRequest(`/roles/${role.id}/members`, { user_id: user.id, member }, setStatus)}
             onLimited={(limited) => adminRequest(`/roles/${role.id}/limited`, { limited }, setStatus)}
+            onHidden={(hidden) => adminRequest(`/roles/${role.id}/hidden`, { hidden }, setStatus)}
           />
         ))}
       </View>

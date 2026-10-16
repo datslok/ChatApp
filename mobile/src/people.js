@@ -7,9 +7,10 @@ import { letterColors, useStyles, useTheme } from './theme';
 import { SERVER } from './config';
 
 // Someone's top role (roles come top first, so the first of theirs found is the top one), or null.
+// Hidden roles (only admins get them) colour nothing, like the web page's topRole.
 export function topRole(user, roles) {
   const ids = user?.roles ?? [];
-  return roles.find((role) => ids.includes(role.id)) ?? null;
+  return roles.find((role) => !role.hidden && ids.includes(role.id)) ?? null;
 }
 
 // The colour for someone's name: their top role's, or undefined (the place's own text colour).
