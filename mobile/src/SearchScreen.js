@@ -15,7 +15,7 @@ import { Avatar, matchPeople } from './people';
 const last = { query: '', where: 'here', fromId: null };
 
 // onJump(chat, messageId): close this and go to the message (in another chat, too).
-export default function SearchScreen({ connection, onJump, onClose }) {
+export default function SearchScreen({ connection, onJump, onClose, onUserMenu }) {
   const cardStyles = useStyles(makeCardStyles);
   const styles = useStyles(makeStyles);
   const { colors } = useTheme();
@@ -144,7 +144,7 @@ export default function SearchScreen({ connection, onJump, onClose }) {
         <ScrollView style={cardStyles.list} contentContainerStyle={cardStyles.listInside} keyboardShouldPersistTaps="handled">
           {results.map((message) => (
             <MessageCard
-              key={message.id} message={message} connection={connection}
+              key={message.id} message={message} connection={connection} onUserMenu={onUserMenu}
               where={where === 'all' ? chatLabel(message.channel, connection) : null}
             >
               <CardButton label="Jump" onPress={() => onJump(message.channel, message.id)} />

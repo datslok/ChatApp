@@ -9,6 +9,7 @@ import {
   StyleSheet, Text, TextInput, View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as Clipboard from 'expo-clipboard';
 import Icon from './Icon';
 import MessageText, { Attachment, CustomEmoji, LinkPreview, formatSize } from './MessageText';
 import PinsScreen from './PinsScreen';
@@ -30,6 +31,12 @@ const MAX_SUGGESTIONS = 10;
 
 // A message from the same person within 5 minutes joins the one before (no picture or name).
 const GROUP_MINUTES = 5;
+
+// The character counter shows this close to the limit (the web page's COUNT_FROM).
+const COUNT_FROM = 200;
+
+// Statuses in words, for the @ suggestions (the web page's PRESENCE_NAMES, lower case).
+const PRESENCE_NAMES = { online: 'online', idle: 'idle', dnd: 'do not disturb' };
 
 // Going to a message further up (a pin, a search result, a reply's quote): at most this many batches
 // of 50 older messages are loaded to reach it (2,000 messages, like the web page's MAX_JUMP_BATCHES).
@@ -167,6 +174,13 @@ function Message({ message, grouped, connection, isBlocked, flash, onShow, onLon
   }
 
   const note = message.kind !== null;  // the server's own notes: "📞 Call · 12 min", "📌 pinned a message."
+
+  // A long press on a reaction: who reacted, by their current names (the web page shows them on hover).
+  function whoReacted(reaction) {
+    const custom = reaction.emoji.match(/^custom:(\d+)$/);
+    const title = custom ? `:${emoji[custom[1]]?.name ?? 'deleted'}:` : reaction.emoji;
+    Alert.alert(title, reaction.user_ids.map((id) => users[id]?.name ?? 'someone').join(', '));
+  }
   return (
     // A long press (half a second) opens the menu: on a phone it stands in for the web page's bar
     // of buttons that appears when the mouse is over a message.
@@ -207,7 +221,7 @@ function Message({ message, grouped, connection, isBlocked, flash, onShow, onLon
         )}
         {/* Then, like the web page: the text, the attached file, the link's preview card, the reactions. */}
         {message.text ? (
-          <MessageText text={message.text} users={users} emoji={emoji} edited={message.edited_at} note={note} />
+          <MessageText text={message.text} users={users} emoji={emoji} edited={message.edited_at} note={note} onMention={onProfile} />
         ) : null}
         {message.file ? (
           <Attachment file={message.file} sender={message.user_id === me.id ? null : name} onLongPress={() => onLongPress(message)} />
@@ -221,6 +235,7 @@ function Message({ message, grouped, connection, isBlocked, flash, onShow, onLon
                 <Pressable
                   key={reaction.emoji}
                   onPress={() => connection.react(message.id, reaction.emoji)}  // add ours, or take it back
+                  onLongPress={() => whoReacted(reaction)}
                   style={[styles.chip, mine && styles.chipMine]}
                 >
                   <ReactionEmoji reaction={reaction.emoji} emoji={emoji} />
@@ -254,9 +269,7 @@ function ReplyLine({ reply, connection, onJump }) {
       <Icon name="reply" size={14} color={colors.textMuted} />
       <Avatar user={users[reply.user_id]} name={reply.name} size={16} />
       <Text style={styles.replyName}>{users[reply.user_id]?.name ?? reply.name}</Text>
-      <Text numberOfLines={1} style={styles.replyText}>
-        {reply.text ? readableText(reply.text, users, emoji) : reply.file ? 'Attachment' : ''}
-      </Text>
+      <Text numberOfLines={1} style={styles.replyText}>{replyContent(reply, users, emoji, styles, colors)}</Text>
     </Pressable>
   );
 }
@@ -294,9 +307,23 @@ function PendingMessage({ item, connection }) {
   );
 }
 
+// A reply quote's text the web page's way (fillWithEmoji): custom emoji as small pictures, mentions
+// highlighted, the rest as it is; a file without text: a paperclip and "Attachment".
+function replyContent(reply, users, emoji, styles, colors) {
+  if (!reply.text) return reply.file ? [<Icon key="clip" name="paperclip" size={12} color={colors.textMuted} />, ' Attachment'] : null;
+  // split() with a (group) keeps the tokens' insides at the odd places: "hi <:17>" -> ["hi ", ":17", ""].
+  return reply.text.split(/<(:\d+|@\d+|@everyone)>/).map((part, index) => {
+    if (index % 2 === 0) return part;
+    if (part.startsWith(':')) return <CustomEmoji key={index} item={emoji[part.slice(1)]} size={16} />;
+    const name = part === '@everyone' ? 'everyone' : users[part.slice(1)]?.name ?? 'unknown';
+    return <Text key={index} style={styles.replyMention}>@{name}</Text>;
+  });
+}
+
 // The long-press menu, a sheet from the bottom. The same choices, in the same order, as the web
-// page's bar on a message: reactions, Reply, Pin, Edit, Delete.
-function MessageMenu({ message, canChange, onClose, onReact, onMoreReactions, onReply, onPin, onEdit, onDelete }) {
+// page's bar on a message: reactions, Reply, Pin, Edit, Delete; and Copy text (a PC's mouse selects it).
+// At its top, when it was sent (the web page shows a grouped message's time on hover).
+function MessageMenu({ message, canChange, onClose, onReact, onMoreReactions, onReply, onCopy, onPin, onEdit, onDelete }) {
   const styles = useStyles(makeStyles);
   // A Modal covers the whole screen, navigation bar included, so the sheet leaves room for that
   // bar itself: insets.bottom is its height.
@@ -306,6 +333,7 @@ function MessageMenu({ message, canChange, onClose, onReact, onMoreReactions, on
       <Pressable style={styles.backdrop} onPress={onClose}>
         {/* A Pressable without onPress inside: taps on the sheet itself don't reach the backdrop. */}
         <Pressable style={[styles.sheet, { paddingBottom: insets.bottom + 8 }]}>
+          <Text style={styles.menuTime}>{headerTime(new Date(message.sent_at))}</Text>
           <View style={styles.quickReactions}>
             {QUICK_REACTIONS.map((reaction) => (
               <Pressable
@@ -322,6 +350,7 @@ function MessageMenu({ message, canChange, onClose, onReact, onMoreReactions, on
             </Pressable>
           </View>
           <MenuItem icon="reply" label="Reply" onPress={onReply} />
+          {message.text ? <MenuItem icon="copy" label="Copy text" onPress={onCopy} /> : null}
           {message.kind === null ? <MenuItem icon="pin" label={message.pinned ? 'Unpin' : 'Pin'} onPress={onPin} /> : null}
           {canChange && message.kind === null ? <MenuItem icon="pencil" label="Edit" onPress={onEdit} /> : null}
           {canChange ? <MenuItem icon="trash-2" label="Delete" onPress={onDelete} danger /> : null}
@@ -435,9 +464,11 @@ export default function ChatScreen({
   const [jump, setJump] = useState(null);
   const jumpBatches = useRef({ count: 0, waitingFor: null });  // batches asked for, and our oldest id then
   const [flash, setFlash] = useState(null);  // the message that lights up: {id, n}
+  const [charNote, setCharNote] = useState(null);  // the counter's warning for now ("No room for that emoji…")
   const list = useRef(null);     // the FlatList, to scroll it
   const rowsNow = useRef([]);    // the rows it was last given (newest first)
   const scrollTries = useRef(0);
+  const scrollPosition = useRef(0.5);  // where scrollToIndex puts its row (onScrollToIndexFailed tries again with it)
   // Each chat keeps its own tray and text, like Discord: a picture picked or words typed in a DM stay
   // there when you go elsewhere.
   // Each chat's tray (trays, from App.js): files about to be sent there,
@@ -520,9 +551,15 @@ export default function ChatScreen({
       ...people.filter((user) => user.name.toLowerCase().startsWith(query)),
       ...people.filter((user) => !user.name.toLowerCase().startsWith(query) && user.name.toLowerCase().includes(query)),
     ];
-    suggestions = named.map((user) => ({ key: 'user' + user.id, user, label: user.name, insert: `@${user.name} ` }));
-    const isChannel = !current.startsWith('dm:') && !current.startsWith('g:');
-    if (isChannel && 'everyone'.startsWith(query)) suggestions.push({ key: 'everyone', label: 'everyone', insert: '@everyone ' });
+    suggestions = named.map((user) => ({
+      key: 'user' + user.id, user, label: user.name, insert: `@${user.name} `,
+      // What they wrote about themselves, else their status while they're on (the web page's detail).
+      detail: user.status || (user.online ? PRESENCE_NAMES[user.presence] ?? 'online' : ''),
+    }));
+    // @everyone in DMs and groups too, like the web page's findPeople.
+    if ('everyone'.startsWith(query)) {
+      suggestions.push({ key: 'everyone', label: 'everyone', insert: '@everyone ', detail: 'Notify everyone who can see this channel' });
+    }
     suggestions = suggestions.slice(0, MAX_SUGGESTIONS);
   }
 
@@ -536,6 +573,7 @@ export default function ChatScreen({
   // Typing: tell the others ("kari is typing…"), at most every 2 s (connection.js).
   function onType(text) {
     setDraft(text);
+    setCharNote(null);
     if (text.trim()) connection.sendTyping();
   }
 
@@ -543,7 +581,10 @@ export default function ChatScreen({
   // ":name:" (the server makes it a picture). Not if the message would get too long.
   function insertEmoji(value) {
     const text = value.startsWith('custom:') ? `:${connection.emoji[value.slice(7)]?.name}:` : value;
-    if (draft.length + text.length > me.maxTextLength) return;
+    if (draft.length + text.length > me.maxTextLength) {
+      setCharNote('No room for that emoji: character limit reached');
+      return;
+    }
     const before = draft.slice(0, cursor) + text;
     setDraft(before + draft.slice(cursor));
     setCursor(before.length);
@@ -566,6 +607,7 @@ export default function ChatScreen({
         return;
       }
       connection.sendMessage('', replyTo?.id, answer.id);
+      toBottom();
       setReplyTo(null);
       setStatus(null);
     } catch {
@@ -574,6 +616,11 @@ export default function ChatScreen({
   }
 
   // Something went wrong: in red on the status line, gone after 5 s (the web page's showUploadError).
+  // Sending while scrolled up: back down to the newest, where it appears (the list is upside down: 0 is the bottom).
+  function toBottom() {
+    list.current?.scrollToOffset({ offset: 0, animated: true });
+  }
+
   function showError(text) {
     setStatus({ text, error: true });
     setTimeout(() => setStatus((now) => (now?.text === text ? null : now)), 5000);
@@ -607,6 +654,7 @@ export default function ChatScreen({
       setStatus((now) => (now?.finding ? null : now));
       scrollTries.current = 0;
       // viewPosition 0.5: in the middle of the screen.
+      scrollPosition.current = 0.5;
       list.current?.scrollToIndex({ index, viewPosition: 0.5, animated: true });
       setFlash({ id: jump.id, n: Date.now() });
       return;
@@ -637,8 +685,27 @@ export default function ChatScreen({
     if (scrollTries.current >= 10) return;
     scrollTries.current += 1;
     list.current?.scrollToOffset({ offset: info.averageItemLength * info.index, animated: false });
-    setTimeout(() => list.current?.scrollToIndex({ index: info.index, viewPosition: 0.5, animated: true }), 100);
+    setTimeout(() => list.current?.scrollToIndex({ index: info.index, viewPosition: scrollPosition.current, animated: true }), 100);
   }
+
+  // The NEW line: once a chat's history is here, if the line is above what's on screen (more new
+  // messages than fit), scroll so it's at the top, to start reading where we left off (the web page's
+  // scrollToNewDivider). Judged once, when FlatList first says which rows are in view. (A ref as the
+  // callback: FlatList doesn't allow it to change. Set while drawing: before FlatList can call it.)
+  const checkNewLine = useRef(false);
+  const hadMessages = useRef(false);
+  if (messages !== null && !hadMessages.current && lastRead !== null && !jump && !jumpRequest) checkNewLine.current = true;
+  hadMessages.current = messages !== null;
+  const onViewableItemsChanged = useRef(({ viewableItems }) => {
+    if (!checkNewLine.current) return;
+    checkNewLine.current = false;
+    if (viewableItems.some((viewable) => viewable.item.type === 'new')) return;  // in view already
+    const index = rowsNow.current.findIndex((row) => row.type === 'new');
+    if (index === -1) return;
+    scrollTries.current = 0;
+    scrollPosition.current = 1;  // (the list is upside down: 1 is the top of the screen)
+    list.current?.scrollToIndex({ index, viewPosition: 1, animated: false });
+  }).current;
 
   // Mention (the user menu): App.js has added "@name " to our text; the cursor goes after it.
   useEffect(() => {
@@ -658,8 +725,10 @@ export default function ChatScreen({
   // Each: {uri, name, type, size}.
   function addToTray(files) {
     const room = MAX_TRAY_FILES - tray.length;
-    const fitting = files.filter((file) => file.size <= MAX_UPLOAD_SIZE);
-    if (fitting.length < files.length) showError('Files can be at most 50 MB');
+    const fitting = files.filter((file) => file.size > 0 && file.size <= MAX_UPLOAD_SIZE);
+    const empty = files.find((file) => file.size === 0);
+    if (empty) showError(`${empty.name} is empty`);  // (nothing to send: the server refuses those too)
+    else if (fitting.length < files.length) showError('Files can be at most 50 MB');
     else if (fitting.length > room) showError(`At most ${MAX_TRAY_FILES} files at a time`);
     const added = fitting.slice(0, room).map((file) => ({
       ...file,
@@ -783,6 +852,7 @@ export default function ChatScreen({
   // going with the first one (and the reply). One that fails stays in the tray, in red (sendTray).
   async function sendTray(caption) {
     setUploading(true);
+    toBottom();
     const chat = current;  // a message goes to the open chat, so we stop if that changes
     let reply = replyTo?.id;
     for (const item of tray) {
@@ -819,14 +889,26 @@ export default function ChatScreen({
       if (!uploading) sendTray(text);
       return;
     }
-    if (!text) return;
     if (editing) {
-      connection.editMessage(editing.id, text);
+      const message = editing;
       setEditing(null);
-    } else {
-      connection.sendMessage(text, replyTo?.id);
-      setReplyTo(null);
+      setDraft('');
+      if (text === readableText(message.text, users, connection.emoji).trim()) return;  // nothing changed
+      if (!text && !message.file) {
+        // Emptied completely: that's really a delete (like on the web page and Discord), asked first.
+        Alert.alert('Delete message?', "This can't be undone.", [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Delete', style: 'destructive', onPress: () => connection.deleteMessage(message.id) },
+        ]);
+        return;
+      }
+      connection.editMessage(message.id, text);  // (a file's caption may be emptied: the file stays)
+      return;
     }
+    if (!text) return;
+    connection.sendMessage(text, replyTo?.id);
+    toBottom();
+    setReplyTo(null);
     setDraft('');
   }
 
@@ -865,6 +947,12 @@ export default function ChatScreen({
   function cancelEdit() {
     setEditing(null);
     setDraft('');
+  }
+
+  // Copy text (the long-press menu): as typed, "@kari" and ":pog:", not the stored "<@2>".
+  function copyText() {
+    Clipboard.setStringAsync(readableText(menuFor.text, users, connection.emoji));  // (Android says "Copied")
+    setMenuFor(null);
   }
 
   function togglePin() {
@@ -943,11 +1031,20 @@ export default function ChatScreen({
         keyboardShouldPersistTaps="handled"  // a tap on a chip works even while the keyboard is up
         onEndReached={connection.loadOlder}
         onEndReachedThreshold={0.5}
+        onViewableItemsChanged={onViewableItemsChanged}
       />
     );
   }
 
   const replyName = replyTo && (users[replyTo.user_id]?.name ?? replyTo.name);
+
+  // The character counter (the web page's updateCharCount): "1850 / 2000" near the limit, a red warning at it.
+  // (.length counts many emoji as 2 where the server counts 1: the limit comes a little early, never late.)
+  const max = me.maxTextLength;
+  let counter = null;
+  if (charNote) counter = { text: charNote, limit: true };
+  else if (draft.length >= max) counter = { text: `Character limit reached (${max})`, limit: true };
+  else if (draft.length >= max - COUNT_FROM) counter = { text: `${draft.length} / ${max}`, limit: false };
 
   // "kari is typing…", "kari and ola are typing…", "Several people are typing…" (the web page's words).
   const { typing } = connection;
@@ -965,7 +1062,8 @@ export default function ChatScreen({
           a file or GIF on its way (or what went wrong) on the right. */}
       <View style={styles.statusLine}>
         <Text numberOfLines={1} style={styles.statusText}>{typingText}</Text>
-        {status ? <Text style={[styles.statusText, status.error && styles.statusError]}>{status.text}</Text> : null}
+        {status ? <Text style={[styles.statusText, status.error && styles.statusError]}>{status.text}</Text>
+          : counter ? <Text style={[styles.statusText, counter.limit && styles.statusError]}>{counter.text}</Text> : null}
       </View>
 
       {suggestions.length > 0 ? (
@@ -980,14 +1078,14 @@ export default function ChatScreen({
               {suggestion.user ? <Avatar user={suggestion.user} size={24} /> : null}
               {suggestion.custom ? <CustomEmoji item={suggestion.custom} size={24} /> : null}
               {suggestion.character ? <Text style={styles.suggestionEmoji}>{suggestion.character}</Text> : null}
-              {suggestion.key === 'everyone' ? <Text style={styles.suggestionAt}>@</Text> : null}
+              {suggestion.key === 'everyone' ? <Icon name="megaphone" size={22} color={colors.icon} /> : null}
               <Text
                 numberOfLines={1}
                 style={[styles.suggestionName, { color: (suggestion.user && nameColor(suggestion.user, roles)) ?? colors.text }]}
               >
                 {suggestion.label}
               </Text>
-              {suggestion.detail ? <Text style={styles.suggestionDetail}>{suggestion.detail}</Text> : null}
+              {suggestion.detail ? <Text numberOfLines={1} style={styles.suggestionDetail}>{suggestion.detail}</Text> : null}
             </Pressable>
           ))}
         </View>
@@ -1031,7 +1129,7 @@ export default function ChatScreen({
         </Pressable>
         <Pressable
           onPress={send}
-          disabled={!draft.trim() && (tray.length === 0 || !!editing)}
+          disabled={!draft.trim() && !editing && tray.length === 0}  // (an edit emptied: a delete, or a cleared caption)
           style={({ pressed }) => [styles.send, pressed && styles.sendPressed]}
         >
           <Text style={styles.sendText}>{editing ? 'Save' : 'Send'}</Text>
@@ -1065,6 +1163,7 @@ export default function ChatScreen({
             setMenuFor(null);
           }}
           onReply={startReply}
+          onCopy={copyText}
           onPin={togglePin}
           onEdit={startEdit}
           onDelete={confirmDelete}
@@ -1072,9 +1171,9 @@ export default function ChatScreen({
       ) : null}
 
       {popup === 'pins' ? (
-        <PinsScreen connection={connection} onJump={(id) => jumpTo(current, id)} onClose={() => setPopup(null)} />
+        <PinsScreen connection={connection} onJump={(id) => jumpTo(current, id)} onClose={() => setPopup(null)} onUserMenu={onUserMenu} />
       ) : null}
-      {popup === 'search' ? <SearchScreen connection={connection} onJump={jumpTo} onClose={() => setPopup(null)} /> : null}
+      {popup === 'search' ? <SearchScreen connection={connection} onJump={jumpTo} onClose={() => setPopup(null)} onUserMenu={onUserMenu} /> : null}
 
       {/* A reaction (from a message's long-press menu): every emoji, in a popup sheet. */}
       {picker?.react ? (
@@ -1125,6 +1224,7 @@ const makeStyles = (colors, size) => StyleSheet.create({
   replyLine: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 2 },
   replyName: { fontSize: size(12.8), fontWeight: '700', color: colors.textSoft },
   replyText: { flex: 1, fontSize: size(12.8), color: colors.textMuted },
+  replyMention: { backgroundColor: colors.accent30, color: colors.mentionText },  // (MessageText's .mention)
   // .reactions and .reaction-chip.
   reactions: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 4 },
   chip: {
@@ -1153,6 +1253,7 @@ const makeStyles = (colors, size) => StyleSheet.create({
   quickReaction: { padding: 8, borderRadius: 24 },
   quickReactionText: { fontSize: size(28) },
   menuItem: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 20, paddingVertical: 14 },
+  menuTime: { textAlign: 'center', fontSize: size(12), color: colors.textMuted, marginBottom: 4 },
   menuText: { color: colors.text, fontSize: size(16) },
   danger: { color: colors.red },
   // #autocomplete.
@@ -1162,10 +1263,9 @@ const makeStyles = (colors, size) => StyleSheet.create({
   },
   suggestion: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 8, paddingVertical: 6, borderRadius: 6 },
   suggestionPressed: { backgroundColor: colors.bgHover },
-  suggestionAt: { width: 24, textAlign: 'center', fontSize: size(18), color: colors.textMuted },
   suggestionName: { flexShrink: 1, fontSize: size(15.2) },
   suggestionEmoji: { width: 24, textAlign: 'center', fontSize: size(20.8) },
-  suggestionDetail: { marginLeft: 'auto', fontSize: size(12.8), color: colors.textMuted },  // pushed to the right
+  suggestionDetail: { flexShrink: 1, marginLeft: 'auto', fontSize: size(12.8), color: colors.textMuted },  // pushed to the right
   // #status-line: always 1.2 lines tall, typing on the left, sending on the right.
   statusLine: { flexDirection: 'row', justifyContent: 'space-between', gap: 12, height: 17, paddingHorizontal: 16 },
   statusText: { flexShrink: 1, fontSize: size(13.6), lineHeight: size(17), color: colors.textMuted },

@@ -6,17 +6,28 @@ import {
   Image, Modal, Pressable, ScrollView, SectionList, StyleSheet, Text, TextInput, View, useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { File, Paths } from 'expo-file-system';
 import { useStyles, useTheme } from './theme';
 import { SERVER } from './config';
 import { CustomEmoji } from './MessageText';
 
-// Emoji picked lately, newest first (unicode emoji, or "custom:17"): up to 24. Kept while the app
-// runs (the web page keeps it in the browser; storage on the phone comes with Settings).
-let recentEmoji = [];
+// Emoji picked lately, newest first (unicode emoji, or "custom:17"): up to 24. Kept on the phone in
+// recent-emoji.json, so they're still there after a restart (the web page keeps them in the browser).
+const recentFile = new File(Paths.document, 'recent-emoji.json');
+let recentEmoji = (() => {
+  try {
+    if (recentFile.exists) return JSON.parse(recentFile.textSync());
+  } catch {}
+  return [];
+})();
 let lastTab = 'emoji';  // the tab used last: the smiley opens that one again, like the web page
 
 function remember(value) {
   recentEmoji = [value, ...recentEmoji.filter((other) => other !== value)].slice(0, 24);
+  try {
+    if (!recentFile.exists) recentFile.create();
+    recentFile.write(JSON.stringify(recentEmoji));
+  } catch {}  // (just not kept for next time)
 }
 
 // ----- Emoji

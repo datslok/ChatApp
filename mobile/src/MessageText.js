@@ -84,7 +84,9 @@ function renderInline(parts, context) {
         return <Text key={index} style={styles.link} onPress={() => openLink(part.url)}>{part.url}</Text>;
       case 'mention': {
         const name = part.id === 'everyone' ? 'everyone' : users[part.id]?.name ?? 'unknown';
-        return <Text key={index} style={styles.mention}>@{name}</Text>;
+        // A person (not @everyone, nor someone gone): a tap opens their profile, like a click on the web page.
+        const onPress = context.onMention && users[part.id] ? () => context.onMention(Number(part.id)) : undefined;
+        return <Text key={index} style={styles.mention} onPress={onPress}>@{name}</Text>;
       }
       case 'emoji':
         // In a line: 1.3 times the text's size; in a jumbo message: 48 px.
@@ -206,13 +208,14 @@ function JumboEmoji({ text, emoji, editedLabel }) {
   );
 }
 
-export default function MessageText({ text, users, emoji, edited, note }) {
+// onMention(id): a tapped @mention (ChatScreen opens the profile); without it they're just highlighted.
+export default function MessageText({ text, users, emoji, edited, note, onMention }) {
   const styles = useStyles(makeStyles);
   const jumbo = isOnlyEmoji(text);
   if (jumbo) {
     return <JumboEmoji text={text} emoji={emoji} editedLabel={edited ? <Text style={styles.edited}>(edited)</Text> : null} />;
   }
-  const context = { users, emoji, jumbo, styles };  // (styles: for the helpers above, which aren't components)
+  const context = { users, emoji, jumbo, styles, onMention };  // (styles: for the helpers above, which aren't components)
   const textStyle = [styles.text, jumbo && styles.jumbo, note && styles.note];
   const blocks = parseMessage(text);
   const editedLabel = edited ? <Text style={styles.edited}> (edited)</Text> : null;

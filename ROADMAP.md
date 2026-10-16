@@ -140,20 +140,20 @@ with Windows, activity detection, zoom, drag-and-drop, hover bars and keyboard s
 - [x] Bugs
     - [x] Leave a channel that gets deleted while it's open (the phone stays in it, titled with its key)
     - [x] Mention in the user menu does nothing in the Lounge (no text box there): hide it there, like the web
-- [ ] Messages
-    - [ ] Who reacted (the web's hover over a reaction): a long press on a reaction
-    - [ ] Tapping a @mention opens the profile
-    - [ ] Copy text in the long-press menu
-    - [ ] The time of grouped messages (the web shows it on hover): in the long-press menu
-    - [ ] The character counter ("1850 / 2000", "Character limit reached", "No room for that emoji")
-    - [ ] The NEW line live: gone when you send, moved to the first message that arrives while you're away, scrolled to when there are more new messages than fit
-    - [ ] Emptying a message while editing deletes it (and a file's caption can be cleared)
-    - [ ] Jump to the bottom when sending while scrolled up
-    - [ ] @everyone suggested in DMs and groups too, and people's status next to their names in @ suggestions
-    - [ ] Recently used emoji kept after a restart
-    - [ ] Reply quotes with custom emoji as pictures, mentions as chips and a paperclip for files
-    - [ ] Refuse empty (0-byte) files in the tray
-    - [ ] A long press on a search or pin card's sender opens the user menu
+- [x] Messages
+    - [x] Who reacted (the web's hover over a reaction): a long press on a reaction
+    - [x] Tapping a @mention opens the profile
+    - [x] Copy text in the long-press menu
+    - [x] The time of grouped messages (the web shows it on hover): in the long-press menu
+    - [x] The character counter ("1850 / 2000", "Character limit reached", "No room for that emoji")
+    - [x] The NEW line live: gone when you send, moved to the first message that arrives while you're away, scrolled to when there are more new messages than fit
+    - [x] Emptying a message while editing deletes it (and a file's caption can be cleared)
+    - [x] Jump to the bottom when sending while scrolled up
+    - [x] @everyone suggested in DMs and groups too, and people's status next to their names in @ suggestions
+    - [x] Recently used emoji kept after a restart
+    - [x] Reply quotes with custom emoji as pictures, mentions as chips and a paperclip for files
+    - [x] Refuse empty (0-byte) files in the tray
+    - [x] A long press on a search or pin card's sender opens the user menu
 - [ ] Calls
     - [ ] The connection quality popup (ping, packet loss, the graph, screen share details)
     - [ ] The noise gate and its sensitivity line (could go in MicProcessor.kt)

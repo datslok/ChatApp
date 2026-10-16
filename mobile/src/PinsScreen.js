@@ -7,7 +7,7 @@ import { CardButton, MessageCard, Popup, makeStyles } from './MessageCard';
 import { useStyles } from './theme';
 
 // onJump(messageId): close this and go to the message.
-export default function PinsScreen({ connection, onJump, onClose }) {
+export default function PinsScreen({ connection, onJump, onClose, onUserMenu }) {
   const styles = useStyles(makeStyles);  // (MessageCard.js's popup styles)
   const { pins } = connection;
 
@@ -27,7 +27,7 @@ export default function PinsScreen({ connection, onJump, onClose }) {
       {empty ? <Text style={styles.empty}>{empty}</Text> : (
         <ScrollView style={styles.list} contentContainerStyle={styles.listInside}>
           {pins.map((message) => (
-            <MessageCard key={message.id} message={message} connection={connection}>
+            <MessageCard key={message.id} message={message} connection={connection} onUserMenu={onUserMenu}>
               <CardButton label="Jump" onPress={() => onJump(message.id)} />
               <CardButton label="Unpin" secondary onPress={() => connection.pin(message.id, false)} />
             </MessageCard>

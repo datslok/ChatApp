@@ -165,6 +165,13 @@ the point is for me to understand how it works, not just to have it done.
   results, a reply's quote) opens the chat (App.js `go` as `onOpenChat`), loads older batches (40 at most) until the
   row is there, `scrollToIndex` (`onScrollToIndexFailed` scrolls to a guess and retries) and `Flash` fades it.
   `src/time.js`: dayName, clock, headerTime.
+  Messages parity (2026-10-16): a long press on a reaction chip (Alert with the names), MessageText `onMention`
+  (a tapped mention opens the profile), the menu's time (headerTime) and Copy text (expo-clipboard, readableText),
+  the counter on the status line (COUNT_FROM 200, `charNote`), the NEW line live (connection.js `myId`/
+  `newWhileAway`; ChatScreen `onViewableItemsChanged` scrolls it to the top once per history, viewPosition 1 as
+  the list is inverted), an emptied edit = delete (asked; a file's caption may be emptied), `toBottom()` on send,
+  @everyone everywhere + status details, `recent-emoji.json` (Picker.js), `replyContent` (quotes with emoji,
+  mentions, a paperclip), empty files refused, MessageCard `onUserMenu` (pins, search).
   Bad connections (since 2026-10-16): Android's WebSocket never pings or times out, so a dead connection
   looked open for minutes and messages went into it. connection.js: a heartbeat (`{"type": "ping"}` every
   15 s on screen, at once after sending and on coming back; anything from the server answers; none in 6 s ->

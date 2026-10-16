@@ -52,7 +52,8 @@ export function Popup({ icon, title, onClose, children }) {
 
 // A message on a card: who and when (and where, if `where` is given, like "#memes"), its text
 // formatted like in the chat, its file's name, and the buttons (`children`, CardButtons).
-export function MessageCard({ message, where, connection, children }) {
+// onUserMenu(id): a long press on the sender (the web page's right-click on the card's head).
+export function MessageCard({ message, where, connection, onUserMenu, children }) {
   const styles = useStyles(makeStyles);
   const { colors } = useTheme();
   const { users, emoji } = connection;
@@ -60,12 +61,16 @@ export function MessageCard({ message, where, connection, children }) {
   const file = message.file;
   return (
     <View style={styles.card}>
-      <View style={styles.head}>
+      <Pressable
+        style={styles.head}
+        disabled={!onUserMenu || !users[message.user_id]}
+        onLongPress={() => onUserMenu(message.user_id)}
+      >
         <Avatar user={users[message.user_id]} name={message.name} size={24} />
         <Text style={styles.name} numberOfLines={1}>{users[message.user_id]?.name ?? message.name}</Text>
         {/* "#memes · Yesterday at 14:03" */}
         <Text style={styles.time} numberOfLines={1}>{(where ? where + ' · ' : '') + dayName(sent) + ' at ' + clock(sent)}</Text>
-      </View>
+      </Pressable>
       {message.text ? <MessageText text={message.text} users={users} emoji={emoji} edited={message.edited_at} /> : null}
       {file ? (
         <View style={styles.file}>

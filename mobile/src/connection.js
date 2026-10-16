@@ -118,6 +118,8 @@ export function useConnection() {
   // so we connect again straight away.
   const pingSent = useRef(null);   // when our unanswered ping went out, or null
   const lastPing = useRef(0);
+  const myId = useRef(null);            // our own id (from "welcome"), for the socket's handlers
+  const newWhileAway = useRef(false);   // this time away already moved the NEW line (see "message")
 
   // The outbox: messages we sent that the server hasn't confirmed yet, each {nonce (its tag), chat, text,
   // replyTo, file, failed, since}. ChatScreen draws the open chat's at the bottom, faded ("Sending…"), or
@@ -154,6 +156,7 @@ export function useConnection() {
         changeOutbox((old) => old.map((item) => (item.nonce === data.nonce ? { ...item, failed: true } : item)));
         break;
       case 'welcome':
+        myId.current = data.id;
         // max_text_length: the server's limit on a message, so the text box can use the same.
         // season: the seasonal easter egg ({name, emoji or image, video}), or null (Sidebar.js).
         // phonePush: the server can send this app push notifications (it has Firebase's key).
@@ -280,6 +283,15 @@ export function useConnection() {
         // One of ours from the outbox (its tag): the real one replaces the faded copy, in the same redraw.
         if (data.nonce) changeOutbox((old) => old.filter((item) => item.nonce !== data.nonce));
         if (data.channel === currentRef.current) {
+          // The NEW line, live (the web page's): we wrote something (here or on another device): caught
+          // up, it goes. The first message while the app is out of sight: the line moves above it, so
+          // coming back shows where we left off (ids only grow: "after id - 1" is this one and what follows).
+          if (data.user_id === myId.current) {
+            setLastRead(null);
+          } else if (AppState.currentState !== 'active' && !newWhileAway.current) {
+            setLastRead(data.id - 1);
+            newWhileAway.current = true;
+          }
           setMessages((old) => [...(old ?? []), data]);
           stopTyping(data.name);  // their message is here: they're done typing it
         }
@@ -443,6 +455,7 @@ export function useConnection() {
       if (state === 'active' && dropped && !loggedOut.current) connect();
       sendLooking();
       if (state === 'active') {
+        newWhileAway.current = false;  // back: the next time away gets a line of its own
         pingSent.current = null;
         checkConnection();
       }
