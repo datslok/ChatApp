@@ -12,7 +12,7 @@
 #
 # 1. Exports the bundle (npx expo export), 2. turns it into an update (tools\make_app_update.py: the
 # files in releases\app-assets\, a manifest in releases\app-updates\<version>\), 3. copies those to the
-# server, the manifest last.
+# server, the manifest last, 4. deletes old updates here and there (tools\prune_app_updates.py).
 
 $ServerFolder = "C:/ChatApp"  # where the code is on the server PC (scp prefers / in paths)
 $root = Split-Path $PSScriptRoot
@@ -67,4 +67,13 @@ if ($LASTEXITCODE -ne 0) { Write-Host "Copying the manifest failed (see above)."
 Write-Host "Restarting the chat, so the open apps reconnect and switch to it..."
 & .\scripts\deploy.ps1
 if ($LASTEXITCODE -ne 0) { Write-Host "The restart failed (see above): open apps switch when they reconnect or come back on screen."; exit 1 }
+
+# 4. Old updates out (the newest 3 per version stay), here and on the server (whose copy of the tool
+# came with the deploy just now), so releases\ doesn't grow by ~6 MB each time.
+if (Get-Command conda -ErrorAction SilentlyContinue) {
+    conda run -n chatapp python tools\prune_app_updates.py releases
+} else {
+    python tools\prune_app_updates.py releases
+}
+ssh chatserver "cd $ServerFolder; .venv\Scripts\python.exe tools\prune_app_updates.py releases"
 Write-Host "Done: open apps with version $version switch to it as soon as they safely can, the others when they start." -ForegroundColor Green

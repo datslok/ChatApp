@@ -294,7 +294,8 @@ the point is for me to understand how it works, not just to have it done.
   `releases/app-assets/<md5>.<ext>`, immutable; `src/liveUpdates.js` checks at every connect and return to the app and
   switches with Updates.reloadAsync when safe (no call, trays, share or popup; view + drafts kept through cache
   reload-state.json, `restored`), the user's wish, like the desktop's reload), made by `scripts/app-update.ps1` (ends
-  with deploy.ps1 so open apps reconnect; refuses when mobile/modules,
+  with deploy.ps1 so open apps reconnect, then `tools/prune_app_updates.py` here and on the server: the newest 3
+  manifests per version and the app-assets they name stay; refuses when mobile/modules,
   plugins, app.json or package*.json changed since android.json's commit) + `tools/make_app_update.py`. New APKs:
   `scripts/app-release.ps1` (bumps version + versionCode, commits "Phone app x", prebuild + gradlew
   app:assembleRelease, apksigner must say CN=ChatApp, `releases/ChatApp-android-<v>.apk` + `releases/android.json`

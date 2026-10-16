@@ -95,6 +95,7 @@ the same PC, but the scripts assume two).
 | `tools\make_call_sounds.py` | your PC | makes the phone app's sounds from the web page's tones: the ringtone and message ping (`mobile\assets\sounds\`), the notifications' ping and ring (`mobile\modules\push\...\res\raw\`) and the in-call calling, join and leave sounds (`mobile\modules\call-service\...\res\raw\`); run it again after changing one |
 | `tools\make_screenshot.py` | your PC | the landing page's screenshot, on a throwaway chat with test accounts (never the real one); run it again when the chat's look changes |
 | `tools\make_app_update.py` | your PC | used by `app-update.ps1`: turns `npx expo export` into an update for the server |
+| `tools\prune_app_updates.py` | either | used by `app-update.ps1` (on both): deletes all but the newest 3 phone updates per version, and the files only they used (`--keep N` for another number) |
 | `tools\make_vapid_keys.py` | either | once: the key pair for push notifications (the web page's), for `.env` |
 | `npx expo run:android` (in `mobile\`) | your PC | builds the native phone app, installs it on a phone over USB and starts Metro |
 | `npx expo start` (in `mobile\`) | your PC | only Metro, for an app already installed by `run:android` |
@@ -760,7 +761,8 @@ on Do Not Disturb.
 Friends get the app from `/download` (on an Android phone it shows the Android app): an APK, the app's
 install file, straight from your server, no Play Store. After that it updates itself, in two ways:
 
-- **JavaScript** (most changes: screens, buttons, behaviour): `.\scripts\app-update.ps1`. It restarts the
+- **JavaScript** (most changes: screens, buttons, behaviour): `.\scripts\app-update.ps1` (which also deletes
+  all but the newest 3 updates, here and on the server, so `releases\` doesn't keep growing). It restarts the
   chat at the end, so every open app reconnects, fetches the new bundle
   ([expo-updates](https://docs.expo.dev/versions/latest/sdk/updates/), from your server's `/app-update`)
   and switches to it in a second, like the desktop app does, as soon as nothing would be lost (not in a
