@@ -10,6 +10,10 @@ import { SERVER, SOCKET_URL } from './config';
 import { forgetThisPhone } from './notifications';
 import { DEFAULT_APPEARANCE } from './theme';
 
+const PING_EVERY = 15000;     // ms between heartbeat pings while the app is on screen (see pingSent)
+const PONG_WAIT = 6000;       // ms without an answer before the connection counts as dead
+const SEND_GIVE_UP = 30000;   // ms before an unconfirmed message turns red (Retry, Delete)
+
 // The newest emoji version each Android draws (its API level -> Unicode's emoji version): newer
 // emoji would show as empty boxes, so the picker leaves them out. (The web page finds out by drawing
 // each one on a canvas instead; an app can't.)
@@ -107,6 +111,24 @@ export function useConnection() {
   const retryTimer = useRef(null);
   const firstUnread = useRef(true);  // the first "unread" after connecting is the whole list
   const loggedOut = useRef(false);   // the server said 4001: no point reconnecting until we log in
+  // The heartbeat: a bad network can kill the connection without either end hearing (no "close" ever
+  // comes, and Android's WebSocket never times out waiting), and messages sent into it are lost. So we
+  // ping every PING_EVERY ms while on screen (and at once after sending something, or coming back to
+  // the app); anything at all from the server counts as the answer. None within PONG_WAIT: it's dead,
+  // so we connect again straight away.
+  const pingSent = useRef(null);   // when our unanswered ping went out, or null
+  const lastPing = useRef(0);
+
+  // The outbox: messages we sent that the server hasn't confirmed yet, each {nonce (its tag), chat, text,
+  // replyTo, file, failed, since}. ChatScreen draws the open chat's at the bottom, faded ("Sending…"), or
+  // red with Retry and Delete once failed (no answer in SEND_GIVE_UP ms, or the server said no). They're
+  // sent again after every reconnect; the server remembers the tags, so nothing is posted twice.
+  const [outbox, setOutbox] = useState([]);
+  const outboxRef = useRef([]);  // (the same, for the socket's handlers, which need the latest)
+  function changeOutbox(change) {
+    outboxRef.current = change(outboxRef.current);
+    setOutbox(outboxRef.current);
+  }
 
   // True if it went out (false: not connected right now).
   function send(data) {
@@ -123,6 +145,14 @@ export function useConnection() {
 
   function handle(data) {
     switch (data.type) {
+      case 'sent':
+        // {"type": "sent", "nonce"}: a message of ours is saved (also when we're in another chat by now).
+        changeOutbox((old) => old.filter((item) => item.nonce !== data.nonce));
+        break;
+      case 'not_sent':
+        // The server refused it (no longer allowed in that chat, a file already sent): it turns red.
+        changeOutbox((old) => old.map((item) => (item.nonce === data.nonce ? { ...item, failed: true } : item)));
+        break;
       case 'welcome':
         // max_text_length: the server's limit on a message, so the text box can use the same.
         // season: the seasonal easter egg ({name, emoji or image, video}), or null (Sidebar.js).
@@ -247,6 +277,8 @@ export function useConnection() {
         }
         break;
       case 'message':
+        // One of ours from the outbox (its tag): the real one replaces the faded copy, in the same redraw.
+        if (data.nonce) changeOutbox((old) => old.filter((item) => item.nonce !== data.nonce));
         if (data.channel === currentRef.current) {
           setMessages((old) => [...(old ?? []), data]);
           stopTyping(data.name);  // their message is here: they're done typing it
@@ -329,6 +361,7 @@ export function useConnection() {
   function connect() {
     clearTimeout(retryTimer.current);
     loggedOut.current = false;
+    pingSent.current = null;
     const ws = new WebSocket(SOCKET_URL);  // Android sends the login cookie along by itself
     socket.current = ws;
     setStatus((old) => (old === 'online' ? 'online' : 'connecting'));
@@ -345,9 +378,14 @@ export function useConnection() {
       // Back after a drop while reading a chat: join it again, which also sends its
       // history afresh (including whatever was said while we were gone).
       if (currentRef.current) send({ type: 'join', channel: currentRef.current });
+      // And whatever we sent that wasn't confirmed: once more (the server skips what it already has).
+      for (const item of outboxRef.current) if (!item.failed) sendFromOutbox(item);
     };
 
-    ws.onmessage = (event) => handle(JSON.parse(event.data));
+    ws.onmessage = (event) => {
+      if (socket.current === ws) pingSent.current = null;  // anything from the server: it's alive
+      handle(JSON.parse(event.data));
+    };
 
     ws.onclose = (event) => {
       if (socket.current !== ws) return;  // an old connection we already replaced
@@ -356,11 +394,35 @@ export function useConnection() {
         setStatus('logged-out');  // the server says we're not logged in
         return;
       }
-      // Try again later, twice as long each time, at most 10 seconds (like the web page).
+      // Try again later, twice as long each time, at most 5 seconds (a phone's bad patch is often short).
       setStatus('offline');
       retryTimer.current = setTimeout(connect, retryDelay.current);
-      retryDelay.current = Math.min(retryDelay.current * 2, 10000);
+      retryDelay.current = Math.min(retryDelay.current * 2, 5000);
     };
+  }
+
+  // Ask the server for a sign of life, unless we're already waiting for one (see pingSent).
+  function checkConnection() {
+    if (pingSent.current === null && send({ type: 'ping' })) {
+      pingSent.current = Date.now();
+      lastPing.current = pingSent.current;
+    }
+  }
+
+  // Every 2 seconds: a ping unanswered too long means a dead connection (connect again now and drop the
+  // old one; its "close", whenever it comes, is ignored); time for the next ping; outbox messages waiting too long.
+  function heartbeat() {
+    const now = Date.now();
+    if (pingSent.current !== null && now - pingSent.current > PONG_WAIT) {
+      const dead = socket.current;
+      connect();
+      dead?.close();
+    } else if (now - lastPing.current > PING_EVERY && AppState.currentState === 'active') {
+      checkConnection();
+    }
+    if (outboxRef.current.some((item) => !item.failed && now - item.since > SEND_GIVE_UP)) {
+      changeOutbox((old) => old.map((item) => (!item.failed && now - item.since > SEND_GIVE_UP ? { ...item, failed: true } : item)));
+    }
   }
 
   // Runs once when the app starts; the function it returns runs when it closes.
@@ -374,14 +436,21 @@ export function useConnection() {
       .catch(() => {});  // (no picker list then; everything else works)
     // Android may cut the connection while the app is in the background. Coming back to the
     // app, reconnect at once instead of waiting for the next try.
+    // And one that looks open may have died meanwhile: ask (a ping from before going away doesn't count).
     const watcher = AppState.addEventListener('change', (state) => {
       const ws = socket.current;
       const dropped = ws && ws.readyState !== WebSocket.OPEN && ws.readyState !== WebSocket.CONNECTING;
       if (state === 'active' && dropped && !loggedOut.current) connect();
       sendLooking();
+      if (state === 'active') {
+        pingSent.current = null;
+        checkConnection();
+      }
     });
+    const beat = setInterval(heartbeat, 2000);
     return () => {
       watcher.remove();
+      clearInterval(beat);
       clearTimeout(retryTimer.current);
       const ws = socket.current;
       socket.current = null;
@@ -425,6 +494,7 @@ export function useConnection() {
     setMe(null);
     setCurrent(null);
     setMessages(null);
+    changeOutbox(() => []);  // (unsent messages were this account's)
     setStatus('logged-out');
   }
 
@@ -440,12 +510,36 @@ export function useConnection() {
   // us included ("message", "reactions", "edited", "deleted"), and that's what we draw. So every
   // screen shows the same, and something the server refused never appears.
   // `file`: an uploaded file's id (a picture we picked, a GIF from /gifs/send) to send with it.
-  // True if it went out.
+  // It goes into the outbox (see outbox), so it's never lost: true, unless no chat is open.
   function sendMessage(text, replyTo, file) {
-    if (!send({ type: 'message', text, reply_to: replyTo ?? null, file: file ?? null })) return false;
+    if (!currentRef.current) return false;
+    const item = {
+      nonce: Math.random().toString(36).slice(2) + Date.now().toString(36),  // (random enough to be ours alone)
+      chat: currentRef.current, text, replyTo: replyTo ?? null, file: file ?? null, failed: false, since: Date.now(),
+    };
+    changeOutbox((old) => [...old, item]);
+    sendFromOutbox(item);
     setLastRead(null);  // we wrote something: caught up, the NEW line goes (like the web page)
     lastTypingSent.current = 0;  // so the next message's typing is told at once
     return true;
+  }
+  // (Naming its chat: by the time it's sent again we may be in another one.) Then make sure it went somewhere alive.
+  function sendFromOutbox(item) {
+    const sent = send({
+      type: 'message', channel: item.chat, text: item.text, reply_to: item.replyTo, file: item.file, nonce: item.nonce,
+    });
+    if (sent) checkConnection();
+  }
+  // A failed one's Retry and Delete.
+  function retryMessage(nonce) {
+    const item = outboxRef.current.find((other) => other.nonce === nonce);
+    if (!item) return;
+    const again = { ...item, failed: false, since: Date.now() };
+    changeOutbox((old) => old.map((other) => (other.nonce === nonce ? again : other)));
+    sendFromOutbox(again);
+  }
+  function discardMessage(nonce) {
+    changeOutbox((old) => old.filter((item) => item.nonce !== nonce));
   }
   // Scrolled up to the oldest message we have: ask for the 50 before it (once at a time).
   function loadOlder() {
@@ -535,6 +629,7 @@ export function useConnection() {
     status, me, myPresence, appearance, channels, lounge, groups, groupsKnown, friends, incoming, outgoing, blocked, users, roles, emoji,
     emojiGroups, unread, mentions, current, messages, lastRead, more, typing, mutedChats, pins, pinsFull,
     searchResults, voiceMembers, dmCalls, callListener, notifyListener,
+    outbox, retryMessage, discardMessage,
     openChat, closeChat, loadOlder, sendMessage, sendTyping, react, pin, editMessage, deleteMessage,
     friendAction, mute, openPins, closePins, search, setPresence, logout, sendVoice, ring, answerCall, cancelCall,
     reconnect: connect,  // after logging in

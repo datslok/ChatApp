@@ -192,6 +192,19 @@ hasher = PasswordHasher()
 # {websocket: {"user_id": 3, "channel": "memes", "voice": "lounge", "muted": False, "deafened": False}}
 clients = {}
 
+# Messages' tags ("nonce"), for the phone app's outbox: it sends a message again when it isn't sure the
+# first try arrived (a bad connection), and a tag seen before means "already saved": we only confirm it
+# again. {(user_id, nonce): (message_id, channel, when)}, forgotten after NONCE_MEMORY seconds. (Memory
+# only: a resend just after a restart could be saved twice, which is rare enough.)
+recent_nonces = {}
+NONCE_MEMORY = 10 * 60
+
+
+def message_nonce(data):
+    """A message's tag from the app: a short string, or None."""
+    nonce = data.get("nonce")
+    return nonce if isinstance(nonce, str) and 0 < len(nonce) <= 64 else None
+
 
 # ---------- Database ----------
 #
@@ -5234,7 +5247,12 @@ async def chat(websocket: WebSocket):
             kind = data.get("type")
             channel = clients[websocket]["channel"]
 
-            if kind == "join":
+            if kind == "ping":
+                # {"type": "ping"}: the app checking the connection still works (a bad network can kill
+                # it without either end hearing). The answer proves it does.
+                await send(websocket, {"type": "pong"})
+
+            elif kind == "join":
                 new_channel = data.get("channel")
                 if new_channel is None:
                     # Looking at no channel (the Friends page): new messages anywhere count as unread.
@@ -5273,21 +5291,30 @@ async def chat(websocket: WebSocket):
                 more = len(older) == HISTORY_LIMIT
                 await send(websocket, {"type": "older", "channel": channel, "messages": older, "more": more})
 
-            elif kind == "message" and channel is not None:
-                # Check again, not just when joining: a DM stops being allowed the moment
-                # the friendship ends, even if this tab is still showing it.
-                if not can_join(channel, user_id):
+            elif kind == "message" and (channel is not None or data.get("channel") is not None):
+                # The chat we're in, or the one the message names (the app's outbox sends a message again
+                # after a reconnect, from whatever chat is open by then). Checked again, not just when
+                # joining: a DM stops being allowed the moment the friendship ends, even if this tab is still showing it.
+                if data.get("channel") is not None:
+                    channel = data.get("channel")
+                # A tag (the app's outbox): seen before means it's saved already, so only confirm it again.
+                nonce = message_nonce(data)
+                now = time.time()
+                for key in [key for key, (_, _, when) in recent_nonces.items() if now - when > NONCE_MEMORY]:
+                    del recent_nonces[key]
+                if nonce is not None and (user_id, nonce) in recent_nonces:
+                    message_id, sent_channel, _ = recent_nonces[(user_id, nonce)]
+                    await send(websocket, {"type": "sent", "nonce": nonce, "id": message_id, "channel": sent_channel})
                     continue
-                text = clean_text(data)
-                if text is None:
-                    continue
+                text = clean_text(data) if can_join(channel, user_id) else None
                 file = None
-                if data.get("file") is not None:
-                    file = claim_attachment(data.get("file"), user_id, channel)
-                    if file is None:
-                        continue  # not their file, already sent, or doesn't exist
-                if not text and file is None:
-                    continue  # nothing to send
+                if text is not None and data.get("file") is not None:
+                    file = claim_attachment(data.get("file"), user_id, channel)  # (None: not theirs, already sent, gone)
+                if text is None or (data.get("file") is not None and file is None) or (not text and file is None):
+                    # Refused (or nothing to send): an outbox's message shows as not sent straight away.
+                    if nonce is not None:
+                        await send(websocket, {"type": "not_sent", "nonce": nonce})
+                    continue
                 text = expand_custom_emoji(text)  # :pog: -> <:17>
                 text, mentioned, everyone = expand_mentions(text)  # @kari -> <@2>
                 reply_to = check_reply(data.get("reply_to"), channel)
@@ -5304,8 +5331,13 @@ async def chat(websocket: WebSocket):
                     "kind": None,
                     "pinned": False,
                     "preview": None,  # a link's preview comes a moment later, as its own "preview"
+                    "nonce": nonce,  # the app's tag (or None): its faded copy in the outbox goes as this comes
                 }
                 await send_to_channel(channel, message)  # everyone in the channel, including us
+                if nonce is not None:
+                    # Saved: tell the page that sent it (even if it's in another chat by now), with its tag.
+                    recent_nonces[(user_id, nonce)] = (message_id, channel, now)
+                    await send(websocket, {"type": "sent", "nonce": nonce, "id": message_id, "channel": channel})
                 await announce_new_message(channel, mentioned_people, message)  # read/unread, mentions, notifications
                 push_message(mentioned_people, message)  # their phones, if they're not looking at the chat
                 start_preview(message_id, channel, user_id, text)  # in the background, if it has a link

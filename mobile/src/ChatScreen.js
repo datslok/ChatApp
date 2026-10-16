@@ -261,6 +261,39 @@ function ReplyLine({ reply, connection, onJump }) {
   );
 }
 
+// A message of ours on its way (connection.js, the outbox), at the bottom: faded until the server has it
+// (then the real one takes its place), with "Sending…" if that takes a while; if it didn't get there,
+// red with Retry and Delete. (A phone's connection is shakier than a PC's, so the web page has none.)
+function PendingMessage({ item, connection }) {
+  const styles = useStyles(makeStyles);
+  const { users, emoji } = connection;
+  const [slow, setSlow] = useState(false);  // (most go in a blink: no "Sending…" flashing by)
+  useEffect(() => {
+    setSlow(false);
+    const timer = setTimeout(() => setSlow(true), 1500);
+    return () => clearTimeout(timer);
+  }, [item.since]);
+  return (
+    <View style={[styles.message, styles.grouped]}>
+      <View style={styles.pictureSpace} />
+      <View style={styles.body}>
+        <View style={item.failed ? null : styles.sending}>
+          {item.text ? <MessageText text={item.text} users={users} emoji={emoji} edited={null} note={false} /> : null}
+          {item.file && !item.text ? <Text style={styles.pendingNote}>A file</Text> : null}
+        </View>
+        {item.failed ? (
+          <Text style={styles.pendingFailed}>
+            Couldn't send.{' '}
+            <Text style={styles.pendingAction} onPress={() => connection.retryMessage(item.nonce)}>Retry</Text>
+            {' · '}
+            <Text style={styles.pendingAction} onPress={() => connection.discardMessage(item.nonce)}>Delete</Text>
+          </Text>
+        ) : slow ? <Text style={styles.pendingNote}>Sending…</Text> : null}
+      </View>
+    </View>
+  );
+}
+
 // The long-press menu, a sheet from the bottom. The same choices, in the same order, as the web
 // page's bar on a message: reactions, Reply, Pin, Edit, Delete.
 function MessageMenu({ message, canChange, onClose, onReact, onMoreReactions, onReply, onPin, onEdit, onDelete }) {
@@ -867,6 +900,7 @@ export default function ChatScreen({
       );
     }
     if (item.type === 'start') return <Text style={styles.channelStart}>This is the beginning of {label}.</Text>;
+    if (item.type === 'pending') return <PendingMessage item={item.item} connection={connection} />;
     return (
       <Message
         message={item.message} grouped={item.grouped} connection={connection}
@@ -887,6 +921,10 @@ export default function ChatScreen({
   } else {
     const rows = buildRows(messages, lastRead, blocked);
     if (!more) rows.unshift({ key: 'start', type: 'start' });  // nothing older: the chat's beginning
+    // Then ours still on their way (the outbox), below everything.
+    for (const item of connection.outbox) {
+      if (item.chat === current) rows.push({ key: 'out' + item.nonce, type: 'pending', item });
+    }
     // inverted: the list is drawn upside down, so it starts at the bottom like a chat, and a new
     // message appears at the bottom without scrolling. So it gets the rows newest first, and its
     // "end" is the top: getting near it (onEndReached) asks for older messages.
@@ -1076,6 +1114,11 @@ const makeStyles = (colors, size) => StyleSheet.create({
   time: { fontSize: size(12), color: colors.textMuted },
   note: { color: colors.textMuted, fontStyle: 'italic' },
   blockedRow: { alignItems: 'center', gap: 8, marginTop: 8 },
+  // A message on its way (PendingMessage): faded; failed: red words, Retry and Delete as links.
+  sending: { opacity: 0.5 },
+  pendingNote: { fontSize: size(12), color: colors.textMuted },
+  pendingFailed: { fontSize: size(13), color: colors.red },
+  pendingAction: { color: colors.link, fontWeight: '600' },
   blocked: { flex: 1, color: colors.textMuted, fontSize: size(14) },
   show: { color: colors.link },
   // .reply-line: 0.8rem, muted, the name bold in --text-soft.

@@ -164,7 +164,15 @@ the point is for me to understand how it works, not just to have it done.
   child of the popup since Android ignores taps outside a parent's edges). ChatScreen's `jumpTo(chat, id)` (pins,
   results, a reply's quote) opens the chat (App.js `go` as `onOpenChat`), loads older batches (40 at most) until the
   row is there, `scrollToIndex` (`onScrollToIndexFailed` scrolls to a guess and retries) and `Flash` fades it.
-  `src/time.js`: dayName, clock, headerTime. Expo's dev-menu gear can cover the top bar's buttons in development builds: drag it.
+  `src/time.js`: dayName, clock, headerTime.
+  Bad connections (since 2026-10-16): Android's WebSocket never pings or times out, so a dead connection
+  looked open for minutes and messages went into it. connection.js: a heartbeat (`{"type": "ping"}` every
+  15 s on screen, at once after sending and on coming back; anything from the server answers; none in 6 s ->
+  `connect()` again; retries at most 5 s apart) and the outbox (`sendMessage` -> `{nonce, chat, ...}`, sent
+  with `channel` and `nonce`, again at every onopen; gone on "message" with its nonce or "sent"; failed after
+  30 s or "not_sent"; ChatScreen `PendingMessage` faded, "Sending…" after 1.5 s, Retry / Delete). server.py:
+  "ping" -> "pong", a message may name its `channel`, `recent_nonces` (10 min, memory) confirms a repeat
+  without saving it twice, "sent"/"not_sent" to the sending page, `nonce` in "message". The web page doesn't use them. Expo's dev-menu gear can cover the top bar's buttons in development builds: drag it.
   People and groups (since 2026-10-15): App.js's `dialog` state draws them over everything: `src/ProfileScreen.js`
   (#profile: Banner, roles, Activity with activityDuration, bio, the friend buttons), `src/UserMenu.js` (userMenuItems
   as a `src/Sheet.js` bottom sheet; no Call, Ban or Make admin yet; Mention appends "@name " to `drafts` and bumps
