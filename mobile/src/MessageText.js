@@ -251,9 +251,14 @@ export default function MessageText({ text, users, emoji, edited, note, onMentio
 
 // A picture as big as fits in maxWidth x maxHeight without changing its shape (CSS max-width +
 // max-height). Its size is only known once loaded (onLoad), so until then it takes a small space.
+// The chat's list takes rows that scrolled far away apart and builds them again on the way back, so
+// each picture's size is remembered here (by address, for as long as the app runs): a rebuilt row is
+// drawn at its real size at once, instead of a small space that jumps open and shifts the list.
+const naturalSizes = new Map();
+
 export function FittedImage({ uri, maxWidth, maxHeight, style, onPress, onLongPress }) {
   const styles = useStyles(makeStyles);
-  const [natural, setNatural] = useState(null);   // the picture's own {width, height}
+  const [natural, setNatural] = useState(() => naturalSizes.get(uri) ?? null);  // the picture's own {width, height}
   const [room, setRoom] = useState(maxWidth);      // how wide it may be here (the column may be narrower)
   let size = { width: Math.min(room, maxWidth), height: 120 };
   if (natural) {
@@ -265,7 +270,15 @@ export function FittedImage({ uri, maxWidth, maxHeight, style, onPress, onLongPr
       source={{ uri }}
       style={[size, style]}
       resizeMode="contain"
-      onLoad={(event) => setNatural({ width: event.nativeEvent.source.width, height: event.nativeEvent.source.height })}
+      // Decoded at the size it's drawn, not the photo's own (Android's default for pictures from the
+      // internet): a 12-megapixel photo is ~48 MB of pixels, and a few of them pushed each other out of
+      // memory, so they were decoded again and again while scrolling. (The viewer still shows it whole.)
+      resizeMethod="resize"
+      onLoad={(event) => {
+        const size = { width: event.nativeEvent.source.width, height: event.nativeEvent.source.height };
+        naturalSizes.set(uri, size);
+        setNatural(size);
+      }}
     />
   );
   return (

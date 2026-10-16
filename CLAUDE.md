@@ -122,7 +122,9 @@ the point is for me to understand how it works, not just to have it done.
   and all, into a tree; `isOnlyEmoji` for jumbo), `src/MessageText.js` (draws it: code, quotes, spoilers,
   links open in the browser, mentions, custom emoji via React Native's Image (it sends the cookie; expo-image,
   tried first, didn't, so the server 404'd), attachments, link preview cards; a paragraph with $inline maths$
-  becomes a wrapping row of words, as Android can't size a view inside a Text), `src/MathView.js` (KaTeX from
+  becomes a wrapping row of words, as Android can't size a view inside a Text; `FittedImage`: `resizeMethod="resize"`, as
+  Android decoded network pictures at full size, ~48 MB a photo, pushing each other out of Fresco's memory cache (lag,
+  reloading while scrolling), and `naturalSizes` remembers sizes so rows FlatList rebuilds don't jump open), `src/MathView.js` (KaTeX from
   the server's /katex-0.18.9/ in a react-native-webview per formula, which reports its size; containerStyle
   needs the size too or the webview's flex: 1 box collapses), `src/Picker.js` (the phone bottom sheet with
   Emoji | GIF tabs, recently used in memory, custom emoji by owner; GIFs via /gifs/search and /gifs/send),
