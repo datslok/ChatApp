@@ -304,6 +304,40 @@ function makeFileLink(url, file, message) {
   return link;
 }
 
+// ----- Each video's volume
+//
+// Videos start at 30% (full volume is loud), and each one remembers where its volume was left: in
+// localStorage "videoVolumes", {key: volume from 0 to 1}, the key being a chat video's file id or a
+// seasonal video's address. Only the newest MAX_VIDEO_VOLUMES are kept, so it can't grow forever.
+// (Only the volume, not muting: a muted video doesn't stay silent next time.)
+const VIDEO_START_VOLUME = 0.3;
+const MAX_VIDEO_VOLUMES = 200;
+
+function videoVolumes() {
+  try {
+    return JSON.parse(localStorage.getItem("videoVolumes")) || {};
+  } catch {
+    return {};  // (nothing saved yet, or something unreadable)
+  }
+}
+
+function videoVolume(key) {
+  return videoVolumes()[key] ?? VIDEO_START_VOLUME;
+}
+
+function saveVideoVolume(key, volume) {
+  // (Setting a video's starting volume fires "volumechange" too, a moment later: nothing to save then.)
+  if (volume === videoVolume(key)) return;
+  const volumes = videoVolumes();
+  // An object keeps its keys in the order they were added: taken out and put back, this one is the
+  // newest, and the oldest are the first keys.
+  delete volumes[key];
+  volumes[key] = volume;
+  const keys = Object.keys(volumes);
+  for (const old of keys.slice(0, keys.length - MAX_VIDEO_VOLUMES)) delete volumes[old];
+  localStorage.setItem("videoVolumes", JSON.stringify(volumes));
+}
+
 // A video: the browser's own player (play, pause, skipping, volume, fullscreen), with the download
 // link under it. preload="metadata": until play is pressed, only its size, length and first picture
 // load, not the whole video. The browser fetches the rest in pieces as it plays ("range requests",
@@ -314,6 +348,9 @@ function makeVideo(url, file, message) {
   const video = document.createElement("video");
   video.src = url;
   video.controls = true;
+  // Each video starts where its volume was left (30% the first time), and remembers every change.
+  video.volume = videoVolume(file.id);
+  video.addEventListener("volumechange", () => saveVideoVolume(file.id, video.volume));
   // No "Download" in the player's ⋮ menu: the file's name under the video downloads it already
   // (in the app, with its progress bar). Chromium only (the app, Chrome, Edge); as an attribute, so
   // browsers without it (Firefox has no video.controlsList) just ignore it.

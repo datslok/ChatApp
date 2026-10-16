@@ -975,10 +975,14 @@ function addSeasonBadge() {
 
 function openSeasonVideo() {
   seasonVideo.src = season.video;
-  seasonVideo.volume = 0.3;  // (0 to 1: it's loud at full volume; the player's slider still goes up)
+  seasonVideo.volume = videoVolume(season.video);  // (30% at first, then where it was left: messages.js)
   seasonDialog.showModal();
   seasonVideo.play().catch(() => {});  // (play() returns a promise; if the browser says no, the ▶ button is there)
 }
+
+seasonVideo.addEventListener("volumechange", () => {
+  if (seasonVideo.getAttribute("src")) saveVideoVolume(season.video, seasonVideo.volume);
+});
 
 // Closed (×, Esc or a click outside the video): stop it, and let go of the file.
 seasonDialog.addEventListener("close", () => {

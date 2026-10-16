@@ -13,7 +13,7 @@
         "Pin a message: hover over it and click 📌. The 📌 at the top of a channel, DM or group lists its pinned messages (up to 100), with Jump and Unpin. Anyone can pin and unpin",
         "@name mentions someone, @everyone mentions everybody: they get a notification and a red count",
         "Type :name for emoji suggestions (↑↓ to choose, Enter or Tab to pick), or use the 😀 button (it only offers emoji your device can draw). Messages with only emoji show them big",
-        "Pictures, videos and files up to 50 MB: the + button, drag and drop, or paste. Up to 10 at once, click a picture to see it big. Videos (MP4 and WebM) play right in the chat, with a button for fullscreen",
+        "Pictures, videos and files up to 50 MB: the + button, drag and drop, or paste. Up to 10 at once, click a picture to see it big. Videos (MP4 and WebM) play right in the chat, with a button for fullscreen. They start at 30% volume, and each one remembers where you left its volume",
         "Each chat keeps its own half-written message and files: switch to another chat and back, and they're still waiting there",
         "GIFs: the GIF button next to the text box (on phones: the smiley, then the GIF tab). Type to search (from GIPHY), or pick one of the trending ones, and click one to send it (as a reply, if you're replying). Esc closes it",
         "Links are clickable, and the first link in a message gets a preview card: the site, title, description and picture",
@@ -121,6 +121,7 @@
     {
       "date": "2026-10-16",
       "items": [
+        "🔉 Videos start at 30% volume instead of full, and each video remembers where you left its volume (on each device)",
         "🖼️ Scrolling past pictures in the Android app is smooth again: they no longer reload or make the chat jump",
         "🔔 The Android app's notifications (and the number on its icon) go away when you read the chat on your PC or anywhere else, and a friend request's when you open the People page (a new version: install it when the app offers it)",
         "📞 Calls in the Android app (a new version: install it when the app offers it): the signal bars in the voice bar show the connection, with a tap for the details; Settings → Voice & audio has the sensitivity line, like on PC, and the meter works in calls too; the ringtone follows your ring volume; it says why the microphone or camera didn't start; hold a call tile for the user menu; drag the bottom of a call banner to resize it; and pick the size when sharing your screen",

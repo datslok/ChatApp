@@ -29,9 +29,9 @@ export function SeasonBadge({ season, onPress }) {
   );
 }
 
-// The season's video, starting at 30% volume (it's loud at full).
+// The season's video (30% volume at first, like every video; VideoScreen remembers it).
 export default function SeasonScreen({ season, onClose }) {
-  return <VideoScreen path={season.video} startVolume={0.3} onClose={onClose} />;
+  return <VideoScreen path={season.video} onClose={onClose} />;
 }
 
 const makeStyles = (colors, size) => StyleSheet.create({

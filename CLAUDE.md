@@ -246,7 +246,7 @@ the point is for me to understand how it works, not just to have it done.
   when the tab opens; `askToSetAdmin`), `src/BanDialog.js` (`mayBan`; lengths as buttons), `src/PersonPicker.js`
   (type-to-search, suggestions in the flow under the box; `matchPeople` in people.js). The user menu has Edit
   profile, Make/Remove admin and Ban…. `src/SeasonScreen.js`: `SeasonBadge` on your panel picture (a 4px-padded box
-  so more of it takes taps) and the video in `src/VideoScreen.js` at 30% volume (our own bar under the video: time
+  so more of it takes taps) and the video in `src/VideoScreen.js` (our own bar under the video: time
   bar, play, time, mute, volume; Android's controls were a big overlay with no volume; chat videos use it too). dev.db's "phone" is admin and owner (password in my memory).
   Calls (since 2026-10-15): `livekit-client` + `@livekit/react-native` 3.0 + `@livekit/react-native-webrtc` 144 +
   `@livekit/react-native-expo-plugin` 1.0.3 (1.0.2 breaks on SDK 57; audioType communication); `registerGlobals()` in
@@ -534,7 +534,9 @@ the point is for me to understand how it works, not just to have it done.
   requests for seeking), `file_info` has `"video"`; `mark_old_videos()` at every start turns earlier .mp4/.webm
   downloads that pass into videos. Web: messages.js `makeVideo` (<video controls preload="metadata"> + the
   `makeFileLink` under it; an unplayable format leaves the link; `controlslist="nodownload"`, the user's wish: the name
-  under it downloads). Phone: expo-video (`VideoAttachment` in
+  under it downloads). Volumes (since 2026-10-16, the user's wish): every video starts at 30% and remembers its own
+  (web messages.js `videoVolume`/`saveVideoVolume`, localStorage "videoVolumes" by file id or seasonal path, also the
+  season dialog; phone VideoScreen.js, `video-volumes.json` by path, saved on close; the newest 200). Phone: expo-video (`VideoAttachment` in
   MessageText.js: the first frame with a play button; a tap opens `src/VideoScreen.js`, the popup with our control bar
   right under the video (the user's wish; Android's full screen had its controls at the screen's bottom); a
   see-through Pressable lies over the VideoView because the native view swallowed taps, so in-message controls never worked); its player downloads with its own OkHttp client without

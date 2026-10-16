@@ -8,7 +8,8 @@
 // cookie as a header (modules/cookies; uploads and seasonal videos need a login).
 import { useEventListener } from 'expo';
 import { VideoView, useVideoPlayer } from 'expo-video';
-import { useMemo, useRef, useState } from 'react';
+import { File, Paths } from 'expo-file-system';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { getCookie } from '../modules/cookies';
 import Icon from './Icon';
@@ -22,11 +23,47 @@ function minutes(seconds) {
   return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, '0')}`;
 }
 
-// path: the video's address on the server ("/uploads/<id>", "/seasonal/halloween.mp4"). startVolume:
-// 0 to 1 (the seasonal ones start at 0.3: they're loud). onClose: closes it.
-export default function VideoScreen({ path, startVolume = 1, onClose }) {
+// ----- Each video's volume (the web page's videoVolume / saveVideoVolume)
+//
+// Videos start at 30% (full volume is loud), and each one remembers where its volume was left: in
+// video-volumes.json, {path: volume from 0 to 1}. Only the newest MAX_VIDEO_VOLUMES are kept. (Only the
+// volume, not muting: a muted video doesn't stay silent next time.)
+const START_VOLUME = 0.3;
+const MAX_VIDEO_VOLUMES = 200;
+const volumesFile = new File(Paths.document, 'video-volumes.json');
+
+function videoVolumes() {
+  try {
+    if (volumesFile.exists) return JSON.parse(volumesFile.textSync());
+  } catch {}
+  return {};
+}
+
+function saveVideoVolume(path, volume) {
+  const volumes = videoVolumes();
+  if (volume === (volumes[path] ?? START_VOLUME)) return;  // (unchanged: nothing to write)
+  // An object keeps its keys in the order they were added: taken out and put back, this one is the
+  // newest, and the oldest are the first keys.
+  delete volumes[path];
+  volumes[path] = volume;
+  const keys = Object.keys(volumes);
+  for (const old of keys.slice(0, keys.length - MAX_VIDEO_VOLUMES)) delete volumes[old];
+  try {
+    if (!volumesFile.exists) volumesFile.create();
+    volumesFile.write(JSON.stringify(volumes));
+  } catch {}
+}
+
+// path: the video's address on the server ("/uploads/<id>", "/seasonal/halloween.mp4"), also the key
+// its volume is remembered by. onClose: closes it.
+export default function VideoScreen({ path, onClose }) {
   const styles = useStyles(makeStyles);
   const screen = useWindowDimensions();
+  const startVolume = useMemo(() => videoVolumes()[path] ?? START_VOLUME, [path]);
+  // The volume as it is now, saved when the video closes (not at every step of a dragged slider). A ref:
+  // changing it redraws nothing.
+  const lastVolume = useRef(startVolume);
+  useEffect(() => () => saveVideoVolume(path, lastVolume.current), [path]);
   const source = useMemo(() => {
     const cookie = getCookie(SERVER);
     return { uri: SERVER + path, headers: cookie ? { Cookie: cookie } : undefined };
@@ -53,7 +90,10 @@ export default function VideoScreen({ path, startVolume = 1, onClose }) {
     if (!seeking.current) setTime(currentTime);
     knowDuration(player.duration);
   });
-  useEventListener(player, 'volumeChange', (event) => setVolume(event.volume));
+  useEventListener(player, 'volumeChange', (event) => {
+    setVolume(event.volume);
+    lastVolume.current = event.volume;
+  });
   useEventListener(player, 'mutedChange', (event) => setMuted(event.muted));
   // At the end it stops (no loop); ▶ then starts it again from the beginning.
   function playOrPause() {
