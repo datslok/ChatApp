@@ -3529,8 +3529,8 @@ async def release_file(name: str):
 # Who sees which channel: a channel is open (everyone sees it) or private (only people with one of
 # its roles, in channel_roles). A role can be "limited": whoever has one sees only the private
 # channels their roles open, no open channel and no Lounge (for parents, say: their DMs and a
-# family channel). The owner sees everything; other admins see open channels, and a private one only
-# with one of its roles (in Settings too: only those who see a private channel can rename or delete it).
+# family channel). The owner sees everything, and bots (Chattus) every channel too, though never
+# limited; other admins see open channels, and a private one only with one of its roles (in Settings too: only those who see a private channel can rename or delete it).
 # Each person's pages get only the channels they may see, and can_join checks the same rule, so a page
 # asking for another channel by hand gets nothing.
 
@@ -3544,7 +3544,7 @@ def channel_list(user_id=None):
     roles_of = {}
     for channel, role_id in db.execute("SELECT channel, role_id FROM channel_roles"):
         roles_of.setdefault(channel, []).append(role_id)
-    owners = {owner_id for (owner_id,) in db.execute("SELECT id FROM users WHERE is_owner = 1")}
+    everywhere = {person for (person,) in db.execute("SELECT id FROM users WHERE is_owner = 1 OR is_bot = 1")}  # (in every channel)
     holders = {}  # role id -> its people
     for holder, role_id in db.execute("SELECT user_id, role_id FROM user_roles"):
         holders.setdefault(role_id, set()).add(holder)
@@ -3552,10 +3552,10 @@ def channel_list(user_id=None):
     for key, name, heading, private in rows:
         item = {"key": key, "name": name, "heading": bool(heading), "private": bool(private), "roles": roles_of.get(key, [])}
         if private:
-            item["members"] = sorted(owners.union(*(holders.get(r, set()) for r in item["roles"])))
+            item["members"] = sorted(everywhere.union(*(holders.get(r, set()) for r in item["roles"])))
         items.append(item)
-    if user_id is None or is_owner(user_id):
-        return items
+    if user_id is None or is_owner(user_id) or is_bot(user_id):
+        return items if user_id is None or is_admin(user_id) else [{k: v for k, v in item.items() if k != "roles"} for item in items]
     mine, limited = role_ids_of(user_id), is_limited(user_id)
     shown = []
     for item in items:
@@ -3578,8 +3578,8 @@ def role_ids_of(user_id):
 
 
 def is_limited(user_id):
-    """Does this person have a limited role (only their private channels, no Lounge)? Never admins."""
-    if is_admin(user_id):
+    """Does this person have a limited role (only their private channels, no Lounge)? Never admins or bots."""
+    if is_admin(user_id) or is_bot(user_id):
         return False
     row = db.execute("SELECT 1 FROM user_roles JOIN roles ON roles.id = user_roles.role_id"
                      " WHERE user_roles.user_id = ? AND roles.limited = 1", (user_id,)).fetchone()
@@ -3596,7 +3596,7 @@ def sees_channel(private, channel_roles, my_roles, limited):
 
 def may_see_channel(key, user_id):
     """May this person see this channel (which exists; see is_channel)?"""
-    if is_owner(user_id):
+    if is_owner(user_id) or is_bot(user_id):
         return True
     private = db.execute("SELECT private FROM channels WHERE key = ?", (key,)).fetchone()[0]
     roles = [role_id for (role_id,) in db.execute("SELECT role_id FROM channel_roles WHERE channel = ?", (key,))]
@@ -4223,7 +4223,7 @@ def users_message():
     # Who has a limited role (not admins): left out of open channels' member lists (see "Channels").
     limited = {user_id for (user_id,) in db.execute(
         "SELECT user_roles.user_id FROM user_roles JOIN roles ON roles.id = user_roles.role_id"
-        " JOIN users ON users.id = user_roles.user_id WHERE roles.limited = 1 AND users.is_admin = 0"
+        " JOIN users ON users.id = user_roles.user_id WHERE roles.limited = 1 AND users.is_admin = 0 AND users.is_bot = 0"
     )}
     users = []
     for user_id, name, avatar, banner, status, bio, admin, bot, chosen, owner in rows:

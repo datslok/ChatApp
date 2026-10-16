@@ -358,8 +358,8 @@ the point is for me to understand how it works, not just to have it done.
   to the first one. Settings → Admin → Channels (settings.js, admins only): each row a small form (Enter/Save
   renames), ↑ ↓, 🗑 with confirm(). `can_join` uses `is_channel`; push titles use `channel_name`.
   Private channels and limited roles (since 2026-10-16; for my parents: their DMs and #family only):
-  `channels.private` + `channel_roles` (channel, role_id), `roles.limited`. `sees_channel`: the owner sees all (not other
-  admins: the user's wish; they can still give themselves a role); private = one of its roles (none ticked or its
+  `channels.private` + `channel_roles` (channel, role_id), `roles.limited`. `sees_channel`: the owner and bots see all (not other
+  admins: the user's wish; they can still give themselves a role; bots are never limited); private = one of its roles (none ticked or its
   role deleted = the owner only, never public); open = not limited (admins never are). Admins only manage the
   channels they see (`managed_channel`; reordering moves only those, around the others). `can_join` ->
   `may_see_channel`, `visible_chats` and "channels" use `channel_list(user_id)` (per person; a heading with nothing
@@ -723,7 +723,8 @@ the point is for me to understand how it works, not just to have it done.
   Searching the chat (only with Claude): a `search_chat` field (`CHAT_SEARCH_SCHEMA`: words, from) in
   `CLAUDE_ANSWER_SCHEMA`; `search_chat` (in ask_model's thread) hands `ask_server_search` to the event loop
   (`run_coroutine_threadsafe`; a Future per "ask" in `chat_searches`, completed by handle's "search_results"), the
-  same WebSocket "search" as the page's 🔍. Privacy: the results are cut to the channels plus the chat he was asked
+  same WebSocket "search" as the page's 🔍. Privacy: the results are cut to the open channels (`open_channels`; he's
+  in every private one, but #general mustn't hear #family) plus the chat he was asked
   in (never another DM or group of his, which he could read); up to `CHAT_SEARCH_RESULTS` 20 lines "[when] here/in
   #x, name: text" go in as a note, then ANSWER_SCHEMA.
   Since 2026-10-13 he runs on **Claude Haiku 5.5** (`CHATTUS_MODEL=claude-haiku-5-5` and `ANTHROPIC_API_KEY` in
