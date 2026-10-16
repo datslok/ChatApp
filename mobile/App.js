@@ -143,7 +143,9 @@ function Main({ connection, voice, notifications, openChatRef, share, onShareDon
   // longer in, or a channel an admin deleted (or made private, or the Lounge for someone with a limited
   // role)? Then it's gone: off to the first channel (or People), like the web page.
   useEffect(() => {
-    if (connection.lounge === null) return;  // (no channel list yet: nothing can be judged gone)
+    // (No channel or group list yet: nothing can be judged gone. "groups" comes after "friends" at connect,
+    // and before it a group opened by a notification looked gone.)
+    if (connection.lounge === null || !connection.groupsKnown) return;
     const first = channels.find((channel) => !channel.heading)?.key ?? PEOPLE;
     const partner = dmPartner(view, connection.me.id);
     const goneDm = partner !== null && !connection.friends.includes(partner);
@@ -155,7 +157,7 @@ function Main({ connection, voice, notifications, openChatRef, share, onShareDon
       history.current = history.current.filter((key) => key !== view);
       go(first, false);
     }
-  }, [connection.friends, connection.groups, channels, connection.lounge]);
+  }, [connection.friends, connection.groups, channels, connection.lounge, connection.groupsKnown]);
 
   // Android's back button, the web page's way: close an open drawer, else back to the chat before.
   // With nowhere left to go, returning false lets Android do its own thing (leave the app).
@@ -436,10 +438,27 @@ export default function App() {
   }, []);
   // A tapped notification (modules/push): kept up here too, through the login and the connecting.
   const [opened, setOpened] = useState(null);
+  // Android hands over the tap with the app's Activity, which this early in a cold start may not be
+  // ready yet (then the answer is "none", and we'd open the first channel): so ask a few more times in
+  // the first seconds. The module marks a tap as dealt with, so it's never opened twice.
   useEffect(() => {
-    getInitialOpen().then((first) => first && setOpened(first)).catch(() => {});
+    let stopped = false;
+    (async () => {
+      for (const wait of [0, 300, 1000, 2500]) {
+        await new Promise((resolve) => setTimeout(resolve, wait));
+        if (stopped) return;
+        const first = await getInitialOpen().catch(() => null);
+        if (first) {
+          setOpened(first);
+          return;
+        }
+      }
+    })();
     const subscription = addOpenListener(setOpened);
-    return () => subscription.remove();
+    return () => {
+      stopped = true;
+      subscription.remove();
+    };
   }, []);
   // Android draws apps "edge to edge", under the status bar and the navigation bar.
   // SafeAreaView adds padding the size of those bars, so nothing ends up behind them.

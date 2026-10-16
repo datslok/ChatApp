@@ -46,6 +46,7 @@ export function useConnection() {
   // false for someone with a limited role: no Lounge. null until the first "channels" (App.js waits for it).
   const [lounge, setLounge] = useState(null);
   const [groups, setGroups] = useState([]);      // our group DMs
+  const [groupsKnown, setGroupsKnown] = useState(false);  // the first "groups" has come (App.js waits for it)
   const [friends, setFriends] = useState([]);    // our friends' ids (each has a DM with us)
   const [incoming, setIncoming] = useState([]);  // ids of people who sent us a friend request
   const [outgoing, setOutgoing] = useState([]);  // ids of people we sent one to
@@ -149,6 +150,7 @@ export function useConnection() {
         break;
       case 'groups':
         setGroups(data.groups);
+        setGroupsKnown(true);
         break;
       case 'friends':
         // Sent at connect, and again after every change (ours or theirs) to any of the three.
@@ -530,7 +532,7 @@ export function useConnection() {
   }
 
   return {
-    status, me, myPresence, appearance, channels, lounge, groups, friends, incoming, outgoing, blocked, users, roles, emoji,
+    status, me, myPresence, appearance, channels, lounge, groups, groupsKnown, friends, incoming, outgoing, blocked, users, roles, emoji,
     emojiGroups, unread, mentions, current, messages, lastRead, more, typing, mutedChats, pins, pinsFull,
     searchResults, voiceMembers, dmCalls, callListener, notifyListener,
     openChat, closeChat, loadOlder, sendMessage, sendTyping, react, pin, editMessage, deleteMessage,
