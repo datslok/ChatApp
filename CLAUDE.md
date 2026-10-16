@@ -320,7 +320,10 @@ the point is for me to understand how it works, not just to have it done.
   thicker", centred, as big as fits): the same script makes `push_cat_icon.png` (modules/push) and `call_notification_icon.png`
   (call-service) in drawable-mdpi..xxxhdpi (24..96 px): the drawing's alpha without its faint specks (<= 32, which
   shifted it off centre), MaxFilter 19 at 1000 px wide, its box filling the 22/24 live area; `setColor` #0086D7.
-  `push_call_icon.xml` (the phone) stays for IncomingCallActivity's buttons. Release builds are signed by `plugins/release-signing.js` with
+  `push_call_icon.xml` (the phone) stays for IncomingCallActivity's buttons.
+  Every new APK resets "Full screen notifications" (Android 14's USE_FULL_SCREEN_INTENT, for apps not from Play; seen
+  2026-10-16, ordinary notifications survive): `src/FillScreenPrompt.js` (in Main) asks once per runtimeVersion
+  (`fill-screen-asked.txt`) when push is on and canFillScreen is false; Allow it -> openFillScreenSettings. Release builds are signed by `plugins/release-signing.js` with
   `~/.chatapp-keys/android-release.jks` (password in `~/.gradle/gradle.properties`, CHATAPP_RELEASE_*; see my memory;
   the user keeps a copy). `plugins/dev-variant.js`: debug builds are `no.datslok.chat.dev` "ChatApp Dev" (the user's
   choice: both on the phone; google-services.json has both apps), so `adb shell am start` etc. need the .dev package.

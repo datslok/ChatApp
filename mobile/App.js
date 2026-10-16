@@ -15,6 +15,7 @@ import CallFloat from './src/CallFloat';
 import { ShareMenu } from './src/CallParts';
 import ChatScreen from './src/ChatScreen';
 import Drawer from './src/Drawer';
+import FillScreenPrompt from './src/FillScreenPrompt';
 import { GroupDialog, GroupMenu, RenameDialog } from './src/GroupScreen';
 import Icon from './src/Icon';
 import IncomingCall from './src/IncomingCall';
@@ -415,6 +416,8 @@ function Main({ connection, voice, notifications, openChatRef, share, onShareDon
       ) : null}
       {dialog?.type === 'rename' ? <RenameDialog connection={connection} groupKey={dialog.key} onClose={closeDialog} /> : null}
       {dialog?.type === 'invites' ? <InviteScreen onClose={closeDialog} /> : null}
+      {/* Full screen notifications off (Android resets them with every new APK): asked once per version. */}
+      <FillScreenPrompt pushOn={notifications.settings.push === true} />
       {/* Someone calling us: over everything, even another popup. */}
       <IncomingCall connection={connection} voice={voice} />
     </KeyboardAvoidingView>
