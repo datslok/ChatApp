@@ -36,7 +36,7 @@
         "Your status: click your name at the bottom left and pick Online, Idle, Do Not Disturb (no notifications or sounds, on any device) or Invisible (you look offline but can chat as usual). After 10 minutes away from the chat you show as Idle by yourself. The dot on a picture shows it: green, yellow, red or grey. Someone with a little phone instead of a dot is only here on their phone",
         "Click someone's picture or name for their profile: picture, banner, status and bio",
         "Right-click someone (a long press on a phone): above their messages, in the member list, the DM list, the People page or a call. A menu with Profile, Mention, Message, Call, Add or Remove friend, Mute DM and Block",
-        "Your own in Settings → Profile. Pictures and banners can be animated GIFs, and you can move and zoom them",
+        "Your own in Settings → Profile. Pictures and banners can be animated GIFs, and you can move and zoom them. The editor starts with the whole picture in the frame; any empty part is saved see-through",
         "Up to 12 custom emoji of your own (also animated) in Settings → Emoji, for messages and reactions"
       ]
     },
@@ -118,6 +118,12 @@
     }
   ],
   "changes": [
+    {
+      "date": "2026-10-18",
+      "items": [
+        "🖼️ The picture editor (profile pictures, banners and custom emoji) opens with the whole picture showing, so a wide or tall picture fits in the frame: zoom in to fill it, or save it like that and the empty part stays see-through"
+      ]
+    },
     {
       "date": "2026-10-16",
       "items": [

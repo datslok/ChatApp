@@ -564,8 +564,19 @@ function rectangleToFile(img, left, top, width, height, saveWidth, saveHeight) {
   const canvas = document.createElement("canvas");
   canvas.width = saveWidth;
   canvas.height = saveHeight;
-  // drawImage(picture, cut out x, y, width, height, ..., draw at x, y, width, height)
-  canvas.getContext("2d").drawImage(img, left, top, width, height, 0, 0, saveWidth, saveHeight);
+  // The rectangle may reach past the picture's edges (the whole picture fits inside the frame),
+  // so only the part that overlaps the picture is drawn; a new canvas is see-through, so the
+  // rest stays empty. `scale` turns picture pixels into saved pixels.
+  const scale = saveWidth / width;
+  const fromX = Math.max(0, left);
+  const fromY = Math.max(0, top);
+  const toX = Math.min(img.naturalWidth, left + width);
+  const toY = Math.min(img.naturalHeight, top + height);
+  // drawImage(picture, cut out x, y, width, height, draw at x, y, width, height)
+  canvas.getContext("2d").drawImage(
+    img, fromX, fromY, toX - fromX, toY - fromY,
+    (fromX - left) * scale, (fromY - top) * scale, (toX - fromX) * scale, (toY - fromY) * scale
+  );
 
   // toBlob turns the canvas into an image file. It reports back through a callback
   // instead of returning, so we wrap it in a Promise to be able to "await" it.
@@ -580,7 +591,8 @@ function rectangleToFile(img, left, top, width, height, saveWidth, saveHeight) {
 // The preview canvas is a frame of `cropShape.width` x `cropShape.height` pixels: a circle
 // for profile pictures, a wide rectangle for banners. Three numbers describe where the picture
 // is: `cropScale` (how much it's enlarged: canvas pixels per picture pixel) and `cropX`, `cropY`
-// (where its top-left corner is, in canvas pixels; 0 or negative).
+// (where its top-left corner is, in canvas pixels). It opens with the whole picture fitting
+// inside the frame; the frame's empty part is saved see-through.
 
 const CROP_SHAPES = {
   avatar: { title: "Edit picture", width: 256, height: 256, round: true, saveWidth: 256, saveHeight: 256 },
@@ -593,7 +605,7 @@ let cropKind = "avatar";
 let cropShape = CROP_SHAPES.avatar;
 let cropImage = null;
 let cropFile = null;   // the original file, if it's a GIF (sent whole, to keep the animation)
-let cropMinScale = 1;  // the zoom where the picture just covers the whole frame
+let cropMinScale = 1;  // the zoom where the whole picture just fits inside the frame
 let cropScale = 1;
 let cropX = 0;
 let cropY = 0;
@@ -617,10 +629,10 @@ function openCropper(img, kind, file) {
   cropFrame.classList.toggle("round", cropShape.round);
 
   cropImage = img;
-  // The smallest zoom where the picture still covers the whole frame: enough to fill the
-  // width AND the height, so the larger of the two. (For a square frame, that's simply
-  // "the shorter side fills it".) Start there, centred.
-  cropMinScale = Math.max(cropShape.width / img.naturalWidth, cropShape.height / img.naturalHeight);
+  // The zoom where the whole picture just fits inside the frame: its width AND its height
+  // must fit, so the smaller of the two. (For a square frame, that's simply "the longer side
+  // fills it".) Start there, centred.
+  cropMinScale = Math.min(cropShape.width / img.naturalWidth, cropShape.height / img.naturalHeight);
   cropScale = cropMinScale;
   cropX = (cropShape.width - img.naturalWidth * cropScale) / 2;
   cropY = (cropShape.height - img.naturalHeight * cropScale) / 2;
@@ -629,14 +641,17 @@ function openCropper(img, kind, file) {
   cropperDialog.showModal();
 }
 
-// Keep the picture covering the whole frame: its left edge may not move right of the
-// frame's left edge (x <= 0), and its right edge may not move left of the frame's right
-// edge (x >= frame width - picture width). The same for top and bottom.
+// Where the picture may be along one side (x or y). Bigger than the frame: its left edge may not
+// move right of the frame's left edge (position <= 0), and its right edge may not move left of the
+// frame's right edge (position >= frame - picture). Smaller than the frame: it stays centred.
+function clampSide(position, frame, picture) {
+  if (picture <= frame) return (frame - picture) / 2;
+  return Math.min(0, Math.max(frame - picture, position));
+}
+
 function clampCrop() {
-  const width = cropImage.naturalWidth * cropScale;
-  const height = cropImage.naturalHeight * cropScale;
-  cropX = Math.min(0, Math.max(cropShape.width - width, cropX));
-  cropY = Math.min(0, Math.max(cropShape.height - height, cropY));
+  cropX = clampSide(cropX, cropShape.width, cropImage.naturalWidth * cropScale);
+  cropY = clampSide(cropY, cropShape.height, cropImage.naturalHeight * cropScale);
 }
 
 function drawCrop() {
@@ -728,13 +743,13 @@ cropSave.addEventListener("click", async () => {
 
   if (cropFile) {
     // A GIF: send the whole file, with the rectangle (in whole pixels) in the address.
-    // The server cuts that rectangle out of every frame, keeping the animation.
-    // Math.floor/round give whole numbers; Math.min keeps the rectangle inside the picture.
+    // The server cuts that rectangle out of every frame, keeping the animation; where it
+    // reaches past the picture's edges, the server fills in see-through pixels.
     const box = {
-      left: Math.floor(left),
-      top: Math.floor(top),
-      width: Math.min(Math.round(width), cropImage.naturalWidth - Math.floor(left)),
-      height: Math.min(Math.round(height), cropImage.naturalHeight - Math.floor(top)),
+      left: Math.round(left),
+      top: Math.round(top),
+      width: Math.round(width),
+      height: Math.round(height),
     };
     await uploadPicture(cropKind, cropFile, box);
     return;

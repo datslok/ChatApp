@@ -179,6 +179,7 @@ PICTURE_EXTENSIONS = {"image/png": "png", "image/jpeg": "jpg", "image/gif": "gif
 # a "decompression bomb" that would fill the memory).
 MAX_GIF_SIZE = 10 * 1024 * 1024  # 10 MB
 MAX_GIF_FRAMES = 200
+MAX_CROP_SIDE = 4096  # the crop rectangle's longest allowed side (see check_crop_box)
 Image.MAX_IMAGE_PIXELS = 25_000_000  # e.g. 5000 x 5000
 # Above that limit Pillow only *warns* (it refuses at twice the limit). Turn the warning into an error.
 warnings.simplefilter("error", Image.DecompressionBombWarning)
@@ -2277,6 +2278,29 @@ def crop_box_from(request):
     return box
 
 
+def check_crop_box(box, picture_size):
+    """Raise ValueError unless the rectangle `box` (left, top, width, height) is a sane size and
+    overlaps the picture. It may go past the picture's edges: the editor lets the whole picture fit
+    inside the frame, and the empty part of the frame becomes see-through."""
+    left, top, width, height = box
+    picture_width, picture_height = picture_size
+    if not (1 <= width <= MAX_CROP_SIDE and 1 <= height <= MAX_CROP_SIDE):
+        raise ValueError("That crop doesn't fit the picture.")
+    if left >= picture_width or top >= picture_height or left + width <= 0 or top + height <= 0:
+        raise ValueError("That crop doesn't fit the picture.")
+
+
+def make_padded_webp(source, destination, box):
+    """A still picture from the phone app, already cut and shrunk, but smaller than the frame on
+    one side (Android's image tools can't add empty space): put it into a see-through `box`
+    (crop() past the edges pads) and save it as WebP."""
+    with Image.open(source) as picture:
+        check_crop_box(box, picture.size)
+        left, top, width, height = box
+        padded = picture.convert("RGBA").crop((left, top, left + width, top + height))
+    padded.save(destination, format="WEBP", quality=85)
+
+
 def make_animated_webp(source, destination, box, size):
     """Crop an animated GIF to `box` (left, top, width, height) and shrink it to `size`,
     frame by frame, and save it as an animated WebP (usually several times smaller than GIF).
@@ -2287,15 +2311,15 @@ def make_animated_webp(source, destination, box, size):
             raise ValueError("That isn't a GIF.")
         if getattr(gif, "n_frames", 1) > MAX_GIF_FRAMES:
             raise ValueError(f"GIFs can have at most {MAX_GIF_FRAMES} frames.")
-        if left < 0 or top < 0 or width < 1 or height < 1 or left + width > gif.width or top + height > gif.height:
-            raise ValueError("That crop doesn't fit the picture.")
+        check_crop_box(box, gif.size)
 
         frames, durations = [], []
         for frame in ImageSequence.Iterator(gif):  # every frame, one after the other
             # How long this frame shows, in milliseconds. Browsers treat tiny values as 100.
             duration = frame.info.get("duration", 100)
             durations.append(duration if duration >= 20 else 100)
-            # RGBA: full colour plus transparency, whatever the GIF's own colour format was.
+            # RGBA: full colour plus transparency, whatever the GIF's own colour format was. Where the
+            # rectangle goes past the picture's edges, crop() fills in see-through pixels.
             cropped = frame.convert("RGBA").crop((left, top, left + width, top + height))
             frames.append(cropped.resize(size, Image.Resampling.LANCZOS))  # LANCZOS: a sharp, smooth way to shrink
 
@@ -2334,6 +2358,20 @@ async def receive_picture(request, kind):
             raise HTTPException(400, "Couldn't read that GIF.")
         finally:
             upload.unlink(missing_ok=True)  # the original isn't kept
+    elif box is not None:
+        # A still picture that needs see-through space around it (the phone app's editor).
+        picture_id = secrets.token_urlsafe(16) + ".webp"
+        upload = settings["folder"] / (picture_id + ".upload")
+        await receive_file(request, upload, settings["max_size"])
+        try:
+            await asyncio.to_thread(make_padded_webp, upload, settings["folder"] / picture_id, box)
+        except ValueError as error:
+            raise HTTPException(400, str(error))
+        except Exception:
+            (settings["folder"] / picture_id).unlink(missing_ok=True)
+            raise HTTPException(400, "Couldn't read that picture.")
+        finally:
+            upload.unlink(missing_ok=True)
     else:
         picture_id = secrets.token_urlsafe(16) + "." + PICTURE_EXTENSIONS[content_type]
         await receive_file(request, settings["folder"] / picture_id, settings["max_size"])

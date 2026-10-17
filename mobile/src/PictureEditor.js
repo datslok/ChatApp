@@ -2,11 +2,14 @@
 // profile picture, banner or custom emoji inside a frame before it's uploaded. One finger drags it,
 // two pinch to zoom (around the point between them), and the slider zooms too, like the web page's.
 //
-// The picture's place is three numbers, as on the web page: `zoom` (1 = it just covers the frame, up
-// to MAX_ZOOM) and x, y (where its top left corner is, in the frame; 0 or less). They're shared values
+// The picture's place is three numbers, as on the web page: `zoom` (1 = the whole picture just fits
+// inside the frame, up to MAX_ZOOM) and x, y (where its top left corner is, in the frame). The frame's
+// empty part is saved see-through. They're shared values
 // (react-native-reanimated), so the gestures move the picture on the UI thread without waiting for
 // JavaScript (see ImageViewer.js). Save turns them back into a rectangle of the picture's own pixels:
-//   - a still picture is cut out and shrunk here (expo-image-manipulator) and saved as WebP;
+//   - a still picture is cut out and shrunk here (expo-image-manipulator) and saved as WebP; if the
+//     rectangle reaches past its edges, the part that overlaps is sent with a rectangle in the address
+//     and the server adds the see-through space (Android's manipulator can't: its extent is web-only);
 //   - an animated GIF is sent whole with that rectangle in the address, and the server cuts it out of
 //     every frame (server.py, make_animated_webp), so it keeps moving. The same as the web page.
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
@@ -33,6 +36,14 @@ const DISPLAY_SIZE = 2048;  // the longest side of the copy shown while editing 
 function clamp(value, low, high) {
   'worklet';
   return Math.min(Math.max(value, low), high);
+}
+
+// Where the picture may be along one side (the web page's clampSide): bigger than the frame, its edges
+// never inside the frame's; smaller, centred.
+function clampSide(position, frame, picture) {
+  'worklet';
+  if (picture <= frame) return (frame - picture) / 2;
+  return clamp(position, frame - picture, 0);
 }
 
 // Choose a picture with Android's photo picker and get it ready for the editor. Returns null if
@@ -79,8 +90,8 @@ export default function PictureEditor({ picture, kind, onDone, onCancel }) {
   const room = Math.min(340, window.width - 32) - 48;
   const frameWidth = Math.min(shape.width, room);
   const frameHeight = frameWidth * shape.height / shape.width;
-  // The picture's size in the frame at zoom 1: just enough to cover both its width and its height.
-  const minScale = Math.max(frameWidth / picture.width, frameHeight / picture.height);
+  // The picture's size in the frame at zoom 1: the whole picture just fits, its width and its height.
+  const minScale = Math.min(frameWidth / picture.width, frameHeight / picture.height);
   const baseWidth = picture.width * minScale;
   const baseHeight = picture.height * minScale;
 
@@ -91,13 +102,12 @@ export default function PictureEditor({ picture, kind, onDone, onCancel }) {
   const start = useSharedValue({ zoom: 1, x: 0, y: 0, focusX: 0, focusY: 0 });
   const [zoomShown, setZoomShown] = useState(1);  // the slider's position (JavaScript's copy of zoom)
 
-  // Keep the picture covering the whole frame (the web page's clampCrop): its left edge never right
-  // of the frame's (x <= 0), its right edge never left of the frame's; the same for top and bottom.
+  // Keep the picture in its allowed place (the web page's clampCrop).
   function place(nextX, nextY, nextZoom) {
     'worklet';
     zoom.value = nextZoom;
-    x.value = clamp(nextX, frameWidth - baseWidth * nextZoom, 0);
-    y.value = clamp(nextY, frameHeight - baseHeight * nextZoom, 0);
+    x.value = clampSide(nextX, frameWidth, baseWidth * nextZoom);
+    y.value = clampSide(nextY, frameHeight, baseHeight * nextZoom);
   }
 
   // One finger: drag. (Only one: with two, the pinch moves it, through the point between them.)
@@ -149,27 +159,45 @@ export default function PictureEditor({ picture, kind, onDone, onCancel }) {
 
   async function save() {
     // Which part of the picture is in the frame, in its own pixels: frame pixels / the scale.
+    // It may reach past the picture's edges (negative left/top, or wider than what's left).
     const scale = minScale * zoom.value;
-    const left = Math.max(0, Math.floor(-x.value / scale));
-    const top = Math.max(0, Math.floor(-y.value / scale));
-    const box = {
-      left,
-      top,
-      width: Math.max(1, Math.min(Math.round(frameWidth / scale), picture.width - left)),
-      height: Math.max(1, Math.min(Math.round(frameHeight / scale), picture.height - top)),
-    };
+    const left = -x.value / scale;
+    const top = -y.value / scale;
+    const width = frameWidth / scale;
+    const height = frameHeight / scale;
     if (picture.gif) {
+      // The server cuts it from every frame, filling in see-through pixels past the edges.
+      const box = { left: Math.round(left), top: Math.round(top), width: Math.round(width), height: Math.round(height) };
       onDone({ uri: picture.uri, type: 'image/gif', params: box });
       return;
     }
     setSaving(true);
     try {
+      // The part of the rectangle that overlaps the picture, in whole picture pixels.
+      const fromX = Math.max(0, Math.floor(left));
+      const fromY = Math.max(0, Math.floor(top));
+      const toX = Math.min(picture.width, Math.ceil(left + width));
+      const toY = Math.min(picture.height, Math.ceil(top + height));
+      // Does the picture fill the frame (give or take a pixel)? Then it's simply shrunk to the saved
+      // size. Else the part is shrunk by the same amount (save pixels per picture pixel), and the server
+      // puts it into a see-through rectangle of the saved size that starts left of and above the part
+      // by the empty space's width and height.
+      const fills = toX - fromX >= width - 1 && toY - fromY >= height - 1;
+      const save = shape.saveWidth / width;
       const cut = await ImageManipulator.manipulate(picture.image)
-        .crop({ originX: box.left, originY: box.top, width: box.width, height: box.height })
-        .resize({ width: shape.saveWidth, height: shape.saveHeight })
+        .crop({ originX: fromX, originY: fromY, width: toX - fromX, height: toY - fromY })
+        .resize(fills
+          ? { width: shape.saveWidth, height: shape.saveHeight }
+          : { width: Math.max(1, Math.round((toX - fromX) * save)), height: Math.max(1, Math.round((toY - fromY) * save)) })
         .renderAsync();
-      const file = await cut.saveAsync({ format: SaveFormat.WEBP, compress: 0.85 });
-      onDone({ uri: file.uri, type: 'image/webp', params: {} });
+      const params = fills ? {} : {
+        left: -Math.round((fromX - left) * save),
+        top: -Math.round((fromY - top) * save),
+        width: shape.saveWidth,
+        height: shape.saveHeight,
+      };
+      const file = await cut.saveAsync({ format: fills ? SaveFormat.WEBP : SaveFormat.PNG, compress: 0.85 });
+      onDone({ uri: file.uri, type: fills ? 'image/webp' : 'image/png', params });
     } catch {
       setSaving(false);
       setProblem("Couldn't save that picture.");
