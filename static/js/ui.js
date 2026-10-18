@@ -23,6 +23,34 @@ openSidebarButton.addEventListener("click", () => openDrawer(sidebarElement));
 openMembersButton.addEventListener("click", () => openDrawer(membersElement));
 drawerBackdrop.addEventListener("click", closeDrawers);
 
+// ---------- The member list's button ----------
+// On wider screens, 👥 in the chat's top bar hides or shows the member list, like Discord. It only
+// toggles the "closed" class (chat.css hides it); the hidden attribute stays renderMembers' (no list
+// on the People page and in the Lounge), so the two never undo each other. Remembered per device
+// (localStorage "membersClosed"); try/catch, as a browser may refuse localStorage.
+const membersButton = document.getElementById("members-button");
+
+function showMembersClosed(closed) {
+  membersElement.classList.toggle("closed", closed);  // (toggle with a second argument: add if true, else remove)
+  membersButton.title = closed ? "Show members" : "Hide members";
+  membersButton.setAttribute("aria-label", membersButton.title);
+  membersButton.setAttribute("aria-pressed", closed ? "false" : "true");
+}
+
+try {
+  showMembersClosed(localStorage.getItem("membersClosed") === "1");
+} catch {
+  showMembersClosed(false);
+}
+
+membersButton.addEventListener("click", () => {
+  const closed = !membersElement.classList.contains("closed");
+  showMembersClosed(closed);
+  try {
+    localStorage.setItem("membersClosed", closed ? "1" : "0");
+  } catch {}
+});
+
 // ---------- The back button ----------
 // The chat is one page, so by itself "back" would leave it. Instead we add our own steps to
 // the browser's history (pushState), and the browser tells us when back is pressed (popstate):

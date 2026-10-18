@@ -604,6 +604,20 @@ body {
   color: var(--icon-strong);
 }
 
+/* The member list's button while the list shows: brighter, as "on" (like Discord's). */
+#members-button[aria-pressed="true"] {
+  color: var(--icon-strong);
+}
+
+/* The member list closed with that button. Only on wider screens: on a phone the list is a drawer
+   (its own 👥 button) and the button is gone, so a list closed on a PC can't get stuck hidden there.
+   "not (max-width: 700px)" is the opposite of the phone layout's media query. */
+@media not (max-width: 700px) {
+  #members.closed {
+    display: none;
+  }
+}
+
 /* A message's 📌 while it's pinned (aria-pressed="true"): highlighted, as "Unpin". */
 .message-actions button[aria-pressed="true"] {
   background: var(--bg-active);
@@ -4723,6 +4737,11 @@ button.download-button {
 /* ---------- Phones and other narrow screens ----------
    Everything in here only applies when the screen is 700px wide or less. */
 @media (max-width: 700px) {
+  /* The top bar's 👥 opens the drawer here instead. */
+  #members-button {
+    display: none;
+  }
+
   /* A bar above the messages: ☰ (channels), where we are, 👥 (online). */
   #topbar {
     display: flex;

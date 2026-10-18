@@ -32,7 +32,7 @@
         "Group DMs: the + next to \"Direct messages\" starts a private chat with 2 to 9 friends. At the top of a group: Add people (your own friends), Rename and Leave. Every message there notifies the others, like a DM. 📞 Call rings everyone in the group; whoever answers joins, and the rest can join later from the call banner. Chattus is in every group: write @Chattus to ask him something there",
         "Online and offline people on the right, and \"is typing…\" under the messages",
         "Roles: admins make roles with a colour in Settings → Admin → Roles and give them to people. A role colours its people's names and gives them a section in the member list; the roles show in their profile",
-        "The member list on the right shows who's in the chat you're in: everyone in a channel, the two of you in a DM, the members of a group",
+        "The member list on the right shows who's in the chat you're in: everyone in a channel, the two of you in a DM, the members of a group. The 👥 button at the top of the chat hides it (and shows it again)",
         "Your status: click your name at the bottom left and pick Online, Idle, Do Not Disturb (no notifications or sounds, on any device) or Invisible (you look offline but can chat as usual). After 10 minutes away from the chat you show as Idle by yourself. The dot on a picture shows it: green, yellow, red or grey. Someone with a little phone instead of a dot is only here on their phone",
         "Click someone's picture or name for their profile: picture, banner, status and bio",
         "Right-click someone (a long press on a phone): above their messages, in the member list, the DM list, the People page or a call. A menu with Profile, Mention, Message, Call, Add or Remove friend, Mute DM and Block",
@@ -122,7 +122,8 @@
       "date": "2026-10-18",
       "items": [
         "😺 Room for twice as many custom emoji: up to 24 each in Settings → Emoji",
-        "🖼️ The picture editor (profile pictures, banners and custom emoji) opens with the whole picture showing, so a wide or tall picture fits in the frame: zoom in to fill it, or save it like that and the empty part stays see-through"
+        "🖼️ The picture editor (profile pictures, banners and custom emoji) opens with the whole picture showing, so a wide or tall picture fits in the frame: zoom in to fill it, or save it like that and the empty part stays see-through",
+        "👥 Hide the member list on the right with the 👥 button at the top of the chat, like on Discord. Click it again to bring the list back"
       ]
     },
     {
