@@ -11,7 +11,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Clipboard from 'expo-clipboard';
 import Icon from './Icon';
-import MessageText, { Attachment, CustomEmoji, LinkPreview, formatSize } from './MessageText';
+import MessageText, { Attachments, CustomEmoji, LinkPreview, formatSize } from './MessageText';
 import ChatInfoScreen from './ChatInfoScreen';
 import PinsScreen from './PinsScreen';
 import Picker from './Picker';
@@ -19,7 +19,7 @@ import SearchScreen from './SearchScreen';
 import { useStyles, useTheme } from './theme';
 import { chatLabel } from './chats';
 import { SERVER } from './config';
-import { MAX_TRAY_FILES, uploadFile } from './files';
+import { uploadFile } from './files';
 import { copySharedFile } from '../modules/shared-files';
 import { Avatar, BotBadge, nameColor } from './people';
 import { dayName, headerTime, isSameDay } from './time';
@@ -221,12 +221,12 @@ function Message({ message, grouped, connection, isBlocked, flash, onShow, onLon
             <Text style={styles.time}>{headerTime(new Date(message.sent_at))}</Text>
           </View>
         )}
-        {/* Then, like the web page: the text, the attached file, the link's preview card, the reactions. */}
+        {/* Then, like the web page: the text, the attached files, the link's preview card, the reactions. */}
         {message.text ? (
           <MessageText text={message.text} users={users} emoji={emoji} edited={message.edited_at} note={note} onMention={onProfile} />
         ) : null}
-        {message.file ? (
-          <Attachment file={message.file} sender={message.user_id === me.id ? null : name} onLongPress={() => onLongPress(message)} />
+        {message.files.length > 0 ? (
+          <Attachments files={message.files} sender={message.user_id === me.id ? null : name} onLongPress={() => onLongPress(message)} />
         ) : null}
         {message.preview ? <LinkPreview preview={message.preview} /> : null}
         {message.reactions.length > 0 ? (
@@ -294,7 +294,9 @@ function PendingMessage({ item, connection }) {
       <View style={styles.body}>
         <View style={item.failed ? null : styles.sending}>
           {item.text ? <MessageText text={item.text} users={users} emoji={emoji} edited={null} note={false} /> : null}
-          {item.file && !item.text ? <Text style={styles.pendingNote}>A file</Text> : null}
+          {item.files.length > 0 && !item.text ? (
+            <Text style={styles.pendingNote}>{item.files.length === 1 ? 'A file' : `${item.files.length} files`}</Text>
+          ) : null}
         </View>
         {item.failed ? (
           <Text style={styles.pendingFailed}>
@@ -613,7 +615,7 @@ export default function ChatScreen({
         showError(typeof answer.detail === 'string' ? answer.detail : "Couldn't send the GIF.");
         return;
       }
-      connection.sendMessage('', replyTo?.id, answer.id);
+      connection.sendMessage('', replyTo?.id, [answer.id]);
       toBottom();
       setReplyTo(null);
       setStatus(null);
@@ -731,12 +733,12 @@ export default function ChatScreen({
   // Files picked: into the tray, if they're not too big and there's room (the web page's addToTray).
   // Each: {uri, name, type, size}.
   function addToTray(files) {
-    const room = MAX_TRAY_FILES - tray.length;
+    const room = limits.files_per_message - tray.length;
     const fitting = files.filter((file) => file.size > 0 && file.size <= limits.upload_size);
     const empty = files.find((file) => file.size === 0);
     if (empty) showError(`${empty.name} is empty`);  // (nothing to send: the server refuses those too)
     else if (fitting.length < files.length) showError(`Files can be at most ${megabytes(limits.upload_size)}`);
-    else if (fitting.length > room) showError(`At most ${MAX_TRAY_FILES} files at a time`);
+    else if (fitting.length > room) showError(`At most ${limits.files_per_message} files at a time`);
     const added = fitting.slice(0, room).map((file) => ({
       ...file,
       key: `${Date.now()}-${Math.random()}`,  // only for React's list
@@ -772,7 +774,7 @@ export default function ChatScreen({
 
   // Returns the new tray items' keys.
   async function takeSharedFiles(files) {
-    let room = MAX_TRAY_FILES - tray.length;
+    let room = limits.files_per_message - tray.length;
     const ready = [];
     for (const file of files) {
       if (file.size > limits.upload_size || room === 0) {
@@ -797,7 +799,7 @@ export default function ChatScreen({
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images', 'videos'],
       allowsMultipleSelection: true,
-      selectionLimit: MAX_TRAY_FILES - tray.length,
+      selectionLimit: limits.files_per_message - tray.length,
       exif: true,  // what the camera wrote inside each photo: the moment it was taken, for its name
     });
     if (!result.canceled) addToTray(fromPicker(result.assets));
@@ -855,36 +857,37 @@ export default function ChatScreen({
     });
   }
 
-  // Send pressed with files in the tray: upload and send each one as its own message, the text
-  // going with the first one (and the reply). One that fails stays in the tray, in red (sendTray).
+  // Send pressed with files in the tray: upload them one after another, then send them all in one
+  // message with the text and the reply (like the web page's sendTray). One that fails to upload stays
+  // in the tray, in red; the others still go.
   async function sendTray(caption) {
     setUploading(true);
     toBottom();
     const chat = current;  // a message goes to the open chat, so we stop if that changes
-    let reply = replyTo?.id;
+    const uploaded = [];   // [{key, id}] for the ones that made it
+    const failed = new Set();
     for (const item of tray) {
       setStatus({ text: `Uploading ${item.name}…` });
-      let sent = false;
       try {
-        const id = await uploadFile(item);
-        if (currentNow.current !== chat) break;  // moved to another chat: the rest wait in their tray
-        sent = connection.sendMessage(caption, reply, id);
-        if (!sent) showError('Not connected, try again in a moment');
+        uploaded.push({ key: item.key, id: await uploadFile(item) });
       } catch (error) {
         showError(error.message);
+        failed.add(item.key);
       }
-      if (!sent) {
-        setTrayOf(chat, (old) => old.map((other) => (other.key === item.key ? { ...other, failed: true } : other)));
-        continue;
-      }
-      setTrayOf(chat, (old) => old.filter((other) => other.key !== item.key));
-      if (caption) {
-        caption = '';  // used up by this file
-        setDraftOf(chat, '');
-      }
-      reply = null;
-      setReplyTo(null);
+      if (currentNow.current !== chat) break;  // moved to another chat: the files wait in their tray
     }
+    if (currentNow.current === chat && uploaded.length > 0) {
+      if (connection.sendMessage(caption, replyTo?.id, uploaded.map((upload) => upload.id))) {
+        const sent = new Set(uploaded.map((upload) => upload.key));
+        setTrayOf(chat, (old) => old.filter((other) => !sent.has(other.key)));
+        if (caption) setDraftOf(chat, '');
+        setReplyTo(null);
+      } else {
+        showError('Not connected, try again in a moment');
+        for (const upload of uploaded) failed.add(upload.key);
+      }
+    }
+    setTrayOf(chat, (old) => old.map((other) => (failed.has(other.key) ? { ...other, failed: true } : other)));
     setStatus((now) => (now?.error ? now : null));  // (a failure's message stays its 5 s)
     setUploading(false);
   }
@@ -901,7 +904,7 @@ export default function ChatScreen({
       setEditing(null);
       setDraft('');
       if (text === readableText(message.text, users, connection.emoji).trim()) return;  // nothing changed
-      if (!text && !message.file) {
+      if (!text && message.files.length === 0) {
         // Emptied completely: that's really a delete (like on the web page and Discord), asked first.
         Alert.alert('Delete message?', "This can't be undone.", [
           { text: 'Cancel', style: 'cancel' },

@@ -22,7 +22,8 @@ VERSION = "1.48.0"
 
 # Every icon the page uses, by Lucide's name.
 ICONS = [
-    "arrow-down", "arrow-up", "ban", "bell", "bell-off", "bluetooth", "bug", "camera", "check", "chevron-down", "copy",
+    "arrow-down", "arrow-up", "ban", "bell", "bell-off", "bluetooth", "bug", "camera", "check", "chevron-down", "chevron-left",
+    "chevron-right", "copy",
     "download", "ear", "ellipsis-vertical", "file", "gamepad-2", "headphone-off", "headphones", "image", "lightbulb", "log-out",
     "maximize", "megaphone", "menu", "mic", "mic-off", "minimize", "monitor", "monitor-up", "music",
     "paperclip", "pause", "pencil", "phone", "phone-off", "pin", "play", "plus", "reply", "search", "settings",

@@ -12,8 +12,6 @@ import * as Sharing from 'expo-sharing';
 import { saveToDownloads } from '../modules/downloads';
 import { SERVER } from './config';
 
-export const MAX_TRAY_FILES = 10;  // the web page's limit too
-
 // Upload one file (a tray item: {uri, name, type}). Returns its id from the server; throws an
 // Error with something to show if it failed.
 export async function uploadFile(item) {

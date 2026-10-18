@@ -239,7 +239,6 @@ db.execute("""
         legacy_name   TEXT,  -- only for messages from before accounts existed (no user_id)
         text          TEXT NOT NULL,
         sent_at       TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        attachment_id TEXT REFERENCES attachments(id),
         reply_to      INTEGER REFERENCES messages(id),  -- the message this one replies to; NULL = none
         edited_at     TEXT,                             -- when it was last edited; NULL = never
         kind          TEXT,                             -- NULL = a normal message, "call" = a call note, "pin" = a pin note
@@ -256,7 +255,9 @@ db.execute("""
         size         INTEGER NOT NULL,
         uploader_id  INTEGER REFERENCES users(id),
         channel      TEXT,  -- NULL until the file is sent in a message
-        created_at   TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        created_at   TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        message_id   INTEGER REFERENCES messages(id),  -- the message it's in; NULL until it's sent
+        position     INTEGER NOT NULL DEFAULT 0        -- its place among that message's files (0 = first)
     )
 """)
 db.execute("""
@@ -466,8 +467,9 @@ if "channel" not in table_columns("messages"):
     # From before channels existed: the DEFAULT puts all the old messages in #general.
     with db:
         db.execute("ALTER TABLE messages ADD COLUMN channel TEXT NOT NULL DEFAULT 'general'")
-if "attachment_id" not in table_columns("messages"):
-    # From before uploads existed: old messages simply have no attachment (NULL).
+if "name" in table_columns("messages") and "attachment_id" not in table_columns("messages"):
+    # From before uploads existed (and user ids: migrate_names_to_ids below copies this column, and
+    # "Several files per message" further down then moves it into the attachments table).
     with db:
         db.execute("ALTER TABLE messages ADD COLUMN attachment_id TEXT REFERENCES attachments(id)")
 if "email" not in table_columns("users"):
@@ -882,6 +884,25 @@ if "repacked" not in table_columns("attachments"):
     with db:
         db.execute("ALTER TABLE attachments ADD COLUMN repacked INTEGER NOT NULL DEFAULT 0")
 
+# Several files per message: from before, when a message had at most one file, in messages.attachment_id.
+# That's a "one-to-many" relationship now, so the reference is turned around: each file says which
+# message it's in (attachments.message_id) and where in its list (position). Done in one transaction:
+# add the columns, copy every message's file across, drop the old column. (After every other change to
+# these tables above: migrate_names_to_ids rebuilds both and would drop the new columns again.)
+if "message_id" not in table_columns("attachments") or "attachment_id" in table_columns("messages"):
+    with db:
+        db.execute("BEGIN")
+        if "message_id" not in table_columns("attachments"):
+            db.execute("ALTER TABLE attachments ADD COLUMN message_id INTEGER REFERENCES messages(id)")
+            db.execute("ALTER TABLE attachments ADD COLUMN position INTEGER NOT NULL DEFAULT 0")
+        if "attachment_id" in table_columns("messages"):
+            # UPDATE ... FROM: like a JOIN, each file gets the id of the message that named it.
+            db.execute("UPDATE attachments SET message_id = messages.id FROM messages"
+                       " WHERE messages.attachment_id = attachments.id")
+            db.execute("ALTER TABLE messages DROP COLUMN attachment_id")
+# An index: a sorted lookup SQLite keeps next to the table, so "the files of message 42" doesn't read them all.
+db.execute("CREATE INDEX IF NOT EXISTS attachments_message ON attachments (message_id, position)")
+
 
 async def repack_old_videos():
     """Videos uploaded before re-packing existed, and the seasonal videos (seasonal/, see "Seasons"):
@@ -928,18 +949,22 @@ def iso_time(sqlite_time):
     return sqlite_time.replace(" ", "T") + "Z"
 
 
-def save_message(channel, user_id, text, file, reply_to, kind=None, sent_from=None):
-    """Save a message (kind: None for a normal one, "call" for a call note; sent_from: the device it
-    came from, see device_of). Returns its id and time, so the live message matches the history exactly."""
+def save_message(channel, user_id, text, files, reply_to, kind=None, sent_from=None):
+    """Save a message (files: claim_attachments' list, or empty; kind: None for a normal one, "call" for a
+    call note; sent_from: the device it came from, see device_of). Returns its id and time, so the live
+    message matches the history exactly."""
     # "with db" commits the change when the block ends (or undoes it if something fails).
     # The ? placeholders keep user text as data, so it can never be run as SQL.
     with db:
         cursor = db.execute(
-            "INSERT INTO messages (channel, user_id, text, attachment_id, reply_to, kind, sent_from)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (channel, user_id, text, file["id"] if file else None, reply_to, kind, sent_from),
+            "INSERT INTO messages (channel, user_id, text, reply_to, kind, sent_from) VALUES (?, ?, ?, ?, ?, ?)",
+            (channel, user_id, text, reply_to, kind, sent_from),
         )
-    message_id = cursor.lastrowid  # the id SQLite gave it
+        message_id = cursor.lastrowid  # the id SQLite gave it
+        # Each file points at its message, in the order they were sent (enumerate counts 0, 1, 2...).
+        for position, file in enumerate(files):
+            db.execute("UPDATE attachments SET message_id = ?, position = ? WHERE id = ?",
+                       (message_id, position, file["id"]))
     sent_at = db.execute("SELECT sent_at FROM messages WHERE id = ?", (message_id,)).fetchone()[0]
     return message_id, iso_time(sent_at)
 
@@ -950,10 +975,21 @@ def file_info(attachment_id, filename, size, content_type):
             "image": content_type in IMAGE_TYPES, "video": content_type in VIDEO_TYPES}
 
 
+def files_note(files):
+    """A message's files in words, for notifications of a message without text."""
+    if not files:
+        return ""
+    if len(files) == 1:
+        return "📷 A picture" if files[0]["image"] else "📎 " + files[0]["filename"]
+    if all(file["image"] for file in files):
+        return f"📷 {len(files)} pictures"
+    return f"📎 {len(files)} files"
+
+
 REPLY_PREVIEW_LENGTH = 100
 
 
-def reply_preview(original_id, user_id, name, text, attachment_id):
+def reply_preview(original_id, user_id, name, text, has_files):
     """The small quote shown above a reply: who wrote the original, and the start of it."""
     if original_id is None:
         return None  # not a reply (or the original no longer exists)
@@ -963,7 +999,7 @@ def reply_preview(original_id, user_id, name, text, attachment_id):
         "name": name,
         # Cut to length, then drop a custom emoji token that got cut in half at the end ("<:1").
         "text": re.sub(r"<:\d*$", "", text[:REPLY_PREVIEW_LENGTH]),
-        "file": attachment_id is not None,  # the page shows "Attachment" if there's no text
+        "file": bool(has_files),  # the page shows "Attachment" if there's no text
     }
 
 
@@ -985,7 +1021,7 @@ def live_reply_preview(original_id):
     row = db.execute(
         """
         SELECT messages.id, messages.user_id, COALESCE(users.username, messages.legacy_name),
-               messages.text, messages.attachment_id
+               messages.text, EXISTS (SELECT 1 FROM attachments WHERE attachments.message_id = messages.id)
         FROM messages LEFT JOIN users ON users.id = messages.user_id
         WHERE messages.id = ?
         """,
@@ -1015,25 +1051,48 @@ def reactions_for(message_ids):
     return result
 
 
+def files_for(message_ids):
+    """The files of several messages, in order: {message_id: [file_info, ...]} (an empty list: none).
+    One query for all of them, like reactions_for."""
+    result = {message_id: [] for message_id in message_ids}
+    if not message_ids:
+        return result
+    placeholders = ",".join("?" * len(message_ids))
+    rows = db.execute(
+        f"SELECT message_id, id, filename, size, content_type FROM attachments WHERE message_id IN ({placeholders})"
+        " ORDER BY message_id, position",
+        list(message_ids),
+    )
+    for message_id, file_id, filename, size, content_type in rows:
+        result[message_id].append(file_info(file_id, filename, size, content_type))
+    return result
+
+
+def with_files(message, files):
+    """Put a message's files in it: "files", the list, and "file", the first one (or None), which the
+    phone apps from before several files per message (2026-10-18) still read."""
+    message["files"] = files
+    message["file"] = files[0] if files else None
+    return message
+
+
 # Everything the page needs about messages, for the history and for the pinned list (each adds its
-# own WHERE and ORDER BY). LEFT JOINs: each message, plus its sender's *current* username, plus its
-# attachment (NULLs where there's none). COALESCE(a, b) means "a, or b if a is NULL": for messages
-# from before accounts existed, there's no user, so we show the name that was typed back then.
+# own WHERE and ORDER BY). LEFT JOINs: each message, plus its sender's *current* username.
+# COALESCE(a, b) means "a, or b if a is NULL": for messages from before accounts existed, there's no
+# user, so we show the name that was typed back then. (The files come separately: files_for.)
 #
 # For replies, the messages table is joined with *itself*: "original" is a second copy of it
-# (an alias), holding the message being replied to, and "original_sender" its sender.
-# And its link preview, if it got one (link_previews).
+# (an alias), holding the message being replied to, and "original_sender" its sender; EXISTS (...) is
+# 1 if the original has any file. And its link preview, if it got one (link_previews).
 MESSAGES_QUERY = """
     SELECT messages.id, messages.sent_at, messages.edited_at, messages.reply_to, messages.kind,
            messages.pinned_at, messages.sent_from, messages.user_id, COALESCE(users.username, messages.legacy_name), messages.text,
-           attachments.id, attachments.filename, attachments.size, attachments.content_type,
            link_previews.url, link_previews.site, link_previews.title, link_previews.description,
            link_previews.image,
            original.id, original.user_id, COALESCE(original_sender.username, original.legacy_name),
-           original.text, original.attachment_id
+           original.text, EXISTS (SELECT 1 FROM attachments WHERE attachments.message_id = original.id)
     FROM messages
     LEFT JOIN users ON users.id = messages.user_id
-    LEFT JOIN attachments ON attachments.id = messages.attachment_id
     LEFT JOIN messages AS original ON original.id = messages.reply_to
     LEFT JOIN users AS original_sender ON original_sender.id = original.user_id
     LEFT JOIN link_previews ON link_previews.message_id = messages.id
@@ -1043,15 +1102,15 @@ MESSAGES_QUERY = """
 def message_dicts(rows):
     """Rows from MESSAGES_QUERY in the same shape as live messages."""
     reactions = reactions_for([row[0] for row in rows])  # all the reactions, in one query
+    files = files_for([row[0] for row in rows])  # and all the files, in another
     return [
-        {
+        with_files({
             "id": message_id,
             "sent_at": iso_time(sent_at),
             "edited_at": iso_time(edited_at) if edited_at else None,
             "user_id": user_id,  # None for messages from before accounts existed
             "name": name,
             "text": text,
-            "file": file_info(file_id, filename, size, content_type) if file_id else None,
             # A reply whose original has been deleted: reply_to is still set, but the JOIN found nothing.
             "reply": reply_preview(*rest[5:]) or ({"id": reply_to, "deleted": True} if reply_to else None),
             "reactions": reactions[message_id],
@@ -1059,9 +1118,9 @@ def message_dicts(rows):
             "pinned": pinned_at is not None,
             "preview": preview_info(*rest[:5]) if rest[0] else None,  # rest: the preview, then the original
             "sent_from": sent_from,  # (bots only: send() takes it out for everyone else)
-        }
+        }, files[message_id])
         for (message_id, sent_at, edited_at, reply_to, kind, pinned_at, sent_from, user_id, name, text,
-             file_id, filename, size, content_type, *rest) in rows
+             *rest) in rows
     ]
 
 
@@ -1108,10 +1167,12 @@ def chat_info(channel, tab, before=None):
     """One batch of a chat's media, files or links: {"items": [messages], "more": True if there may be
     more, "oldest": the id to ask `before` next}."""
     shown = ", ".join("?" * len(SHOWN_TYPES))  # one "?" per type: "?, ?, ?" (the types go in as values)
+    # A message with any file of the kind (it may have others too: the page picks out the right ones).
+    has_file = "EXISTS (SELECT 1 FROM attachments WHERE attachments.message_id = messages.id AND attachments.content_type"
     if tab == "media":
-        what, values = f"attachments.content_type IN ({shown})", list(SHOWN_TYPES)
+        what, values = f"{has_file} IN ({shown}))", list(SHOWN_TYPES)
     elif tab == "files":
-        what, values = f"attachments.id IS NOT NULL AND attachments.content_type NOT IN ({shown})", list(SHOWN_TYPES)
+        what, values = f"{has_file} NOT IN ({shown}))", list(SHOWN_TYPES)
     else:  # links: a quick first look in SQL, then message_links finds the real ones
         what, values = "(messages.text LIKE '%http://%' OR messages.text LIKE '%https://%')", []
     rows = db.execute(
@@ -2260,22 +2321,38 @@ async def upload(request: Request, filename: str):
     return {"id": file_id}
 
 
-def claim_attachment(file_id, user_id, channel):
-    """Tie an uploaded file to the channel it's being sent in. Only the uploader can do that,
-    and only once. Returns the file's info for the message, or None if not allowed."""
-    if not isinstance(file_id, str):
+MAX_FILES_PER_MESSAGE = 10  # like Discord
+
+
+class NotAllowed(Exception):
+    """Raised inside a `with db:` block to undo everything it did so far."""
+
+
+def claim_attachments(file_ids, user_id, channel):
+    """Tie uploaded files to the channel they're being sent in. Only the uploader can do that, and
+    only once. All of them or none: returns their infos for the message, in order, or None if any
+    isn't allowed (or the list is wrong: not a list of 1 to MAX_FILES_PER_MESSAGE different ids)."""
+    if (not isinstance(file_ids, list) or not 1 <= len(file_ids) <= MAX_FILES_PER_MESSAGE
+            or not all(isinstance(file_id, str) for file_id in file_ids) or len(set(file_ids)) != len(file_ids)):
         return None
-    with db:
-        cursor = db.execute(
-            "UPDATE attachments SET channel = ? WHERE id = ? AND uploader_id = ? AND channel IS NULL",
-            (channel, file_id, user_id),
-        )
-    if cursor.rowcount != 1:  # rowcount: how many rows the UPDATE changed
+    try:
+        with db:  # one transaction: an exception inside undoes the files claimed before it
+            for file_id in file_ids:
+                cursor = db.execute(
+                    "UPDATE attachments SET channel = ? WHERE id = ? AND uploader_id = ? AND channel IS NULL",
+                    (channel, file_id, user_id),
+                )
+                if cursor.rowcount != 1:  # rowcount: how many rows the UPDATE changed
+                    raise NotAllowed
+    except NotAllowed:
         return None
-    filename, size, content_type = db.execute(
-        "SELECT filename, size, content_type FROM attachments WHERE id = ?", (file_id,)
-    ).fetchone()
-    return file_info(file_id, filename, size, content_type)
+    files = []
+    for file_id in file_ids:
+        filename, size, content_type = db.execute(
+            "SELECT filename, size, content_type FROM attachments WHERE id = ?", (file_id,)
+        ).fetchone()
+        files.append(file_info(file_id, filename, size, content_type))
+    return files
 
 
 @app.get("/uploads/{file_id}")
@@ -2870,8 +2947,8 @@ def push_message(people, message):
     body = readable_text(message["text"])
     if len(body) > PUSH_TEXT_LENGTH:
         body = body[:PUSH_TEXT_LENGTH] + "…"
-    if not body and message["file"]:
-        body = "📷 A picture" if message["file"]["image"] else "📎 " + message["file"]["filename"]
+    if not body:
+        body = files_note(message["files"])
     avatar = db.execute("SELECT avatar_id FROM users WHERE id = ?", (message["user_id"],)).fetchone()[0]
     push_in_background(people, {
         "title": title, "body": body, "channel": channel, "message_id": message["id"],
@@ -4801,12 +4878,12 @@ async def end_call(channel, reason):
         text = f"📞 Call · {minutes} min" if minutes >= 1 else "📞 Call · under a minute"
     # The note comes from the caller, and is saved and sent like any message (so it gets unread
     # dots and stays in the history).
-    message_id, sent_at = save_message(channel, call["caller"], text, None, None, kind="call")
-    message = {
+    message_id, sent_at = save_message(channel, call["caller"], text, [], None, kind="call")
+    message = with_files({
         "type": "message", "channel": channel, "id": message_id, "sent_at": sent_at,
-        "user_id": call["caller"], "name": username_of(call["caller"]), "text": text, "file": None,
+        "user_id": call["caller"], "name": username_of(call["caller"]), "text": text,
         "reply": None, "reactions": [], "edited_at": None, "kind": "call", "pinned": False,
-    }
+    }, [])
     await send_to_channel(channel, message)
     await announce_new_message(channel)
 
@@ -5253,7 +5330,7 @@ class GifChoice(BaseModel):
 @app.post("/gifs/send")
 async def save_gif(choice: GifChoice, request: Request):
     """Download a GIF from GIPHY and save it as an upload of ours. Answers {"id": ...} like /upload,
-    and the page then sends it like any file (claim_attachment ties it to the chat)."""
+    and the page then sends it like any file (claim_attachments ties it to the chat)."""
     user_id = current_user(request)
     if user_id is None:
         raise HTTPException(401, "You're not logged in.")
@@ -5347,7 +5424,7 @@ async def announce_new_message(channel, mentioned=(), message=None):
                         "user_id": message["user_id"],
                         "name": message["name"],
                         # The start of the text (a token cut in half at the end dropped), or a file.
-                        "text": re.sub(r"<(:\d*|@\w*)?$", "", message["text"][:100]) or ("📎 Attachment" if message["file"] else ""),
+                        "text": re.sub(r"<(:\d*|@\w*)?$", "", message["text"][:100]) or files_note(message["files"]),
                     }
             await send(websocket, update)
 
@@ -5432,6 +5509,7 @@ LIMITS = {
     "custom_emoji": MAX_CUSTOM_EMOJI,
     "emoji_name": MAX_EMOJI_NAME,
     "upload_size": MAX_UPLOAD_SIZE,
+    "files_per_message": MAX_FILES_PER_MESSAGE,  # (also how many files the tray holds)
     "gif_size": MAX_GIF_SIZE,  # profile pictures, banners and emoji (they come whole)
     "image_types": sorted(IMAGE_TYPES),  # (a set isn't JSON)
     "group_size": MAX_GROUP_SIZE,
@@ -5581,10 +5659,12 @@ async def chat(websocket: WebSocket):
                     await send(websocket, {"type": "sent", "nonce": nonce, "id": message_id, "channel": sent_channel})
                     continue
                 text = clean_text(data) if can_join(channel, user_id) else None
-                file = None
-                if text is not None and data.get("file") is not None:
-                    file = claim_attachment(data.get("file"), user_id, channel)  # (None: not theirs, already sent, gone)
-                if text is None or (data.get("file") is not None and file is None) or (not text and file is None):
+                # The files: "files", a list of upload ids; or "file", one (from before several per message).
+                file_ids = data.get("files") if data.get("file") is None else [data.get("file")]
+                files = []
+                if text is not None and file_ids is not None:
+                    files = claim_attachments(file_ids, user_id, channel)  # (None: not theirs, already sent, gone)
+                if text is None or files is None or (not text and not files):
                     # Refused (or nothing to send): an outbox's message shows as not sent straight away.
                     if nonce is not None:
                         await send(websocket, {"type": "not_sent", "nonce": nonce})
@@ -5593,13 +5673,13 @@ async def chat(websocket: WebSocket):
                 text, mentioned, everyone = expand_mentions(text)  # @kari -> <@2>
                 reply_to = check_reply(data.get("reply_to"), channel)
                 sent_from = device_of(clients[websocket])
-                message_id, sent_at = save_message(channel, user_id, text, file, reply_to, sent_from=sent_from)
+                message_id, sent_at = save_message(channel, user_id, text, files, reply_to, sent_from=sent_from)
                 mentioned_people = save_mentions(message_id, channel, user_id, mentioned, everyone)
                 # The name comes from the login (looked up now, so it's always the current one),
                 # never from the client.
-                message = {
+                message = with_files({
                     "type": "message", "channel": channel, "id": message_id, "sent_at": sent_at,
-                    "user_id": user_id, "name": username_of(user_id), "text": text, "file": file,
+                    "user_id": user_id, "name": username_of(user_id), "text": text,
                     "reply": live_reply_preview(reply_to),
                     "reactions": [],  # a brand new message has none yet
                     "edited_at": None,
@@ -5608,7 +5688,7 @@ async def chat(websocket: WebSocket):
                     "preview": None,  # a link's preview comes a moment later, as its own "preview"
                     "nonce": nonce,  # the app's tag (or None): its faded copy in the outbox goes as this comes
                     "sent_from": sent_from,  # (bots only, see send)
-                }
+                }, files)
                 await send_to_channel(channel, message)  # everyone in the channel, including us
                 if nonce is not None:
                     # Saved: tell the page that sent it (even if it's in another chat by now), with its tag.
@@ -5653,12 +5733,12 @@ async def chat(websocket: WebSocket):
                 message_id = data.get("message_id")
                 if not isinstance(message_id, int) or isinstance(message_id, bool):
                     continue
-                row = db.execute(
-                    "SELECT channel, user_id, attachment_id, kind FROM messages WHERE id = ?", (message_id,)
-                ).fetchone()
+                row = db.execute("SELECT channel, user_id, kind FROM messages WHERE id = ?", (message_id,)).fetchone()
                 if row is None:
                     continue
-                message_channel, author_id, attachment_id, message_kind = row
+                message_channel, author_id, message_kind = row
+                file_ids = [file_id for (file_id,) in db.execute(
+                    "SELECT id FROM attachments WHERE message_id = ?", (message_id,))]
                 if kind == "edit" and message_kind is not None:
                     continue  # call notes are written by the server, not edited
                 if not can_join(message_channel, user_id):
@@ -5668,7 +5748,7 @@ async def chat(websocket: WebSocket):
 
                 if kind == "edit":
                     text = clean_text(data)
-                    if text is None or (not text and attachment_id is None):
+                    if text is None or (not text and not file_ids):
                         continue  # too long, or empty without a file to keep the message
                     text = expand_custom_emoji(text)  # :pog: -> <:17>, as for new messages
                     text, mentioned, everyone = expand_mentions(text)
@@ -5686,18 +5766,14 @@ async def chat(websocket: WebSocket):
                     })
                 else:
                     # Delete the message with everything that belongs to it, in one transaction.
-                    file = None
-                    if attachment_id:
-                        file = db.execute("SELECT id FROM attachments WHERE id = ?", (attachment_id,)).fetchone()
                     with db:
                         db.execute("DELETE FROM reactions WHERE message_id = ?", (message_id,))
                         db.execute("DELETE FROM mentions WHERE message_id = ?", (message_id,))
                         preview_image = delete_preview(message_id)
+                        db.execute("DELETE FROM attachments WHERE message_id = ?", (message_id,))
                         db.execute("DELETE FROM messages WHERE id = ?", (message_id,))
-                        if attachment_id:
-                            db.execute("DELETE FROM attachments WHERE id = ?", (attachment_id,))
-                    if file:  # the file on disk, only once the database change has been saved
-                        (UPLOAD_DIR / attachment_id).unlink(missing_ok=True)
+                    for file_id in file_ids:  # the files on disk, only once the database change has been saved
+                        (UPLOAD_DIR / file_id).unlink(missing_ok=True)
                     if preview_image:
                         (PREVIEW_DIR / preview_image).unlink(missing_ok=True)
                     # (Replies to it keep their reply_to; their quote now says "deleted".)
@@ -5735,13 +5811,13 @@ async def chat(websocket: WebSocket):
                 if pin:
                     # A note in the chat, quoting the message, so everyone notices (like Discord). Saved and
                     # sent like any message, so it gets unread dots; like a call note, it can't be edited.
-                    note_id, sent_at = save_message(message_channel, user_id, "📌 pinned a message.", None, message_id, kind="pin")
-                    await send_to_channel(message_channel, {
+                    note_id, sent_at = save_message(message_channel, user_id, "📌 pinned a message.", [], message_id, kind="pin")
+                    await send_to_channel(message_channel, with_files({
                         "type": "message", "channel": message_channel, "id": note_id, "sent_at": sent_at,
                         "user_id": user_id, "name": username_of(user_id), "text": "📌 pinned a message.",
-                        "file": None, "reply": live_reply_preview(message_id), "reactions": [],
+                        "reply": live_reply_preview(message_id), "reactions": [],
                         "edited_at": None, "kind": "pin", "pinned": False, "preview": None,
-                    })
+                    }, []))
                     await announce_new_message(message_channel)
 
             elif kind == "search":

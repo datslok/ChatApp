@@ -42,7 +42,8 @@ the point is for me to understand how it works, not just to have it done.
   generated sound), `ui.js` (drawers, back button, popups, text box, emoji autocomplete), `voice.js`
   (audio engine, mic, gate, volumes, who's in voice), `video.js` (camera, screen sharing), `rooms.js`
   (joining/leaving, DM calls, call banner, Lounge page), `voice-settings.js`, `settings.js`,
-  `people.js` (DM/online lists, friends, profile popup, typing), `chat-info.js` (the chat info panel) and `messages.js` (uploads, messages,
+  `people.js` (DM/online lists, friends, profile popup, typing), `viewer.js` (the picture viewer, see "Several files
+  per message"), `chat-info.js` (the chat info panel) and `messages.js` (uploads, messages,
   reactions, replies, editing; ends with `start()`). Code that runs at load time may only use what
   earlier files declare. `appearance.js` alone is loaded in `<head>`, before anything is drawn:
   Settings → Appearance (theme via `data-theme` on `<html>`, picked colours, `--font`, text size),
@@ -143,8 +144,8 @@ the point is for me to understand how it works, not just to have it done.
   (expo-image-picker's photo picker and camera, which give no real names: named from the EXIF DateTimeOriginal like
   Samsung's camera, `20261014_182205.jpg`, else `photo-<time>.jpg`; real names would need photo access, see ROADMAP's Maybe;
   expo-document-picker for any file, as it asks Android for the real name: `File.pickFileAsync` gave "document:1000006562"),
-  the `Tray` above the box (the web's #tray: 10 files, 50 MB each, one message per file, the caption with the first,
-  failed ones in red), "Uploading x…" on the status line. A tapped picture opens `src/ImageViewer.js` (a Modal with
+  the `Tray` above the box (the web's #tray: limits.files_per_message files, 50 MB each, all in one message with the
+  caption, failed ones in red), "Uploading x…" on the status line. A tapped picture opens `src/ImageViewer.js` (a Modal with
   its own GestureHandlerRootView: pinch, drag, double tap via react-native-gesture-handler + reanimated; zoom only
   there); a tapped file asks "Download this file?" like the desktop app, shows a bar, saves it in Download straight away (like a browser; the user's wish) and asks Close / Open (opens the
   Download copy by its content:// Uri). The viewer's download button saves too, with a toast; Share is only there. Saving is our own native module `mobile/modules/downloads` (Kotlin, made with
@@ -362,7 +363,23 @@ the point is for me to understand how it works, not just to have it done.
   ban reason/feedback lengths) are written only in server.py: `LIMITS`, sent in "welcome" as `limits`. Web: core.js
   `limits` (+ `applyLimits` sets the HTML boxes' maxlength from `LIMITED_INPUTS`, `megabytes()`); phone:
   `src/limits.js` (filled by connection.js). Never copy such a number into a page: add it to LIMITS.
-  (The message length is the older `max_text_length`; the 10-file tray and other page-design numbers stay in the pages.)
+  (The message length is the older `max_text_length`; page-design numbers stay in the pages. The tray holds
+  `files_per_message`.)
+- Several files per message (since 2026-10-18, the user's wish, like Discord): `attachments.message_id` + `position`
+  (one-to-many; the old `messages.attachment_id` was moved there and dropped by a migration). A message sends
+  `files: [upload ids]` (1 to `MAX_FILES_PER_MESSAGE` 10, different; `claim_attachments` claims all or none, one
+  transaction; the old single `file` is still accepted) and comes back with `files: [file_info...]` (`files_for`, one
+  query like reactions_for; `with_files` also sets `file` = the first, for phone APKs from before). Chat info's Media and
+  Files tabs pick a message if it has any file of that kind (the pages take only those files); `files_note` is the push/
+  notify text. Web: `sendTray` uploads all, then one message; messages.js `makeAttachments` (one picture or video as
+  before; several: `makeMediaGrid`, a 6-column grid of .media-tile, halves for 2 and 4, else rows of three after a first
+  row with the leftovers; other files as links under it). `viewer.js` (#image-viewer): `openViewer(items, index, onJump)`
+  with ‹ › and arrow keys, "2 / 5", the file's link (makeFileLink) and Jump (chat info: the whole Media tab), videos too;
+  pictures zoom by CSS transform (`zoomAt` keeps the point under the mouse; wheel, ctrl+wheel = touchpad pinch, two-
+  pointer pinch, double-click = real size, drag while zoomed, `clampPan`). Phone: MessageText.js `Attachments`/`MediaGrid`
+  (videos as ▶ squares), `ImageViewer({files, index})` swipes between pictures (`ZoomablePicture` keyed per file,
+  `scheduleOnRN`); connection.js `sendMessage(text, replyTo, files)`. Chattus: `attachments_to_show` counts files
+  (with Claude every picture of the target message, `on_target`).
 - `static/login.html`: the login / create account page.
 - `static/reset.html`: "forgot password" (asks for a reset link) and, with `?token=`, choosing a new password.
 - Emails (reset links) go out through Resend's SMTP server, configured in `.env`. Without `SMTP_HOST`
@@ -795,7 +812,7 @@ the point is for me to understand how it works, not just to have it done.
   when it adds something, reaction-only for thanks/goodbyes, at most one emoji per message.
   `reaction_code` checks it against `/emoji.json` (fetched at start; with/without U+FE0F) or a custom
   emoji's name (-> `custom:<id>`); anything else is dropped. Up to 50 custom emoji names are in the prompt.
-  Pictures: the target message's picture and the newest one in the 5 messages before it (`attachments_to_show`),
+  Pictures: the target message's (first) picture and the newest one in the 5 messages before it (`attachments_to_show`),
   fetched from `/uploads/<id>` with his cookie, flattened on white, shrunk to 768 px JPEG, sent as a data URL
   in an `image_url` content part (~600 tokens, ~6 s). Custom emoji: a `LOOK_AT_EMOJI` job in the same queue
   describes each new picture once (256 px, 8 words) into `chattus-emoji.json` (git-ignored, keyed by file
@@ -854,7 +871,7 @@ the point is for me to understand how it works, not just to have it done.
   MAX_EARLIER_FILES 3)` picks the target's file and up to 3 in the 10 messages before. A PDF becomes our own
   `{"type": "pdf", "data": base64}` part, which `for_claude` turns into a `document` block; a text file goes into
   the message's text between "[sent the file x:]" and "[end of the file]". Too-big PDFs are named as such.
-  Pictures with Claude: the target's and up to `CLAUDE_EARLIER_PICTURES` 3 in the `CLAUDE_PICTURE_LOOKBACK` 10
+  Pictures with Claude: all the target's and up to `CLAUDE_EARLIER_PICTURES` 3 in the `CLAUDE_PICTURE_LOOKBACK` 10
   messages before, shrunk to `CLAUDE_PICTURE_SIZE` 1568 px (Claude's best size; ~2,500 tokens each) instead of 1 at 768.
   Posting pictures, only with Claude: a `pictures` field (a search) in `CLAUDE_ANSWER_SCHEMA`; `commons_pictures`
   searches Wikimedia Commons (api.php, generator=search in File:, `filetype:bitmap`, imageinfo with a 1280 px

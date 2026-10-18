@@ -5,8 +5,8 @@
 // plain scripts sharing one global scope: what one file declares, the others can use.
 
 // ---------- Uploads: the tray, the + button, drag-and-drop and pasting ----------
-
-const MAX_TRAY_FILES = 10;
+//
+// The tray holds as many files as one message may have (limits.files_per_message, from the server).
 
 // Files waiting to be sent: [{file, previewUrl, failed}]. Nothing is uploaded until Enter.
 // Each chat has its own tray, and its own half-written text, like Discord: a picture added or words
@@ -47,8 +47,8 @@ function addToTray(files) {
       showUploadError(`${file.name} is empty`);
       continue;
     }
-    if (tray.length >= MAX_TRAY_FILES) {
-      showUploadError(`At most ${MAX_TRAY_FILES} files at a time`);
+    if (tray.length >= limits.files_per_message) {
+      showUploadError(`At most ${limits.files_per_message} files at a time`);
       break;
     }
     // For pictures, a temporary local address so we can show a preview
@@ -103,8 +103,9 @@ function renderTray() {
   }
 }
 
-// Enter was pressed with files in the tray: upload and send each one as its own message.
-// The caption goes with the first file that's sent. Files that fail stay in the tray.
+// Enter was pressed with files in the tray: upload them one after another, then send them all in
+// one message, with the caption (like Discord). Files that fail to upload stay in the tray, in red;
+// the others still go.
 async function sendTray(caption) {
   if (socket.readyState !== WebSocket.OPEN) {
     showUploadError("Not connected, try again in a moment");
@@ -112,24 +113,28 @@ async function sendTray(caption) {
   }
   sending = true;
   // A message goes to the chat that's open when it's sent, so keep track of where we started:
-  // if another chat opens meanwhile, we stop, and the rest wait in their own tray.
+  // if another chat opens meanwhile, we stop, and the files wait in their own tray.
   const list = tray;
   const channel = currentChannel;
+  const uploaded = [];  // [{item, fileId}] for the ones that made it
 
-  for (const item of [...list]) {  // a copy, since we take items out as we go
+  for (const item of list) {
     const fileId = await uploadFile(item.file);
     if (currentChannel !== channel) break;
-    const sent = fileId !== null &&
-      sendToServer({ type: "message", text: caption, file: fileId, reply_to: replyingTo?.id });
-    if (!sent) {
-      item.failed = true;  // keep it in the tray, outlined in red
-      continue;
-    }
-    takeFromTray(item, list);
-    clearReply();  // the reply went with this first file
-    if (caption) {
-      caption = "";      // the caption went with this file, so it's used up
-      clearInput();
+    item.failed = fileId === null;  // (outlined in red by renderTray)
+    if (fileId !== null) uploaded.push({ item, fileId });
+  }
+
+  if (currentChannel === channel && uploaded.length > 0) {
+    const sent = sendToServer({
+      type: "message", text: caption, files: uploaded.map((upload) => upload.fileId), reply_to: replyingTo?.id,
+    });
+    if (sent) {
+      for (const { item } of uploaded) takeFromTray(item, list);
+      clearReply();
+      if (caption) clearInput();
+    } else {
+      for (const { item } of uploaded) item.failed = true;
     }
   }
 
@@ -231,24 +236,6 @@ document.addEventListener("paste", (event) => {
   addToTray(files);
 });
 
-// ---------- Image popup ----------
-
-function openImage(url, name) {
-  viewerImage.src = url;
-  viewerImage.alt = name;
-  viewer.showModal();  // open as a modal: on top of everything; Esc closes it
-}
-
-// A click on the picture has the <img> as its target; a click on the dark area
-// around it has the dialog itself as the target. Only the second one closes it.
-viewer.addEventListener("click", (event) => {
-  if (event.target === viewer) viewer.close();
-});
-viewerClose.addEventListener("click", () => viewer.close());
-// However it was closed (Esc, outside, ×), drop the picture so the next one
-// doesn't briefly show the old one while loading.
-viewer.addEventListener("close", () => viewerImage.removeAttribute("src"));
-
 // ---------- Messages ----------
 
 // Turn a size in bytes into something readable, like "2.3 MB".
@@ -258,12 +245,24 @@ function formatSize(bytes) {
   return (bytes / (1024 * 1024)).toFixed(1) + " MB";
 }
 
-// The element showing an attached file: the picture itself, a video player, or a download link.
-// message: the message it's in (who sent it, for "Download this file?").
+// A message's files (up to 10): its pictures and videos first, then the other files as download
+// links, one under the other. A single picture or video is drawn as big as it may be; several as a
+// grid (makeMediaGrid). message: the message they're in (who sent it, for "Download this file?").
+function makeAttachments(files, message) {
+  const box = document.createElement("div");
+  box.className = "attachments";
+  const media = files.filter((file) => file.image || file.video);
+  const others = files.filter((file) => !file.image && !file.video);
+  if (media.length === 1) box.appendChild(makeAttachment(media[0], message));
+  if (media.length > 1) box.appendChild(makeMediaGrid(media, message));
+  for (const file of others) box.appendChild(makeFileLink("/uploads/" + encodeURIComponent(file.id), file, message));
+  return box;
+}
+
+// The element showing one picture or video on its own: the picture itself, or a video player.
 function makeAttachment(file, message) {
   const url = "/uploads/" + encodeURIComponent(file.id);
   if (file.video) return makeVideo(url, file, message);
-  if (!file.image) return makeFileLink(url, file, message);
 
   const link = document.createElement("a");
   link.href = url;
@@ -274,7 +273,7 @@ function makeAttachment(file, message) {
   link.rel = "noopener";  // a new tab gets no access back to ours
   link.addEventListener("click", (event) => {
     event.preventDefault();
-    openImage(url, file.filename);
+    openViewer([{ file, message }]);  // (viewer.js)
   });
   const img = document.createElement("img");
   img.className = "attachment-image";
@@ -282,6 +281,45 @@ function makeAttachment(file, message) {
   img.alt = file.filename;
   link.appendChild(img);
   return link;
+}
+
+// Several pictures and videos, as a grid of tiles like Discord's. The grid has 6 columns, so a tile
+// can be a whole row wide (6), half (3) or a third (2): 2 and 4 are drawn as halves, everything
+// else in rows of three, with what doesn't fit in threes (1 or 2 left over) as a wider first row.
+// So 5 = 2 + 3, 7 = 1 + 3 + 3, 10 = 1 + 3 + 3 + 3. Each tile is cut to its shape (object-fit: cover
+// in chat.css) and opens the viewer there, which goes through all of them.
+function makeMediaGrid(media, message) {
+  const grid = document.createElement("div");
+  grid.className = "media-group";
+  const count = media.length;
+  const halves = count === 2 || count === 4;
+  const firstRow = count % 3;  // the leftover tiles (0: none, every row is a row of three)
+  const items = media.map((file) => ({ file, message }));  // what the viewer goes through
+  media.forEach((file, index) => {
+    // Halves for 2 and 4; else a whole row for a lone first tile, half for two, else a third.
+    const span = halves ? 3 : index < firstRow ? 6 / firstRow : 2;
+    const tile = document.createElement("button");
+    tile.type = "button";
+    tile.className = "media-tile" + (span === 6 ? " wide" : "");  // (chat.css: the Media tab's squares)
+    tile.style.gridColumn = `span ${span}`;
+    tile.title = file.filename;
+    const url = "/uploads/" + encodeURIComponent(file.id);
+    if (file.video) {
+      const video = document.createElement("video");
+      video.src = url;
+      video.preload = "metadata";  // only its first frame and length, not the whole video
+      video.muted = true;
+      tile.append(video, makeIcon("play"));
+    } else {
+      const picture = document.createElement("img");
+      picture.src = url;
+      picture.alt = file.filename;
+      tile.appendChild(picture);
+    }
+    tile.addEventListener("click", () => openViewer(items, index));
+    grid.appendChild(tile);
+  });
+  return grid;
 }
 
 // A file to download: its name and size, as a link.
@@ -852,7 +890,7 @@ async function sendGif(gif) {
     return;
   }
   uploadStatus.textContent = "";
-  sendToServer({ type: "message", text: "", file: result.data.id, reply_to: replyingTo?.id });
+  sendToServer({ type: "message", text: "", files: [result.data.id], reply_to: replyingTo?.id });
   clearReply();
 }
 
@@ -1486,11 +1524,11 @@ function makeMessageCard(message, where = "") {
     formatText(text, message.text);  // **bold**, mentions, emoji, links: as in the chat
     item.appendChild(text);
   }
-  if (message.file) {
+  for (const attached of message.files) {
     const file = document.createElement("div");
     file.className = "card-file";
-    file.textContent = message.file.filename;
-    setIcon(file, message.file.image ? "image" : message.file.video ? "video" : "paperclip");
+    file.textContent = attached.filename;
+    setIcon(file, attached.image ? "image" : attached.video ? "video" : "paperclip");
     item.appendChild(file);
   }
 
@@ -1763,7 +1801,7 @@ function stopEditing() {
 function saveEdit(message) {
   const text = editDraft.trim();
   if (text === tokensToCodes(message.text).trim()) return stopEditing();  // nothing changed
-  if (!text && !message.file) {
+  if (!text && message.files.length === 0) {
     // Emptied completely: that's really a delete (like on Discord).
     stopEditing();
     deleteMessage(message, false);
@@ -2013,8 +2051,8 @@ function showMessage(message, follow = true) {
     }
     body.appendChild(text);
   }
-  if (message.file) {
-    body.appendChild(makeAttachment(message.file, message));
+  if (message.files.length > 0) {
+    body.appendChild(makeAttachments(message.files, message));
   }
   if (message.preview) {
     body.appendChild(makePreviewCard(message.preview));

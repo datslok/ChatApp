@@ -290,26 +290,94 @@ export function FittedImage({ uri, maxWidth, maxHeight, style, onPress, onLongPr
 
 // ----- What comes after the text
 
-// An attached file: a picture is shown (at most 400 x 300) and a tap opens it full screen; a video gets
-// a player; any other file shows its name and size, and a tap downloads it. sender: who sent it (their
+const isMedia = (file) => file.image || file.video;
+
+// A message's files (the web page's makeAttachments): its pictures and videos first (one on its own as
+// big as it may be, several as a MediaGrid), then each other file's name. sender: who sent it (their
 // name), or null for us. onLongPress: the message's menu (a tap target inside the message would
 // otherwise take the touch).
-export function Attachment({ file, sender, onLongPress }) {
+export function Attachments({ files, sender, onLongPress }) {
+  const media = files.filter(isMedia);
+  return (
+    <View>
+      {media.length === 1 ? <Attachment file={media[0]} sender={sender} onLongPress={onLongPress} /> : null}
+      {media.length > 1 ? <MediaGrid media={media} onLongPress={onLongPress} /> : null}
+      {files.filter((file) => !isMedia(file)).map((file) => (
+        <FileAttachment key={file.id} file={file} sender={sender} onLongPress={onLongPress} />
+      ))}
+    </View>
+  );
+}
+
+// One picture or video on its own: a picture is shown (at most 400 x 300) and a tap opens it full
+// screen; a video gets its first picture with a play button.
+function Attachment({ file, sender, onLongPress }) {
   const styles = useStyles(makeStyles);
   const [viewing, setViewing] = useState(false);
   if (file.video) return <VideoAttachment file={file} sender={sender} onLongPress={onLongPress} />;
-  if (file.image) {
-    return (
-      <>
-        <FittedImage
-          uri={`${SERVER}/uploads/${encodeURIComponent(file.id)}`} maxWidth={400} maxHeight={300}
-          style={styles.attachmentImage} onPress={() => setViewing(true)} onLongPress={onLongPress}
-        />
-        {viewing ? <ImageViewer file={file} onClose={() => setViewing(false)} /> : null}
-      </>
-    );
-  }
-  return <FileAttachment file={file} sender={sender} onLongPress={onLongPress} />;
+  return (
+    <>
+      <FittedImage
+        uri={`${SERVER}/uploads/${encodeURIComponent(file.id)}`} maxWidth={400} maxHeight={300}
+        style={styles.attachmentImage} onPress={() => setViewing(true)} onLongPress={onLongPress}
+      />
+      {viewing ? <ImageViewer files={[file]} onClose={() => setViewing(false)} /> : null}
+    </>
+  );
+}
+
+// Several pictures and videos as a grid (the web page's makeMediaGrid, same rule): 6 columns, a tile
+// 6, 3 or 2 of them wide; halves for 2 and 4, else rows of three after a first row with what's left
+// over (5 = 2 + 3, 7 = 1 + 3 + 3). Tiles are squares (a whole-row one twice as wide as tall), the
+// picture cut to fit. A tap on a picture opens the viewer, which swipes through the grid's pictures;
+// a video (a dark square with ▶, like the chat info screen's: a first frame would need a player each)
+// opens VideoScreen.
+const GRID_GAP = 4;
+
+function MediaGrid({ media, onLongPress }) {
+  const styles = useStyles(makeStyles);
+  const [room, setRoom] = useState(400);  // how wide it may be here
+  const [viewing, setViewing] = useState(null);  // the picture's place among `pictures`, while open
+  const [watching, setWatching] = useState(null); // the video playing, while open
+  const width = Math.min(room, 400);
+  const count = media.length;
+  const halves = count === 2 || count === 4;
+  const firstRow = count % 3;
+  const pictures = media.filter((file) => file.image);
+  // A tile `span` columns wide: its share of the width, less the gaps between the tiles of its row.
+  const tileWidth = (span) => Math.floor(((width - GRID_GAP * (6 / span - 1)) * span) / 6);
+  return (
+    <View style={styles.fitted} onLayout={(event) => setRoom(event.nativeEvent.layout.width)}>
+      <View style={[styles.grid, { width }]}>
+        {media.map((file, index) => {
+          const span = halves ? 3 : index < firstRow ? 6 / firstRow : 2;
+          const tile = { width: tileWidth(span), height: span === 6 ? tileWidth(span) / 2 : tileWidth(span) };
+          return (
+            <Pressable
+              key={file.id}
+              style={({ pressed }) => [styles.gridTile, tile, pressed && styles.attachmentPressed]}
+              onPress={() => (file.video ? setWatching(file) : setViewing(pictures.indexOf(file)))}
+              onLongPress={onLongPress}
+            >
+              {file.video ? (
+                <Icon name="play" size={28} color="#ffffff" />
+              ) : (
+                // resizeMethod "resize": decoded at the size shown, not the photo's (see FittedImage).
+                <Image
+                  source={{ uri: `${SERVER}/uploads/${encodeURIComponent(file.id)}` }}
+                  style={tile} resizeMode="cover" resizeMethod="resize"
+                />
+              )}
+            </Pressable>
+          );
+        })}
+      </View>
+      {viewing !== null ? <ImageViewer files={pictures} index={viewing} onClose={() => setViewing(null)} /> : null}
+      {watching ? (
+        <VideoScreen path={`/uploads/${encodeURIComponent(watching.id)}`} onClose={() => setWatching(null)} />
+      ) : null}
+    </View>
+  );
 }
 
 // A video: its first picture as big as a picture may be (at most 400 x 300) with a play button on it,
@@ -482,6 +550,11 @@ const makeStyles = (colors, size) => StyleSheet.create({
   wrapped: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center' },
   lineBreak: { width: '100%', height: 0 },
   attachmentImage: { marginTop: 4, borderRadius: 8 },
+  // .media-group: the tiles in rows, 4px apart; each a .media-tile (rounded, dark until it loads).
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: GRID_GAP, marginTop: 4 },
+  gridTile: {
+    borderRadius: 6, overflow: 'hidden', backgroundColor: colors.bgNeutral, alignItems: 'center', justifyContent: 'center',
+  },
   video: { backgroundColor: colors.bgDarkest, overflow: 'hidden' },  // dark until the first picture shows
   // Over the video (marginTop: the video's own 4), the play button centred in it.
   videoCover: { position: 'absolute', top: 4, left: 0, alignItems: 'center', justifyContent: 'center' },

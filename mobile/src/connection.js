@@ -555,13 +555,13 @@ export function useConnection() {
   // Writing. None of these change the screen themselves: the server answers everyone in the chat,
   // us included ("message", "reactions", "edited", "deleted"), and that's what we draw. So every
   // screen shows the same, and something the server refused never appears.
-  // `file`: an uploaded file's id (a picture we picked, a GIF from /gifs/send) to send with it.
-  // It goes into the outbox (see outbox), so it's never lost: true, unless no chat is open.
-  function sendMessage(text, replyTo, file) {
+  // `files`: uploaded files' ids (the tray's pictures, a GIF from /gifs/send) to send with it, up to
+  // limits.files_per_message. It goes into the outbox (see outbox), so it's never lost: true, unless no chat is open.
+  function sendMessage(text, replyTo, files = []) {
     if (!currentRef.current) return false;
     const item = {
       nonce: Math.random().toString(36).slice(2) + Date.now().toString(36),  // (random enough to be ours alone)
-      chat: currentRef.current, text, replyTo: replyTo ?? null, file: file ?? null, failed: false, since: Date.now(),
+      chat: currentRef.current, text, replyTo: replyTo ?? null, files, failed: false, since: Date.now(),
     };
     changeOutbox((old) => [...old, item]);
     sendFromOutbox(item);
@@ -572,7 +572,7 @@ export function useConnection() {
   // (Naming its chat: by the time it's sent again we may be in another one.) Then make sure it went somewhere alive.
   function sendFromOutbox(item) {
     const sent = send({
-      type: 'message', channel: item.chat, text: item.text, reply_to: item.replyTo, file: item.file, nonce: item.nonce,
+      type: 'message', channel: item.chat, text: item.text, reply_to: item.replyTo, files: item.files, nonce: item.nonce,
     });
     if (sent) checkConnection();
   }

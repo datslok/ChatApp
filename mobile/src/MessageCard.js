@@ -58,7 +58,6 @@ export function MessageCard({ message, where, connection, onUserMenu, children }
   const { colors } = useTheme();
   const { users, emoji } = connection;
   const sent = new Date(message.sent_at);
-  const file = message.file;
   return (
     <View style={styles.card}>
       <Pressable
@@ -72,12 +71,12 @@ export function MessageCard({ message, where, connection, onUserMenu, children }
         <Text style={styles.time} numberOfLines={1}>{(where ? where + ' · ' : '') + dayName(sent) + ' at ' + clock(sent)}</Text>
       </Pressable>
       {message.text ? <MessageText text={message.text} users={users} emoji={emoji} edited={message.edited_at} /> : null}
-      {file ? (
-        <View style={styles.file}>
+      {message.files.map((file) => (
+        <View key={file.id} style={styles.file}>
           <Icon name={file.image ? 'image' : file.video ? 'video' : 'paperclip'} size={16} color={colors.textSoft} />
           <Text style={styles.fileName} numberOfLines={1}>{file.filename}</Text>
         </View>
-      ) : null}
+      ))}
       <View style={styles.buttons}>{children}</View>
     </View>
   );

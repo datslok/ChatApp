@@ -3469,6 +3469,25 @@ button.download-button {
   border-radius: 8px;
 }
 
+/* A message's files (messages.js, makeAttachments): the pictures, then each other file on its own line. */
+.attachments .attachment-file {
+  display: table;  /* (like a block, one per line, but only as wide as its text) */
+}
+
+/* Several pictures and videos in one message (messages.js, makeMediaGrid): 6 columns, each tile
+   spanning 6, 3 or 2 of them; the tiles are the Media tab's squares (.media-tile, further down),
+   a whole-row one twice as wide as it's tall. */
+.media-group {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 4px;
+  width: min(440px, 100%);
+  margin-top: 4px;
+}
+.media-group .media-tile.wide {
+  aspect-ratio: 2;
+}
+
 /* A link's preview (messages.js, makePreviewCard): a card with a bar on the left, like Discord's. */
 .link-preview {
   display: flex;
@@ -3534,21 +3553,83 @@ button.download-button {
 #viewer-image,
 #viewer-video {
   max-width: 90vw;
-  max-height: 90vh;
+  max-height: 84vh;  /* (room for the bar at the bottom) */
   border-radius: 8px;
 }
 #viewer-image[hidden],
 #viewer-video[hidden],
-#viewer-jump[hidden] {
+#viewer-jump[hidden],
+#viewer-count[hidden],
+.viewer-arrow[hidden] {
   display: none;
 }
+/* Zooming (viewer.js): the page handles every touch on the picture itself (no scrolling or the
+   browser's own zoom), and a zoomed picture can be grabbed and dragged. */
+#viewer-image {
+  touch-action: none;
+  user-select: none;
+}
+#viewer-image.zoomed {
+  cursor: grab;
+}
+#viewer-image.zoomed:active {
+  cursor: grabbing;
+}
 
-/* From the chat info panel's Media tab: "Jump to message" at the bottom, in the middle. */
-#viewer-jump {
+/* ‹ and ›: round buttons at the middle of the left and right edges. */
+.viewer-arrow {
   position: fixed;
-  bottom: 20px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--bg-panel);
+  color: var(--text-strong);
+  font-size: 1.3rem;
+  cursor: pointer;
+  opacity: 0.85;
+  z-index: 1;  /* (like #viewer-close) */
+}
+.viewer-arrow:hover {
+  opacity: 1;
+}
+#viewer-prev {
+  left: 16px;
+}
+#viewer-next {
+  right: 16px;
+}
+
+/* The bar at the bottom, in the middle: "2 / 5", the file's link, "Jump to message". */
+#viewer-bar {
+  position: fixed;
+  bottom: 16px;
   left: 50%;
   transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: calc(100vw - 32px);
+  z-index: 1;  /* (like #viewer-close) */
+}
+#viewer-count {
+  color: white;
+  white-space: nowrap;
+}
+#viewer-file .attachment-file {
+  margin-top: 0;
+  overflow-wrap: anywhere;
+}
+
+/* From the chat info panel's Media tab: "Jump to message". */
+#viewer-jump {
+  flex-shrink: 0;
   padding: 8px 16px;
   border: none;
   border-radius: 6px;
@@ -3915,6 +3996,7 @@ button.download-button {
   color: var(--text-strong);
   font-size: 1.2rem;
   cursor: pointer;
+  z-index: 1;  /* above a zoomed picture (a transformed element is drawn over what comes before it) */
 }
 
 .attachment-file {

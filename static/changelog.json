@@ -14,7 +14,7 @@
         "Pin a message: hover over it and click 📌. The 📌 at the top of a channel, DM or group lists its pinned messages (up to 100), with Jump and Unpin. Anyone can pin and unpin",
         "@name mentions someone, @everyone mentions everybody: they get a notification and a red count",
         "Type :name for emoji suggestions (↑↓ to choose, Enter or Tab to pick), or use the 😀 button (it only offers emoji your device can draw). Messages with only emoji show them big",
-        "Pictures, videos and files up to 50 MB: the + button, drag and drop, or paste. Up to 10 at once, click a picture to see it big. Videos (MP4 and WebM) play right in the chat, with a button for fullscreen. They start at 30% volume, and each one remembers where you left its volume",
+        "Pictures, videos and files up to 50 MB: the + button, drag and drop, or paste. Up to 10 at once, sent together in one message (pictures and videos as a grid). Click a picture to see it big: zoom with the mouse wheel or a pinch, drag it around, double-click for its real size, and ‹ › or the arrow keys go through the others in the message (on a phone, pinch and swipe). Videos (MP4 and WebM) play right in the chat, with a button for fullscreen. They start at 30% volume, and each one remembers where you left its volume",
         "Each chat keeps its own half-written message and files: switch to another chat and back, and they're still waiting there",
         "GIFs: the GIF button next to the text box (on phones: the smiley, then the GIF tab). Type to search (from GIPHY), or pick one of the trending ones, and click one to send it (as a reply, if you're replying). Esc closes it",
         "Links are clickable, and the first link in a message gets a preview card: the site, title, description and picture",
@@ -95,7 +95,7 @@
         "In a DM with a friend, write @Chattus to ask him something there: he only answers when mentioned. Mentioning him lets him read that DM's latest messages for an hour (and like everything he reads, they go to his AI, Claude, to answer)",
         "He reacts to messages too (🎉 for good news, 🐾 for a thanks), and knows our own emoji by name",
         "He can look further back: ask him about something said earlier (\"@Chattus what did kari say about the trip?\") and he searches the chat's older messages and tells you when and where. He only looks in the channels and in the chat you ask him in, so private chats stay private",
-        "He can see pictures: send one in #chattus (or with @Chattus), or ask about the pictures above (up to 3 of the last few), small text in them too",
+        "He can see pictures: send some in #chattus (or with @Chattus; he sees every picture in that message), or ask about the pictures above (up to 3 of the last few), small text in them too",
         "He searches the web when he needs fresh facts. Start with \"search:\" to make him search the web, or \"wiki:\" for Wikipedia. The search engines only get his search words, never the chat",
         "He writes maths as real formulas, like $E = mc^2$",
         "He reads links: post one and ask what it says, or for a summary. Some big sites (like recipe sites) don't let him in",
@@ -125,6 +125,8 @@
     {
       "date": "2026-10-18",
       "items": [
+        "🖼️ Several pictures sent at once now go in one message, as a grid like on Discord, instead of one message each (files too, listed under them; the text goes with them all). Click one to see it big and go through the others with ‹ › or the arrow keys (swipe in the Android app)",
+        "🔍 Zoom in on a picture on PC: the mouse wheel or a touchpad pinch zooms where the mouse is, drag to look around, double-click for its real size (and again to go back)",
         "😺 Room for twice as many custom emoji: up to 24 each in Settings → Emoji",
         "🖼️ The picture editor (profile pictures, banners and custom emoji) opens with the whole picture showing, so a wide or tall picture fits in the frame: zoom in to fill it, or save it like that and the empty part stays see-through",
         "🔠 The text size (and the Windows app's scale) is now each device's own: a bigger text on your phone no longer changes your PC. Theme, colours and font still follow your account",

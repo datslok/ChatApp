@@ -103,9 +103,6 @@ const trayElement = document.getElementById("tray");
 const replyBar = document.getElementById("reply-bar");
 const replyName = document.getElementById("reply-name");
 const replyCancel = document.getElementById("reply-cancel");
-const viewer = document.getElementById("image-viewer");
-const viewerImage = document.getElementById("viewer-image");
-const viewerClose = document.getElementById("viewer-close");
 
 let socket = null;         // our WebSocket (replaced with a new one if it drops)
 let currentChannel = null;  // the channel (or DM) we're looking at
@@ -582,7 +579,7 @@ function handleServerMessage(event) {
     if (forMe && !isLooking()) {
       missedWhileAway += 1;
       updateTitle();
-      notify(data.channel, data.id, data.user_id, data.name, data.text || (data.file ? "📎 Attachment" : ""));
+      notify(data.channel, data.id, data.user_id, data.name, data.text || (data.files.length > 0 ? "📎 Attachment" : ""));
     }
   } else if (data.type === "preview") {
     // A link's preview arrived (a moment after its message): add it, and redraw.

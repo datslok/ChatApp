@@ -112,6 +112,81 @@ def test_deleting_the_message_deletes_the_file(server, channel):
     assert a.get(f"/uploads/{file_id}").status == 404
 
 
+# ----- Several files in one message
+
+def test_several_files_in_one_message(server, channel):
+    a, b = server.person(), server.person()
+    ids = [upload(a, f"cat{n}.png", picture(), "image/png") for n in range(3)]
+    ids.append(upload(a, "notes.txt", b"notes", "text/plain"))
+    with a.connect() as ws:
+        ws.join(channel)
+        message = ws.say("my cats", files=ids)
+        # In the order they were sent, and "file" (for older apps) is the first of them.
+        assert [file["id"] for file in message["files"]] == ids
+        assert [file["image"] for file in message["files"]] == [True, True, True, False]
+        assert message["file"] == message["files"][0]
+    with b.connect() as ws:
+        history = ws.join(channel)["messages"]
+    assert [file["id"] for file in history[-1]["files"]] == ids  # the history has them all too, in order
+    assert all(b.get(f"/uploads/{file_id}").status == 200 for file_id in ids)
+
+
+def test_several_files_are_sent_all_or_none(server, channel):
+    a, b = server.person(), server.person()
+    mine = upload(a, "mine.txt", b"mine", "text/plain")
+    theirs = upload(b, "theirs.txt", b"theirs", "text/plain")
+    with a.connect() as ws:
+        ws.join(channel)
+        ws.send(type="message", text="both", files=[mine, theirs], nonce="n1")
+        assert ws.wait_for("not_sent")["nonce"] == "n1"
+        # Nothing was used up: our own file can still be sent.
+        assert [file["id"] for file in ws.say("just mine", files=[mine])["files"]] == [mine]
+
+
+def test_at_most_ten_different_files_in_a_message(server, channel):
+    a = server.person()
+    ids = [upload(a, f"f{n}.txt", b"x", "text/plain") for n in range(11)]
+    with a.connect() as ws:
+        ws.join(channel)
+        for n, files in enumerate([ids, [ids[0], ids[0]], [], "not a list", [17]]):
+            ws.send(type="message", text="files", files=files, nonce=f"bad{n}")
+            assert ws.wait_for("not_sent")["nonce"] == f"bad{n}"
+        assert len(ws.say("ten", files=ids[:10])["files"]) == 10
+
+
+def test_deleting_a_message_deletes_all_its_files(server, channel):
+    a = server.person()
+    ids = [upload(a, f"gone{n}.txt", b"bye", "text/plain") for n in range(3)]
+    with a.connect() as ws:
+        ws.join(channel)
+        message = ws.say("", files=ids)
+        ws.send(type="delete", message_id=message["id"])
+        ws.wait_for("deleted")
+    assert all(a.get(f"/uploads/{file_id}").status == 404 for file_id in ids)
+
+
+def test_an_emptied_caption_keeps_the_files(server, channel):
+    a = server.person()
+    ids = [upload(a, f"keep{n}.txt", b"keep", "text/plain") for n in range(2)]
+    with a.connect() as ws:
+        ws.join(channel)
+        message = ws.say("a caption", files=ids)
+        ws.send(type="edit", message_id=message["id"], text="")
+        assert ws.wait_for("edited")["text"] == ""
+
+
+def test_chat_info_shows_a_message_in_each_tab_it_has_files_for(friends):
+    a, b, dm = friends
+    ids = [upload(a, "cat.png", picture(), "image/png"), upload(a, "notes.txt", b"notes", "text/plain")]
+    with a.connect() as ws:
+        ws.join(dm)
+        message = ws.say("both kinds", files=ids)
+        for tab in ("media", "files"):
+            ws.send(type="chat_info", tab=tab, before=None)
+            info = ws.wait_for("chat_info", lambda answer: answer["tab"] == tab)
+            assert [item["id"] for item in info["items"]] == [message["id"]]
+
+
 def test_uploads_need_a_login_and_something_in_them(person):
     assert Client().post("/upload?filename=x.txt", raw=b"x", content_type="text/plain").status == 401
     assert person.post("/upload?filename=empty.txt", raw=b"", content_type="text/plain").status == 400

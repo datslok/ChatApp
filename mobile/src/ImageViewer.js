@@ -1,5 +1,6 @@
 // A picture opened full screen (the web page's #viewer popup), with the phone's own way of looking
-// closer: pinch to zoom, drag a zoomed picture around, double tap to zoom in or back out.
+// closer: pinch to zoom, drag a zoomed picture around, double tap to zoom in or back out. With several
+// (a message's pictures), a swipe left or right goes to the next or previous one (the web's ‹ ›).
 // × or the back button closes it; download saves the picture in the phone's Download folder, share sends it on.
 //
 // Fingers are read by react-native-gesture-handler and the picture is moved by react-native-reanimated.
@@ -12,6 +13,7 @@ import {
 } from 'react-native';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import { scheduleOnRN } from 'react-native-worklets';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from './Icon';
 import { useStyles } from './theme';
@@ -20,6 +22,7 @@ import { downloadFile, saveFile, shareFile } from './files';
 
 const MAX_ZOOM = 5;
 const DOUBLE_TAP_ZOOM = 2.5;
+const SWIPE = 80;  // how far (in px) a swipe must go to change pictures; less springs back
 
 // A number kept between low and high.
 function clamp(value, low, high) {
@@ -27,15 +30,85 @@ function clamp(value, low, high) {
   return Math.min(Math.max(value, low), high);
 }
 
-// file: the attachment ({id, filename, size}). onClose: closes the viewer. onJump (from the chat info
-// screen's Media tab): a Jump button in the bar, to the message it came in.
-export default function ImageViewer({ file, onClose, onJump }) {
+// files: the pictures ({id, filename, size}), index: the one to show first. onClose: closes the viewer.
+// onJump (from the chat info screen's Media tab): a Jump button in the bar, to the message it came in.
+export default function ImageViewer({ files, index: start = 0, onClose, onJump }) {
+  const styles = useStyles(makeStyles);
+  const insets = useSafeAreaInsets();
+  const [index, setIndex] = useState(start);
+  const [busy, setBusy] = useState(null);  // "save" or "share" while that's downloading
+  const file = files[index];
+
+  // A swipe: one on or back, going round at the ends (like the web page's stepViewer).
+  function step(by) {
+    setIndex((now) => (now + by + files.length) % files.length);
+  }
+
+  // Both first download the picture into the app's own storage (files.js), then hand it on.
+  async function save() {
+    if (busy) return;
+    setBusy('save');
+    try {
+      const saved = await saveFile(file, await downloadFile(file));
+      // A toast: Android's own little notice at the bottom, gone by itself after a moment.
+      ToastAndroid.show(`Saved to Download as ${saved.name}`, ToastAndroid.SHORT);
+    } catch (error) {
+      Alert.alert("Couldn't save the picture", error.message);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function share() {
+    if (busy) return;
+    setBusy('share');
+    try {
+      await shareFile(await downloadFile(file));
+    } catch (error) {
+      Alert.alert(error.message);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    // statusBarTranslucent / navigationBarTranslucent: the black reaches behind the phone's bars.
+    <Modal visible transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent navigationBarTranslucent>
+      {/* A Modal is a separate window on Android, so gestures need their own root inside it. */}
+      <GestureHandlerRootView style={styles.backdrop}>
+        {/* key: a new picture is a new ZoomablePicture, starting unzoomed with its own size. */}
+        <ZoomablePicture key={file.id} file={file} onStep={files.length > 1 ? step : null} />
+
+        {/* The bar on top: "2 / 5", the file's name, download, share, close. Over the picture, below the status bar. */}
+        <View style={[styles.bar, { paddingTop: insets.top + 4 }]}>
+          {files.length > 1 ? <Text style={styles.count}>{index + 1} / {files.length}</Text> : null}
+          <Text numberOfLines={1} style={styles.name}>{file.filename}</Text>
+          {onJump ? (
+            <Pressable onPress={onJump} hitSlop={8} style={styles.button}>
+              <Text style={styles.jump}>Jump</Text>
+            </Pressable>
+          ) : null}
+          <Pressable onPress={save} hitSlop={8} style={styles.button}>
+            {busy === 'save' ? <ActivityIndicator color="#ffffff" /> : <Icon name="download" size={22} color="#ffffff" />}
+          </Pressable>
+          <Pressable onPress={share} hitSlop={8} style={styles.button}>
+            {busy === 'share' ? <ActivityIndicator color="#ffffff" /> : <Icon name="share-2" size={22} color="#ffffff" />}
+          </Pressable>
+          <Pressable onPress={onClose} hitSlop={8} style={styles.button}>
+            <Icon name="x" size={24} color="#ffffff" />
+          </Pressable>
+        </View>
+      </GestureHandlerRootView>
+    </Modal>
+  );
+}
+
+// One picture with its gestures. onStep(-1 or 1): swiped to the previous or next one (null: only one).
+function ZoomablePicture({ file, onStep }) {
   const styles = useStyles(makeStyles);
   // The area the picture has: the whole screen, measured once the viewer is laid out (onLayout).
   const [screen, setScreen] = useState(useWindowDimensions());
-  const insets = useSafeAreaInsets();
   const [natural, setNatural] = useState(null);  // the picture's own size, once loaded
-  const [busy, setBusy] = useState(null);  // "save" or "share" while that's downloading
 
   // The picture's size on screen at zoom 1: as big as fits, keeping its shape ("contain").
   let shown = { width: screen.width, height: screen.height };
@@ -106,7 +179,8 @@ export default function ImageViewer({ file, onClose, onJump }) {
     .onEnd(settle);
 
   // One finger on a zoomed picture: drag it around. (Only one: with two, the pinch moves it,
-  // through the point between the fingers; both writing x and y made it jump.)
+  // through the point between the fingers; both writing x and y made it jump.) Not zoomed, with
+  // several pictures: the picture follows the finger sideways, and far enough changes pictures.
   const pan = Gesture.Pan()
     .maxPointers(1)
     .onStart(() => {
@@ -114,11 +188,22 @@ export default function ImageViewer({ file, onClose, onJump }) {
       startY.value = y.value;
     })
     .onUpdate((event) => {
-      if (scale.value <= 1) return;  // nothing to look around at
-      x.value = startX.value + event.translationX;
-      y.value = startY.value + event.translationY;
+      if (scale.value > 1) {
+        x.value = startX.value + event.translationX;
+        y.value = startY.value + event.translationY;
+      } else if (onStep) {
+        x.value = event.translationX;
+      }
     })
-    .onEnd(settle);
+    .onEnd((event) => {
+      if (scale.value <= 1 && onStep && Math.abs(event.translationX) > SWIPE) {
+        // scheduleOnRN: from the UI thread back to JavaScript's, where React's state lives.
+        // (Swiping left, the finger moving towards negative x, shows the next one.)
+        scheduleOnRN(onStep, event.translationX < 0 ? 1 : -1);
+        return;
+      }
+      settle();
+    });
 
   // Double tap: zoomed in → back to the whole picture; else zoom in on the tapped spot.
   const doubleTap = Gesture.Tap()
@@ -149,75 +234,23 @@ export default function ImageViewer({ file, onClose, onJump }) {
     transform: [{ translateX: x.value }, { translateY: y.value }, { scale: scale.value }],
   }));
 
-  // Both first download the picture into the app's own storage (files.js), then hand it on.
-  async function save() {
-    if (busy) return;
-    setBusy('save');
-    try {
-      const saved = await saveFile(file, await downloadFile(file));
-      // A toast: Android's own little notice at the bottom, gone by itself after a moment.
-      ToastAndroid.show(`Saved to Download as ${saved.name}`, ToastAndroid.SHORT);
-    } catch (error) {
-      Alert.alert("Couldn't save the picture", error.message);
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  async function share() {
-    if (busy) return;
-    setBusy('share');
-    try {
-      await shareFile(await downloadFile(file));
-    } catch (error) {
-      Alert.alert(error.message);
-    } finally {
-      setBusy(null);
-    }
-  }
-
   return (
-    // statusBarTranslucent / navigationBarTranslucent: the black reaches behind the phone's bars.
-    <Modal visible transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent navigationBarTranslucent>
-      {/* A Modal is a separate window on Android, so gestures need their own root inside it. */}
-      <GestureHandlerRootView style={styles.backdrop}>
-        <GestureDetector gesture={gestures}>
-          <View
-            style={styles.stage}
-            onLayout={(event) => setScreen({ width: event.nativeEvent.layout.width, height: event.nativeEvent.layout.height })}
-          >
-            <Animated.View style={[shown, pictureStyle]}>
-              <Image
-                source={{ uri: `${SERVER}/uploads/${encodeURIComponent(file.id)}` }}
-                style={styles.picture}
-                resizeMode="contain"
-                onLoad={(event) => setNatural({ width: event.nativeEvent.source.width, height: event.nativeEvent.source.height })}
-              />
-            </Animated.View>
-            {natural ? null : <ActivityIndicator style={styles.loading} color="#ffffff" size="large" />}
-          </View>
-        </GestureDetector>
-
-        {/* The bar on top: the file's name, download, share, close. Over the picture, below the status bar. */}
-        <View style={[styles.bar, { paddingTop: insets.top + 4 }]}>
-          <Text numberOfLines={1} style={styles.name}>{file.filename}</Text>
-          {onJump ? (
-            <Pressable onPress={onJump} hitSlop={8} style={styles.button}>
-              <Text style={styles.jump}>Jump</Text>
-            </Pressable>
-          ) : null}
-          <Pressable onPress={save} hitSlop={8} style={styles.button}>
-            {busy === 'save' ? <ActivityIndicator color="#ffffff" /> : <Icon name="download" size={22} color="#ffffff" />}
-          </Pressable>
-          <Pressable onPress={share} hitSlop={8} style={styles.button}>
-            {busy === 'share' ? <ActivityIndicator color="#ffffff" /> : <Icon name="share-2" size={22} color="#ffffff" />}
-          </Pressable>
-          <Pressable onPress={onClose} hitSlop={8} style={styles.button}>
-            <Icon name="x" size={24} color="#ffffff" />
-          </Pressable>
-        </View>
-      </GestureHandlerRootView>
-    </Modal>
+    <GestureDetector gesture={gestures}>
+      <View
+        style={styles.stage}
+        onLayout={(event) => setScreen({ width: event.nativeEvent.layout.width, height: event.nativeEvent.layout.height })}
+      >
+        <Animated.View style={[shown, pictureStyle]}>
+          <Image
+            source={{ uri: `${SERVER}/uploads/${encodeURIComponent(file.id)}` }}
+            style={styles.picture}
+            resizeMode="contain"
+            onLoad={(event) => setNatural({ width: event.nativeEvent.source.width, height: event.nativeEvent.source.height })}
+          />
+        </Animated.View>
+        {natural ? null : <ActivityIndicator style={styles.loading} color="#ffffff" size="large" />}
+      </View>
+    </GestureDetector>
   );
 }
 
@@ -231,6 +264,7 @@ const makeStyles = (colors, size) => StyleSheet.create({
     position: 'absolute', top: 0, left: 0, right: 0, flexDirection: 'row', alignItems: 'center', gap: 4,
     paddingHorizontal: 8, paddingBottom: 4, backgroundColor: 'rgba(0, 0, 0, 0.4)',
   },
+  count: { color: '#ffffff', fontSize: size(15), paddingLeft: 8 },
   name: { flex: 1, color: '#ffffff', fontSize: size(15), paddingHorizontal: 8 },
   button: { padding: 10 },
   jump: { color: '#ffffff', fontSize: size(15), fontWeight: '600' },

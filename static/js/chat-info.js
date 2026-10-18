@@ -14,8 +14,6 @@ const chatInfoTabButtons = document.querySelectorAll(".chat-info-tab");
 const memberLists = document.getElementById("member-lists");
 const chatInfoList = document.getElementById("chat-info-list");
 const chatInfoStatus = document.getElementById("chat-info-status");
-const viewerVideo = document.getElementById("viewer-video");
-const viewerJump = document.getElementById("viewer-jump");
 
 let chatInfoTab = null;      // the open tab ("members", "media", "pins", "links" or "files"); null: closed
 let chatInfoItems = [];      // the messages shown in a list tab, newest first
@@ -131,21 +129,24 @@ function showChatInfoEmpty() {
   chatInfoStatus.textContent = empty[chatInfoTab];
 }
 
-// What one message adds to the open tab: a square, or a row per link, or a file's row.
+const isMedia = (file) => file.image || file.video;
+
+// What one message adds to the open tab: a square per picture or video, a row per link, or a row per
+// file. (A message can have several files, of both kinds: each tab takes its own.)
 function makeChatInfoItems(message) {
-  if (chatInfoTab === "media") return [makeMediaTile(message)];
+  if (chatInfoTab === "media") return message.files.filter(isMedia).map((file) => makeMediaTile(file, message));
   if (chatInfoTab === "links") return message.links.map((url, index) => makeLinkRow(message, url, index));
-  return [makeFileRow(message)];
+  return message.files.filter((file) => !isMedia(file)).map((file) => makeFileRow(file, message));
 }
 
 // A picture or a video's first frame, cut to a square (object-fit: cover in chat.css), as a button.
-function makeMediaTile(message) {
+function makeMediaTile(file, message) {
   const tile = document.createElement("button");
   tile.type = "button";
   tile.className = "media-tile";
-  tile.title = message.file.filename;
-  const url = "/uploads/" + encodeURIComponent(message.file.id);
-  if (message.file.video) {
+  tile.title = file.filename;
+  const url = "/uploads/" + encodeURIComponent(file.id);
+  if (file.video) {
     const video = document.createElement("video");
     video.src = url;
     video.preload = "metadata";  // only its first frame and length, not the whole video
@@ -154,11 +155,11 @@ function makeMediaTile(message) {
   } else {
     const picture = document.createElement("img");
     picture.src = url;
-    picture.alt = message.file.filename;
+    picture.alt = file.filename;
     picture.loading = "lazy";  // only loaded when scrolled near: a long grid doesn't fetch everything at once
     tile.appendChild(picture);
   }
-  tile.addEventListener("click", () => openMedia(message));
+  tile.addEventListener("click", () => openMedia(file));
   return tile;
 }
 
@@ -182,10 +183,10 @@ function makeLinkRow(message, url, index) {
 }
 
 // One file: the same link as in the chat (in the Windows app, with "Download this file?" and its bar).
-function makeFileRow(message) {
+function makeFileRow(file, message) {
   const row = document.createElement("div");
   row.className = "info-row";
-  row.append(makeFileLink("/uploads/" + encodeURIComponent(message.file.id), message.file, message), makeInfoMeta(message));
+  row.append(makeFileLink("/uploads/" + encodeURIComponent(file.id), file, message), makeInfoMeta(message));
   return row;
 }
 
@@ -207,37 +208,13 @@ function jumpFromChatInfo(message) {
   jumpToMessage(message.id);
 }
 
-// A tile was clicked: the picture in the usual viewer (messages.js, openImage), or the video playing
-// there, with "Jump to message" under it.
-function openMedia(message) {
-  const url = "/uploads/" + encodeURIComponent(message.file.id);
-  if (message.file.video) {
-    viewerImage.hidden = true;
-    viewerVideo.hidden = false;
-    viewerVideo.src = url;
-    viewerVideo.dataset.fileId = message.file.id;
-    viewerVideo.volume = videoVolume(message.file.id);  // (messages.js: each video remembers its volume)
-    viewer.showModal();
-    viewerVideo.play().catch(() => {});  // (a browser may refuse to start it by itself: then press play)
-  } else {
-    openImage(url, message.file.filename);
-  }
-  viewerJump.hidden = false;
-  viewerJump.onclick = () => {  // (onclick, not addEventListener: one handler, replaced each time)
-    viewer.close();
-    jumpFromChatInfo(message);
-  };
+// A tile was clicked: the viewer (viewer.js), which goes through every picture and video loaded in
+// the tab with ‹ ›, with "Jump to message" at the bottom.
+function openMedia(clicked) {
+  const items = chatInfoItems.flatMap((message) => message.files.filter(isMedia).map((file) => ({ file, message })));
+  const index = items.findIndex((item) => item.file.id === clicked.id);
+  openViewer(items, Math.max(0, index), (item) => jumpFromChatInfo(item.message));
 }
-
-viewerVideo.addEventListener("volumechange", () => saveVideoVolume(viewerVideo.dataset.fileId, viewerVideo.volume));
-// However the viewer closes: stop the video, and back to how the chat's pictures use it.
-viewer.addEventListener("close", () => {
-  viewerVideo.pause();
-  viewerVideo.removeAttribute("src");
-  viewerVideo.hidden = true;
-  viewerImage.hidden = false;
-  viewerJump.hidden = true;
-});
 
 // Something changed in the chat we're in (core.js): ask again for the open tab if it's affected.
 // kind: "message", "edited", "deleted", "preview" or "pinned"; data: the server's message.
@@ -246,8 +223,8 @@ function chatInfoNews(kind, data) {
   const hasLink = (text) => /https?:\/\//.test(text ?? "");
   const shown = chatInfoItems.some((message) => message.id === data.message_id);
   const affected = {
-    media: (kind === "message" && (data.file?.image || data.file?.video)) || (kind === "deleted" && shown),
-    files: (kind === "message" && data.file && !data.file.image && !data.file.video) || (kind === "deleted" && shown),
+    media: (kind === "message" && data.files.some(isMedia)) || (kind === "deleted" && shown),
+    files: (kind === "message" && data.files.some((file) => !isMedia(file))) || (kind === "deleted" && shown),
     links: (kind === "message" && hasLink(data.text)) || kind === "edited" || kind === "preview" || (kind === "deleted" && shown),
     pins: kind === "pinned" || (kind === "deleted" && shown),
   };

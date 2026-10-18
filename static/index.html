@@ -1022,14 +1022,22 @@
     <video id="season-video" controls playsinline></video>
   </dialog>
 
-  <!-- The popup for looking at a picture. Hidden until showModal() opens it. -->
+  <!-- The popup for looking at pictures and videos (viewer.js). Hidden until showModal() opens it.
+       A picture can be zoomed (wheel, pinch, double-click) and dragged; ‹ › go through a message's
+       pictures and videos (or the chat info panel's Media tab). -->
   <dialog id="image-viewer">
     <button type="button" id="viewer-close" title="Close">×</button>
-    <img id="viewer-image" alt="">
-    <!-- From the chat info panel's Media tab (chat-info.js): a video plays here instead of the picture,
-         and "Jump to message" goes to the message it came in. -->
+    <img id="viewer-image" alt="" draggable="false">
     <video id="viewer-video" controls controlslist="nodownload" hidden></video>
-    <button type="button" id="viewer-jump" hidden>Jump to message</button>
+    <button type="button" class="viewer-arrow" id="viewer-prev" title="Previous (←)" aria-label="Previous" data-icon="chevron-left" hidden></button>
+    <button type="button" class="viewer-arrow" id="viewer-next" title="Next (→)" aria-label="Next" data-icon="chevron-right" hidden></button>
+    <!-- At the bottom: "2 / 5", the file's name (a download link) and, from the chat info panel,
+         "Jump to message". -->
+    <div id="viewer-bar">
+      <span id="viewer-count" hidden></span>
+      <span id="viewer-file"></span>
+      <button type="button" id="viewer-jump" hidden>Jump to message</button>
+    </div>
   </dialog>
 
   <!-- LiveKit's browser library, for voice: it creates the global LivekitClient. "async": load it in
@@ -1050,6 +1058,7 @@
   <script src="/static/js/voice-settings.js"></script>
   <script src="/static/js/settings.js"></script>
   <script src="/static/js/people.js"></script>
+  <script src="/static/js/viewer.js"></script>
   <script src="/static/js/chat-info.js"></script>
   <script src="/static/js/messages.js"></script>
 </body>

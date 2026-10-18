@@ -19,6 +19,8 @@ import { useStyles, useTheme } from './theme';
 
 const TABS = [['members', 'Members'], ['media', 'Media'], ['pins', 'Pins'], ['links', 'Links'], ['files', 'Files']];
 
+const isMedia = (file) => file.image || file.video;
+
 const EMPTY = {
   media: 'No pictures or videos here yet.',
   // (The web page says "Hover over a message"; here it's a long press.)
@@ -124,10 +126,10 @@ function ListTab({ tab, connection, onJump, onUserMenu }) {
       // Something changed in the chat: ask again if it touches this tab (the web page's chatInfoNews).
       news(kind, data) {
         const shown = itemsRef.current.some((message) => message.id === data.message_id);
-        const file = kind === 'message' ? data.file : null;
+        const files = kind === 'message' ? data.files : [];
         const affected = {
-          media: (file && (file.image || file.video)) || (kind === 'deleted' && shown),
-          files: (file && !file.image && !file.video) || (kind === 'deleted' && shown),
+          media: files.some(isMedia) || (kind === 'deleted' && shown),
+          files: files.some((file) => !isMedia(file)) || (kind === 'deleted' && shown),
           links: (kind === 'message' && /https?:\/\//.test(data.text ?? '')) || kind === 'edited' || kind === 'preview'
             || (kind === 'deleted' && shown),
         };
@@ -145,23 +147,25 @@ function ListTab({ tab, connection, onJump, onUserMenu }) {
     return <Text style={styles.empty}>{items === null ? 'Loading…' : EMPTY[tab]}</Text>;
   }
   if (tab === 'media') {
+    // A square per picture or video (a message can have several, and other files too).
+    const tiles = items.flatMap((message) => message.files.filter(isMedia).map((file) => ({ file, message })));
     return (
       <FlatList
-        data={items}
+        data={tiles}
         numColumns={3}
-        keyExtractor={(message) => String(message.id)}
+        keyExtractor={(tile) => tile.file.id}
         contentContainerStyle={styles.grid}
         columnWrapperStyle={styles.gridRow}
         onEndReached={more}
         onEndReachedThreshold={1}
-        renderItem={({ item }) => <MediaTile message={item} onJump={onJump} />}
+        renderItem={({ item }) => <MediaTile file={item.file} message={item.message} onJump={onJump} />}
       />
     );
   }
-  // Links: a row per link (a message can have several); Files: a row per file.
+  // Links: a row per link (a message can have several); Files: a row per file (that too).
   const rows = tab === 'links'
     ? items.flatMap((message) => message.links.map((url, index) => ({ key: `${message.id}:${index}`, message, url, index })))
-    : items.map((message) => ({ key: String(message.id), message }));
+    : items.flatMap((message) => message.files.filter((file) => !isMedia(file)).map((file) => ({ key: file.id, message, file })));
   return (
     <FlatList
       data={rows}
@@ -175,7 +179,7 @@ function ListTab({ tab, connection, onJump, onUserMenu }) {
             ? <LinkRow message={row.message} url={row.url} index={row.index} />
             : (
               <FileAttachment
-                file={row.message.file}
+                file={row.file}
                 sender={row.message.user_id === connection.me.id ? null : row.message.name}
               />
             )}
@@ -188,12 +192,11 @@ function ListTab({ tab, connection, onJump, onUserMenu }) {
 
 // A picture, cut to a square, or a video's square with ▶ (phone reason: no first frame, as a player per
 // square would be heavy). A tap opens it full screen, with Jump.
-function MediaTile({ message, onJump }) {
+function MediaTile({ file, message, onJump }) {
   const styles = useStyles(makeStyles);
   const screen = useWindowDimensions();
   const [open, setOpen] = useState(false);
   const side = (screen.width - 16 * 2 - 4 * 2) / 3;  // three a row: the screen less the padding and gaps
-  const file = message.file;
   const jump = () => {
     setOpen(false);
     onJump(message.id);
@@ -212,7 +215,7 @@ function MediaTile({ message, onJump }) {
         )}
       </Pressable>
       {open && file.video ? <VideoScreen path={`/uploads/${encodeURIComponent(file.id)}`} onClose={() => setOpen(false)} onJump={jump} /> : null}
-      {open && !file.video ? <ImageViewer file={file} onClose={() => setOpen(false)} onJump={jump} /> : null}
+      {open && !file.video ? <ImageViewer files={[file]} onClose={() => setOpen(false)} onJump={jump} /> : null}
     </>
   );
 }
