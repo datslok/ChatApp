@@ -5095,7 +5095,7 @@ GIF_CACHE_TIME = 60 * 60      # seconds an answer is kept
 GIF_LIMIT = 20                # GIPHY requests per person (searches not in the cache, and sends)...
 GIF_WINDOW = 60               # ...within this many seconds
 MAX_GIPHY_ANSWER = 2 * 1024 * 1024  # bytes: 30 GIFs' details are well under 100 KB
-MAX_GIF_SIZE = 5 * 1024 * 1024      # the file we save (a few hundred KB as WebP, usually)
+MAX_GIPHY_FILE = 5 * 1024 * 1024    # the file we save (a few hundred KB as WebP, usually)
 MAX_GIF_QUERY = 50
 gif_cache = {}   # search ("" = trending) -> (when, the GIFs as the page gets them)
 gif_files = {}   # GIPHY id -> (address of the file to save, its title), from searches, for sending
@@ -5125,7 +5125,7 @@ def gif_file(item):
     images = item.get("images", {})
     for version in ("original", "fixed_height"):
         image = images.get(version) or {}
-        if is_giphy_url(image.get("webp")) and int(image.get("webp_size") or 0) <= MAX_GIF_SIZE:
+        if is_giphy_url(image.get("webp")) and int(image.get("webp_size") or 0) <= MAX_GIPHY_FILE:
             return image["webp"]
     return None
 
@@ -5219,8 +5219,8 @@ async def save_gif(choice: GifChoice, request: Request):
     address, title = known
 
     couldnt = HTTPException(502, "Couldn't get that GIF. Try another one.")
-    result = await asyncio.to_thread(fetch_url, address, MAX_GIF_SIZE, "image/webp,image/*")
-    if result is None or len(result[2]) > MAX_GIF_SIZE:
+    result = await asyncio.to_thread(fetch_url, address, MAX_GIPHY_FILE, "image/webp,image/*")
+    if result is None or len(result[2]) > MAX_GIPHY_FILE:
         raise couldnt
     body = result[2]
     # Make sure it really is a picture (Pillow reads its header), and which kind.
