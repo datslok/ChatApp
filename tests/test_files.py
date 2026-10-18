@@ -148,10 +148,20 @@ def test_at_most_ten_different_files_in_a_message(server, channel):
     ids = [upload(a, f"f{n}.txt", b"x", "text/plain") for n in range(11)]
     with a.connect() as ws:
         ws.join(channel)
-        for n, files in enumerate([ids, [ids[0], ids[0]], [], "not a list", [17]]):
+        for n, files in enumerate([ids, [ids[0], ids[0]], "not a list", [17]]):
             ws.send(type="message", text="files", files=files, nonce=f"bad{n}")
             assert ws.wait_for("not_sent")["nonce"] == f"bad{n}"
         assert len(ws.say("ten", files=ids[:10])["files"]) == 10
+
+
+def test_an_empty_list_of_files_is_a_text_message(server, channel):
+    """The phone app sends "files": [] with every text message (connection.js sendMessage)."""
+    a = server.person()
+    with a.connect() as ws:
+        ws.join(channel)
+        assert ws.say("just words", files=[])["files"] == []
+        ws.send(type="message", text="", files=[], nonce="empty")  # nothing at all: still refused
+        assert ws.wait_for("not_sent")["nonce"] == "empty"
 
 
 def test_deleting_a_message_deletes_all_its_files(server, channel):

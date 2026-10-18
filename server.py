@@ -5660,9 +5660,10 @@ async def chat(websocket: WebSocket):
                     continue
                 text = clean_text(data) if can_join(channel, user_id) else None
                 # The files: "files", a list of upload ids; or "file", one (from before several per message).
+                # (An empty list is no files: the phone app sends "files": [] with every text message.)
                 file_ids = data.get("files") if data.get("file") is None else [data.get("file")]
                 files = []
-                if text is not None and file_ids is not None:
+                if text is not None and file_ids not in (None, []):
                     files = claim_attachments(file_ids, user_id, channel)  # (None: not theirs, already sent, gone)
                 if text is None or files is None or (not text and not files):
                     # Refused (or nothing to send): an outbox's message shows as not sent straight away.
