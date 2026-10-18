@@ -511,6 +511,9 @@ the point is for me to understand how it works, not just to have it done.
   tab row; Members.js, PinsScreen's cards, `FileAttachment`, ImageViewer/VideoScreen with `onJump`; videos as ▶ squares,
   no first frame), opened by ChatTitle's `onInfo` (popup "info", drawn by ChatScreen); connection.js `watchChatInfo`
   ({batch, news}) / `askChatInfo`.
+- The scroll-down button (since 2026-10-18): more than 1.5 views above the newest message, `#to-bottom` (in #status-line,
+  placed above it; class "shown" fades it) scrolls #messages to the bottom (messages.js "The scroll-down button";
+  joinCurrentChannel hides it). Phone: ChatScreen's `farUp` from the inverted FlatList's onScroll offset, `toBottom()`.
 - Picking people: anywhere you choose from what could be everyone (or many), a type-to-search picker,
   never a drop-down (the user's rule): `usePersonPicker(input, list, {candidates, onPick, onType})` in people.js
   (search's "From", Settings → Admin → Roles "+ Add someone"); a multi-pick list (the group popup's friends) gets a

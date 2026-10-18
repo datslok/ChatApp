@@ -187,6 +187,9 @@
       </section>
       <div id="messages"></div>
       <div id="status-line">
+        <!-- Scrolled far up: back to the newest message (messages.js, "The scroll-down button"). Placed
+             over the bottom of the messages by chat.css; faded in with the "shown" class. -->
+        <button type="button" id="to-bottom" title="Back to the newest messages" aria-label="Back to the newest messages" data-icon="arrow-down" tabindex="-1"></button>
         <span id="typing"></span>
         <span class="status-right">
           <span id="char-count"></span>

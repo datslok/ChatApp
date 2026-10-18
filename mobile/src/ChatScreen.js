@@ -471,6 +471,11 @@ export default function ChatScreen({
   const rowsNow = useRef([]);    // the rows it was last given (newest first)
   const scrollTries = useRef(0);
   const scrollPosition = useRef(0.5);  // where scrollToIndex puts its row (onScrollToIndexFailed tries again with it)
+  // The scroll-down button (the web page's #to-bottom): shown when more than one and a half of the list's
+  // heights above the newest message. The list is upside down, so its scroll offset is that distance.
+  const [farUp, setFarUp] = useState(false);
+  const listHeight = useRef(0);
+  useEffect(() => setFarUp(false), [current]);  // (another chat starts at its bottom)
   // Each chat keeps its own tray and text, like Discord: a picture picked or words typed in a DM stay
   // there when you go elsewhere.
   // Each chat's tray (trays, from App.js): files about to be sent there,
@@ -1034,6 +1039,10 @@ export default function ChatScreen({
         onEndReached={connection.loadOlder}
         onEndReachedThreshold={0.5}
         onViewableItemsChanged={onViewableItemsChanged}
+        onLayout={(event) => { listHeight.current = event.nativeEvent.layout.height; }}
+        // (setFarUp with the value it already has redraws nothing; at most every 100 ms while scrolling.)
+        onScroll={(event) => setFarUp(event.nativeEvent.contentOffset.y > listHeight.current * 1.5)}
+        scrollEventThrottle={100}
       />
     );
   }
@@ -1058,7 +1067,18 @@ export default function ChatScreen({
   return (
     // (Room for the keyboard is made around the whole screen, in App.js.)
     <View style={styles.screen}>
-      {body}
+      {/* The messages, with the scroll-down button over their bottom right corner. */}
+      <View style={styles.middle}>
+        {body}
+        {farUp && messages !== null ? (
+          <Pressable
+            onPress={toBottom} accessibilityLabel="Back to the newest messages"
+            style={({ pressed }) => [styles.toBottom, pressed && styles.toBottomPressed]}
+          >
+            <Icon name="arrow-down" size={20} color={colors.iconStrong} />
+          </Pressable>
+        ) : null}
+      </View>
 
       {/* The web page's #status-line, always there (so nothing jumps): who's typing on the left,
           a file or GIF on its way (or what went wrong) on the right. */}
@@ -1206,6 +1226,12 @@ const makeStyles = (colors, size) => StyleSheet.create({
   // The light behind a message we jumped to: the accent at 35%, over the whole message.
   flash: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.accent35 },
   middle: { flex: 1 },
+  // chat.css's #to-bottom: round, 40px, the panel's colour, a shadow (elevation on Android).
+  toBottom: {
+    position: 'absolute', right: 16, bottom: 8, width: 40, height: 40, borderRadius: 20,
+    alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bgPanel, elevation: 4,
+  },
+  toBottomPressed: { backgroundColor: colors.bgHover },
   listInside: { padding: 12 },  // #messages on a phone: 12px
   // .message: the picture's column and the body side by side, 12px apart.
   message: { flexDirection: 'row', gap: 12, paddingVertical: 6, paddingHorizontal: 4, borderRadius: 4 },

@@ -3948,12 +3948,42 @@ button.download-button {
 
 /* "kari is typing…" on the left, "Uploading cat.png…" on the right */
 #status-line {
+  position: relative;  /* the scroll-down button is placed from here */
   height: 1.2em;  /* keep the space even when empty, so the page doesn't jump */
   padding: 0 16px;
   display: flex;
   justify-content: space-between;
   font-size: 0.85rem;
   color: var(--text-muted);
+}
+
+/* Scrolled far up: a round ↓ just above the status line, at the right (messages.js). Always there but
+   see-through and unclickable (pointer-events: none) until "shown", so it can fade in and out:
+   "transition" animates the change of opacity. */
+#to-bottom {
+  position: absolute;
+  right: 24px;
+  bottom: calc(100% + 8px);  /* 8px above the top of the status line */
+  z-index: 5;
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: 50%;
+  background: var(--bg-panel);
+  color: var(--icon-strong);
+  font-size: 1rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+#to-bottom.shown {
+  opacity: 1;
+  pointer-events: auto;
+}
+#to-bottom:hover {
+  background: var(--bg-hover);
 }
 
 #upload-status.error {

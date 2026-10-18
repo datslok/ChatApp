@@ -703,6 +703,7 @@ function joinCurrentChannel() {
   clearReply();                // a reply belongs to the channel we just left
   clearTyping();
   closeChatInfo();             // (chat-info.js: its tabs belonged to the chat we left)
+  toBottomButton.classList.remove("shown");  // (messages.js: a new chat starts at its bottom)
   // Show the People page (FRIENDS), the Lounge page or the channel: one of them.
   const inFriends = currentChannel === FRIENDS;
   const inLounge = currentChannel === LOUNGE;

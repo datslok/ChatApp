@@ -1698,6 +1698,25 @@ function loadOlderMessages() {
 // "near the top": the next batch then usually arrives before you get there.
 messages.addEventListener("scroll", () => {
   if (messages.scrollTop < 300) loadOlderMessages();
+  showToBottom();
+});
+
+// ---------- The scroll-down button ----------
+// More than one and a half screens above the newest message: a round ↓ over the bottom of the chat
+// (index.html #to-bottom). Every message scrolled past is still on the page, so the bottom is
+// always there to scroll to. (Scrolling by code, like a jump to a pin, fires "scroll" too.)
+
+const toBottomButton = document.getElementById("to-bottom");
+
+function showToBottom() {
+  // How far the bottom is: everything's height, less what's above the view and the view itself.
+  const fromBottom = messages.scrollHeight - messages.scrollTop - messages.clientHeight;
+  toBottomButton.classList.toggle("shown", fromBottom > messages.clientHeight * 1.5);
+}
+
+toBottomButton.addEventListener("click", () => {
+  jumpTarget = null;  // (no longer staying at a message we jumped to)
+  messages.scrollTo({ top: messages.scrollHeight, behavior: "smooth" });
 });
 
 // The server's answer (core.js): put the batch in front, without moving what you're reading.

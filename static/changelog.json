@@ -8,6 +8,7 @@
         "Maths (LaTeX): $\\frac{a}{b}$ in a sentence, $$...$$ for a formula on its own line. Money stays money: \"$5 and $10\" isn't maths, and `\\$` always shows a real $",
         "Hover a message to react 😀, reply ↩, edit ✏️ or delete 🗑️ (hold Shift to skip the question). Esc cancels a reply or an edit",
         "↑ in an empty text box edits your last message",
+        "Scrolled far up in a chat? The round ↓ button at the bottom right takes you back to the newest messages",
         "Click a reply's quote to jump to the original message (older ones load by themselves)",
         "A red line marked NEW shows where you stopped reading in a chat (also for messages that came while you were away from the window). Lots of new ones? The chat opens at the line. It goes away when you write something",
         "Pin a message: hover over it and click 📌. The 📌 at the top of a channel, DM or group lists its pinned messages (up to 100), with Jump and Unpin. Anyone can pin and unpin",
@@ -125,6 +126,7 @@
         "😺 Room for twice as many custom emoji: up to 24 each in Settings → Emoji",
         "🖼️ The picture editor (profile pictures, banners and custom emoji) opens with the whole picture showing, so a wide or tall picture fits in the frame: zoom in to fill it, or save it like that and the empty part stays see-through",
         "🔠 The text size (and the Windows app's scale) is now each device's own: a bigger text on your phone no longer changes your PC. Theme, colours and font still follow your account",
+        "⬇️ Scrolled far up in a chat? A round ↓ button at the bottom right takes you back to the newest messages",
         "🗂️ Click the name at the top of a DM or group (tap it in the phone app) to see its members, pictures and videos, pinned messages, links and files, like on Discord",
         "👥 Hide the member list on the right with the 👥 button at the top of the chat, like on Discord. Click it again to bring the list back"
       ]
