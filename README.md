@@ -944,7 +944,7 @@ with `start.ps1` (it restarts when you save), and try things in two browser wind
 ### Running the tests
 
 ```powershell
-.	est.ps1                        # everything (about a minute)
+.	est.ps1                        # everything (about a minute and a half)
 .	est.ps1 tests	est_people.py   # one file
 .	est.ps1 -k block               # only the tests with "block" in their name
 ```

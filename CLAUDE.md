@@ -588,6 +588,16 @@ the point is for me to understand how it works, not just to have it done.
   address of the host must be public (`ipaddress.is_global`), we connect to the checked address ourselves (no
   DNS rebinding), redirects checked by hand (3 at most), 5 s timeouts, 1 MB HTML, 5 MB pictures, 10 previews per
   person per minute. Not for links in `code`, not on edits.
+- The test suite (since 2026-10-18; README "Running the tests"): `tests/`, run by `test.ps1` (pytest, in
+  `requirements-dev.txt`; `pytest.ini`). `conftest.py` starts a real uvicorn server on port 8011 with a temporary
+  DATABASE_FILE/UPLOAD_DIR, REQUIRE_INVITE=1, no keys (SECRETS stripped, FIREBASE_KEY_FILE pointed nowhere, test
+  LiveKit/VAPID values); the owner registers first; `server.person()` = invite + register + the /verify link read
+  from the server's printed emails (its log). `Socket.wait_for/nothing/drain/join/say`; fixtures `channel` (made
+  and deleted: max 50) and `friends`; `cf-connecting-ip` varies per person for the per-IP limits. **Black-box
+  only: never import server.py**, so the suite proves a refactor (the planned split into modules) changed nothing.
+  Files by area: accounts, admin, messages, channels, people, files, voice, misc (~170 tests, ~1.5 min). Connections
+  start with state messages ("unread", "mutes", "pinned_chats"...): `drain()` before expecting an answer. Run it after
+  every server change; add tests with features and fixes.
 - `ROADMAP.md`: the milestones, ticked off as they're done.
 - `setup.ps1`: creates the `chatapp` conda environment and installs `requirements.txt`.
 - `start.ps1`: activates the environment and starts the server with auto-reload (development).
