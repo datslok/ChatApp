@@ -234,8 +234,13 @@ class Server:
             time.sleep(0.1)
 
     def invite(self):
-        """A fresh invite code from the owner."""
+        """A fresh invite code from the owner. (At the limit of 10 open ones, left over from tests that
+        didn't use theirs, those are cancelled first.)"""
         reply = self.owner.post("/invites")
+        if reply.status == 400:
+            for invite in self.owner.get("/invites").json["invites"]:
+                self.owner.post(f"/invites/{invite['code']}/cancel")
+            reply = self.owner.post("/invites")
         assert reply.status == 200, reply
         return reply.json["invites"][0]["code"]
 
