@@ -340,6 +340,23 @@ def person(server):
     return server.person()
 
 
+@pytest.fixture
+def channel(owner):
+    """A fresh channel for this test (deleted after it: there may be at most 50)."""
+    reply = owner.post("/channels", {"name": unique("test-")})
+    assert reply.status == 200, reply
+    yield reply.json["key"]
+    owner.post(f"/channels/{reply.json['key']}/delete")
+
+
+@pytest.fixture
+def friends(server):
+    """Two new people who are friends, and their DM's key: (a, b, dm)."""
+    a, b = server.person("ann"), server.person("ben")
+    befriend(a, b)
+    return a, b, dm_key(a, b)
+
+
 def befriend(a, b):
     """Make two people friends (a asks, b accepts)."""
     assert a.post("/friends/request", {"user_id": b.id}).status == 200
