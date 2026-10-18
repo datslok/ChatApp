@@ -6,9 +6,7 @@
 
 // ---------- Uploads: the tray, the + button, drag-and-drop and pasting ----------
 
-const MAX_UPLOAD_SIZE = 50 * 1024 * 1024;  // 50 MB, same as the server
 const MAX_TRAY_FILES = 10;
-const IMAGE_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"];  // same as the server
 
 // Files waiting to be sent: [{file, previewUrl, failed}]. Nothing is uploaded until Enter.
 // Each chat has its own tray, and its own half-written text, like Discord: a picture added or words
@@ -41,8 +39,8 @@ function anythingInTrays() {
 // All three ways of adding files (+ button, drop, paste) end up here.
 function addToTray(files) {
   for (const file of files) {
-    if (file.size > MAX_UPLOAD_SIZE) {
-      showUploadError(`${file.name} is too big (max 50 MB)`);
+    if (file.size > limits.upload_size) {
+      showUploadError(`${file.name} is too big (max ${megabytes(limits.upload_size)})`);
       continue;
     }
     if (file.size === 0) {
@@ -55,7 +53,7 @@ function addToTray(files) {
     }
     // For pictures, a temporary local address so we can show a preview
     // straight from your computer, without uploading anything yet.
-    const previewUrl = IMAGE_TYPES.includes(file.type) ? URL.createObjectURL(file) : null;
+    const previewUrl = limits.image_types.includes(file.type) ? URL.createObjectURL(file) : null;
     tray.push({ file: file, previewUrl: previewUrl, failed: false });
   }
   renderTray();

@@ -168,7 +168,8 @@ PICTURE_KINDS = {
     },
 }
 MAX_CUSTOM_EMOJI = 24  # per person
-EMOJI_NAME_PATTERN = re.compile(r"[A-Za-z0-9_]{2,32}")
+MAX_EMOJI_NAME = 32
+EMOJI_NAME_PATTERN = re.compile(rf"[A-Za-z0-9_]{{2,{MAX_EMOJI_NAME}}}")  # ({{ }}: a real { } in an f-string)
 for kind in PICTURE_KINDS.values():
     kind["folder"].mkdir(exist_ok=True)
 PICTURE_EXTENSIONS = {"image/png": "png", "image/jpeg": "jpg", "image/gif": "gif", "image/webp": "webp"}
@@ -5338,6 +5339,25 @@ async def send_to_channel(channel, data, except_user_id=None):
             await send(websocket, data)
 
 
+# The limits the pages need to know (to grey out a button or say "too big" before trying), sent
+# in "welcome" so this file is the only place they're written. The server still checks each one
+# itself: a page's copy is only for being friendly.
+LIMITS = {
+    "custom_emoji": MAX_CUSTOM_EMOJI,
+    "emoji_name": MAX_EMOJI_NAME,
+    "upload_size": MAX_UPLOAD_SIZE,
+    "gif_size": MAX_GIF_SIZE,  # profile pictures, banners and emoji (they come whole)
+    "image_types": sorted(IMAGE_TYPES),  # (a set isn't JSON)
+    "group_size": MAX_GROUP_SIZE,
+    "channel_name": MAX_CHANNEL_NAME,  # also group names
+    "role_name": MAX_ROLE_NAME,
+    "status": MAX_STATUS_LENGTH,
+    "bio": MAX_BIO_LENGTH,
+    "ban_reason": MAX_BAN_REASON,
+    "feedback": MAX_FEEDBACK_LENGTH,
+}
+
+
 @app.websocket("/ws")
 async def chat(websocket: WebSocket):
     # The browser sends the session cookie along when it opens the WebSocket.
@@ -5368,6 +5388,7 @@ async def chat(websocket: WebSocket):
         await send(websocket, {
             "type": "welcome", "id": user_id, "username": username_of(user_id),
             "max_text_length": MAX_TEXT_LENGTH,  # so the page's text box uses the same limit
+            "limits": LIMITS,  # the other limits the pages need (see LIMITS)
             "page_version": PAGE_VERSION,  # a different one than it was loaded with: it reloads
             "appearance": appearance_of(user_id),  # Settings → Appearance (None: the defaults)
             "presence": presence_of(user_id),  # the status they chose (the others may see another: users)

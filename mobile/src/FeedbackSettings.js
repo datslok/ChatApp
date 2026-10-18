@@ -7,6 +7,7 @@ import Icon from './Icon';
 import { postJson } from './api';
 import { Button, Field, Form, Help, Status, Title } from './SettingsParts';
 import { useStyles, useTheme } from './theme';
+import { limits } from './limits';
 
 const KINDS = [
   { kind: 'bug', icon: 'bug', label: 'Report a bug' },
@@ -61,7 +62,7 @@ export default function FeedbackSettings() {
           ))}
         </View>
         <Field
-          label="What happened, or what would you like?" value={text} onChangeText={setText} maxLength={4000} multiline
+          label="What happened, or what would you like?" value={text} onChangeText={setText} maxLength={limits.feedback} multiline
           placeholder="For a bug: what you did, what you expected, and what happened instead" style={styles.text}
         />
         <Status status={message} />

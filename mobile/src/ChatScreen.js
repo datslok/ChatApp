@@ -18,10 +18,11 @@ import SearchScreen from './SearchScreen';
 import { useStyles, useTheme } from './theme';
 import { chatLabel } from './chats';
 import { SERVER } from './config';
-import { IMAGE_TYPES, MAX_TRAY_FILES, MAX_UPLOAD_SIZE, uploadFile } from './files';
+import { MAX_TRAY_FILES, uploadFile } from './files';
 import { copySharedFile } from '../modules/shared-files';
 import { Avatar, BotBadge, nameColor } from './people';
 import { dayName, headerTime, isSameDay } from './time';
+import { limits, megabytes } from './limits';
 
 // Quick reactions in the long-press menu, before its smiley (which opens the whole emoji picker).
 const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🎉'];
@@ -725,15 +726,15 @@ export default function ChatScreen({
   // Each: {uri, name, type, size}.
   function addToTray(files) {
     const room = MAX_TRAY_FILES - tray.length;
-    const fitting = files.filter((file) => file.size > 0 && file.size <= MAX_UPLOAD_SIZE);
+    const fitting = files.filter((file) => file.size > 0 && file.size <= limits.upload_size);
     const empty = files.find((file) => file.size === 0);
     if (empty) showError(`${empty.name} is empty`);  // (nothing to send: the server refuses those too)
-    else if (fitting.length < files.length) showError('Files can be at most 50 MB');
+    else if (fitting.length < files.length) showError(`Files can be at most ${megabytes(limits.upload_size)}`);
     else if (fitting.length > room) showError(`At most ${MAX_TRAY_FILES} files at a time`);
     const added = fitting.slice(0, room).map((file) => ({
       ...file,
       key: `${Date.now()}-${Math.random()}`,  // only for React's list
-      image: IMAGE_TYPES.includes(file.type),
+      image: limits.image_types.includes(file.type),  // (the ones the server shows as pictures)
       failed: false,
     }));
     setTray((old) => [...old, ...added]);
@@ -768,7 +769,7 @@ export default function ChatScreen({
     let room = MAX_TRAY_FILES - tray.length;
     const ready = [];
     for (const file of files) {
-      if (file.size > MAX_UPLOAD_SIZE || room === 0) {
+      if (file.size > limits.upload_size || room === 0) {
         ready.push(file);
         continue;
       }

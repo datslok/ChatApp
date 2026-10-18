@@ -7,6 +7,7 @@ import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { DialogButton, DialogButtons, Popup, makeStyles as makePopupStyles } from './MessageCard';
 import { postJson } from './api';
 import { useStyles, useTheme } from './theme';
+import { limits } from './limits';
 
 // The web page's drop-down, as buttons side by side (four short choices suit a phone better).
 const LENGTHS = [[null, 'For good'], [1, '1 day'], [7, '1 week'], [30, '1 month']];
@@ -44,7 +45,7 @@ export default function BanDialog({ user, onBanned, onClose }) {
       </Text>
       <Text style={styles.label}>Reason (optional, shown to them)</Text>
       <TextInput
-        style={popupStyles.input} value={reason} onChangeText={setReason} maxLength={200}
+        style={popupStyles.input} value={reason} onChangeText={setReason} maxLength={limits.ban_reason}
         placeholderTextColor={colors.textMuted}
       />
       <Text style={styles.label}>How long</Text>

@@ -355,6 +355,11 @@ the point is for me to understand how it works, not just to have it done.
   dev.db has the test accounts "phone", "phone2" and "tester" (phone's friends both). Rules (from the template's AGENTS.md): check Expo's
   docs for SDK 57 specifically, always `npx expo install` for packages, never edit the generated
   `android/` (git-ignored; `npx expo prebuild --clean` after changing `app.json`).
+- Limits the pages need (emoji per person, upload and GIF sizes, picture types, group size, name/status/bio/
+  ban reason/feedback lengths) are written only in server.py: `LIMITS`, sent in "welcome" as `limits`. Web: core.js
+  `limits` (+ `applyLimits` sets the HTML boxes' maxlength from `LIMITED_INPUTS`, `megabytes()`); phone:
+  `src/limits.js` (filled by connection.js). Never copy such a number into a page: add it to LIMITS.
+  (The message length is the older `max_text_length`; the 10-file tray and other page-design numbers stay in the pages.)
 - `static/login.html`: the login / create account page.
 - `static/reset.html`: "forgot password" (asks for a reset link) and, with `?token=`, choosing a new password.
 - Emails (reset links) go out through Resend's SMTP server, configured in `.env`. Without `SMTP_HOST`

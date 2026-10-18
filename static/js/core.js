@@ -125,6 +125,33 @@ const LOUNGE = "voice:lounge";  // the Lounge page (a "channel" name like FRIEND
 let myId = null;            // our own user id; the server tells us in its "welcome"
 let season = null;          // the server's season now: {name, emoji, video} or null (the easter egg, people.js)
 let myPresence = "online";  // the status we chose: online, idle, dnd or invisible ("welcome", "my_presence")
+// The server's limits (server.py, LIMITS), from "welcome": limits.custom_emoji, limits.upload_size, ...
+// Empty until then, which is fine: nothing that reads them can be used before we're connected.
+let limits = {};
+
+// Text boxes whose maxlength is one of those limits: the box's id -> the limit's name. The browser
+// then refuses typing past it by itself (the server checks again).
+const LIMITED_INPUTS = {
+  "status-input": "status",
+  "bio-input": "bio",
+  "emoji-name": "emoji_name",
+  "group-name": "channel_name",
+  "new-channel-name": "channel_name",
+  "new-role-name": "role_name",
+  "ban-reason": "ban_reason",
+  "feedback-text": "feedback",
+};
+
+// A size limit in words: 52428800 -> "50 MB".
+function megabytes(bytes) {
+  return Math.round(bytes / (1024 * 1024)) + " MB";
+}
+
+function applyLimits() {
+  for (const [id, name] of Object.entries(LIMITED_INPUTS)) {
+    document.getElementById(id).maxLength = limits[name];
+  }
+}
 let pendingJump = null;     // a message id to go to once its channel's history arrives (from a notification)
 let jumpTarget = null;      // the message we last jumped to: pictures loading keep it in view (messages.js)
 let loadingOlder = false;   // asked the server for older messages, and waiting for them (messages.js)
@@ -354,6 +381,8 @@ function handleServerMessage(event) {
     myPresence = data.presence || "online";
     maxTextLength = data.max_text_length;
     input.maxLength = maxTextLength;  // the textarea's maxlength, from the server's limit
+    limits = data.limits;
+    applyLimits();
     applyAppearance(data.appearance || {});  // the account's (appearance.js); null: the defaults
     vapidPublicKey = data.vapid_public_key;  // for push notifications (notifications.js)
     season = data.season;  // the seasonal easter egg, or null (people.js, renderUserPanel)

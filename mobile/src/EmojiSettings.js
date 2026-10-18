@@ -11,8 +11,8 @@ import { CustomEmoji } from './MessageText';
 import PictureEditor, { pickPicture } from './PictureEditor';
 import { Button, Field, Form, Help, Status, Title } from './SettingsParts';
 import { useStyles } from './theme';
+import { limits } from './limits';
 
-const MAX_CUSTOM_EMOJI = 24;  // as the server's
 const NAME_PATTERN = /^[A-Za-z0-9_]{2,32}$/;
 
 // One emoji: its picture, ":name:" (and whose, for someone else's), Replace and Delete.
@@ -99,7 +99,7 @@ export default function EmojiSettings({ connection }) {
     <View>
       <Title>Emoji</Title>
       <Form>
-        <Text style={styles.count}>Your emoji: {mine.length}/{MAX_CUSTOM_EMOJI}. Everyone can react with them.</Text>
+        <Text style={styles.count}>Your emoji: {mine.length}/{limits.custom_emoji}. Everyone can react with them.</Text>
         <View style={styles.list}>
           {mine.map((item) => row(item, false))}
           {amAdmin && others.length ? (
@@ -110,10 +110,10 @@ export default function EmojiSettings({ connection }) {
           ) : null}
         </View>
         <Field
-          label="Name for a new emoji" value={name} onChangeText={setName} maxLength={32} placeholder="e.g. pog"
+          label="Name for a new emoji" value={name} onChangeText={setName} maxLength={limits.emoji_name} placeholder="e.g. pog"
           autoCapitalize="none" autoCorrect={false}
         />
-        <Button label="Choose picture…" onPress={addNew} disabled={mine.length >= MAX_CUSTOM_EMOJI} />
+        <Button label="Choose picture…" onPress={addNew} disabled={mine.length >= limits.custom_emoji} />
         <Status status={message} />
       </Form>
       {editing ? <PictureEditor picture={editing.picture} kind="emoji" onDone={upload} onCancel={() => setEditing(null)} /> : null}

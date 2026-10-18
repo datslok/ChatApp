@@ -640,7 +640,6 @@ document.getElementById("ban-cancel").addEventListener("click", () => banDialog.
 // work like in a channel; its key is the "channel" they're saved under. Calls work like a DM's
 // (rooms.js), ringing everyone else, with a tile for everyone in the call like the Lounge.
 
-const MAX_GROUP_SIZE = 10;  // as the server's
 const groups = new Map();   // key -> the group, in the order the server sent them (oldest first)
 const groupDialog = document.getElementById("group-dialog");
 const groupForm = document.getElementById("group-form");
@@ -731,8 +730,8 @@ function openGroupDialog(key) {
   const members = key ? groupPeople(groups.get(key)) : [myId];
   groupDialogTitle.textContent = key ? "Add people" : "New group";
   groupDialogHelp.textContent = key
-    ? `Pick friends to add (up to ${MAX_GROUP_SIZE - members.length} more). They'll see the whole chat.`
-    : `Pick 2 to ${MAX_GROUP_SIZE - 1} friends. Everyone in a group can read and write in it, add their own friends, and leave. Chattus is in every group: write @Chattus to ask him something.`;
+    ? `Pick friends to add (up to ${limits.group_size - members.length} more). They'll see the whole chat.`
+    : `Pick 2 to ${limits.group_size - 1} friends. Everyone in a group can read and write in it, add their own friends, and leave. Chattus is in every group: write @Chattus to ask him something.`;
   groupNameRow.hidden = key !== null;  // (renaming has its own button)
   groupNameInput.value = "";
   groupFilter.value = "";
@@ -788,7 +787,7 @@ function updateGroupChoices() {
   const already = groupDialogKey ? groupPeople(groups.get(groupDialogKey)).length : 1;
   const chosen = chosenFriends().length;
   for (const box of groupFriends.querySelectorAll("input")) {
-    box.disabled = !box.checked && already + chosen >= MAX_GROUP_SIZE;
+    box.disabled = !box.checked && already + chosen >= limits.group_size;
   }
   groupSubmit.disabled = chosen < (groupDialogKey ? 1 : 2);
 }

@@ -18,6 +18,7 @@ import { getJson, postJson } from './api';
 import { Avatar, Person } from './people';
 import { useStyles, useTheme } from './theme';
 import { clock, dayName } from './time';
+import { limits } from './limits';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -240,7 +241,7 @@ function ChannelRow({ item, index, count, roles, onRename, onMove, onDelete, onA
         {item.heading ? <Icon name="chevron-down" size={16} color={colors.textMuted} /> : <Text style={styles.markText}>#</Text>}
       </View>
       <TextInput
-        style={[styles.rowInput, item.heading && styles.headingInput]} value={name} onChangeText={setName} maxLength={30}
+        style={[styles.rowInput, item.heading && styles.headingInput]} value={name} onChangeText={setName} maxLength={limits.channel_name}
         onSubmitEditing={() => changed && onRename(name)} returnKeyType="done" autoCorrect={false}
         accessibilityLabel={item.heading ? 'Heading name' : 'Channel name'}
       />
@@ -328,7 +329,7 @@ function Channels({ connection }) {
       <Heading>Add</Heading>
       <Form>
         <TextInput
-          style={styles.input} value={newName} onChangeText={setNewName} maxLength={30} placeholder="e.g. games"
+          style={styles.input} value={newName} onChangeText={setNewName} maxLength={limits.channel_name} placeholder="e.g. games"
           placeholderTextColor={colors.textMuted} autoCorrect={false} accessibilityLabel="Name"
         />
         <View style={styles.buttonRow}>
@@ -358,7 +359,7 @@ function RoleRow({ role, index, count, connection, onEdit, onMove, onDelete, onM
       <View style={styles.adminRow}>
         <Pressable onPress={onPickColour} accessibilityLabel="Colour" style={[styles.colourBox, { backgroundColor: role.colour }]} />
         <TextInput
-          style={styles.rowInput} value={name} onChangeText={setName} maxLength={30} autoCorrect={false}
+          style={styles.rowInput} value={name} onChangeText={setName} maxLength={limits.role_name} autoCorrect={false}
           onSubmitEditing={() => changed && onEdit({ name, colour: role.colour })} accessibilityLabel="Role name"
         />
         {changed ? <SmallButton label="Save" main onPress={() => onEdit({ name, colour: role.colour })} /> : null}
@@ -442,7 +443,7 @@ function Roles({ connection }) {
       <View style={styles.adminRow}>
         <Pressable onPress={() => setPicking('new')} accessibilityLabel="Colour" style={[styles.colourBox, { backgroundColor: newColour }]} />
         <TextInput
-          style={styles.rowInput} value={newName} onChangeText={setNewName} maxLength={30} placeholder="e.g. Gamers"
+          style={styles.rowInput} value={newName} onChangeText={setNewName} maxLength={limits.role_name} placeholder="e.g. Gamers"
           placeholderTextColor={colors.textMuted} autoCorrect={false} accessibilityLabel="Name"
         />
         <SmallButton label="Add role" main onPress={add} disabled={!newName.trim()} />

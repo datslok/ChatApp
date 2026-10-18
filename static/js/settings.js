@@ -394,8 +394,8 @@ function setUpPictureButtons(kind, changeButton, removeButton, fileInput) {
     fileInput.value = "";  // so the same file can be picked again later
     if (!file) return;
     // Animated GIFs are uploaded whole (the server crops them), so they may be bigger.
-    if (file.type === "image/gif" && file.size > 10 * 1024 * 1024) {
-      showStatus(profileStatusLine, "GIFs can be at most 10 MB.", "error");
+    if (file.type === "image/gif" && file.size > limits.gif_size) {
+      showStatus(profileStatusLine, `GIFs can be at most ${megabytes(limits.gif_size)}.`, "error");
       return;
     }
     try {
@@ -416,7 +416,6 @@ setUpPictureButtons("banner", changeBannerButton, removeBannerButton, bannerInpu
 
 // ---------- Settings: custom emoji ----------
 
-const MAX_CUSTOM_EMOJI = 24;
 let pendingEmojiName = "";  // the name for the emoji being edited/uploaded
 // The emoji getting a new picture ({id, name, ...}), or null when adding a new one. Replacing
 // keeps its id, so the messages and reactions that use it show the new picture.
@@ -457,7 +456,7 @@ function makeEmojiItem(emoji, showOwner) {
 // Our own custom emoji, each with a Delete button, and "3/24". Admins also see everyone else's.
 function renderMyEmoji() {
   const mine = customEmoji.filter((emoji) => emoji.owner_id === myId);
-  emojiCount.textContent = `Your emoji: ${mine.length}/${MAX_CUSTOM_EMOJI}. Everyone can react with them.`;
+  emojiCount.textContent = `Your emoji: ${mine.length}/${limits.custom_emoji}. Everyone can react with them.`;
   myEmojiList.replaceChildren();
   for (const emoji of mine) myEmojiList.appendChild(makeEmojiItem(emoji, false));
 
@@ -469,7 +468,7 @@ function renderMyEmoji() {
     myEmojiList.appendChild(heading);
     for (const emoji of others) myEmojiList.appendChild(makeEmojiItem(emoji, true));
   }
-  addEmojiButton.disabled = mine.length >= MAX_CUSTOM_EMOJI;
+  addEmojiButton.disabled = mine.length >= limits.custom_emoji;
 }
 
 addEmojiButton.addEventListener("click", () => {
@@ -493,8 +492,8 @@ emojiInput.addEventListener("change", async () => {
   const file = emojiInput.files[0];
   emojiInput.value = "";
   if (!file) return;
-  if (file.type === "image/gif" && file.size > 10 * 1024 * 1024) {
-    showStatus(emojiStatus, "GIFs can be at most 10 MB.", "error");
+  if (file.type === "image/gif" && file.size > limits.gif_size) {
+    showStatus(emojiStatus, `GIFs can be at most ${megabytes(limits.gif_size)}.`, "error");
     return;
   }
   try {
@@ -1154,7 +1153,7 @@ function makeChannelAdminItem(item, index) {
 
   const name = document.createElement("input");
   name.value = item.name;  // (.value, like textContent, is never read as HTML)
-  name.maxLength = 30;     // as the server's MAX_CHANNEL_NAME
+  name.maxLength = limits.channel_name;
   name.required = true;    // the browser won't submit it empty
   name.autocomplete = "off";
   name.setAttribute("aria-label", item.heading ? "Heading name" : "Channel name");
@@ -1317,7 +1316,7 @@ function makeRoleAdminItem(role, index) {
   colour.setAttribute("aria-label", "Colour");
   const name = document.createElement("input");
   name.value = role.name;
-  name.maxLength = 30;
+  name.maxLength = limits.role_name;
   name.required = true;
   name.autocomplete = "off";
   name.setAttribute("aria-label", "Role name");

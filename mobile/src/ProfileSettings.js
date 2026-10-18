@@ -12,11 +12,10 @@ import PictureEditor, { pickPicture } from './PictureEditor';
 import { Banner } from './ProfileScreen';
 import { Button, Field, Form, Status, Title } from './SettingsParts';
 import { useStyles } from './theme';
+import { limits } from './limits';
 
 const DONE = { avatar: 'Picture changed.', banner: 'Banner changed.' };
 
-const MAX_STATUS = 60;  // as the server's
-const MAX_BIO = 300;
 
 export default function ProfileSettings({ connection }) {
   const styles = useStyles(makeStyles);
@@ -79,9 +78,9 @@ export default function ProfileSettings({ connection }) {
           <Button label="Change banner" small onPress={() => changePicture('banner')} disabled={busy} />
           <Button label="Remove" small secondary onPress={() => removePicture('banner')} />
         </View>
-        <Field label="Status" value={status} onChangeText={setStatus} maxLength={MAX_STATUS} placeholder="e.g. 🎮 playing Minecraft" />
+        <Field label="Status" value={status} onChangeText={setStatus} maxLength={limits.status} placeholder="e.g. 🎮 playing Minecraft" />
         <Field
-          label="Bio" value={bio} onChangeText={setBio} maxLength={MAX_BIO} placeholder="A few words about yourself"
+          label="Bio" value={bio} onChangeText={setBio} maxLength={limits.bio} placeholder="A few words about yourself"
           multiline style={styles.bio}
         />
         <Status status={message} />

@@ -281,7 +281,7 @@
       <div id="group-friends"></div>
       <label id="group-name-row">
         Name (optional)
-        <input id="group-name" maxlength="30" autocomplete="off" placeholder="e.g. Weekend plans">
+        <input id="group-name" autocomplete="off" placeholder="e.g. Weekend plans">
       </label>
       <p id="group-status" class="action-status"></p>
       <div class="group-dialog-buttons">
@@ -299,7 +299,7 @@
         told who banned them, only the reason.</p>
       <label class="ban-field">
         Reason (optional, shown to them)
-        <input id="ban-reason" maxlength="200" autocomplete="off">
+        <input id="ban-reason" autocomplete="off">
       </label>
       <label class="ban-field">
         How long
@@ -509,11 +509,11 @@
           </div>
           <label>
             Status
-            <input id="status-input" maxlength="60" placeholder="e.g. 🎮 playing Minecraft">
+            <input id="status-input" placeholder="e.g. 🎮 playing Minecraft">
           </label>
           <label>
             Bio
-            <textarea id="bio-input" maxlength="300" rows="3" placeholder="A few words about yourself"></textarea>
+            <textarea id="bio-input" rows="3" placeholder="A few words about yourself"></textarea>
           </label>
           <div id="profile-status-line" class="status"></div>
           <button>Save profile</button>
@@ -579,7 +579,7 @@
           <div id="my-emoji"></div>
           <label>
             Name for a new emoji
-            <input id="emoji-name" maxlength="32" placeholder="e.g. pog" autocomplete="off">
+            <input id="emoji-name" placeholder="e.g. pog" autocomplete="off">
           </label>
           <!-- Picking a picture opens the editor; Save there uploads it with this name. -->
           <button type="button" id="add-emoji">Choose picture…</button>
@@ -765,7 +765,7 @@
           </div>
           <label>
             What happened, or what would you like?
-            <textarea id="feedback-text" maxlength="4000" rows="6" required
+            <textarea id="feedback-text" rows="6" required
               placeholder="For a bug: what you did, what you expected, and what happened instead"></textarea>
           </label>
           <div id="feedback-status" class="status"></div>
@@ -799,7 +799,7 @@
           <form id="new-channel-form">
             <label>
               Name
-              <input id="new-channel-name" maxlength="30" placeholder="e.g. games" autocomplete="off" required>
+              <input id="new-channel-name" placeholder="e.g. games" autocomplete="off" required>
             </label>
             <div class="button-row">
               <button type="submit" value="channel">Add channel</button>
@@ -821,7 +821,7 @@
           <h3>Add a role</h3>
           <form id="new-role-form" class="new-role">
             <input type="color" id="new-role-colour" value="#3ba55c" aria-label="Colour">
-            <input id="new-role-name" maxlength="30" placeholder="e.g. Gamers" autocomplete="off" required aria-label="Name">
+            <input id="new-role-name" placeholder="e.g. Gamers" autocomplete="off" required aria-label="Name">
             <button type="submit">Add role</button>
           </form>
           <div id="role-admin-status" class="status"></div>

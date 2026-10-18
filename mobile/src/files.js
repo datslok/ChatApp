@@ -12,11 +12,7 @@ import * as Sharing from 'expo-sharing';
 import { saveToDownloads } from '../modules/downloads';
 import { SERVER } from './config';
 
-export const MAX_UPLOAD_SIZE = 50 * 1024 * 1024;  // 50 MB, same as the server
-export const MAX_TRAY_FILES = 10;                   // the web page's limit too
-
-// The types the server shows as pictures (server.py's IMAGE_TYPES); anything else is a download.
-export const IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
+export const MAX_TRAY_FILES = 10;  // the web page's limit too
 
 // Upload one file (a tray item: {uri, name, type}). Returns its id from the server; throws an
 // Error with something to show if it failed.

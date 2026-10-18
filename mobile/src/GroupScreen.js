@@ -12,9 +12,8 @@ import { postJson } from './api';
 import { groupName, groupPeople } from './chats';
 import { useStyles, useTheme } from './theme';
 import { Person } from './people';
+import { limits } from './limits';
 
-const MAX_GROUP_SIZE = 10;  // as the server's
-const MAX_NAME = 30;        // (the web page's maxlength; the server's MAX_CHANNEL_NAME)
 
 // A checkbox: a rounded square, filled with a tick when ticked. (Settings → Notifications has some too.)
 export function Checkbox({ checked }) {
@@ -48,7 +47,7 @@ export function GroupDialog({ connection, groupKey, onCreated, onClose }) {
   // The search box: only names containing what's typed; ticked ones always stay in sight.
   const typed = filter.trim().toLowerCase();
   const shown = choices.filter((user) => !typed || chosen.includes(user.id) || user.name.toLowerCase().includes(typed));
-  const full = members.length + chosen.length >= MAX_GROUP_SIZE;  // nobody more can be ticked
+  const full = members.length + chosen.length >= limits.group_size;  // nobody more can be ticked
   const enough = chosen.length >= (group ? 1 : 2);
 
   function toggle(id) {
@@ -71,8 +70,8 @@ export function GroupDialog({ connection, groupKey, onCreated, onClose }) {
   }
 
   const help = group
-    ? `Pick friends to add (up to ${MAX_GROUP_SIZE - members.length} more). They'll see the whole chat.`
-    : `Pick 2 to ${MAX_GROUP_SIZE - 1} friends. Everyone in a group can read and write in it, add their own friends, and leave. Chattus is in every group: write @Chattus to ask him something.`;
+    ? `Pick friends to add (up to ${limits.group_size - members.length} more). They'll see the whole chat.`
+    : `Pick 2 to ${limits.group_size - 1} friends. Everyone in a group can read and write in it, add their own friends, and leave. Chattus is in every group: write @Chattus to ask him something.`;
 
   return (
     <Popup title={group ? 'Add people' : 'New group'} onClose={onClose}>
@@ -117,7 +116,7 @@ export function GroupDialog({ connection, groupKey, onCreated, onClose }) {
             style={[popupStyles.input, styles.nameInput]}
             value={name}
             onChangeText={setName}
-            maxLength={MAX_NAME}
+            maxLength={limits.channel_name}
             placeholder="e.g. Weekend plans"
             placeholderTextColor={colors.textMuted}
           />
@@ -159,7 +158,7 @@ export function RenameDialog({ connection, groupKey, onClose }) {
           value={name}
           onChangeText={setName}
           onSubmitEditing={save}
-          maxLength={MAX_NAME}
+          maxLength={limits.channel_name}
           selectTextOnFocus
           placeholder="e.g. Weekend plans"
           placeholderTextColor={colors.textMuted}

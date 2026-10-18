@@ -21,6 +21,7 @@ import Animated, { useAnimatedStyle, useSharedValue } from 'react-native-reanima
 import { scheduleOnRN } from 'react-native-worklets';
 import Slider from './Slider';
 import { useStyles } from './theme';
+import { limits, megabytes } from './limits';
 
 // Each kind's frame (its shape, at most this big on screen) and the size it's saved at: the web page's
 // CROP_SHAPES. Banners are saved bigger than their frame, as they're shown wide.
@@ -30,7 +31,6 @@ const SHAPES = {
   emoji: { title: 'Edit emoji', width: 160, height: 160, round: false, saveWidth: 128, saveHeight: 128 },
 };
 const MAX_ZOOM = 4;
-const MAX_GIF_SIZE = 10 * 1024 * 1024;  // as the server's: GIFs come whole, so they may be bigger
 const DISPLAY_SIZE = 2048;  // the longest side of the copy shown while editing (see pickPicture)
 
 function clamp(value, low, high) {
@@ -58,7 +58,8 @@ export async function pickPicture() {
   if (result.canceled) return null;
   const asset = result.assets[0];
   if (asset.mimeType === 'image/gif') {
-    if ((asset.fileSize ?? 0) > MAX_GIF_SIZE) throw new Error('GIFs can be at most 10 MB.');
+    // GIFs come whole (the server cuts them), so they have their own, bigger limit.
+    if ((asset.fileSize ?? 0) > limits.gif_size) throw new Error(`GIFs can be at most ${megabytes(limits.gif_size)}.`);
     return { uri: asset.uri, width: asset.width, height: asset.height, gif: true };
   }
   try {

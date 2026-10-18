@@ -9,6 +9,7 @@ import { AppState, Platform } from 'react-native';
 import { SERVER, SOCKET_URL } from './config';
 import { forgetThisPhone } from './notifications';
 import { DEFAULT_APPEARANCE } from './theme';
+import { limits } from './limits';
 
 const PING_EVERY = 15000;     // ms between heartbeat pings while the app is on screen (see pingSent)
 const PONG_WAIT = 6000;       // ms without an answer before the connection counts as dead
@@ -161,6 +162,7 @@ export function useConnection() {
         break;
       case 'welcome':
         myId.current = data.id;
+        Object.assign(limits, data.limits);  // the server's limits (limits.js)
         // max_text_length: the server's limit on a message, so the text box can use the same.
         // season: the seasonal easter egg ({name, emoji or image, video}), or null (Sidebar.js).
         // phonePush: the server can send this app push notifications (it has Firebase's key).
