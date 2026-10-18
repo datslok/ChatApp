@@ -14,7 +14,7 @@ JavaScript for the page, no frameworks.
 
 ## Features
 
-- **Messages:** text channels and direct messages, replies, reactions (every emoji, plus 12 custom
+- **Messages:** text channels and direct messages, replies, reactions (every emoji, plus 24 custom
   emoji per person, animated too), @mentions and @everyone, editing and deleting, formatting
   (`**bold**`, `*italic*`, `` `code` ``, code blocks, quotes, `||spoilers||`), link previews,
   pictures and files (drag, drop or paste), GIF search (GIPHY), unread dots, and history that loads

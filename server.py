@@ -167,7 +167,7 @@ PICTURE_KINDS = {
         "max_size": 512 * 1024, "animated_size": (128, 128),       # 512 KB
     },
 }
-MAX_CUSTOM_EMOJI = 12  # per person
+MAX_CUSTOM_EMOJI = 24  # per person
 EMOJI_NAME_PATTERN = re.compile(r"[A-Za-z0-9_]{2,32}")
 for kind in PICTURE_KINDS.values():
     kind["folder"].mkdir(exist_ok=True)

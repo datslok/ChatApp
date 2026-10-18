@@ -12,7 +12,7 @@ import PictureEditor, { pickPicture } from './PictureEditor';
 import { Button, Field, Form, Help, Status, Title } from './SettingsParts';
 import { useStyles } from './theme';
 
-const MAX_CUSTOM_EMOJI = 12;  // as the server's
+const MAX_CUSTOM_EMOJI = 24;  // as the server's
 const NAME_PATTERN = /^[A-Za-z0-9_]{2,32}$/;
 
 // One emoji: its picture, ":name:" (and whose, for someone else's), Replace and Delete.

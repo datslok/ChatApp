@@ -23,7 +23,7 @@
    - [x] Message ids and times on the page, message grouping and date dividers
    - [x] Replies
    - [x] Reactions, with a full emoji picker (from Unicode's emoji list)
-   - [x] Custom emoji (12 per person, also animated) as reactions
+   - [x] Custom emoji (24 per person, also animated) as reactions
    - [x] Editing and deleting your own messages; admins can edit and delete anyone's (tools/make_admin.py)
    - [x] @mentions and @everyone (stored by user id), with a red unread count per channel
    - [x] Notifications for DMs and mentions (desktop notifications, a generated sound, count in the tab title)
@@ -180,3 +180,7 @@ with Windows, activity detection, zoom, drag-and-drop, hover bars and keyboard s
 - [ ] Android developer verification, before Google enforces it in Norway (worldwide from 2027): register as a developer (the hobbyist account, if it fits 5-20 phones) and the app's package and release key, so our own APKs keep installing. No Play Store needed
 - [ ] Discord-style photo picker in the phone app: our own grid of recent photos under the text box (needs photo access, "limited access" included), which also gives the photos' real names
 - [ ] Soundboard in voice (short clips anyone in a call can play for everyone; uploads like custom emoji, a few built-in ones, its own volume)
+
+## Known limitations
+
+- Chattus only knows 50 custom emoji by name (`MAX_CUSTOM_EMOJI` in chattus.py, the first 50 alphabetically): with 24 per person a busy server can have more, and he can't use or recognise the rest by name

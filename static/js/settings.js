@@ -416,7 +416,7 @@ setUpPictureButtons("banner", changeBannerButton, removeBannerButton, bannerInpu
 
 // ---------- Settings: custom emoji ----------
 
-const MAX_CUSTOM_EMOJI = 12;
+const MAX_CUSTOM_EMOJI = 24;
 let pendingEmojiName = "";  // the name for the emoji being edited/uploaded
 // The emoji getting a new picture ({id, name, ...}), or null when adding a new one. Replacing
 // keeps its id, so the messages and reactions that use it show the new picture.
@@ -454,7 +454,7 @@ function makeEmojiItem(emoji, showOwner) {
   return item;
 }
 
-// Our own custom emoji, each with a Delete button, and "3/12". Admins also see everyone else's.
+// Our own custom emoji, each with a Delete button, and "3/24". Admins also see everyone else's.
 function renderMyEmoji() {
   const mine = customEmoji.filter((emoji) => emoji.owner_id === myId);
   emojiCount.textContent = `Your emoji: ${mine.length}/${MAX_CUSTOM_EMOJI}. Everyone can react with them.`;
