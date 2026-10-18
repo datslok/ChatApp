@@ -68,6 +68,7 @@ the same PC, but the scripts assume two).
 | `setup.ps1` | your PC | makes a conda environment and installs the Python packages |
 | `start.ps1` | your PC | the chat for trying and developing (http://localhost:8001, its own `dev.db`; keys from `dev-secrets.env` if there is one) |
 | `voice.ps1 -Dev` | your PC | voice for development (only reachable from this PC) |
+| `test.ps1` | your PC | runs the test suite against a throwaway server of its own (see [Running the tests](#running-the-tests)) |
 | `scripts\server\install.ps1` | server (as admin) | installs and sets up everything; safe to run again (`-AI`: also the AI bot's model) |
 | `serve.ps1`, `voice.ps1` | server | the chat and voice; scheduled tasks start them at boot |
 | `llama.ps1` | server | the AI bot's language model (optional); a scheduled task starts it at boot |
@@ -934,10 +935,33 @@ example) and they can run it with a double-click. Downloaded files make Windows 
 - `chattus.py`: the AI bot (optional), a separate program that talks to the server like a browser.
 - `livekit.yaml`: LiveKit's settings. `desktop/`: the Windows app. `mobile/`: the native phone app
   (in progress). `tools/`: small helper programs.
+- `tests/`: the test suite (see below).
 - [ROADMAP.md](ROADMAP.md): what's done and what's planned.
 
 The code is written to be read: comments explain the *why*, and there are no build steps. Develop
 with `start.ps1` (it restarts when you save), and try things in two browser windows.
+
+### Running the tests
+
+```powershell
+.	est.ps1                        # everything (about a minute)
+.	est.ps1 tests	est_people.py   # one file
+.	est.ps1 -k block               # only the tests with "block" in their name
+```
+
+The tests start a server of their own on port 8011, with an empty database and uploads folder in a
+temporary folder, so they never touch `chat.db` or `dev.db`, and they can run while `start.ps1` does.
+They use it only from the outside, like the web page and the phone app: HTTP requests and WebSocket
+messages, never server.py's own functions. So they keep passing however the server's code is arranged,
+which is what makes them useful before and after moving code around.
+
+`tests/conftest.py` has the shared parts: the server, `server.person()` (a new account: invited by the
+owner, registered, its email verified, from the link the server prints since there's no mail server),
+and `person.connect()`, the WebSocket (`ws.join("general")`, `ws.say("hi")`, `ws.wait_for("message")`,
+`ws.nothing(...)` for what must not arrive). Outside services stay out: no Firebase, GIPHY or Anthropic
+keys reach the test server, and voice tokens are made without a LiveKit server. Run it after every change
+to the server, and add a test with every new feature or fixed bug. `setup.ps1` installs pytest
+(`requirements-dev.txt`).
 
 **CLAUDE.md** is the original author's instruction file for [Claude Code](https://claude.com/claude-code),
 the AI assistant this project was built with: how they like to work (small steps, explained first)

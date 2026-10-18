@@ -1,0 +1,2 @@
+# Only for working on the code (setup.ps1 installs these too); the server doesn't need them.
+pytest  # runs the test suite in tests/ (test.ps1)

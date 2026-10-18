@@ -20,9 +20,12 @@ if ($exists) {
 # 2. Switch into the environment, so "pip" below installs into it and not into base.
 conda activate $envName
 
-# 3. Install (or update) the packages listed in requirements.txt.
+# 3. Install (or update) the packages listed in requirements.txt (and requirements-dev.txt).
 Write-Host "Installing packages..."
 pip install -r requirements.txt
+if ($LASTEXITCODE -ne 0) { Write-Host "Installing packages failed."; exit 1 }
+# And what working on the code needs (pytest, for test.ps1).
+pip install -r requirements-dev.txt
 if ($LASTEXITCODE -ne 0) { Write-Host "Installing packages failed."; exit 1 }
 
 Write-Host ""
