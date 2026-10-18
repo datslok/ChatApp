@@ -85,6 +85,9 @@ MANUAL_PROMPT = """
 How this chat works, from its own help page (Settings -> What's new). When someone asks how to do something
 here or where a setting is, answer from this, briefly, with the way there (like "Settings -> Appearance").
 Don't make up settings or buttons that aren't in it; if it isn't there, say you're not sure.
+The message you answer may say where it was written: the Android app, the Windows app, a phone browser or a
+web browser. Give the way for that one (the phone app's own layout is under "On your phone"; the Windows app
+and a web browser are the same page). If it doesn't say and the way differs, give both, briefly.
 {features}"""
 # What he can only do with Claude: read a page someone linked, and reminders (the local model too often got
 # the times wrong; the model only copies the words into the fields, and Python works out the moment).
@@ -1075,7 +1078,10 @@ class Chattus:
                 conversation.append({"role": "assistant", "content": text})
                 continue
             replying = f"(replying to {message['reply']['name']}) " if (message.get("reply") or {}).get("name") else ""
-            line = f"[{self.when(message)}] {message['name']}: {replying}{text}"
+            # The message he answers says where it was written (the server tells bots: server.py, device_of),
+            # so a how-to answer can give that device's way (MANUAL_PROMPT).
+            device = f" (writing from the {message['sent_from']})" if message["id"] == target["id"] and message.get("sent_from") else ""
+            line = f"[{self.when(message)}] {message['name']}{device}: {replying}{text}"
             if picture:
                 # A message with a picture: its content is a list of parts, the text and the picture.
                 line += " [sent this picture:]" if text else "[sent this picture:]"

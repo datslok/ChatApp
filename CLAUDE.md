@@ -867,6 +867,12 @@ the point is for me to understand how it works, not just to have it done.
   The chat's manual, with Claude: `load_manual` fetches `/changelog.json` at every start and puts its `features`
   ("## topic" / "- item") into `{manual}` (`MANUAL_PROMPT`: answer how-to and where-is questions from it, with the
   way there, and don't make up settings). ~2,000 tokens; the whole prompt ~2,800.
+  The asker's device (since 2026-10-18, the user's wish): `messages.sent_from` ("android app", "windows app", "phone
+  browser", "web browser"; server.py `device_of` from the connection's "looking": `android` (the phone app sends it),
+  `app`, `mobile`), saved with each message and **sent to bots only** (`send()` strips it with `without_devices` for
+  anyone whose connection isn't `bot`: messages, history/older/pins, search results, chat info items). chattus.py adds
+  "(writing from the android app)" to the target's line; MANUAL_PROMPT says to give that device's way (the app's
+  layout is in What's new, "On your phone"). Tested in tests/test_devices.py (conftest's `bot` fixture: make_bot.py).
   Reminders, only with Claude (Qwen 9B got times wrong; tried and removed on 2026-10-13): `CLAUDE_TOOLS_PROMPT` (put into
   `{claude_tools}` only with Claude; single braces, as a format value) and `remind` in `CLAUDE_ANSWER_SCHEMA`
   ("remind:" -> `ONLY_REMIND_SCHEMA`): what, day (today/tomorrow/weekday/MM-DD), time (HH:MM), in (amount + unit),

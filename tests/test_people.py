@@ -4,8 +4,12 @@ from conftest import befriend, dm_key, unique
 
 
 def friends_of(person):
+    """Someone's friends message, without bots (every bot is everyone's friend: server.py, befriend_bots)."""
     with person.connect() as ws:
-        return ws.wait_for("friends")
+        friends = ws.wait_for("friends")
+        bots = {user["id"] for user in ws.wait_for("users")["users"] if user["bot"]}
+    return {key: [i for i in value if i not in bots] if isinstance(value, list) else value
+            for key, value in friends.items()}
 
 
 def user_entry(ws, person):

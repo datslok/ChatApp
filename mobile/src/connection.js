@@ -149,9 +149,11 @@ export function useConnection() {
   }
 
   // Tell the server whether the app is on screen, and that this is a phone: like the web
-  // page's "looking", so we don't turn idle while using the app (and others see a phone).
+  // page's "looking", so we don't turn idle while using the app (and others see a phone). android:
+  // the app, not a phone's browser (the server remembers each message's device for Chattus, who then
+  // explains the app's way to a setting: server.py, device_of).
   function sendLooking() {
-    send({ type: 'looking', looking: AppState.currentState === 'active', mobile: true });
+    send({ type: 'looking', looking: AppState.currentState === 'active', mobile: true, android: true });
   }
 
   function handle(data) {

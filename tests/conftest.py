@@ -210,8 +210,9 @@ class Socket:
 class Server:
     """The running test server: makes people, and reads the emails it would have sent."""
 
-    def __init__(self, log_path):
+    def __init__(self, log_path, work=None):
         self.log_path = log_path
+        self.work = work  # the temporary folder with its database and uploads
         self.owner = None
 
     def log(self):
@@ -299,7 +300,7 @@ def server(tmp_path_factory):
             cwd=REPO, env=env, stdout=log, stderr=subprocess.STDOUT,
         )
         try:
-            started = Server(log_path)
+            started = Server(log_path, work)
             deadline = time.monotonic() + 60
             while not _up():
                 if process.poll() is not None or time.monotonic() > deadline:
@@ -332,6 +333,25 @@ def _up():
 def owner(server):
     """The first account: owner and admin."""
     return server.owner
+
+
+@pytest.fixture(scope="session")
+def bot(server):
+    """A bot account, like Chattus (users.is_bot): made by tools/make_bot.py in the test database, as on a
+    real server, and logged in with the password it writes into its env file."""
+    env_file = server.work / "bot.env"
+    subprocess.run(
+        [sys.executable, "tools/make_bot.py", "--name", "TestBot", "--db", str(server.work / "test.db"),
+         "--uploads", str(server.work / "uploads"), "--env", str(env_file)],
+        cwd=REPO, check=True, capture_output=True,
+    )
+    password = re.search(r"CHATTUS_PASSWORD=(\S+)", env_file.read_text(encoding="utf-8"))[1]
+    testbot = Person("TestBot", None, "10.254.0.1")
+    reply = testbot.post("/login", {"username": "TestBot", "password": password})
+    assert reply.status == 200, reply
+    with testbot.connect() as ws:
+        testbot.id = ws.wait_for("welcome")["id"]
+    return testbot
 
 
 @pytest.fixture

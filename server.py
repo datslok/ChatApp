@@ -244,7 +244,8 @@ db.execute("""
         edited_at     TEXT,                             -- when it was last edited; NULL = never
         kind          TEXT,                             -- NULL = a normal message, "call" = a call note, "pin" = a pin note
         pinned_at     TEXT,                             -- when it was pinned; NULL = not pinned
-        pinned_by     INTEGER REFERENCES users(id)      -- who pinned it
+        pinned_by     INTEGER REFERENCES users(id),     -- who pinned it
+        sent_from     TEXT                              -- the device (see device_of); NULL = unknown
     )
 """)
 db.execute("""
@@ -628,6 +629,11 @@ if "pinned_at" not in table_columns("messages"):
         db.execute("ALTER TABLE messages ADD COLUMN pinned_at TEXT")  # when it was pinned; NULL = not pinned
         db.execute("ALTER TABLE messages ADD COLUMN pinned_by INTEGER REFERENCES users(id)")  # who pinned it
 
+if "sent_from" not in table_columns("messages"):
+    # From before devices were remembered: we don't know where older messages were sent from (NULL).
+    with db:
+        db.execute("ALTER TABLE messages ADD COLUMN sent_from TEXT")
+
 # Search: a full-text index of every message's text (SQLite's FTS5), like the index at the back of a
 # book: for each word, which messages have it, so finding one is a lookup instead of reading every
 # message. "content='messages'": the index doesn't keep its own copy of the text, it points to the
@@ -922,15 +928,16 @@ def iso_time(sqlite_time):
     return sqlite_time.replace(" ", "T") + "Z"
 
 
-def save_message(channel, user_id, text, file, reply_to, kind=None):
-    """Save a message (kind: None for a normal one, "call" for a call note). Returns its id and
-    time, so the live message matches the history exactly."""
+def save_message(channel, user_id, text, file, reply_to, kind=None, sent_from=None):
+    """Save a message (kind: None for a normal one, "call" for a call note; sent_from: the device it
+    came from, see device_of). Returns its id and time, so the live message matches the history exactly."""
     # "with db" commits the change when the block ends (or undoes it if something fails).
     # The ? placeholders keep user text as data, so it can never be run as SQL.
     with db:
         cursor = db.execute(
-            "INSERT INTO messages (channel, user_id, text, attachment_id, reply_to, kind) VALUES (?, ?, ?, ?, ?, ?)",
-            (channel, user_id, text, file["id"] if file else None, reply_to, kind),
+            "INSERT INTO messages (channel, user_id, text, attachment_id, reply_to, kind, sent_from)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (channel, user_id, text, file["id"] if file else None, reply_to, kind, sent_from),
         )
     message_id = cursor.lastrowid  # the id SQLite gave it
     sent_at = db.execute("SELECT sent_at FROM messages WHERE id = ?", (message_id,)).fetchone()[0]
@@ -1018,7 +1025,7 @@ def reactions_for(message_ids):
 # And its link preview, if it got one (link_previews).
 MESSAGES_QUERY = """
     SELECT messages.id, messages.sent_at, messages.edited_at, messages.reply_to, messages.kind,
-           messages.pinned_at, messages.user_id, COALESCE(users.username, messages.legacy_name), messages.text,
+           messages.pinned_at, messages.sent_from, messages.user_id, COALESCE(users.username, messages.legacy_name), messages.text,
            attachments.id, attachments.filename, attachments.size, attachments.content_type,
            link_previews.url, link_previews.site, link_previews.title, link_previews.description,
            link_previews.image,
@@ -1051,8 +1058,9 @@ def message_dicts(rows):
             "kind": kind,  # None, "call" for a call note, "pin" for a pin note
             "pinned": pinned_at is not None,
             "preview": preview_info(*rest[:5]) if rest[0] else None,  # rest: the preview, then the original
+            "sent_from": sent_from,  # (bots only: send() takes it out for everyone else)
         }
-        for (message_id, sent_at, edited_at, reply_to, kind, pinned_at, user_id, name, text,
+        for (message_id, sent_at, edited_at, reply_to, kind, pinned_at, sent_from, user_id, name, text,
              file_id, filename, size, content_type, *rest) in rows
     ]
 
@@ -5344,9 +5352,42 @@ async def announce_new_message(channel, mentioned=(), message=None):
             await send(websocket, update)
 
 
+# Which device a message was sent from ("sent_from"): saved with it, and given to bots only, so Chattus can
+# explain the way to a setting for the device someone asks on. People's pages never get it: a phone dot while
+# you're online is one thing, "from the phone at 03:12" kept on every message is more than anyone asked to share.
+
+def device_of(client):
+    """What a connection is, from what its page says in "looking": "android app", "windows app",
+    "phone browser" or "web browser"."""
+    if client["android"]:
+        return "android app"
+    if client["app"]:
+        return "windows app"
+    return "phone browser" if client["mobile"] else "web browser"
+
+
+def without_devices(data):
+    """A WebSocket message without any message's "sent_from": on a message itself, or on each one in
+    a list of them ("history", "older" and "pins" have "messages", search "results", chat info "items")."""
+    def strip(message):
+        return {key: value for key, value in message.items() if key != "sent_from"}
+
+    if "sent_from" in data:
+        data = strip(data)
+    for key in ("messages", "results", "items"):
+        if isinstance(data.get(key), list):
+            data = {**data, key: [strip(item) if isinstance(item, dict) else item for item in data[key]]}
+    return data
+
+
 async def send(websocket, data):
     """Send to one connection, ignoring errors: if that tab just closed, its own
-    chat() call notices and cleans up, so a failure here must not crash the sender."""
+    chat() call notices and cleans up, so a failure here must not crash the sender.
+    Every WebSocket message goes through here, so this is where messages' devices are taken out for
+    everyone but bots (see device_of)."""
+    client = clients.get(websocket)
+    if client is None or not client["bot"]:
+        data = without_devices(data)
     try:
         await websocket.send_json(data)
     except Exception:
@@ -5427,6 +5468,8 @@ async def chat(websocket: WebSocket):
                           "away_since": time.time(),  # since when it isn't (None while it is): for "idle"
                           "app": False,      # the Windows app (the page says so in "looking" too)
                           "mobile": False,   # a phone (in "looking" too): see on_phone_only
+                          "android": False,  # the Android app, not a phone's browser ("looking" too): device_of
+                          "bot": is_bot(user_id),  # a bot gets each message's device (see send)
                           "activity": None}  # what they're doing, if this page says (see "activity")
     try:
         # Tell the page who it is (the id is for building DM names).
@@ -5549,7 +5592,8 @@ async def chat(websocket: WebSocket):
                 text = expand_custom_emoji(text)  # :pog: -> <:17>
                 text, mentioned, everyone = expand_mentions(text)  # @kari -> <@2>
                 reply_to = check_reply(data.get("reply_to"), channel)
-                message_id, sent_at = save_message(channel, user_id, text, file, reply_to)
+                sent_from = device_of(clients[websocket])
+                message_id, sent_at = save_message(channel, user_id, text, file, reply_to, sent_from=sent_from)
                 mentioned_people = save_mentions(message_id, channel, user_id, mentioned, everyone)
                 # The name comes from the login (looked up now, so it's always the current one),
                 # never from the client.
@@ -5563,6 +5607,7 @@ async def chat(websocket: WebSocket):
                     "pinned": False,
                     "preview": None,  # a link's preview comes a moment later, as its own "preview"
                     "nonce": nonce,  # the app's tag (or None): its faded copy in the outbox goes as this comes
+                    "sent_from": sent_from,  # (bots only, see send)
                 }
                 await send_to_channel(channel, message)  # everyone in the channel, including us
                 if nonce is not None:
@@ -5765,6 +5810,7 @@ async def chat(websocket: WebSocket):
                     clients[websocket]["away_since"] = None if looking else time.time()
                 clients[websocket]["looking"] = looking
                 clients[websocket]["app"] = data.get("app") is True  # (then no pushes at all: has_app_open)
+                clients[websocket]["android"] = data.get("android") is True
                 mobile = data.get("mobile") is True
                 phone_changed = mobile != clients[websocket]["mobile"]
                 clients[websocket]["mobile"] = mobile
