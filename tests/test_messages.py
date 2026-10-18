@@ -1,6 +1,14 @@
 """Messages: sending, who may write where, history and scrolling up, editing and deleting, replies,
-reactions, mentions and unread counts, pins, typing, search, and a DM's chat info tabs."""
-from conftest import befriend, dm_key, unique
+reactions, mentions and unread counts, pins, typing, search, a DM's chat info tabs, and connections that
+stop reading."""
+import base64
+import json
+import os
+import socket
+import struct
+import time
+
+from conftest import PORT, befriend, dm_key, unique
 
 
 def from_user(person):
@@ -463,3 +471,50 @@ def test_ping(person):
     with person.connect() as ws:
         ws.send(type="ping")
         ws.wait_for("pong")
+
+
+# ----- A connection that stops reading (a phone that lost its signal)
+
+def text_frame(text):
+    """One WebSocket text frame as a client sends it (masked, as the protocol requires)."""
+    payload = text.encode()
+    mask = os.urandom(4)
+    size = bytes([0x80 | len(payload)]) if len(payload) < 126 else bytes([0x80 | 126]) + struct.pack(">H", len(payload))
+    return bytes([0x81]) + size + mask + bytes(byte ^ mask[i % 4] for i, byte in enumerate(payload))
+
+
+def never_reading(person, channel):
+    """A raw connection that joins a channel and then never reads again: the server's buffer for it fills up."""
+    cookie = "; ".join(f"{c.name}={c.value}" for c in person.cookies)
+    raw = socket.socket()
+    raw.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 4096)
+    raw.connect(("127.0.0.1", PORT))
+    key = base64.b64encode(os.urandom(16)).decode()
+    raw.sendall((f"GET /ws HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
+                 f"Sec-WebSocket-Key: {key}\r\nSec-WebSocket-Version: 13\r\nCookie: {cookie}\r\n\r\n").encode())
+    time.sleep(0.5)
+    raw.sendall(text_frame(json.dumps({"type": "join", "channel": channel})))
+    return raw
+
+
+def test_a_connection_that_stops_reading_holds_nobody_up(server, channel):
+    stuck, talker, newcomer = server.person("stuck"), server.person("talker"), server.person("newcomer")
+    raw = never_reading(stuck, channel)
+    time.sleep(0.5)
+    try:
+        with talker.connect() as ws:
+            ws.join(channel)
+            # ~200 KB into the stuck one's channel: far more than its buffers hold (63 of these filled them).
+            for number in range(100):
+                text = f"{number} " + "x" * 1900
+                ws.send(type="message", text=text)
+                # (once, up to 5 s while the server gives up on the stuck one: see SEND_TIMEOUT)
+                ws.wait_for("message", lambda message: message["text"] == text, timeout=10)
+        with newcomer.connect() as fresh:
+            # A new connection gets everything and answers within the phone app's 6 s (it got stuck at "users").
+            users = {user["id"]: user for user in fresh.wait_for("users")["users"]}
+            assert not users[stuck.id]["online"]  # given up on and cleaned up like a closed connection
+            fresh.send(type="ping")
+            fresh.wait_for("pong", timeout=6)
+    finally:
+        raw.close()

@@ -200,7 +200,13 @@ the point is for me to understand how it works, not just to have it done.
   with `channel` and `nonce`, again at every onopen; gone on "message" with its nonce or "sent"; failed after
   30 s or "not_sent"; ChatScreen `PendingMessage` faded, "Sending…" after 1.5 s, Retry / Delete). server.py:
   "ping" -> "pong", a message may name its `channel`, `recent_nonces` (10 min, memory) confirms a repeat
-  without saving it twice, "sent"/"not_sent" to the sending page, `nonce` in "message". The web page doesn't use them. Expo's dev-menu gear can cover the top bar's buttons in development builds: drag it.
+  without saving it twice, "sent"/"not_sent" to the sending page, `nonce` in "message". The web page doesn't use them.
+  Stuck connections (2026-10-19, mongri's report: phones reconnecting in a loop for up to a minute): a connection
+  that stops reading fills its buffer and uvicorn's send then waits; we send to everyone one after another, so it
+  held up every sender, and new connections hung at `announce_presences` without answering pings. server.py `send`:
+  `SEND_TIMEOUT` 5 s, then the client is marked `stuck` (skipped) and its chat() task cancelled (cleaned up like a
+  close). tests/test_messages.py `never_reading` reproduces it. The app: `OPEN_WAIT` 10 s for a connection still
+  opening (React Native waits for the upgrade's answer for ever), onopen closes one already replaced. Expo's dev-menu gear can cover the top bar's buttons in development builds: drag it.
   The rest of parity (2026-10-16, needs the APK after 1.0.2): `src/VerifyScreen.js` (verify.html; LoginScreen asks
   /verify/status at mount and after logging in, polls every 5 s); `src/MessageBanner.js` (notifications.js `banner` from
   "unread"'s notify and new requests, only while active and not quiet; setting `banner`; tap -> App.js `goToNotice`,

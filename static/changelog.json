@@ -123,6 +123,12 @@
   ],
   "changes": [
     {
+      "date": "2026-10-19",
+      "items": [
+        "🔌 Fixed: the Android app could get stuck reconnecting, or trying to reach the server, for up to a minute when you opened it. One phone that had lost its signal could hold the server up for everyone else's phones. Thanks for reporting it!"
+      ]
+    },
+    {
       "date": "2026-10-18",
       "items": [
         "🖼️ Several pictures sent at once now go in one message, as a grid like on Discord, instead of one message each (files too, listed under them; the text goes with them all). Click one to see it big and go through the others with ‹ › or the arrow keys (swipe in the Android app)",

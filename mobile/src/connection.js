@@ -13,6 +13,7 @@ import { limits } from './limits';
 
 const PING_EVERY = 15000;     // ms between heartbeat pings while the app is on screen (see pingSent)
 const PONG_WAIT = 6000;       // ms without an answer before the connection counts as dead
+const OPEN_WAIT = 10000;      // ms a new connection may take to open before we try again (see connectStarted)
 const SEND_GIVE_UP = 30000;   // ms before an unconfirmed message turns red (Retry, Delete)
 
 // The newest emoji version each Android draws (its API level -> Unicode's emoji version): newer
@@ -127,6 +128,10 @@ export function useConnection() {
   // so we connect again straight away.
   const pingSent = useRef(null);   // when our unanswered ping went out, or null
   const lastPing = useRef(0);
+  // When the connection being opened was started. Android gives up by itself when it can't reach the
+  // server at all, but once Cloudflare has taken the connection it waits for our server's answer for
+  // ever; so the heartbeat tries again after OPEN_WAIT.
+  const connectStarted = useRef(0);
   const myId = useRef(null);            // our own id (from "welcome"), for the socket's handlers
   const newWhileAway = useRef(false);   // this time away already moved the NEW line (see "message")
 
@@ -409,9 +414,16 @@ export function useConnection() {
     pingSent.current = null;
     const ws = new WebSocket(SOCKET_URL);  // Android sends the login cookie along by itself
     socket.current = ws;
+    connectStarted.current = Date.now();
     setStatus((old) => (old === 'online' ? 'online' : 'connecting'));
 
     ws.onopen = () => {
+      // One we gave up on that opened after all: close it (a connection still opening can't be closed
+      // yet, so the heartbeat only leaves it behind), or the server would keep it as an extra page.
+      if (socket.current !== ws) {
+        ws.close();
+        return;
+      }
       retryDelay.current = 1000;  // it worked: next time start from 1 second again
       firstUnread.current = true;
       setStatus('online');
@@ -455,10 +467,14 @@ export function useConnection() {
   }
 
   // Every 2 seconds: a ping unanswered too long means a dead connection (connect again now and drop the
-  // old one; its "close", whenever it comes, is ignored); time for the next ping; outbox messages waiting too long.
+  // old one; its "close", whenever it comes, is ignored), and so does one still opening after OPEN_WAIT;
+  // time for the next ping; outbox messages waiting too long.
   function heartbeat() {
     const now = Date.now();
-    if (pingSent.current !== null && now - pingSent.current > PONG_WAIT) {
+    const opening = socket.current?.readyState === WebSocket.CONNECTING;
+    if (opening && now - connectStarted.current > OPEN_WAIT) {
+      connect();  // (the old one is left to onopen above, if it ever opens)
+    } else if (pingSent.current !== null && now - pingSent.current > PONG_WAIT) {
       const dead = socket.current;
       connect();
       dead?.close();

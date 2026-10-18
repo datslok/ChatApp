@@ -36,6 +36,7 @@ from PIL import Image, ImageSequence
 from pydantic import BaseModel
 from pywebpush import WebPushException, webpush
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.websockets import WebSocketDisconnected
 
 # docs_url etc. = None: turn off FastAPI's automatic API explorer pages (/docs, /redoc),
 # handy in development but nothing the public internet needs to see.
@@ -5457,16 +5458,33 @@ def without_devices(data):
     return data
 
 
+# Stuck connections: a connection whose other end stopped reading (a phone that lost its signal, with
+# nobody hearing of it yet) fills up its outgoing buffer, and then sending to it waits until there's room,
+# which may be minutes. Everyone is sent to one after another, so that wait held up whoever was sending:
+# a new connection got stuck in its first "users" and never answered the phone app's ping, which then
+# reconnected, and got stuck again (a reconnecting loop, for up to a minute). So a send that can't go out
+# within SEND_TIMEOUT gives up on the connection: it's marked "stuck", skipped from then on, and its chat()
+# is stopped, which cleans up after it like any closed connection (its phone simply connects again).
+# (5 s: a working connection drains far faster, and it's below the phone app's 6 s wait for an answer.)
+SEND_TIMEOUT = 5
+
+
 async def send(websocket, data):
     """Send to one connection, ignoring errors: if that tab just closed, its own
     chat() call notices and cleans up, so a failure here must not crash the sender.
     Every WebSocket message goes through here, so this is where messages' devices are taken out for
     everyone but bots (see device_of)."""
     client = clients.get(websocket)
+    if client is not None and client["stuck"]:
+        return  # given up on (see "Stuck connections")
     if client is None or not client["bot"]:
         data = without_devices(data)
     try:
-        await websocket.send_json(data)
+        await asyncio.wait_for(websocket.send_json(data), SEND_TIMEOUT)
+    except TimeoutError:
+        if client is not None:
+            client["stuck"] = True
+            client["task"].cancel()  # its chat() ends (see the end of chat())
     except Exception:
         pass
 
@@ -5548,7 +5566,9 @@ async def chat(websocket: WebSocket):
                           "mobile": False,   # a phone (in "looking" too): see on_phone_only
                           "android": False,  # the Android app, not a phone's browser ("looking" too): device_of
                           "bot": is_bot(user_id),  # a bot gets each message's device (see send)
-                          "activity": None}  # what they're doing, if this page says (see "activity")
+                          "activity": None,  # what they're doing, if this page says (see "activity")
+                          "stuck": False,    # not reading what we send: given up on (see "Stuck connections")
+                          "task": asyncio.current_task()}  # this chat() call, for stopping it then
     try:
         # Tell the page who it is (the id is for building DM names).
         await send(websocket, {
@@ -5968,8 +5988,12 @@ async def chat(websocket: WebSocket):
                 call = calls.get(data.get("channel"))
                 if call is not None and call["caller"] == user_id and call["started"] is None:
                     await end_call(data.get("channel"), "cancelled")
-    except WebSocketDisconnect:
-        pass
+    except (WebSocketDisconnect, WebSocketDisconnected):
+        pass  # closed (WebSocketDisconnected: a send to it had already failed, so starlette knew first)
+    except asyncio.CancelledError:
+        if not clients[websocket]["stuck"]:
+            raise  # (the server is shutting down)
+        # send() gave up on it (see "Stuck connections"): it ends here, cleaned up below.
     finally:
         voice_room = clients[websocket]["voice"]
         gone = clients.pop(websocket)
