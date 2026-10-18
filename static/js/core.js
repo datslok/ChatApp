@@ -572,6 +572,7 @@ function handleServerMessage(event) {
       newWhileAway = true;
     }
     showMessage(data);
+    chatInfoNews("message", data);  // (chat-info.js: a new picture, file or link in its open tab)
     // In the channel we're in, but the tab is hidden or the window isn't focused:
     // a DM or a mention still notifies, and counts in the tab title until we're back.
     // In a muted chat only when we're named in it, or an admin wrote it (like the server's save_mentions).
@@ -590,6 +591,7 @@ function handleServerMessage(event) {
       message.preview = data.preview;
       redrawMessages();
     }
+    chatInfoNews("preview", data);
   } else if (data.type === "edited") {
     // A message was edited: update it in our list (and quotes of it in replies), then redraw.
     const edited = shownMessages.find((message) => message.id === data.message_id);
@@ -603,6 +605,7 @@ function handleServerMessage(event) {
       }
     }
     redrawMessages();
+    chatInfoNews("edited", data);
   } else if (data.type === "deleted") {
     // A message was deleted: take it out of our list, mark replies to it, and redraw.
     shownMessages = shownMessages.filter((message) => message.id !== data.message_id);
@@ -614,6 +617,7 @@ function handleServerMessage(event) {
     if (editingId === data.message_id) editingId = null;
     redrawMessages();
     if (pinsDialog.open) sendToServer({ type: "pins" });  // (it may have been pinned)
+    chatInfoNews("deleted", data);
   } else if (data.type === "pinned") {
     // A message was pinned or unpinned (by anyone): its 📌 button, and the list if it's open.
     const message = shownMessages.find((m) => m.id === data.message_id);
@@ -622,8 +626,12 @@ function handleServerMessage(event) {
       redrawMessages();
     }
     if (pinsDialog.open) sendToServer({ type: "pins" });
+    chatInfoNews("pinned", data);
   } else if (data.type === "pins") {
     showPins(data.messages);  // the 📌 list (messages.js)
+    showChatInfoPins(data.messages);  // and the chat info panel's Pins tab (chat-info.js), if that asked
+  } else if (data.type === "chat_info") {
+    showChatInfo(data);  // the chat info panel's Media, Links or Files (chat-info.js)
   } else if (data.type === "pins_full") {
     showUploadError(`This chat already has ${data.max} pinned messages: unpin one first.`);
   } else if (data.type === "typing") {
@@ -694,6 +702,7 @@ function joinCurrentChannel() {
   jumpLoading = null;          // (messages.js: loading older messages to reach one, in the old channel)
   clearReply();                // a reply belongs to the channel we just left
   clearTyping();
+  closeChatInfo();             // (chat-info.js: its tabs belonged to the chat we left)
   // Show the People page (FRIENDS), the Lounge page or the channel: one of them.
   const inFriends = currentChannel === FRIENDS;
   const inLounge = currentChannel === LOUNGE;

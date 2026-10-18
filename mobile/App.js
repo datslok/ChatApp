@@ -94,7 +94,7 @@ function Main({ connection, voice, notifications, openChatRef, share, onShareDon
   const { channels, unread, mentions, incoming } = connection;
   const [view, setView] = useState(null);      // the chat on screen (its key), or PEOPLE
   const [drawer, setDrawer] = useState(null);  // the open drawer: "left", "right" or null
-  // The chat's popup that's open ("search" or "pins", from the top bar's buttons), or null. The chat
+  // The chat's popup that's open ("search" or "pins" from the top bar's buttons, "info" from the chat's name), or null. The chat
   // screen draws it: its Jump buttons go to messages there.
   const [popup, setPopup] = useState(null);
   // The popup or menu about people and groups that's open, drawn over everything here (each closes
@@ -307,7 +307,7 @@ function Main({ connection, voice, notifications, openChatRef, share, onShareDon
           <Text numberOfLines={1} style={styles.title}>{view === PEOPLE ? 'People' : 'Lounge'}</Text>
         ) : (
           <>
-            <ChatTitle connection={connection} chatKey={view} />
+            <ChatTitle connection={connection} chatKey={view} onInfo={() => setPopup('info')} />
             {/* Mute, search, pins (and call): the web page's #dm-header buttons, here in the top bar itself. */}
             <ChatButtons
               connection={connection} voice={voice} chatKey={view} onPopup={setPopup}

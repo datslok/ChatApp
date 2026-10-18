@@ -88,6 +88,10 @@ export function useConnection() {
   // is open (a ref: the socket's handlers need it, to ask again when a pin changes).
   const [pins, setPins] = useState(null);
   const pinsOpen = useRef(false);
+  // The chat info screen while it's open (ChatInfoScreen.js): {batch(data), news(kind, data)}, told about
+  // its batches ("chat_info") and about changes in the chat that may change its tab. A ref, set by
+  // watchChatInfo: the socket's handlers call it, and nothing here needs to redraw for it.
+  const chatInfoWatcher = useRef(null);
   // The newest search's answer, {ask, results}: ask numbers our searches (search() returns it), so
   // the search screen can tell an older search's answer (typing fast) from the one it waits for.
   const [searchResults, setSearchResults] = useState(null);
@@ -222,6 +226,10 @@ export function useConnection() {
       case 'pins_full':
         setPinsFull({ max: data.max });
         break;
+      case 'chat_info':
+        // A batch of the open chat's media, links or files (the server's "Chat info").
+        if (data.channel === currentRef.current) chatInfoWatcher.current?.batch(data);
+        break;
       case 'search_results':
         // (From any chat: not checked against the one we're in.)
         if (data.ask === searchAsk.current) setSearchResults({ ask: data.ask, results: data.results });
@@ -248,6 +256,7 @@ export function useConnection() {
           setMessages((old) => old?.map((message) => (message.id === data.message_id
             ? { ...message, preview: data.preview }
             : message)));
+          chatInfoWatcher.current?.news('preview', data);
         }
         break;
       case 'unread': {
@@ -295,6 +304,7 @@ export function useConnection() {
             ? { ...message, pinned: data.pinned }
             : message)));
           if (pinsOpen.current) send({ type: 'pins' });  // the 📌 list is open: ask for it afresh
+          chatInfoWatcher.current?.news('pinned', data);
         }
         break;
       case 'message':
@@ -312,6 +322,7 @@ export function useConnection() {
           }
           setMessages((old) => [...(old ?? []), data]);
           stopTyping(data.name);  // their message is here: they're done typing it
+          chatInfoWatcher.current?.news('message', data);
         }
         break;
       case 'edited':
@@ -319,6 +330,7 @@ export function useConnection() {
           setMessages((old) => old?.map((message) => (message.id === data.message_id
             ? { ...message, text: data.text, edited_at: data.edited_at }
             : message)));
+          chatInfoWatcher.current?.news('edited', data);
         }
         break;
       case 'deleted':
@@ -330,6 +342,7 @@ export function useConnection() {
               ? { ...message, reply: { id: data.message_id, deleted: true } }
               : message)));
           if (pinsOpen.current) send({ type: 'pins' });  // (it may have been pinned)
+          chatInfoWatcher.current?.news('deleted', data);
         }
         break;
       case 'reactions':
@@ -604,6 +617,18 @@ export function useConnection() {
     pinsOpen.current = false;
     setPins(null);
   }
+  // The chat info screen (ChatInfoScreen.js): it gives its watcher while it's open (the returned function
+  // takes it away again), and asks for a tab's batches: tab "media", "links" or "files", before a message
+  // id or null for the newest. The answers go to watcher.batch.
+  function watchChatInfo(watcher) {
+    chatInfoWatcher.current = watcher;
+    return () => {
+      if (chatInfoWatcher.current === watcher) chatInfoWatcher.current = null;
+    };
+  }
+  function askChatInfo(tab, before) {
+    send({ type: 'chat_info', tab, before });
+  }
   // Search: words, a chat's key or null (everywhere we can see), a person's id or null (anyone).
   // Returns this search's number; its answer comes as `searchResults` with the same `ask`.
   // (Any answer still on its way for an earlier search is from then on ignored.)
@@ -665,7 +690,7 @@ export function useConnection() {
     searchResults, voiceMembers, dmCalls, callListener, notifyListener,
     outbox, retryMessage, discardMessage,
     openChat, closeChat, loadOlder, sendMessage, sendTyping, react, pin, editMessage, deleteMessage,
-    friendAction, mute, pinChat, openPins, closePins, search, setPresence, logout, sendVoice, ring, answerCall, cancelCall,
+    friendAction, mute, pinChat, openPins, closePins, watchChatInfo, askChatInfo, search, setPresence, logout, sendVoice, ring, answerCall, cancelCall,
     reconnect: connect,  // after logging in
   };
 }

@@ -30,6 +30,7 @@
         "Block someone: Block in their profile (click their name or picture). You stop being friends, they can't send you requests or reach you, and their messages are hidden for you (\"Show\" to see one). They aren't told. Unblock them in their profile or on the People page's Blocked tab. Admins and bots can't be blocked",
         "Direct messages are sorted by the latest message, newest at the top. Pin your favourites to the top: right-click someone (hold on a phone) → Pin DM, or Pin at the top of a group (on a phone: hold the group in the list, or its ⋯ button)",
         "Group DMs: the + next to \"Direct messages\" starts a private chat with 2 to 9 friends. At the top of a group: Add people (your own friends), Rename and Leave. Every message there notifies the others, like a DM. 📞 Call rings everyone in the group; whoever answers joins, and the rest can join later from the call banner. Chattus is in every group: write @Chattus to ask him something there",
+        "Click the name at the top of a DM or group (tap it on a phone) for its Members, Media (every picture and video, click one to see it big), Pins, Links and Files, each with Jump to go to its message. Click the name again or × to close it",
         "Online and offline people on the right, and \"is typing…\" under the messages",
         "Roles: admins make roles with a colour in Settings → Admin → Roles and give them to people. A role colours its people's names and gives them a section in the member list; the roles show in their profile",
         "The member list on the right shows who's in the chat you're in: everyone in a channel, the two of you in a DM, the members of a group. The 👥 button at the top of the chat hides it (and shows it again)",
@@ -124,6 +125,7 @@
         "😺 Room for twice as many custom emoji: up to 24 each in Settings → Emoji",
         "🖼️ The picture editor (profile pictures, banners and custom emoji) opens with the whole picture showing, so a wide or tall picture fits in the frame: zoom in to fill it, or save it like that and the empty part stays see-through",
         "🔠 The text size (and the Windows app's scale) is now each device's own: a bigger text on your phone no longer changes your PC. Theme, colours and font still follow your account",
+        "🗂️ Click the name at the top of a DM or group (tap it in the phone app) to see its members, pictures and videos, pinned messages, links and files, like on Discord",
         "👥 Hide the member list on the right with the 👥 button at the top of the chat, like on Discord. Click it again to bring the list back"
       ]
     },

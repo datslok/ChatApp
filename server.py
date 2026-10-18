@@ -1083,6 +1083,45 @@ def pinned_messages(channel):
     return message_dicts(rows)
 
 
+# ---------- Chat info (a DM's or group's Media, Links and Files tabs) ----------
+#
+# Clicking a DM's or group's name opens a panel with tabs (the page's chat-info.js; the phone's
+# ChatInfoScreen.js). Members and Pins come from what the page already has and from "pins"; these three
+# are asked for here: {"type": "chat_info", "tab": "media", "before": null}. The newest CHAT_INFO_BATCH
+# messages with a picture or video ("media"), another file ("files") or a link ("links"; each with its
+# "links"), newest first. `before` (a message id) pages on, like scrolling up in the chat: ids only grow,
+# so "older" is "a smaller id". Only for the chat the connection is in, so can_join is the one gate.
+
+CHAT_INFO_BATCH = 50
+CHAT_INFO_TABS = {"media", "files", "links"}
+
+
+def chat_info(channel, tab, before=None):
+    """One batch of a chat's media, files or links: {"items": [messages], "more": True if there may be
+    more, "oldest": the id to ask `before` next}."""
+    shown = ", ".join("?" * len(SHOWN_TYPES))  # one "?" per type: "?, ?, ?" (the types go in as values)
+    if tab == "media":
+        what, values = f"attachments.content_type IN ({shown})", list(SHOWN_TYPES)
+    elif tab == "files":
+        what, values = f"attachments.id IS NOT NULL AND attachments.content_type NOT IN ({shown})", list(SHOWN_TYPES)
+    else:  # links: a quick first look in SQL, then message_links finds the real ones
+        what, values = "(messages.text LIKE '%http://%' OR messages.text LIKE '%https://%')", []
+    rows = db.execute(
+        MESSAGES_QUERY + f" WHERE messages.channel = ? AND messages.id < ? AND messages.kind IS NULL AND {what}"
+        " ORDER BY messages.id DESC LIMIT ?",
+        # No `before`: SQLite's biggest whole number, so every message gets through (like recent_messages).
+        [channel, before if before is not None else 2**63 - 1, *values, CHAT_INFO_BATCH],
+    ).fetchall()
+    items = message_dicts(rows)
+    if tab == "links":
+        for item in items:
+            item["links"] = message_links(item["text"])
+        # ("https://" only inside `code`: no links after all. It still counts for "more": it was a row.)
+        items = [item for item in items if item["links"]]
+    # oldest: the next batch's `before` (the last row's id, even if links left it out).
+    return {"items": items, "more": len(rows) == CHAT_INFO_BATCH, "oldest": rows[-1][0] if rows else None}
+
+
 MAX_SEARCH_RESULTS = 50
 MAX_SEARCH_WORDS = 10
 
@@ -4833,19 +4872,26 @@ preview_times = {}                # user id -> times of their recent previews (f
 background_tasks = set()          # running previews (asyncio only keeps a weak reference to tasks)
 
 
-def first_link(text):
-    """The first web address in a message, as the page shows it (static/js/messages.js), or None.
-    Not one inside `code` or a code block: those are shown as typed, not as links."""
+def message_links(text):
+    """Every web address in a message, in order and without repeats, as the page shows them
+    (static/js/messages.js). Not ones inside `code` or a code block: those are shown as typed, not as links."""
     text = re.sub(r"```[\s\S]*?```|`[^`\n]*`", " ", text)
-    match = re.search(r"https?://[^\s<]+", text)
-    if not match:
-        return None
-    url = match.group()
-    # Punctuation at the end belongs to the sentence ("see https://x.com."); a ")" stays if the
-    # address has a "(" of its own (like the page's trimUrl).
-    while url and (url[-1] in ".,!?:;'\"*~|" or (url[-1] == ")" and url.count(")") > url.count("("))):
-        url = url[:-1]
-    return url
+    links = []
+    for match in re.finditer(r"https?://[^\s<]+", text):
+        url = match.group()
+        # Punctuation at the end belongs to the sentence ("see https://x.com."); a ")" stays if the
+        # address has a "(" of its own (like the page's trimUrl).
+        while url and (url[-1] in ".,!?:;'\"*~|" or (url[-1] == ")" and url.count(")") > url.count("("))):
+            url = url[:-1]
+        if url and url not in links:
+            links.append(url)
+    return links
+
+
+def first_link(text):
+    """The first web address in a message (the one that gets a preview card), or None."""
+    links = message_links(text)
+    return links[0] if links else None
 
 
 def public_address(host, port):
@@ -5670,6 +5716,18 @@ async def chat(websocket: WebSocket):
                 # {"type": "pins"}: the pinned messages of the channel we're in (the 📌 list).
                 if can_join(channel, user_id):
                     await send(websocket, {"type": "pins", "channel": channel, "messages": pinned_messages(channel)})
+
+            elif kind == "chat_info" and channel is not None:
+                # {"type": "chat_info", "tab": "media" | "files" | "links", "before": a message id or null}:
+                # the chat info panel of the DM or group we're in ("Chat info" above). The answer
+                # repeats tab and before, so the page knows which question it answers.
+                tab = data.get("tab")
+                before = data.get("before")
+                if not isinstance(before, int) or isinstance(before, bool):  # (True is an int in Python)
+                    before = None
+                if tab in CHAT_INFO_TABS and is_dm_or_group(channel) and can_join(channel, user_id):
+                    await send(websocket, {"type": "chat_info", "channel": channel, "tab": tab, "before": before,
+                                           **chat_info(channel, tab, before)})
 
             elif kind == "typing" and channel is not None:
                 # Tell the others in this channel; you don't need to see yourself typing.

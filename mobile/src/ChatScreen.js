@@ -12,6 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Clipboard from 'expo-clipboard';
 import Icon from './Icon';
 import MessageText, { Attachment, CustomEmoji, LinkPreview, formatSize } from './MessageText';
+import ChatInfoScreen from './ChatInfoScreen';
 import PinsScreen from './PinsScreen';
 import Picker from './Picker';
 import SearchScreen from './SearchScreen';
@@ -442,7 +443,7 @@ function extension(asset) {
 // null; onSharedTaken: say it's been taken. trays, drafts (and their setters): every chat's tray and
 // half-written text (App.js keeps them, so they stay while this screen is away, on the People page).
 // onOpenChat(key): open another chat (App.js's go), for a search result there. popup: the top bar's
-// popup that's open ("search", "pins" or null), drawn here; setPopup changes it. onProfile(id),
+// popup that's open ("search", "pins", "info" or null), drawn here; setPopup changes it. onProfile(id),
 // onUserMenu(id): someone's profile or user menu (App.js draws them). focusTick: a new number puts the
 // cursor at the end of the text box (after the user menu's Mention added "@name "). jumpRequest: a
 // message to go to, {chat, id} (a tapped notification's), or null; onJumpTaken: say we're on our way.
@@ -1175,6 +1176,13 @@ export default function ChatScreen({
         <PinsScreen connection={connection} onJump={(id) => jumpTo(current, id)} onClose={() => setPopup(null)} onUserMenu={onUserMenu} />
       ) : null}
       {popup === 'search' ? <SearchScreen connection={connection} onJump={jumpTo} onClose={() => setPopup(null)} onUserMenu={onUserMenu} /> : null}
+      {/* A DM's or group's name in the top bar: its members, media, pins, links and files. */}
+      {popup === 'info' ? (
+        <ChatInfoScreen
+          connection={connection} chatKey={current} onJump={(id) => jumpTo(current, id)} onClose={() => setPopup(null)}
+          onProfile={onProfile} onUserMenu={onUserMenu}
+        />
+      ) : null}
 
       {/* A reaction (from a message's long-press menu): every emoji, in a popup sheet. */}
       {picker?.react ? (

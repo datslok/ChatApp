@@ -27,8 +27,9 @@ function clamp(value, low, high) {
   return Math.min(Math.max(value, low), high);
 }
 
-// file: the attachment ({id, filename, size}). onClose: closes the viewer.
-export default function ImageViewer({ file, onClose }) {
+// file: the attachment ({id, filename, size}). onClose: closes the viewer. onJump (from the chat info
+// screen's Media tab): a Jump button in the bar, to the message it came in.
+export default function ImageViewer({ file, onClose, onJump }) {
   const styles = useStyles(makeStyles);
   // The area the picture has: the whole screen, measured once the viewer is laid out (onLayout).
   const [screen, setScreen] = useState(useWindowDimensions());
@@ -200,6 +201,11 @@ export default function ImageViewer({ file, onClose }) {
         {/* The bar on top: the file's name, download, share, close. Over the picture, below the status bar. */}
         <View style={[styles.bar, { paddingTop: insets.top + 4 }]}>
           <Text numberOfLines={1} style={styles.name}>{file.filename}</Text>
+          {onJump ? (
+            <Pressable onPress={onJump} hitSlop={8} style={styles.button}>
+              <Text style={styles.jump}>Jump</Text>
+            </Pressable>
+          ) : null}
           <Pressable onPress={save} hitSlop={8} style={styles.button}>
             {busy === 'save' ? <ActivityIndicator color="#ffffff" /> : <Icon name="download" size={22} color="#ffffff" />}
           </Pressable>
@@ -227,4 +233,5 @@ const makeStyles = (colors, size) => StyleSheet.create({
   },
   name: { flex: 1, color: '#ffffff', fontSize: size(15), paddingHorizontal: 8 },
   button: { padding: 10 },
+  jump: { color: '#ffffff', fontSize: size(15), fontWeight: '600' },
 });

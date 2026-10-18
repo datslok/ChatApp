@@ -33,7 +33,7 @@ export function CustomEmoji({ item, size }) {
   );
 }
 
-function openLink(url) {
+export function openLink(url) {
   Linking.openURL(url);  // in the phone's browser (the web page opens a new tab)
 }
 
@@ -375,7 +375,7 @@ function VideoAttachment({ file, sender, onLongPress }) {
 // A file that isn't a picture. Like the desktop app: a tap asks first ("Download this file?", with a
 // warning when someone else sent it), then downloads it with a progress bar under the name, saves it
 // in the phone's Download folder (like a browser), and offers to open it (in an app that can).
-function FileAttachment({ file, sender, onLongPress }) {
+export function FileAttachment({ file, sender, onLongPress }) {
   const styles = useStyles(makeStyles);
   const { colors } = useTheme();
   const [progress, setProgress] = useState(null);  // 0..1 while downloading, else null

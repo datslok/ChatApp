@@ -8,17 +8,23 @@ import Icon from './Icon';
 import { chatLabel, dmPartner } from './chats';
 import { useStyles, useTheme } from './theme';
 
-// The name, and in a group its members underneath: "you, kari, ola".
-export function ChatTitle({ connection, chatKey }) {
+// The name, and in a group its members underneath: "you, kari, ola". In a DM or group a tap opens its
+// info (ChatInfoScreen.js: members, media, pins, links, files; onInfo); in a channel it's just the name.
+export function ChatTitle({ connection, chatKey, onInfo }) {
   const styles = useStyles(makeStyles);
   const { groups, users, me } = connection;
   const group = groups.find((g) => g.key === chatKey);
   const members = group?.members.map((id) => (id === me.id ? 'you' : users[id]?.name ?? 'someone')).join(', ');
+  const hasInfo = group !== undefined || dmPartner(chatKey, me.id) !== null;
   return (
-    <View style={styles.title}>
+    <Pressable
+      onPress={hasInfo ? onInfo : undefined} disabled={!hasInfo}
+      accessibilityLabel={hasInfo ? 'Members, media, pins, links and files' : undefined}
+      style={({ pressed }) => [styles.title, pressed && styles.titlePressed]}
+    >
       <Text style={styles.name} numberOfLines={1}>{chatLabel(chatKey, connection)}</Text>
       {group ? <Text style={styles.members} numberOfLines={1}>{members}</Text> : null}
-    </View>
+    </Pressable>
   );
 }
 
@@ -70,7 +76,8 @@ export function ChatButtons({ connection, voice, chatKey, onPopup, onGroupMenu }
 }
 
 const makeStyles = (colors, size) => StyleSheet.create({
-  title: { flex: 1, minWidth: 0 },  // (minWidth 0: a long name shrinks and gets its "…")
+  title: { flex: 1, minWidth: 0, borderRadius: 6 },  // (minWidth 0: a long name shrinks and gets its "…")
+  titlePressed: { opacity: 0.6 },
   name: { fontSize: size(16), fontWeight: '600', color: colors.textStrong },
   // #group-members: 0.75rem, muted.
   members: { fontSize: size(12), color: colors.textMuted },

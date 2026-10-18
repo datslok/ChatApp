@@ -56,7 +56,8 @@ function saveVideoVolume(path, volume) {
 
 // path: the video's address on the server ("/uploads/<id>", "/seasonal/halloween.mp4"), also the key
 // its volume is remembered by. onClose: closes it.
-export default function VideoScreen({ path, onClose }) {
+// onJump (from the chat info screen's Media tab): "Jump to message" under it.
+export default function VideoScreen({ path, onClose, onJump }) {
   const styles = useStyles(makeStyles);
   const screen = useWindowDimensions();
   const startVolume = useMemo(() => videoVolumes()[path] ?? START_VOLUME, [path]);
@@ -181,6 +182,11 @@ export default function VideoScreen({ path, onClose }) {
             </View>
           </View>
         </View>
+        {onJump ? (
+          <Pressable onPress={onJump} hitSlop={8} style={styles.jump}>
+            <Text style={styles.jumpText}>Jump to message</Text>
+          </Pressable>
+        ) : null}
       </View>
     </Modal>
   );
@@ -205,6 +211,9 @@ const makeStyles = (colors, size) => StyleSheet.create({
   time: { flex: 1, color: '#ffffff', fontSize: size(13.6), fontVariant: ['tabular-nums'] },
   timeBar: { flexDirection: 'row' },
   volume: { width: 100, flexDirection: 'row' },
+  // The web page's #viewer-jump: a panel-coloured button under the video.
+  jump: { marginTop: 16, paddingVertical: 8, paddingHorizontal: 16, borderRadius: 6, backgroundColor: colors.bgPanel },
+  jumpText: { color: colors.textStrong, fontSize: size(16) },
   close: {
     position: 'absolute', top: 8, right: 8, width: 32, height: 32, borderRadius: 16,
     alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bgDarkest,

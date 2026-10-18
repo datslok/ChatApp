@@ -42,7 +42,7 @@ the point is for me to understand how it works, not just to have it done.
   generated sound), `ui.js` (drawers, back button, popups, text box, emoji autocomplete), `voice.js`
   (audio engine, mic, gate, volumes, who's in voice), `video.js` (camera, screen sharing), `rooms.js`
   (joining/leaving, DM calls, call banner, Lounge page), `voice-settings.js`, `settings.js`,
-  `people.js` (DM/online lists, friends, profile popup, typing) and `messages.js` (uploads, messages,
+  `people.js` (DM/online lists, friends, profile popup, typing), `chat-info.js` (the chat info panel) and `messages.js` (uploads, messages,
   reactions, replies, editing; ends with `start()`). Code that runs at load time may only use what
   earlier files declare. `appearance.js` alone is loaded in `<head>`, before anything is drawn:
   Settings → Appearance (theme via `data-theme` on `<html>`, picked colours, `--font`, text size),
@@ -498,6 +498,19 @@ the point is for me to understand how it works, not just to have it done.
   a channel (all channels are open to everyone), the two people in a DM, a group's members (bots too); hidden
   on the People page and the Lounge. Everyone is on the People page's Everyone tab (with a filter box). The
   People page was the Friends page: its key (`FRIENDS`, "friends") and ids (#friends-view) keep the old name.
+  👥 in #dm-header (ui.js, since 2026-10-18) hides it on wide screens: `#members.closed`, localStorage "membersClosed".
+- The chat info panel (since 2026-10-18, the user's wish, like Discord; DMs and groups only, the user's choice): the
+  name in #dm-header is a button (disabled in channels, rooms.js) that opens it in #members (`.info-open`, 340px, shown
+  even when 👥 closed the list; on phones the right drawer). chat-info.js: tabs Members (#member-lists, renderMembers'
+  lists), Media (a grid; a tile opens #image-viewer, which got #viewer-video and #viewer-jump), Pins ("pins", makePinnedItem),
+  Links and Files (makeFileLink); Jump = jumpToMessage. Server: WebSocket `{"type": "chat_info", "tab", "before"}` ->
+  "chat_info" {items, more, oldest} (server.py "Chat info", `chat_info()`: MESSAGES_QUERY rows with SHOWN_TYPES
+  attachments / other attachments / http in the text, 50 per batch, `message_links()` = every link, first_link's rule;
+  only `is_dm_or_group` + can_join). core.js calls `chatInfoNews` on message/edited/deleted/preview/pinned (reloads the
+  tab if affected) and `closeChatInfo` in joinCurrentChannel. Phone: `src/ChatInfoScreen.js` (full screen, Settings'
+  tab row; Members.js, PinsScreen's cards, `FileAttachment`, ImageViewer/VideoScreen with `onJump`; videos as ▶ squares,
+  no first frame), opened by ChatTitle's `onInfo` (popup "info", drawn by ChatScreen); connection.js `watchChatInfo`
+  ({batch, news}) / `askChatInfo`.
 - Picking people: anywhere you choose from what could be everyone (or many), a type-to-search picker,
   never a drop-down (the user's rule): `usePersonPicker(input, list, {candidates, onPick, onType})` in people.js
   (search's "From", Settings → Admin → Roles "+ Add someone"); a multi-pick list (the group popup's friends) gets a

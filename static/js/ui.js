@@ -14,6 +14,10 @@ function openDrawer(drawer) {
 }
 
 function closeDrawers() {
+  // The chat info panel in the right drawer (phones) closes with it. Only then: on a wide screen the
+  // column is no drawer, and this runs for other reasons too (a right-click menu, Settings).
+  // (closeChatInfo is in chat-info.js, a later file: fine, as this only runs once everything has loaded.)
+  if (membersElement.classList.contains("open")) closeChatInfo();
   sidebarElement.classList.remove("open");
   membersElement.classList.remove("open");
   drawerBackdrop.hidden = true;
@@ -44,6 +48,11 @@ try {
 }
 
 membersButton.addEventListener("click", () => {
+  // With the chat info panel open (chat-info.js), 👥 only closes that: back to the list as it was.
+  if (chatInfoTab !== null) {
+    closeChatInfo();
+    return;
+  }
   const closed = !membersElement.classList.contains("closed");
   showMembersClosed(closed);
   try {

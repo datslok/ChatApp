@@ -150,7 +150,8 @@
            and groups the call button (groups also their members and buttons). -->
       <header id="dm-header" hidden>
         <div class="dm-header-text">
-          <span id="dm-header-name"></span>
+          <!-- A button: in a DM or group it opens the chat info panel (chat-info.js); disabled in channels. -->
+          <button type="button" id="dm-header-name"></button>
           <span id="group-members" hidden></span>
         </div>
         <div id="group-buttons" hidden>
@@ -228,14 +229,28 @@
   </main>
 
   <aside id="members">
-    <h2 id="bots-heading" class="section-heading" hidden>Bots</h2>
-    <ul id="bots-list" hidden></ul>
-    <!-- A heading and list for each role with people online (people.js, showUsers). -->
-    <div id="role-sections"></div>
-    <h2 id="online-heading" class="section-heading">Online</h2>
-    <ul id="online-list"></ul>
-    <h2 id="offline-heading" class="section-heading">Offline</h2>
-    <ul id="offline-list"></ul>
+    <!-- The chat info panel (chat-info.js): a DM's or group's name opens it here, in place of the plain
+         member list. The tabs and ×; Members shows the lists below, the others #chat-info-list. -->
+    <div id="chat-info-top" hidden>
+      <button type="button" class="chat-info-tab" data-tab="members">Members</button>
+      <button type="button" class="chat-info-tab" data-tab="media">Media</button>
+      <button type="button" class="chat-info-tab" data-tab="pins">Pins</button>
+      <button type="button" class="chat-info-tab" data-tab="links">Links</button>
+      <button type="button" class="chat-info-tab" data-tab="files">Files</button>
+      <button type="button" id="chat-info-close" title="Close" aria-label="Close">×</button>
+    </div>
+    <div id="member-lists">
+      <h2 id="bots-heading" class="section-heading" hidden>Bots</h2>
+      <ul id="bots-list" hidden></ul>
+      <!-- A heading and list for each role with people online (people.js, showUsers). -->
+      <div id="role-sections"></div>
+      <h2 id="online-heading" class="section-heading">Online</h2>
+      <ul id="online-list"></ul>
+      <h2 id="offline-heading" class="section-heading">Offline</h2>
+      <ul id="offline-list"></ul>
+    </div>
+    <div id="chat-info-list" hidden></div>
+    <p id="chat-info-status" class="pins-empty" hidden></p>
   </aside>
 
   <!-- The pinned messages of the chat we're in (messages.js, "Pinned messages"). -->
@@ -1008,6 +1023,10 @@
   <dialog id="image-viewer">
     <button type="button" id="viewer-close" title="Close">×</button>
     <img id="viewer-image" alt="">
+    <!-- From the chat info panel's Media tab (chat-info.js): a video plays here instead of the picture,
+         and "Jump to message" goes to the message it came in. -->
+    <video id="viewer-video" controls controlslist="nodownload" hidden></video>
+    <button type="button" id="viewer-jump" hidden>Jump to message</button>
   </dialog>
 
   <!-- LiveKit's browser library, for voice: it creates the global LivekitClient. "async": load it in
@@ -1028,6 +1047,7 @@
   <script src="/static/js/voice-settings.js"></script>
   <script src="/static/js/settings.js"></script>
   <script src="/static/js/people.js"></script>
+  <script src="/static/js/chat-info.js"></script>
   <script src="/static/js/messages.js"></script>
 </body>
 </html>

@@ -548,7 +548,27 @@ body {
 .dm-header-text {
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
   min-width: 0;
+}
+
+/* The name: a button (it opens the chat info panel, chat-info.js) that looks like the text it was.
+   "font: inherit" takes the bar's bold text instead of the browser's button font. */
+#dm-header-name {
+  max-width: 100%;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+#dm-header-name:hover:not(:disabled) {
+  text-decoration: underline;
+}
+#dm-header-name:disabled {
+  cursor: default;  /* a channel: just its name */
 }
 
 #group-members {
@@ -613,7 +633,7 @@ body {
    (its own 👥 button) and the button is gone, so a list closed on a PC can't get stuck hidden there.
    "not (max-width: 700px)" is the opposite of the phone layout's media query. */
 @media not (max-width: 700px) {
-  #members.closed {
+  #members.closed:not(.info-open) {  /* (the chat info panel shows even then: chat-info.js) */
     display: none;
   }
 }
@@ -3511,10 +3531,33 @@ button.download-button {
   background: rgba(0, 0, 0, 0.85);
 }
 
-#viewer-image {
+#viewer-image,
+#viewer-video {
   max-width: 90vw;
   max-height: 90vh;
   border-radius: 8px;
+}
+#viewer-image[hidden],
+#viewer-video[hidden],
+#viewer-jump[hidden] {
+  display: none;
+}
+
+/* From the chat info panel's Media tab: "Jump to message" at the bottom, in the middle. */
+#viewer-jump {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 8px 16px;
+  border: none;
+  border-radius: 6px;
+  background: var(--bg-panel);
+  color: var(--text-strong);
+  cursor: pointer;
+}
+#viewer-jump:hover {
+  background: var(--bg-hover);
 }
 
 /* The Settings popup: the tabs on the left, the chosen page on the right. A fixed size, so it
@@ -4246,6 +4289,145 @@ button.download-button {
   padding: 0;
 }
 
+/* The chat info panel (chat-info.js): the same column, wider, as pictures and cards need the room. */
+#members.info-open {
+  width: 340px;
+}
+
+/* Its tabs and ×, in a row that wraps if it must. (The [hidden] rules: a display of our own would
+   otherwise beat the hidden attribute.) */
+#chat-info-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+#chat-info-top[hidden],
+#member-lists[hidden],
+#chat-info-list[hidden] {
+  display: none;
+}
+.chat-info-tab,
+#chat-info-close {
+  padding: 4px 8px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.chat-info-tab:hover,
+#chat-info-close:hover {
+  background: var(--bg-hover);
+  color: var(--text-strong);
+}
+.chat-info-tab[aria-pressed="true"] {
+  background: var(--bg-active);
+  color: var(--text-strong);
+}
+#chat-info-close {
+  margin-left: auto;  /* pushed to the end of the row */
+  font-size: 1.1rem;
+}
+
+/* Media: three squares a row. aspect-ratio keeps each as tall as it's wide; object-fit: cover fills
+   the square with the picture, cutting off what sticks out (the viewer shows all of it). */
+.media-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+}
+.media-tile {
+  position: relative;  /* the ▶ is placed on top of it, see below */
+  aspect-ratio: 1;
+  padding: 0;
+  overflow: hidden;
+  border: none;
+  border-radius: 6px;
+  background: var(--bg-neutral);
+  cursor: pointer;
+}
+.media-tile img,
+.media-tile video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.media-tile:hover img,
+.media-tile:hover video {
+  opacity: 0.85;
+}
+/* A video's ▶ in the middle ("absolute": placed in the tile, not in the flow). */
+.media-tile .icon {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);  /* by half its own size, so its centre is the tile's */
+  width: 32px;
+  height: 32px;
+  color: white;
+  filter: drop-shadow(0 0 3px rgba(0, 0, 0, 0.8));  /* readable on a white picture too */
+}
+
+/* Links and Files: a row each, a line between them. */
+.info-rows {
+  display: flex;
+  flex-direction: column;
+}
+.info-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.info-row .message-link {
+  max-width: 100%;
+  overflow-wrap: anywhere;  /* a long address breaks anywhere instead of sticking out */
+}
+.info-row .attachment-file {
+  max-width: 100%;
+  margin-top: 0;
+  overflow-wrap: anywhere;
+}
+.info-site {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+.info-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+.info-meta button {
+  margin-left: auto;
+  padding: 2px 10px;
+  border: none;
+  border-radius: 6px;
+  background: var(--bg-neutral);
+  color: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+/* The pinned cards: in the panel they needn't scroll on their own (.card-list does in its popup). */
+#chat-info-list.card-list {
+  max-height: none;
+  overflow: visible;
+}
+/* A long address in a card breaks instead of sticking out of the narrow panel. */
+#chat-info-list .message-text {
+  overflow-wrap: anywhere;
+}
+
 #members #offline-heading {
   margin-top: 20px;
 }
@@ -4804,6 +4986,12 @@ button.download-button {
   #members {
     right: 0;
     transform: translateX(100%);  /* moved right by its own width */
+  }
+
+  /* With the chat info panel in it: a little wider, for the pictures. */
+  #members.info-open {
+    width: 90vw;
+    max-width: 340px;
   }
 
   #sidebar.open,
