@@ -2481,9 +2481,10 @@ async def change_profile(data: ProfileChange, request: Request):
     return {"ok": True}
 
 
-# ---------- Appearance (Settings → Appearance): theme, colours, font, text size and scale ----------
+# ---------- Appearance (Settings → Appearance): theme, colours and font ----------
 #
-# Kept with the account, so it's the same on every device. The page (static/js/appearance.js)
+# Kept with the account, so it's the same on every device. (The text size and the Windows app's scale
+# are each device's own, kept by the pages themselves: the user's wish.) The page (static/js/appearance.js)
 # puts these values into its CSS, so only names from these lists and real colours get in: without
 # that check, anyone could put any text into their own page's styles with a hand-made request.
 
@@ -2498,8 +2499,7 @@ class Appearance(BaseModel):
     theme: str = "dark"
     colours: dict[str, str] = {}  # only the ones picked by hand: {"accent": "#e91e63"}
     font: str = "system"
-    font_size: int = 16  # pixels: everything written in rem in chat.css follows it
-    scale: int = 100  # percent: the desktop app zooms the whole page (main.rs, set_zoom)
+    # (Older pages also send font_size and scale: pydantic ignores fields that aren't here.)
 
 
 def appearance_of(user_id):
@@ -2518,11 +2518,10 @@ async def change_appearance(data: Appearance, request: Request):
     for name, colour in data.colours.items():
         if name not in APPEARANCE_COLOURS or not HEX_COLOUR.fullmatch(colour):
             raise HTTPException(400, "Unknown colour.")
-    if not 12 <= data.font_size <= 20:
-        raise HTTPException(400, "The text size must be between 12 and 20.")
-    if not 80 <= data.scale <= 150:
-        raise HTTPException(400, "The scale must be between 80 and 150.")
-    appearance = data.model_dump()  # the checked values, back as a plain dict
+    # The checked values, back as a plain dict, on top of what was saved: settings saved before the text
+    # size and scale went per device have those too, and they stay for pages and phone apps from before,
+    # which would otherwise reset them to the defaults (new ones ignore them, appearance.js).
+    appearance = {**(appearance_of(user_id) or {}), **data.model_dump()}
     with db:
         db.execute("UPDATE users SET appearance = ? WHERE id = ?", (json.dumps(appearance), user_id))
     # Every open page of theirs (this one too, which already shows it): the app, their phone.

@@ -2,8 +2,10 @@
 //
 // Loaded in <head>, unlike the other scripts: it runs before the browser draws anything, so the
 // page appears in your theme straight away, from the copy kept in this browser. The server keeps
-// the real one with your account, sends it in "welcome" (core.js) and to all your open pages
-// after a change ("appearance"), and checks every value (server.py, change_appearance).
+// the theme, colours and font with your account, sends them in "welcome" (core.js) and to all your
+// open pages after a change ("appearance"), and checks every value (server.py, change_appearance).
+// The text size and scale are this device's own (the user's wish: a phone and a big screen want
+// different sizes): they're only in that copy in this browser, never sent to the server.
 //
 // Everything works through chat.css's variables: data-theme on <html> picks a theme's colours,
 // colours picked by hand are set on <html> itself (which beats the theme), and so are the font
@@ -21,6 +23,8 @@ const APPEARANCE_FONTS = {
 };
 
 const DEFAULT_APPEARANCE = { theme: "dark", colours: {}, font: "system", font_size: 16, scale: 100 };
+// The ones kept with the account; the rest (font_size, scale) stay on this device.
+const ACCOUNT_APPEARANCE = ["theme", "colours", "font"];
 
 // Tauri puts __TAURI_INTERNALS__ on the app's pages (before any of ours run); browsers don't have it.
 const canZoom = "__TAURI_INTERNALS__" in window;
@@ -105,15 +109,23 @@ function guardIconColours(root) {
   if (strong !== "var(--text-strong)") root.style.setProperty("--icon-strong", strong);
 }
 
-// Change them (Settings → Appearance): show them here at once, then save them with the account.
-// Resolves to true once saved; the server then sends them to our other open pages too.
+// The account's settings from the server ("welcome", "appearance"): shown with this device's own text
+// size and scale, which the server doesn't have.
+function applyAccountAppearance(settings) {
+  applyAppearance({ ...settings, font_size: appearance.font_size, scale: appearance.scale });
+}
+
+// Change them (Settings → Appearance): show them here at once, then save the account's part with the
+// account. Resolves to true once saved; the server then sends them to our other open pages too.
 async function saveAppearance(settings) {
   applyAppearance(settings);
+  // Only the account's fields: an object made from [name, value] pairs, keeping those three.
+  const account = Object.fromEntries(ACCOUNT_APPEARANCE.map((name) => [name, appearance[name]]));
   try {
     const response = await fetch("/settings/appearance", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(appearance),
+      body: JSON.stringify(account),
     });
     return response.ok;
   } catch {

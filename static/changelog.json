@@ -111,7 +111,7 @@
         "Banning (admins only): right-click someone → Ban…, or Settings → Admin → Bans. Choose how long (a day, a week, a month or for good) and an optional reason they'll see. They're logged out straight away, can't log in until it ends, and disappear from the lists; their messages stay. Unban in Settings → Admin → Bans. Only the owner (the first account) can ban an admin, and nobody can ban the owner or a bot",
         "Channels: admins add, rename, move and delete channels in Settings → Admin → Channels, and add headings that group the channels under them in the sidebar",
         "My Account: change your username, email and password. A new email address only takes over once you click the link we send to it. Forgot your password? There's a link on the login page",
-        "Appearance: eight themes (Dark, Darker, Light, Blue, Purple, Green, Pink, Light pink), your own colours on top, a font and a text size, and in the Windows app a scale (everything bigger or smaller). Saved with your account, so it's the same on every device",
+        "Appearance: eight themes (Dark, Darker, Light, Blue, Purple, Green, Pink, Light pink), your own colours on top, a font and a text size, and in the Windows app a scale (everything bigger or smaller). Theme, colours and font are saved with your account, so they're the same on every device; the text size and scale are each device's own",
         "What's new: what changed lately (a red dot on ⚙️ means something new), and everything the chat can do",
         "Bugs & ideas: tell us what's broken or what you'd like"
       ]
@@ -123,6 +123,7 @@
       "items": [
         "😺 Room for twice as many custom emoji: up to 24 each in Settings → Emoji",
         "🖼️ The picture editor (profile pictures, banners and custom emoji) opens with the whole picture showing, so a wide or tall picture fits in the frame: zoom in to fill it, or save it like that and the empty part stays see-through",
+        "🔠 The text size (and the Windows app's scale) is now each device's own: a bigger text on your phone no longer changes your PC. Theme, colours and font still follow your account",
         "👥 Hide the member list on the right with the 👥 button at the top of the chat, like on Discord. Click it again to bring the list back"
       ]
     },

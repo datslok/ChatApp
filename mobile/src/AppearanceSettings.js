@@ -1,9 +1,10 @@
 // Settings → Appearance (the web page's settings.js, "Appearance"): the theme, colours picked on top of
-// it, and the text size. Kept with the account, so the web page and the Windows app change too.
+// it, and the text size. The theme, colours and font are kept with the account, so the web page and the
+// Windows app change too; the text size is this phone's own (theme.js keeps it in appearance.json).
 //
 // Like the web page: a change shows at once (setAppearance: everything that reads the theme draws
 // again), then it's saved (POST /settings/appearance), and the server sends it to our other devices.
-// While a colour or the text size is being dragged, only the screen follows; it's saved on letting go.
+// While a colour is being dragged, only the screen follows; it's saved on letting go.
 // The fonts are the web page's, as near as Android has them (theme.js, FONT_FAMILIES). (Its Scale is
 // the Windows app's own zoom, so that isn't here.)
 import { useEffect, useRef, useState } from 'react';
@@ -16,7 +17,7 @@ import { Button, Heading, Help, Status, Title } from './SettingsParts';
 import { Choices } from './VoiceSettings';
 import { postJson } from './api';
 import {
-  FONT_CHOICES, FONT_FAMILIES, PICKABLE_COLOURS, THEME_CHOICES, makeTheme, useStyles, useTheme,
+  ACCOUNT_APPEARANCE, FONT_CHOICES, FONT_FAMILIES, PICKABLE_COLOURS, THEME_CHOICES, makeTheme, useStyles, useTheme,
 } from './theme';
 
 // One theme's swatch: a circle, its top left half the theme's panel colour and the rest its
@@ -86,13 +87,14 @@ export default function AppearanceSettings() {
   const [status, setStatus] = useState(null);  // only when saving failed
   const [picking, setPicking] = useState(null);  // the colour being picked: {name, label, before}
   const [fontSize, setFontSize] = useState(appearance.font_size);  // the slider's number while dragging
-  // Changed on another device meanwhile: the slider follows.
+  // Changed meanwhile (the first copy replaced): the slider follows.
   useEffect(() => setFontSize(appearance.font_size), [appearance.font_size]);
 
-  // Show and save. (The server checks every value, and sends them to our other devices.)
+  // Show and save the account's part. (The server checks every value, and sends them to our other devices.)
   async function save(next) {
     setAppearance(next);
-    const result = await postJson('/settings/appearance', next);
+    const account = Object.fromEntries(ACCOUNT_APPEARANCE.map((name) => [name, next[name]]));
+    const result = await postJson('/settings/appearance', account);
     setStatus(result.ok ? null : { text: "Couldn't save that. Is the connection lost?", error: true });
   }
 
@@ -149,10 +151,11 @@ export default function AppearanceSettings() {
             setFontSize(value);
             setAppearance({ ...appearance, font_size: value });  // everything follows while dragging
           }}
-          onDone={(value) => save({ ...appearance, font_size: value })}
+          onDone={(value) => setAppearance({ ...appearance, font_size: value })}  // (kept on the phone only)
         />
         <Text style={styles.sliderValue}>{fontSize}px</Text>
       </View>
+      <Help>The text size is just for this phone: your theme, colours and font follow your account.</Help>
       <Status status={status} />
 
       {picking ? (

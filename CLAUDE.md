@@ -46,8 +46,11 @@ the point is for me to understand how it works, not just to have it done.
   reactions, replies, editing; ends with `start()`). Code that runs at load time may only use what
   earlier files declare. `appearance.js` alone is loaded in `<head>`, before anything is drawn:
   Settings → Appearance (theme via `data-theme` on `<html>`, picked colours, `--font`, text size),
-  kept with the account (`users.appearance`, `POST /settings/appearance`, checked against the lists in
+  theme/colours/font kept with the account (`users.appearance`, `POST /settings/appearance`, checked against the lists in
   server.py, in "welcome" and sent to all the user's pages), with a copy in localStorage for the first paint.
+  Text size and scale are per device (since 2026-10-18, the user's wish): only in that localStorage copy
+  (`applyAccountAppearance` keeps them when the server's arrive; phone: appearance.json, App.js); the server
+  ignores them but keeps the old saved ones in users.appearance for pages from before.
   While it loads, `#page-loading` (index.html's first element: the logo and a bar sliding by `transform`, which the compositor
   runs while scripts load; `left` froze) covers the page until core.js `tellAppReady` (or 10 s) fades it out.
   Every colour in chat.css is a variable in its `:root`, named by role. Both folders are served with `Cache-Control: no-cache` (FreshStaticFiles), as is

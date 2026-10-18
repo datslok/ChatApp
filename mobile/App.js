@@ -458,10 +458,11 @@ function Screen({ share, onShareDone, opened, onOpenedDone }) {
   const notifications = useNotifications(connection);
   const { status, me } = connection;
 
-  // The appearance kept with the account (in "welcome", and "appearance" after a change on any device).
-  const { setAppearance } = useTheme();
+  // The appearance kept with the account (in "welcome", and "appearance" after a change on any device):
+  // its theme, colours and font, with this phone's own text size (the user's wish; theme.js).
+  const { appearance, setAppearance } = useTheme();
   useEffect(() => {
-    if (connection.appearance) setAppearance(connection.appearance);
+    if (connection.appearance) setAppearance({ ...connection.appearance, font_size: appearance.font_size });
   }, [connection.appearance]);
   // A newer APK? Asked again at every connect (a new release restarts the server, so we reconnect) and
   // when a call ends; never offered in the middle of a call or while it rings (appUpdate.js).

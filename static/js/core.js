@@ -383,7 +383,7 @@ function handleServerMessage(event) {
     input.maxLength = maxTextLength;  // the textarea's maxlength, from the server's limit
     limits = data.limits;
     applyLimits();
-    applyAppearance(data.appearance || {});  // the account's (appearance.js); null: the defaults
+    applyAccountAppearance(data.appearance || {});  // the account's (appearance.js); null: the defaults
     vapidPublicKey = data.vapid_public_key;  // for push notifications (notifications.js)
     season = data.season;  // the seasonal easter egg, or null (people.js, renderUserPanel)
     showPhoneBanner();  // now that we know whether the server has push (notifications.js)
@@ -443,7 +443,7 @@ function handleServerMessage(event) {
     return;
   }
   if (data.type === "appearance") {
-    applyAppearance(data.appearance);  // changed in Settings, here or on another device
+    applyAccountAppearance(data.appearance);  // changed in Settings, here or on another device
     return;
   }
   if (data.type === "renamed") {

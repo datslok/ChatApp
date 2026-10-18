@@ -208,10 +208,11 @@ applyActivitySettings();
 
 // ---------- Settings: Appearance ----------
 //
-// Theme, colours, font and text size, kept with the account. appearance.js does the work:
-// applyAppearance shows settings on the whole page, saveAppearance also saves them. Every change
-// here shows at once; sliders and colour pickers save when let go ("change"), not while they're
-// moving ("input"), so the server gets one save instead of dozens a second.
+// Theme, colours and font, kept with the account; text size and scale, kept on this device.
+// appearance.js does the work: applyAppearance shows settings on the whole page (and keeps them in
+// this browser), saveAppearance also saves the account's part. Every change here shows at once;
+// colour pickers save when let go ("change"), not while they're moving ("input"), so the server
+// gets one save instead of dozens a second.
 
 const themeSwatches = document.querySelectorAll(".theme-swatch");
 const colourInputs = document.querySelectorAll(".colour-pickers input");
@@ -278,14 +279,15 @@ fontSizeSlider.addEventListener("input", () => {
   applyAppearance({ ...appearance, font_size: Number(fontSizeSlider.value) });
   fontSizeValue.textContent = fontSizeSlider.value + "px";
 });
-fontSizeSlider.addEventListener("change", () => changeAppearance({ font_size: Number(fontSizeSlider.value) }));
+// (Nothing to send when let go: applyAppearance has already kept it in this browser.)
 
 // The scale only changes once let go: zooming while dragging would move the slider away under
 // the mouse (the zoom makes the slider itself bigger or smaller). Meanwhile only the number moves.
 scaleSlider.addEventListener("input", () => {
   scaleValue.textContent = scaleSlider.value + "%";
 });
-scaleSlider.addEventListener("change", () => changeAppearance({ scale: Number(scaleSlider.value) }));
+// This device's own, like the text size: shown and kept here, not sent.
+scaleSlider.addEventListener("change", () => applyAppearance({ ...appearance, scale: Number(scaleSlider.value) }));
 
 // ---------- Settings: What's new ----------
 //

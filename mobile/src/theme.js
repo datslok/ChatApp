@@ -10,9 +10,10 @@
 //   ...inside a component:  const styles = useStyles(makeStyles);
 //
 // When the theme changes, every component that reads it draws again with the new styles; nothing
-// reloads. The appearance is kept with the account (users.appearance: "welcome" brings it, and
-// "appearance" after a change on any device), and a copy in a file on the phone, so the app starts in
-// your theme before it has even connected (the web page keeps that copy in localStorage).
+// reloads. The theme, colours and font are kept with the account (users.appearance: "welcome" brings
+// them, and "appearance" after a change on any device), and a copy in a file on the phone, so the app
+// starts in your theme before it has even connected (the web page keeps that copy in localStorage).
+// The text size is the phone's own (the user's wish): only in that file, never sent to the server.
 import { File, Paths } from 'expo-file-system';
 import { createContext, useContext } from 'react';
 
@@ -111,6 +112,8 @@ export const PICKABLE_COLOURS = [
 export const letterColors = ['#5865f2', '#3ba55c', '#faa61a', '#ed4245', '#eb459e', '#9b59b6', '#1abc9c'];
 
 export const DEFAULT_APPEARANCE = { theme: 'dark', colours: {}, font: 'system', font_size: 16, scale: 100 };
+// The ones kept with the account (sent to the server); font_size stays on the phone.
+export const ACCOUNT_APPEARANCE = ['theme', 'colours', 'font'];
 
 // The web page's fonts (appearance.js, APPEARANCE_FONTS) as Android has them. Its choices are Windows'
 // fonts; Android's own come close for three: its serif (Noto Serif) for Georgia, its monospace (Droid Sans
