@@ -3463,10 +3463,53 @@ button.download-button {
    download link under it. A block, so the link starts on the next line. */
 .attachment-video video {
   display: block;
-  max-width: min(400px, 100%);
+  max-width: 100%;  /* (of its frame, which has the 400px) */
   max-height: 300px;
-  margin-top: 4px;
   border-radius: 8px;
+}
+/* The video's frame: exactly the video's size (fit-content: as wide as what's in it), so the
+   fullscreen button below can be placed in the video's corner ("relative": the corner of this).
+   The width limit is here, not on the video: there the frame came out wider than a wide video
+   (measured: a 1920x1080 one shown 400px wide in a 533px frame, the width its 300px height allows). */
+.video-frame {
+  position: relative;
+  width: fit-content;
+  max-width: min(400px, 100%);
+  margin-top: 4px;
+}
+/* Its fullscreen button (messages.js, makeVideoFullscreenButton): a dark round button in the top right
+   corner, only showing while the mouse is over the video (or it has keyboard focus), like Discord's.
+   (Black and white: the same on every theme, like everything over a video.) */
+.video-fullscreen {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.6);
+  color: white;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.video-frame:hover .video-fullscreen,
+.video-fullscreen:focus-visible {
+  opacity: 1;
+}
+.video-fullscreen:hover {
+  background: rgba(0, 0, 0, 0.8);
+}
+/* A touchscreen has no "mouse over": there it always shows. */
+@media (hover: none) {
+  .video-fullscreen {
+    opacity: 1;
+  }
 }
 
 /* A message's files (messages.js, makeAttachments): the pictures, then each other file on its own line. */
@@ -3558,7 +3601,7 @@ button.download-button {
 }
 #viewer-image[hidden],
 #viewer-video[hidden],
-#viewer-jump[hidden],
+.viewer-bar-button[hidden],
 #viewer-count[hidden],
 .viewer-arrow[hidden] {
   display: none;
@@ -3627,8 +3670,11 @@ button.download-button {
   overflow-wrap: anywhere;
 }
 
-/* From the chat info panel's Media tab: "Jump to message". */
-#viewer-jump {
+/* Fullscreen (a video) and, from the chat info panel's Media tab, "Jump to message". */
+.viewer-bar-button {
+  display: flex;
+  align-items: center;
+  gap: 6px;  /* (Fullscreen's icon and word) */
   flex-shrink: 0;
   padding: 8px 16px;
   border: none;
@@ -3637,7 +3683,7 @@ button.download-button {
   color: var(--text-strong);
   cursor: pointer;
 }
-#viewer-jump:hover {
+.viewer-bar-button:hover {
   background: var(--bg-hover);
 }
 

@@ -16,6 +16,7 @@ const viewerNext = document.getElementById("viewer-next");
 const viewerCount = document.getElementById("viewer-count");
 const viewerFile = document.getElementById("viewer-file");
 const viewerJump = document.getElementById("viewer-jump");
+const viewerFullscreen = document.getElementById("viewer-fullscreen");
 
 let viewerItems = [];    // what can be looked at: [{file, message}], pictures and videos
 let viewerIndex = 0;     // the one showing
@@ -59,6 +60,7 @@ function showViewerItem(index) {
   viewerCount.textContent = `${index + 1} / ${viewerItems.length}`;
   viewerFile.replaceChildren(makeFileLink(url, file, message));  // (messages.js; in the app: "Download this file?")
   viewerJump.hidden = viewerOnJump === null;
+  viewerFullscreen.hidden = !file.video;
 }
 
 // ‹ and ›: one back or on, going round at the ends (% is the remainder, so 5 % 5 = 0 starts over).
@@ -74,6 +76,8 @@ viewer.addEventListener("keydown", (event) => {
   else return;
   event.preventDefault();  // (or the video player would also skip 5 seconds)
 });
+
+viewerFullscreen.addEventListener("click", () => viewerVideo.requestFullscreen().catch(() => {}));
 
 viewerJump.addEventListener("click", () => {
   const item = viewerItems[viewerIndex];
