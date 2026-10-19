@@ -585,7 +585,8 @@ the point is for me to understand how it works, not just to have it done.
   The player (since 2026-10-19, the user's wish: Chromium's bar hid fullscreen in ⋮ on narrow videos, and a page can't
   add to it): video-player.js `makeVideoPlayer(video, {arrowKeys})` (no `controls`; the frame `.video-player` with
   `.video-bar` over its bottom: time bar and volume as <input type="range">, play, time, mute, fullscreen of the frame;
-  shows on hover/paused/keyboard focus, in fullscreen hides 2 s after the mouse stops ("awake"); click = play/pause,
+  shows only on hover (paused too, the user's wish) or keyboard focus on the frame or a button, in fullscreen hides
+  2 s after the mouse stops ("awake") unless paused; click = play/pause,
   double-click = fullscreen, keys space/K, ← →, M, F; `.tall` (videoHeight > videoWidth) makes it at least 1:1, the
   user's wish; container queries on the bar drop volume < 260px and the time < 200px). The 400px limit is on the
   frame, not the video (on the video, the frame came out 533px around a 400px one). The viewer (`#viewer-player`,

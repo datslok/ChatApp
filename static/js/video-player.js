@@ -84,7 +84,7 @@ function makeVideoPlayer(video, { arrowKeys = true } = {}) {
   }
   function showPlaying() {
     const paused = video.paused;  // (also true once it has ended)
-    frame.classList.toggle("paused", paused);  // paused: the bar stays (chat.css)
+    frame.classList.toggle("paused", paused);  // paused in fullscreen: the bar doesn't hide (chat.css)
     setIcon(playButton, paused ? "play" : "pause");
     playButton.title = paused ? "Play" : "Pause";
     playButton.setAttribute("aria-label", playButton.title);
@@ -108,7 +108,8 @@ function makeVideoPlayer(video, { arrowKeys = true } = {}) {
     timeBar.max = Number.isFinite(video.duration) ? video.duration : 0;
     showTime();
   });
-  video.addEventListener("timeupdate", showTime);  // (several times a second while it plays)  video.addEventListener("play", showPlaying);
+  video.addEventListener("timeupdate", showTime);  // (several times a second while it plays)
+  video.addEventListener("play", showPlaying);
   video.addEventListener("pause", showPlaying);
   video.addEventListener("ended", showPlaying);
   video.addEventListener("volumechange", showSound);

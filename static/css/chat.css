@@ -3519,9 +3519,10 @@ button.download-button {
   height: 100%;
 }
 
-/* The bar: over the bottom, on a dark fade so white shows on a bright picture too. It shows while
-   the mouse is over the video, while it's paused, and while the keyboard is in it. container-type:
-   the rules at the end ask how wide this bar is (and so the video), not the window. */
+/* The bar: over the bottom, on a dark fade so white shows on a bright picture too. It shows only
+   while the mouse is over the video (paused too: the user's wish), or the keyboard is on the player
+   or one of its buttons (not a slider: a dragged one keeps the focus, and with it the bar).
+   container-type: the rules at the end ask how wide this bar is (and so the video), not the window. */
 .video-bar {
   position: absolute;
   left: 0;
@@ -3535,8 +3536,7 @@ button.download-button {
   container-type: inline-size;
 }
 .video-player:hover .video-bar,
-.video-player.paused .video-bar,
-.video-player:has(:focus-visible) .video-bar,
+.video-player:has(button:focus-visible) .video-bar,
 .video-player:focus-visible .video-bar {
   opacity: 1;
 }
