@@ -374,46 +374,23 @@ function saveVideoVolume(key, volume) {
   localStorage.setItem("videoVolumes", JSON.stringify(volumes));
 }
 
-// A video: the browser's own player (play, pause, skipping, volume, fullscreen), with the download
-// link under it. preload="metadata": until play is pressed, only its size, length and first picture
-// load, not the whole video. The browser fetches the rest in pieces as it plays ("range requests",
-// which the server answers). A format this browser can't play leaves just the link.
+// A video: our own player (video-player.js: play, pause, the time bar, volume, fullscreen), with the
+// download link under it. preload="metadata": until play is pressed, only its size, length and first
+// picture load, not the whole video. The browser fetches the rest in pieces as it plays ("range
+// requests", which the server answers). A format this browser can't play leaves just the link.
 function makeVideo(url, file, message) {
   const box = document.createElement("div");
   box.className = "attachment-video";
   const video = document.createElement("video");
   video.src = url;
-  video.controls = true;
   // Each video starts where its volume was left (30% the first time), and remembers every change.
   video.volume = videoVolume(file.id);
   video.addEventListener("volumechange", () => saveVideoVolume(file.id, video.volume));
-  // No "Download" in the player's ⋮ menu: the file's name under the video downloads it already
-  // (in the app, with its progress bar). Chromium only (the app, Chrome, Edge); as an attribute, so
-  // browsers without it (Firefox has no video.controlsList) just ignore it.
-  video.setAttribute("controlslist", "nodownload");
   video.preload = "metadata";
-  // Our own fullscreen button, in the video's top right corner: the player has one, but in a video as
-  // narrow as ours usually are, Chromium moves it into its ⋮ menu. The video goes in a frame of its
-  // own size (not the box, which has the link under it too), so the button can sit in its corner.
-  const frame = document.createElement("div");
-  frame.className = "video-frame";
-  frame.append(video, makeVideoFullscreenButton(video));
-  video.addEventListener("error", () => frame.remove());
-  box.append(frame, makeFileLink(url, file, message));
+  const player = makeVideoPlayer(video);
+  video.addEventListener("error", () => player.remove());
+  box.append(player, makeFileLink(url, file, message));
   return box;
-}
-
-// A button that shows `video` fullscreen (Esc or the player's own button comes out again).
-function makeVideoFullscreenButton(video) {
-  const button = document.createElement("button");
-  button.type = "button";
-  button.className = "video-fullscreen";
-  button.title = "Fullscreen";
-  button.setAttribute("aria-label", "Fullscreen");
-  button.append(makeIcon("maximize"));
-  // (.catch: the browser may refuse, say in a page that isn't allowed fullscreen; nothing to do then)
-  button.addEventListener("click", () => video.requestFullscreen().catch(() => {}));
-  return button;
 }
 
 // ----- "Download this file?" (desktop app only): one dialog, reused for every file.

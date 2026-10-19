@@ -1028,16 +1028,16 @@
   <dialog id="image-viewer">
     <button type="button" id="viewer-close" title="Close">×</button>
     <img id="viewer-image" alt="" draggable="false">
-    <video id="viewer-video" controls controlslist="nodownload" hidden></video>
+    <!-- (viewer.js puts it in our video player, video-player.js: #viewer-player) -->
+    <video id="viewer-video"></video>
     <button type="button" class="viewer-arrow" id="viewer-prev" title="Previous (←)" aria-label="Previous" data-icon="chevron-left" hidden></button>
     <button type="button" class="viewer-arrow" id="viewer-next" title="Next (→)" aria-label="Next" data-icon="chevron-right" hidden></button>
-    <!-- At the bottom: "2 / 5", the file's name (a download link), Fullscreen for a video (its player's
-         own button can hide in its ⋮ menu) and, from the chat info panel, "Jump to message". -->
+    <!-- At the bottom: "2 / 5", the file's name (a download link) and, from the chat info panel,
+         "Jump to message". -->
     <div id="viewer-bar">
       <span id="viewer-count" hidden></span>
       <span id="viewer-file"></span>
-      <button type="button" id="viewer-fullscreen" class="viewer-bar-button" data-icon="maximize" hidden>Fullscreen</button>
-      <button type="button" id="viewer-jump" class="viewer-bar-button" hidden>Jump to message</button>
+      <button type="button" id="viewer-jump" hidden>Jump to message</button>
     </div>
   </dialog>
 
@@ -1059,6 +1059,7 @@
   <script src="/static/js/voice-settings.js"></script>
   <script src="/static/js/settings.js"></script>
   <script src="/static/js/people.js"></script>
+  <script src="/static/js/video-player.js"></script>
   <script src="/static/js/viewer.js"></script>
   <script src="/static/js/chat-info.js"></script>
   <script src="/static/js/messages.js"></script>

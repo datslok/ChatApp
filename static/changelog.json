@@ -14,7 +14,7 @@
         "Pin a message: hover over it and click 📌. The 📌 at the top of a channel, DM or group lists its pinned messages (up to 100), with Jump and Unpin. Anyone can pin and unpin",
         "@name mentions someone, @everyone mentions everybody: they get a notification and a red count",
         "Type :name for emoji suggestions (↑↓ to choose, Enter or Tab to pick), or use the 😀 button (it only offers emoji your device can draw). Messages with only emoji show them big",
-        "Pictures, videos and files up to 50 MB: the + button, drag and drop, or paste. Up to 10 at once, sent together in one message (pictures and videos as a grid). Click a picture to see it big: zoom with the mouse wheel or a pinch, drag it around, double-click for its real size, and ‹ › or the arrow keys go through the others in the message (on a phone, pinch and swipe). Videos (MP4 and WebM) play right in the chat, with a fullscreen button in the top right corner when you point at one (or double-click it). They start at 30% volume, and each one remembers where you left its volume",
+        "Pictures, videos and files up to 50 MB: the + button, drag and drop, or paste. Up to 10 at once, sent together in one message (pictures and videos as a grid). Click a picture to see it big: zoom with the mouse wheel or a pinch, drag it around, double-click for its real size, and ‹ › or the arrow keys go through the others in the message (on a phone, pinch and swipe). Videos (MP4 and WebM) play right in the chat, with play, a time bar, volume and fullscreen along the bottom (click to play or pause, double-click for fullscreen; then space, ← →, M and F). They start at 30% volume, and each one remembers where you left its volume",
         "Each chat keeps its own half-written message and files: switch to another chat and back, and they're still waiting there",
         "GIFs: the GIF button next to the text box (on phones: the smiley, then the GIF tab). Type to search (from GIPHY), or pick one of the trending ones, and click one to send it (as a reply, if you're replying). Esc closes it",
         "Links are clickable, and the first link in a message gets a preview card: the site, title, description and picture",
@@ -126,7 +126,7 @@
       "date": "2026-10-19",
       "items": [
         "🔌 Fixed: the Android app could get stuck reconnecting, or trying to reach the server, for up to a minute when you opened it. One phone that had lost its signal could hold the server up for everyone else's phones. Thanks for reporting it!",
-        "🎬 Videos in the chat have a fullscreen button in their top right corner when you point at one (it used to hide in the player's ⋮ menu on smaller videos), and in the big view at the bottom"
+        "🎬 Videos on PC have a new player: play, the time bar, volume and a fullscreen button that's always there along the bottom (it used to hide in the ⋮ menu on smaller videos). Videos filmed upright show as a square instead of a thin strip. Click a video to play or pause it, double-click for fullscreen; once clicked, space, ← →, M (mute) and F (fullscreen) work too"
       ]
     },
     {

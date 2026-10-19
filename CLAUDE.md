@@ -42,7 +42,8 @@ the point is for me to understand how it works, not just to have it done.
   generated sound), `ui.js` (drawers, back button, popups, text box, emoji autocomplete), `voice.js`
   (audio engine, mic, gate, volumes, who's in voice), `video.js` (camera, screen sharing), `rooms.js`
   (joining/leaving, DM calls, call banner, Lounge page), `voice-settings.js`, `settings.js`,
-  `people.js` (DM/online lists, friends, profile popup, typing), `viewer.js` (the picture viewer, see "Several files
+  `people.js` (DM/online lists, friends, profile popup, typing), `video-player.js` (`makeVideoPlayer`: our own control
+  bar for chat videos and the viewer's, see "Videos"), `viewer.js` (the picture viewer, see "Several files
   per message"), `chat-info.js` (the chat info panel) and `messages.js` (uploads, messages,
   reactions, replies, editing; ends with `start()`). Code that runs at load time may only use what
   earlier files declare. `appearance.js` alone is loaded in `<head>`, before anything is drawn:
@@ -579,9 +580,16 @@ the point is for me to understand how it works, not just to have it done.
   Videos (since 2026-10-15): `VIDEO_TYPES` (video/mp4, video/webm) are believed only if `is_video` finds the format's
   first bytes ("ftyp" at byte 4; 1A 45 DF A3), served inline like pictures (`SHOWN_TYPES`; FileResponse answers range
   requests for seeking), `file_info` has `"video"`; `mark_old_videos()` at every start turns earlier .mp4/.webm
-  downloads that pass into videos. Web: messages.js `makeVideo` (<video controls preload="metadata"> + the
-  `makeFileLink` under it; an unplayable format leaves the link; `controlslist="nodownload"`, the user's wish: the name
-  under it downloads). Volumes (since 2026-10-16, the user's wish): every video starts at 30% and remembers its own
+  downloads that pass into videos. Web: messages.js `makeVideo` (<video preload="metadata"> in our player + the
+  `makeFileLink` under it; an unplayable format leaves the link; the name under it downloads, the user's wish).
+  The player (since 2026-10-19, the user's wish: Chromium's bar hid fullscreen in ⋮ on narrow videos, and a page can't
+  add to it): video-player.js `makeVideoPlayer(video, {arrowKeys})` (no `controls`; the frame `.video-player` with
+  `.video-bar` over its bottom: time bar and volume as <input type="range">, play, time, mute, fullscreen of the frame;
+  shows on hover/paused/keyboard focus, in fullscreen hides 2 s after the mouse stops ("awake"); click = play/pause,
+  double-click = fullscreen, keys space/K, ← →, M, F; `.tall` (videoHeight > videoWidth) makes it at least 1:1, the
+  user's wish; container queries on the bar drop volume < 260px and the time < 200px). The 400px limit is on the
+  frame, not the video (on the video, the frame came out 533px around a 400px one). The viewer (`#viewer-player`,
+  arrowKeys false: ← → stay its stepping) uses it too; the season popup keeps the browser's controls. Volumes (since 2026-10-16, the user's wish): every video starts at 30% and remembers its own
   (web messages.js `videoVolume`/`saveVideoVolume`, localStorage "videoVolumes" by file id or seasonal path, also the
   season dialog; phone VideoScreen.js, `video-volumes.json` by path, saved on close; the newest 200). Phone: expo-video (`VideoAttachment` in
   MessageText.js: the first frame with a play button; a tap opens `src/VideoScreen.js`, the popup with our control bar

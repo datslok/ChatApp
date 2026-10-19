@@ -16,7 +16,10 @@ const viewerNext = document.getElementById("viewer-next");
 const viewerCount = document.getElementById("viewer-count");
 const viewerFile = document.getElementById("viewer-file");
 const viewerJump = document.getElementById("viewer-jump");
-const viewerFullscreen = document.getElementById("viewer-fullscreen");
+// The video in our player (video-player.js), which takes its place in the popup. ← → stay the viewer's.
+const viewerPlayer = makeVideoPlayer(viewerVideo, { arrowKeys: false });
+viewerPlayer.id = "viewer-player";
+viewerPlayer.hidden = true;
 
 let viewerItems = [];    // what can be looked at: [{file, message}], pictures and videos
 let viewerIndex = 0;     // the one showing
@@ -35,18 +38,18 @@ function showViewerItem(index) {
   const { file, message } = viewerItems[index];  // (takes the object apart into two names)
   const url = "/uploads/" + encodeURIComponent(file.id);
   resetZoom();
-  // A video plays in the browser's player instead of the picture (no zooming those).
+  // A video plays in our player instead of the picture (no zooming those).
   viewerVideo.pause();
   if (file.video) {
     viewerImage.hidden = true;
     viewerImage.removeAttribute("src");
-    viewerVideo.hidden = false;
+    viewerPlayer.hidden = false;
     viewerVideo.src = url;
     viewerVideo.dataset.fileId = file.id;
     viewerVideo.volume = videoVolume(file.id);  // (messages.js: each video remembers its volume)
     viewerVideo.play().catch(() => {});  // (a browser may refuse to start it by itself: then press play)
   } else {
-    viewerVideo.hidden = true;
+    viewerPlayer.hidden = true;
     viewerVideo.removeAttribute("src");
     viewerImage.hidden = false;
     // Drop the old picture first, so the next one doesn't briefly show the old one while loading.
@@ -60,7 +63,6 @@ function showViewerItem(index) {
   viewerCount.textContent = `${index + 1} / ${viewerItems.length}`;
   viewerFile.replaceChildren(makeFileLink(url, file, message));  // (messages.js; in the app: "Download this file?")
   viewerJump.hidden = viewerOnJump === null;
-  viewerFullscreen.hidden = !file.video;
 }
 
 // ‹ and ›: one back or on, going round at the ends (% is the remainder, so 5 % 5 = 0 starts over).
@@ -76,8 +78,6 @@ viewer.addEventListener("keydown", (event) => {
   else return;
   event.preventDefault();  // (or the video player would also skip 5 seconds)
 });
-
-viewerFullscreen.addEventListener("click", () => viewerVideo.requestFullscreen().catch(() => {}));
 
 viewerJump.addEventListener("click", () => {
   const item = viewerItems[viewerIndex];
@@ -96,6 +96,7 @@ viewerVideo.addEventListener("volumechange", () => saveVideoVolume(viewerVideo.d
 // moment after closing: if something opened it again meanwhile, it's that one's now.)
 viewer.addEventListener("close", () => {
   if (viewer.open) return;
+  if (document.fullscreenElement === viewerPlayer) document.exitFullscreen().catch(() => {});
   viewerVideo.pause();
   viewerVideo.removeAttribute("src");
   viewerImage.removeAttribute("src");

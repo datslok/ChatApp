@@ -3459,56 +3459,159 @@ button.download-button {
   border-radius: 8px;
 }
 
-/* A video (messages.js, makeVideo): the browser's player, as big as a picture may be, with its
-   download link under it. A block, so the link starts on the next line. */
-.attachment-video video {
-  display: block;
-  max-width: 100%;  /* (of its frame, which has the 400px) */
-  max-height: 300px;
-  border-radius: 8px;
-}
-/* The video's frame: exactly the video's size (fit-content: as wide as what's in it), so the
-   fullscreen button below can be placed in the video's corner ("relative": the corner of this).
-   The width limit is here, not on the video: there the frame came out wider than a wide video
-   (measured: a 1920x1080 one shown 400px wide in a 533px frame, the width its 300px height allows). */
-.video-frame {
+/* ----- The video player (video-player.js): our own bar over the bottom of a video, like the
+   browser's was, with the time bar on top and the buttons under it. Black and white throughout:
+   the same on every theme, like everything over a video. */
+
+/* The frame: exactly the video's size (fit-content: as wide as what's in it), with the bar placed
+   against it ("relative"). overflow: hidden cuts the bar to the rounded corners. */
+.video-player {
   position: relative;
   width: fit-content;
+  max-width: 100%;
+  border-radius: 8px;
+  overflow: hidden;
+  background: black;  /* (beside a tall video) */
+}
+.video-player[hidden] {
+  display: none;
+}
+.video-player:focus {
+  outline: none;  /* (it gets the focus by a click, for the keys: no ring for that) */
+}
+.video-player:focus-visible {
+  outline: 2px solid var(--accent);
+}
+.video-player video {
+  display: block;
+  max-width: 100%;
+  object-fit: contain;  /* in a box of another shape (tall, fullscreen): all of it, black around */
+  cursor: pointer;
+}
+
+/* In a message, as big as a picture may be, with the download link under it. The width limit is on
+   the frame, not the video: there the frame came out wider than a wide video (measured: a 1920x1080
+   one shown 400px wide in a 533px frame, the width its 300px height allows). Not in fullscreen. */
+.attachment-video .video-player:not(:fullscreen) {
   max-width: min(400px, 100%);
   margin-top: 4px;
 }
-/* Its fullscreen button (messages.js, makeVideoFullscreenButton): a dark round button in the top right
-   corner, only showing while the mouse is over the video (or it has keyboard focus), like Discord's.
-   (Black and white: the same on every theme, like everything over a video.) */
-.video-fullscreen {
-  position: absolute;
-  top: 8px;
-  right: 8px;
+.attachment-video .video-player:not(:fullscreen) video {
+  max-height: 300px;
+}
+/* Taller than wide (video-player.js sets "tall"): at least square, the video in the middle, so a
+   phone held upright isn't a thin strip with no room for the bar. */
+.attachment-video .video-player.tall:not(:fullscreen) video {
+  width: 300px;
+  height: auto;
+  aspect-ratio: 1;
+}
+
+/* Fullscreen: the whole screen, the video as big as fits. */
+.video-player:fullscreen {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  border: none;
-  border-radius: 50%;
-  background: rgba(0, 0, 0, 0.6);
+  border-radius: 0;
+}
+.video-player:fullscreen video {
+  width: 100%;
+  height: 100%;
+}
+
+/* The bar: over the bottom, on a dark fade so white shows on a bright picture too. It shows while
+   the mouse is over the video, while it's paused, and while the keyboard is in it. container-type:
+   the rules at the end ask how wide this bar is (and so the video), not the window. */
+.video-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 24px 8px 4px;
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.75));
   color: white;
-  cursor: pointer;
   opacity: 0;
   transition: opacity 0.15s;
+  container-type: inline-size;
 }
-.video-frame:hover .video-fullscreen,
-.video-fullscreen:focus-visible {
+.video-player:hover .video-bar,
+.video-player.paused .video-bar,
+.video-player:has(:focus-visible) .video-bar,
+.video-player:focus-visible .video-bar {
   opacity: 1;
-}
-.video-fullscreen:hover {
-  background: rgba(0, 0, 0, 0.8);
 }
 /* A touchscreen has no "mouse over": there it always shows. */
 @media (hover: none) {
-  .video-fullscreen {
+  .video-bar {
     opacity: 1;
+  }
+}
+/* Fullscreen and playing: hidden (with the mouse pointer) once the mouse stops moving ("awake",
+   video-player.js), unless it's over the bar itself. */
+.video-player:fullscreen:not(.awake):not(.paused):not(:has(.video-bar:hover)) {
+  cursor: none;
+}
+.video-player:fullscreen:not(.awake):not(.paused):not(:has(.video-bar:hover)) video {
+  cursor: none;
+}
+.video-player:fullscreen:not(.awake):not(.paused):not(:has(.video-bar:hover)) .video-bar {
+  opacity: 0;
+}
+
+/* The two sliders: the browser's own, in the theme's accent colour (accent-color). */
+.video-time-bar,
+.video-volume {
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.video-time-bar {
+  display: block;
+  width: 100%;
+  margin: 0 0 2px;
+}
+.video-volume {
+  width: 70px;
+  min-width: 0;
+}
+.video-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.video-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: white;
+  cursor: pointer;
+}
+.video-button:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+.video-time {
+  font-size: 0.8rem;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;  /* every digit as wide: the time doesn't wobble as it counts */
+}
+.video-spacer {
+  flex: 1;
+}
+/* A narrow video: what doesn't fit goes (Mute still mutes; fullscreen always stays). */
+@container (max-width: 260px) {
+  .video-volume {
+    display: none;
+  }
+}
+@container (max-width: 200px) {
+  .video-time {
+    display: none;
   }
 }
 
@@ -3594,14 +3697,19 @@ button.download-button {
 }
 
 #viewer-image,
-#viewer-video {
+#viewer-player:not(:fullscreen) video {
   max-width: 90vw;
   max-height: 84vh;  /* (room for the bar at the bottom) */
   border-radius: 8px;
 }
+/* A tall video (video-player.js): at least square here too. */
+#viewer-player.tall:not(:fullscreen) video {
+  width: min(84vh, 90vw);
+  height: auto;
+  aspect-ratio: 1;
+}
 #viewer-image[hidden],
-#viewer-video[hidden],
-.viewer-bar-button[hidden],
+#viewer-jump[hidden],
 #viewer-count[hidden],
 .viewer-arrow[hidden] {
   display: none;
@@ -3670,11 +3778,8 @@ button.download-button {
   overflow-wrap: anywhere;
 }
 
-/* Fullscreen (a video) and, from the chat info panel's Media tab, "Jump to message". */
-.viewer-bar-button {
-  display: flex;
-  align-items: center;
-  gap: 6px;  /* (Fullscreen's icon and word) */
+/* From the chat info panel's Media tab: "Jump to message". */
+#viewer-jump {
   flex-shrink: 0;
   padding: 8px 16px;
   border: none;
@@ -3683,7 +3788,7 @@ button.download-button {
   color: var(--text-strong);
   cursor: pointer;
 }
-.viewer-bar-button:hover {
+#viewer-jump:hover {
   background: var(--bg-hover);
 }
 
