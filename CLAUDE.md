@@ -603,7 +603,11 @@ the point is for me to understand how it works, not just to have it done.
   video is re-packed by ffmpeg (`-c copy`, `+faststart`, `-map 0:v -map 0:a?`, 60 s limit, in a thread; the original
   stays if it fails) before /upload answers; `attachments.repacked`; `repack_old_videos` (started by the first
   connection) does older ones and fragmented seasonal videos (`mp4_is_fragmented` reads the top-level boxes).
-  `find_ffmpeg` also reads PATH from the registry (a running server keeps its old PATH). ffmpeg: winget's
+  `find_ffmpeg` also reads PATH from the registry (a running server keeps its old PATH).
+  Sound (since 2026-10-19, the user's wish: the player greys out the volume of a silent video): `FFPROBE` (beside
+  ffmpeg, e.g. WinGet\Links\ffprobe.exe), `has_audio` (ffprobe -select_streams a; None = can't tell) at upload and for
+  `attachments.audio IS NULL` in repack_old_videos; `file_info` gives videos `"audio"` (unknown = true);
+  video-player.js `setVideoAudio(frame, hasSound)` disables `.video-mute` and the slider. Not in the phone app yet. ffmpeg: winget's
   Gyan.FFmpeg (install.ps1 step 1, machine scope; this PC has it per user, its bin folder on the user PATH).
 - GIFs (server.py, "GIFs"; messages.js, "GIFs"): the GIF button by the text box opens #gif-picker. `/gifs/search?q=`
   (trending without q) asks GIPHY's API with `GIPHY_API_KEY` (.env; on this PC in the git-ignored `dev-secrets.env`,

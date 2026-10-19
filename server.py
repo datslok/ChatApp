@@ -858,6 +858,32 @@ def repack_video(path, content_type):
     return False
 
 
+# Has a video any sound? Browsers can't tell before it plays, so the server asks once and the page's
+# player greys its volume out for a silent one (static/js/video-player.js). ffprobe, which comes with
+# ffmpeg (in the same folder), only reads a file and describes what's in it: here, its audio streams.
+FFPROBE = None
+if FFMPEG is not None:
+    beside = Path(FFMPEG).with_name("ffprobe" + Path(FFMPEG).suffix)  # (".exe" on Windows)
+    FFPROBE = str(beside) if beside.is_file() else shutil.which("ffprobe")
+
+
+def has_audio(path):
+    """True if the video at `path` has a sound track, False if not, None if we can't tell (no ffprobe,
+    or it couldn't read the file). Runs a program, so it's called in a background thread."""
+    if FFPROBE is None:
+        return None
+    # -select_streams a: only the audio streams; -show_entries stream=index: one line (its number) for
+    # each; csv=p=0: just that number. No line at all: no sound.
+    command = [FFPROBE, "-v", "error", "-select_streams", "a", "-show_entries", "stream=index", "-of", "csv=p=0", str(path)]
+    try:
+        result = subprocess.run(command, capture_output=True, timeout=30)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if result.returncode != 0:
+        return None
+    return result.stdout.strip() != b""
+
+
 def mp4_is_fragmented(path):
     """Does this MP4 need re-packing: is it in pieces ("moof" boxes), or is its index after the picture
     and sound ("moov" after "mdat")? An MP4 is a row of boxes, each starting with its size (4 bytes) and
@@ -884,6 +910,10 @@ if "repacked" not in table_columns("attachments"):
     # 1 once a video has been through repack_video (whether or not it needed it), so each is done once.
     with db:
         db.execute("ALTER TABLE attachments ADD COLUMN repacked INTEGER NOT NULL DEFAULT 0")
+if "audio" not in table_columns("attachments"):
+    # A video's sound (has_audio): 1 has some, 0 is silent, NULL not known (yet: repack_old_videos asks).
+    with db:
+        db.execute("ALTER TABLE attachments ADD COLUMN audio INTEGER")
 
 # Several files per message: from before, when a message had at most one file, in messages.attachment_id.
 # That's a "one-to-many" relationship now, so the reference is turned around: each file says which
@@ -921,6 +951,16 @@ async def repack_old_videos():
                 db.execute("UPDATE attachments SET size = ? WHERE id = ?", (path.stat().st_size, file_id))
         with db:
             db.execute("UPDATE attachments SET repacked = 1 WHERE id = ?", (file_id,))
+    # And videos whose sound we don't know yet (from before has_audio; or ffprobe failed: tried again).
+    rows = db.execute(
+        "SELECT id FROM attachments WHERE content_type IN ('video/mp4', 'video/webm') AND audio IS NULL"
+    ).fetchall()
+    for (file_id,) in rows:
+        path = UPLOAD_DIR / file_id
+        audio = await asyncio.to_thread(has_audio, path) if path.exists() else None
+        if audio is not None:
+            with db:
+                db.execute("UPDATE attachments SET audio = ? WHERE id = ?", (int(audio), file_id))
     for season in SEASONS:
         path = SEASONAL_DIR / season["video"]
         if path.is_file() and await asyncio.to_thread(mp4_is_fragmented, path):
@@ -970,10 +1010,14 @@ def save_message(channel, user_id, text, files, reply_to, kind=None, sent_from=N
     return message_id, iso_time(sent_at)
 
 
-def file_info(attachment_id, filename, size, content_type):
-    """What the page needs to know about an attachment."""
-    return {"id": attachment_id, "filename": filename, "size": size,
+def file_info(attachment_id, filename, size, content_type, audio=None):
+    """What the page needs to know about an attachment. A video also says whether it has sound
+    (attachments.audio; not known counts as yes, so the volume is never greyed out by mistake)."""
+    info = {"id": attachment_id, "filename": filename, "size": size,
             "image": content_type in IMAGE_TYPES, "video": content_type in VIDEO_TYPES}
+    if info["video"]:
+        info["audio"] = audio != 0
+    return info
 
 
 def files_note(files):
@@ -1060,12 +1104,12 @@ def files_for(message_ids):
         return result
     placeholders = ",".join("?" * len(message_ids))
     rows = db.execute(
-        f"SELECT message_id, id, filename, size, content_type FROM attachments WHERE message_id IN ({placeholders})"
+        f"SELECT message_id, id, filename, size, content_type, audio FROM attachments WHERE message_id IN ({placeholders})"
         " ORDER BY message_id, position",
         list(message_ids),
     )
-    for message_id, file_id, filename, size, content_type in rows:
-        result[message_id].append(file_info(file_id, filename, size, content_type))
+    for message_id, file_id, filename, size, content_type, audio in rows:
+        result[message_id].append(file_info(file_id, filename, size, content_type, audio))
     return result
 
 
@@ -2313,11 +2357,14 @@ async def upload(request: Request, filename: str):
     repacked = content_type in VIDEO_TYPES and FFMPEG is not None
     if repacked and await asyncio.to_thread(repack_video, UPLOAD_DIR / file_id, content_type):
         size = (UPLOAD_DIR / file_id).stat().st_size
+    # And whether it has sound (see has_audio; None: not known, asked again at the next start).
+    audio = await asyncio.to_thread(has_audio, UPLOAD_DIR / file_id) if content_type in VIDEO_TYPES else None
 
     with db:
         db.execute(
-            "INSERT INTO attachments (id, filename, content_type, size, uploader_id, repacked) VALUES (?, ?, ?, ?, ?, ?)",
-            (file_id, filename, content_type, size, user_id, int(repacked)),
+            "INSERT INTO attachments (id, filename, content_type, size, uploader_id, repacked, audio)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (file_id, filename, content_type, size, user_id, int(repacked), None if audio is None else int(audio)),
         )
     return {"id": file_id}
 
@@ -2349,10 +2396,10 @@ def claim_attachments(file_ids, user_id, channel):
         return None
     files = []
     for file_id in file_ids:
-        filename, size, content_type = db.execute(
-            "SELECT filename, size, content_type FROM attachments WHERE id = ?", (file_id,)
+        filename, size, content_type, audio = db.execute(
+            "SELECT filename, size, content_type, audio FROM attachments WHERE id = ?", (file_id,)
         ).fetchone()
-        files.append(file_info(file_id, filename, size, content_type))
+        files.append(file_info(file_id, filename, size, content_type, audio))
     return files
 
 

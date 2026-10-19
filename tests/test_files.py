@@ -1,7 +1,10 @@
 """Files: uploads and who may download them, pictures and videos vs other files, profile pictures and
 banners, and custom emoji."""
 import io
+import shutil
+import subprocess
 
+import pytest
 from PIL import Image
 
 from conftest import Client, unique
@@ -64,6 +67,42 @@ def test_a_video_must_really_be_one(server, channel):
         assert ws.wait_for("message")["file"]["video"] is True
         ws.send(type="message", text="", file=fake)
         assert ws.wait_for("message")["file"]["video"] is False
+
+
+def made_video(tmp_path, name, sound):
+    """A real one-second MP4 made by ffmpeg: a blue picture, with a tone or without any sound."""
+    ffmpeg = shutil.which("ffmpeg")
+    if ffmpeg is None:
+        pytest.skip("ffmpeg isn't installed")
+    path = tmp_path / name
+    command = [ffmpeg, "-v", "error", "-y", "-f", "lavfi", "-i", "color=c=blue:s=160x120:d=1"]
+    if sound:
+        command += ["-f", "lavfi", "-i", "sine=frequency=440:duration=1"]
+    command += ["-pix_fmt", "yuv420p", "-shortest", str(path)]
+    subprocess.run(command, check=True)
+    return path.read_bytes()
+
+
+def test_a_video_says_whether_it_has_sound(server, channel, tmp_path):
+    a = server.person()
+    loud = upload(a, "tone.mp4", made_video(tmp_path, "tone.mp4", sound=True), "video/mp4")
+    quiet = upload(a, "quiet.mp4", made_video(tmp_path, "quiet.mp4", sound=False), "video/mp4")
+    unreadable = upload(a, "clip.mp4", b"\x00\x00\x00\x18ftypmp42" + b"\x00" * 200, "video/mp4")
+    with a.connect() as ws:
+        ws.join(channel)
+        ws.send(type="message", text="", files=[loud, quiet, unreadable])
+        files = ws.wait_for("message")["files"]
+    assert [file["audio"] for file in files] == [True, False, True]  # (not known: counted as sound)
+    assert "audio" not in upload_info(a, channel)  # only videos say
+
+
+def upload_info(person, channel):
+    """A text file's info as a message brings it."""
+    file_id = upload(person, "notes.txt", b"hello", "text/plain")
+    with person.connect() as ws:
+        ws.join(channel)
+        ws.send(type="message", text="", files=[file_id])
+        return ws.wait_for("message")["files"][0]
 
 
 def test_an_unsent_file_is_only_for_its_uploader(server):

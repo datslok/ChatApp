@@ -387,7 +387,8 @@ function makeVideo(url, file, message) {
   video.volume = videoVolume(file.id);
   video.addEventListener("volumechange", () => saveVideoVolume(file.id, video.volume));
   video.preload = "metadata";
-  const player = makeVideoPlayer(video);
+  // (audio: false only when the server knows it has no sound; from older servers it's missing)
+  const player = makeVideoPlayer(video, { audio: file.audio !== false });
   video.addEventListener("error", () => player.remove());
   box.append(player, makeFileLink(url, file, message));
   return box;

@@ -44,6 +44,7 @@ function showViewerItem(index) {
     viewerImage.hidden = true;
     viewerImage.removeAttribute("src");
     viewerPlayer.hidden = false;
+    setVideoAudio(viewerPlayer, file.audio !== false);  // (video-player.js: greyed sound if it has none)
     viewerVideo.src = url;
     viewerVideo.dataset.fileId = file.id;
     viewerVideo.volume = videoVolume(file.id);  // (messages.js: each video remembers its volume)

@@ -3595,6 +3595,15 @@ button.download-button {
 .video-button:hover {
   background: rgba(255, 255, 255, 0.15);
 }
+/* A video without sound (video-player.js, setVideoAudio): its sound button and volume slider greyed out. */
+.video-button:disabled,
+.video-volume:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.video-button:disabled:hover {
+  background: none;
+}
 .video-time {
   font-size: 0.8rem;
   white-space: nowrap;

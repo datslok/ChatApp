@@ -128,7 +128,8 @@ between them. This uses its own database (`dev.db`) and upload folder (`dev-uplo
 ignores it, so the key is never committed. Without it the GIF button says GIF search isn't set up.
 
 **Videos** are re-packed by ffmpeg when they're uploaded (the same picture and sound, with their length
-and index at the start, so the phone app's player can show the length and skip). Without ffmpeg they're
+and index at the start, so the phone app's player can show the length and skip), and ffprobe (which comes
+with it) checks whether they have sound, so the player greys out the volume of a silent one. Without ffmpeg they're
 kept as they are and the server says so when it starts. To install it: `winget install Gyan.FFmpeg`
 (the server finds it without restarting PowerShell). Videos uploaded before are re-packed once, in the
 background, after the server starts; so are the seasonal videos.

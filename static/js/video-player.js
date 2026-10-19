@@ -33,10 +33,20 @@ function makePlayerButton(icon, label) {
   return button;
 }
 
+// A video without sound (the server says so: file_info's "audio", found by ffprobe): the sound button and
+// volume slider are greyed out and do nothing ("silent", chat.css). The viewer calls it for each video.
+function setVideoAudio(frame, hasSound) {
+  frame.classList.toggle("silent", !hasSound);
+  const muteButton = frame.querySelector(".video-mute");
+  muteButton.disabled = !hasSound;
+  frame.querySelector(".video-volume").disabled = !hasSound;
+  frame.querySelector("video").dispatchEvent(new Event("volumechange"));  // (redraws the button: showSound)
+}
+
 // Puts `video` in a player (the frame with the bar over its bottom) and returns the frame. If the video
 // is already on the page, the frame takes its place. arrowKeys: false leaves ← → to the page (the
-// picture viewer goes through its pictures with them).
-function makeVideoPlayer(video, { arrowKeys = true } = {}) {
+// picture viewer goes through its pictures with them). audio: false for a video without sound.
+function makeVideoPlayer(video, { arrowKeys = true, audio = true } = {}) {
   const frame = document.createElement("div");
   frame.className = "video-player paused";
   frame.tabIndex = 0;  // it can have the keyboard's focus (clicking it gives it), for the keys below
@@ -60,6 +70,7 @@ function makeVideoPlayer(video, { arrowKeys = true } = {}) {
   const spacer = document.createElement("span");
   spacer.className = "video-spacer";  // takes the free room, pushing the rest to the right
   const muteButton = makePlayerButton("volume-2", "Mute");
+  muteButton.classList.add("video-mute");
   const volume = document.createElement("input");
   volume.type = "range";
   volume.className = "video-volume";
@@ -90,10 +101,11 @@ function makeVideoPlayer(video, { arrowKeys = true } = {}) {
     playButton.setAttribute("aria-label", playButton.title);
   }
   function showSound() {
-    const silent = video.muted || video.volume === 0;
-    volume.value = video.muted ? 0 : video.volume;
+    const noSound = frame.classList.contains("silent");  // (the video has none: see setVideoAudio)
+    const silent = noSound || video.muted || video.volume === 0;
+    volume.value = video.muted || noSound ? 0 : video.volume;
     setIcon(muteButton, silent ? "volume-x" : "volume-2");
-    muteButton.title = silent ? "Unmute" : "Mute";
+    muteButton.title = noSound ? "This video has no sound" : silent ? "Unmute" : "Mute";
     muteButton.setAttribute("aria-label", muteButton.title);
   }
   // The length and shape are known (preload="metadata" loads them without the video itself).
@@ -129,6 +141,7 @@ function makeVideoPlayer(video, { arrowKeys = true } = {}) {
     else video.pause();
   }
   function toggleMute() {
+    if (frame.classList.contains("silent")) return;  // (nothing to mute: M does nothing either)
     if (video.muted || video.volume === 0) {
       video.muted = false;
       if (video.volume === 0) video.volume = 0.3;  // (unmuting at no volume would still be silent)
@@ -195,6 +208,6 @@ function makeVideoPlayer(video, { arrowKeys = true } = {}) {
 
   showTime();
   showPlaying();
-  showSound();
+  setVideoAudio(frame, audio);  // (and draws the sound button, through showSound)
   return frame;
 }
