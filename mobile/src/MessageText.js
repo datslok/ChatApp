@@ -374,7 +374,9 @@ function MediaGrid({ media, onLongPress }) {
       </View>
       {viewing !== null ? <ImageViewer files={pictures} index={viewing} onClose={() => setViewing(null)} /> : null}
       {watching ? (
-        <VideoScreen path={`/uploads/${encodeURIComponent(watching.id)}`} onClose={() => setWatching(null)} />
+        <VideoScreen
+          path={`/uploads/${encodeURIComponent(watching.id)}`} audio={watching.audio !== false} onClose={() => setWatching(null)}
+        />
       ) : null}
     </View>
   );
@@ -435,7 +437,11 @@ function VideoAttachment({ file, sender, onLongPress }) {
         </View>
       </View>
       <FileAttachment file={file} sender={sender} onLongPress={onLongPress} />
-      {watching ? <VideoScreen path={`/uploads/${encodeURIComponent(file.id)}`} onClose={() => setWatching(false)} /> : null}
+      {watching ? (
+        <VideoScreen
+          path={`/uploads/${encodeURIComponent(file.id)}`} audio={file.audio !== false} onClose={() => setWatching(false)}
+        />
+      ) : null}
     </View>
   );
 }

@@ -126,7 +126,7 @@
       "date": "2026-10-19",
       "items": [
         "🔌 Fixed: the Android app could get stuck reconnecting, or trying to reach the server, for up to a minute when you opened it. One phone that had lost its signal could hold the server up for everyone else's phones. Thanks for reporting it!",
-        "🎬 Videos on PC have a new player: play, the time bar, volume and a fullscreen button that's always there along the bottom (it used to hide in the ⋮ menu on smaller videos). Videos filmed upright show as a square instead of a thin strip. Click a video to play or pause it, double-click for fullscreen; once clicked, space, ← →, M (mute) and F (fullscreen) work too. A video without sound has its volume greyed out"
+        "🎬 Videos on PC have a new player: play, the time bar, volume and a fullscreen button that's always there along the bottom (it used to hide in the ⋮ menu on smaller videos). Videos filmed upright show as a square instead of a thin strip. Click a video to play or pause it, double-click for fullscreen; once clicked, space, ← →, M (mute) and F (fullscreen) work too. A video without sound has its volume greyed out (in the Android app too)"
       ]
     },
     {

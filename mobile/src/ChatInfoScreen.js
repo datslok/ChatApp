@@ -214,7 +214,11 @@ function MediaTile({ file, message, onJump }) {
           />
         )}
       </Pressable>
-      {open && file.video ? <VideoScreen path={`/uploads/${encodeURIComponent(file.id)}`} onClose={() => setOpen(false)} onJump={jump} /> : null}
+      {open && file.video ? (
+        <VideoScreen
+          path={`/uploads/${encodeURIComponent(file.id)}`} audio={file.audio !== false} onClose={() => setOpen(false)} onJump={jump}
+        />
+      ) : null}
       {open && !file.video ? <ImageViewer files={[file]} onClose={() => setOpen(false)} onJump={jump} /> : null}
     </>
   );

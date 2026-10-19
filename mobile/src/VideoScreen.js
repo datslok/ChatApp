@@ -57,7 +57,9 @@ function saveVideoVolume(path, volume) {
 // path: the video's address on the server ("/uploads/<id>", "/seasonal/halloween.mp4"), also the key
 // its volume is remembered by. onClose: closes it.
 // onJump (from the chat info screen's Media tab): "Jump to message" under it.
-export default function VideoScreen({ path, onClose, onJump }) {
+// audio: false for a video without sound (the server's file_info says so): the sound button and volume are
+// greyed out and take no touches, like the web page's player (video-player.js, setVideoAudio).
+export default function VideoScreen({ path, onClose, onJump, audio = true }) {
   const styles = useStyles(makeStyles);
   const screen = useWindowDimensions();
   const startVolume = useMemo(() => videoVolumes()[path] ?? START_VOLUME, [path]);
@@ -167,17 +169,23 @@ export default function VideoScreen({ path, onClose, onJump }) {
                 <Icon name={playing ? 'pause' : 'play'} size={22} color="#ffffff" />
               </Pressable>
               <Text style={styles.time}>{minutes(time)} / {minutes(duration)}</Text>
-              <Pressable onPress={() => { player.muted = !muted; }} hitSlop={8} accessibilityLabel={muted ? 'Unmute' : 'Mute'}>
-                <Icon name={muted || volume === 0 ? 'volume-x' : 'volume-2'} size={22} color="#ffffff" />
-              </Pressable>
-              <View style={styles.volume}>
-                <Slider
-                  value={muted ? 0 : Math.round(volume * 100)} min={0} max={100} step={1}
-                  onChange={(value) => {
-                    player.volume = value / 100;
-                    if (muted && value > 0) player.muted = false;
-                  }}
-                />
+              {/* (pointerEvents "none": no touches reach the sound controls of a silent video) */}
+              <View style={[styles.sound, !audio && styles.silent]} pointerEvents={audio ? 'auto' : 'none'}>
+                <Pressable
+                  onPress={() => { player.muted = !muted; }} hitSlop={8}
+                  accessibilityLabel={!audio ? 'This video has no sound' : muted ? 'Unmute' : 'Mute'}
+                >
+                  <Icon name={!audio || muted || volume === 0 ? 'volume-x' : 'volume-2'} size={22} color="#ffffff" />
+                </Pressable>
+                <View style={styles.volume}>
+                  <Slider
+                    value={!audio || muted ? 0 : Math.round(volume * 100)} min={0} max={100} step={1}
+                    onChange={(value) => {
+                      player.volume = value / 100;
+                      if (muted && value > 0) player.muted = false;
+                    }}
+                  />
+                </View>
               </View>
             </View>
           </View>
@@ -211,6 +219,9 @@ const makeStyles = (colors, size) => StyleSheet.create({
   time: { flex: 1, color: '#ffffff', fontSize: size(13.6), fontVariant: ['tabular-nums'] },
   timeBar: { flexDirection: 'row' },
   volume: { width: 100, flexDirection: 'row' },
+  // The sound button and volume together (the row's gap between them), greyed out for a silent video.
+  sound: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  silent: { opacity: 0.4 },
   // The web page's #viewer-jump: a panel-coloured button under the video.
   jump: { marginTop: 16, paddingVertical: 8, paddingHorizontal: 16, borderRadius: 6, backgroundColor: colors.bgPanel },
   jumpText: { color: colors.textStrong, fontSize: size(16) },
