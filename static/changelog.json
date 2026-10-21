@@ -125,7 +125,8 @@
     {
       "date": "2026-10-21",
       "items": [
-        "📱 In the Android app, a call's tile opened over the whole screen (a camera or a shared screen) now turns with your phone: hold it sideways to watch it wide. It follows your phone's auto-rotate setting, and the rest of the app stays upright. Its volume bar, name and × fade away after a few seconds: tap the video to bring them back, × or back closes it"
+        "📱 In the Android app, a call's tile opened over the whole screen (a camera or a shared screen) now turns with your phone: hold it sideways to watch it wide. It follows your phone's auto-rotate setting, and the rest of the app stays upright. Its volume bar, name and × fade away after a few seconds: tap the video to bring them back, × or back closes it",
+        "☀️ In the Android app, the screen stays on during a call while the app is open, so it doesn't go dark while you watch someone's screen or camera (the power button still turns it off)"
       ]
     },
     {

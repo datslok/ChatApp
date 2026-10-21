@@ -20,6 +20,7 @@ import {
 import { Room, RoomEvent, Track, VideoPresets43 } from 'livekit-client';
 import { AndroidAudioTypePresets, AudioSession } from '@livekit/react-native';
 import { setAudioModeAsync } from 'expo-audio';
+import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { File, Paths } from 'expo-file-system';
 import { SERVER } from './config';
 import { chatLabel } from './chats';
@@ -220,6 +221,15 @@ export function useVoice(connection, onOpenChatRef) {
   }
 
   useEffect(applyAllVolumes, [settings, deafened]);
+
+  // The screen stays on for the whole call (the user's wish), while the app is in front: expo-keep-awake
+  // sets the window's FLAG_KEEP_SCREEN_ON, which Android ignores once the app isn't showing, and the
+  // power button still turns it off. Ends with the call, however it ends (roomName back to null).
+  useEffect(() => {
+    if (!roomName) return undefined;
+    activateKeepAwakeAsync('call').catch(() => {});
+    return () => deactivateKeepAwake('call').catch(() => {});
+  }, [roomName]);
 
   // ----- Who's talking (the web page's "Who's talking")
 
