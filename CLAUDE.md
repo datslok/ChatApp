@@ -283,7 +283,7 @@ the point is for me to understand how it works, not just to have it done.
   foreground service's notification is hidden. Its channel "ongoing_calls" is default importance with no sound and
   VISIBILITY_PUBLIC (the first, low-importance "calls" one, which Samsung hid from the lock screen, is deleted). connection.js: `voiceMembers`, `dmCalls`, `sendVoice` (re-sent at every
   reconnect), `ring`/`answerCall`/`cancelCall`. Screens: `src/CallParts.js` (RoundButton, `makeTiles`, CallTile with
-  `<VideoTrack>`, TileGrid = fitTiles, FocusView: a tap on a tile opens it over the screen, and only while it's open the app may rotate (**expo-screen-orientation**: `unlockAsync` = Android's UNSPECIFIED, which follows the phone's auto-rotate; closing locks PORTRAIT_UP again; sideways it fills the screen; the user's wish, 2026-10-21), OutputButton's Sheet,
+  `<VideoTrack>`, TileGrid = fitTiles, FocusView: a tap on a tile opens it over the screen, and only while it's open the app may rotate (**expo-screen-orientation**: `unlockAsync` = Android's UNSPECIFIED, which follows the phone's auto-rotate; closing locks PORTRAIT_UP again; sideways it fills the screen; the user's wish, 2026-10-21; its ×, name band and volume slider fade out after `CONTROLS_FOR` 3 s, a tap toggles them, so × or back closes it), OutputButton's Sheet,
   CallControls), `src/LoungeScreen.js` (the `voice:lounge` view; App.js `pick` joins it like the web), `src/CallBanner.js`
   (40% of the height above a DM's/group's chat), `src/IncomingCall.js`, the Sidebar's Voice list + VoiceBar + mute/deafen
   in your panel, the green phone in ChatButtons, Call in the user menu, Voice volume in profiles, In voice in MeScreen,

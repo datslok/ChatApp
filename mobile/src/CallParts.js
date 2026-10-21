@@ -1,9 +1,10 @@
 // The pieces calls are drawn with, on the Lounge page (LoungeScreen.js) and in a DM's call banner
 // (CallBanner.js): the web page's .call-tile, .call-round buttons and fitTiles (rooms.js).
-import { useEffect, useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Animated, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { VideoTrack } from '@livekit/react-native';
 import * as ScreenOrientation from 'expo-screen-orientation';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from './Icon';
 import { Avatar } from './people';
 import { Sheet, SheetItem } from './Sheet';
@@ -12,6 +13,7 @@ import Slider from './Slider';
 import { useStyles, useTheme } from './theme';
 
 const TILE_GAP = 8;  // the space between tiles (rooms.js's TILE_GAP)
+const CONTROLS_FOR = 3000;  // ms: FocusView's controls stay this long after the last touch
 
 // A round button (.call-round): kind "off" (red: muted), "on" (green: camera on), "end" (red: leave),
 // or nothing (grey).
@@ -71,7 +73,8 @@ export function makeTiles({ members, people, meId, inCall, alwaysMe, extra = () 
 // One tile: a camera filling it (or a screen fitted inside it, on black), else the picture in the middle;
 // the name (with the mic-off or headphone-off icon) in the corner, and a green ring while they talk.
 // onLongPress: the user menu (the web page's right-click on a tile).
-export function CallTile({ tile, user, width, speaking, facing, onPress, onLongPress }) {
+// nameOpacity: an Animated value the name band fades with (FocusView's controls), else always shown.
+export function CallTile({ tile, user, width, speaking, facing, onPress, onLongPress, nameOpacity }) {
   const styles = useStyles(makeStyles);
   const height = (width * 9) / 16;
   const name = user?.name ?? '?';
@@ -91,10 +94,10 @@ export function CallTile({ tile, user, width, speaking, facing, onPress, onLongP
       ) : (
         <View style={tile.away && styles.away}><Avatar user={user} size={pictureSize} /></View>
       )}
-      <View style={styles.name}>
+      <Animated.View style={[styles.name, nameOpacity && { opacity: nameOpacity }]}>
         {stateIcon ? <Icon name={stateIcon} size={14} color="#ffffff" /> : null}
         <Text numberOfLines={1} style={styles.nameText}>{label}</Text>
-      </View>
+      </Animated.View>
       {speaking && !tile.screen ? <View pointerEvents="none" style={styles.ring} /> : null}
     </Pressable>
   );
@@ -139,14 +142,44 @@ export function TileGrid({ tiles, voice, connection, style, onUserMenu }) {
 }
 
 // A tile over the whole screen, on black (the web page's focus and fullscreen in one: a phone's screen is
-// small). A tap or the back button closes it. voice: given for a shared screen with sound, which then gets
-// its volume slider under it (the web page's makeScreenVolume).
+// small). voice: given for a shared screen with sound, which then gets its volume slider under it (the web
+// page's makeScreenVolume).
+// Its controls (the ×, the name and the volume slider) lie over the video, so like a phone's video player
+// they fade out CONTROLS_FOR after the last touch (never while the slider is held); a tap shows them again,
+// or hides them at once. × or the back button closes it.
 // While it's open the app may turn with the phone (the user's wish), as far as the phone's own auto-rotate
 // allows: unlockAsync is Android's UNSPECIFIED, which follows that setting (not FULL_SENSOR, which ignores
 // it). Closing it locks the app upright again, as app.json has it. Sideways, the tile fills the screen.
 export function FocusView({ tile, user, speaking, facing, onClose, voice, onLongPress }) {
   const styles = useStyles(makeStyles);
   const [size, setSize] = useState(null);
+  const insets = useSafeAreaInsets();
+  const [shown, setShown] = useState(true);
+  const fade = useRef(new Animated.Value(1)).current;
+  const timer = useRef(null);
+  const dragging = useRef(false);  // the volume slider held: the controls stay
+  function hideLater() {
+    clearTimeout(timer.current);
+    timer.current = setTimeout(() => {
+      if (!dragging.current) setShown(false);
+    }, CONTROLS_FOR);
+  }
+  function toggle() {
+    if (shown) {
+      clearTimeout(timer.current);
+      setShown(false);
+    } else {
+      setShown(true);
+      hideLater();
+    }
+  }
+  useEffect(() => {
+    Animated.timing(fade, { toValue: shown ? 1 : 0, duration: 200, useNativeDriver: true }).start();
+  }, [shown]);
+  useEffect(() => {
+    hideLater();
+    return () => clearTimeout(timer.current);
+  }, []);
   useEffect(() => {
     ScreenOrientation.unlockAsync().catch(() => {});
     return () => {
@@ -156,20 +189,40 @@ export function FocusView({ tile, user, speaking, facing, onClose, voice, onLong
   const margin = size && size.width > size.height ? 0 : 16;
   return (
     <Modal transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent navigationBarTranslucent>
-      <Pressable style={styles.focus} onPress={onClose} onLayout={(event) => setSize(event.nativeEvent.layout)}>
+      <Pressable style={styles.focus} onPress={toggle} onLayout={(event) => setSize(event.nativeEvent.layout)}>
         {size ? (
           <CallTile
-            tile={tile} user={user} speaking={speaking} facing={facing} onPress={onClose} onLongPress={onLongPress}
-            width={Math.min(size.width - margin, ((size.height - margin) * 16) / 9)}
+            tile={tile} user={user} speaking={speaking} facing={facing} onPress={toggle} onLongPress={onLongPress}
+            width={Math.min(size.width - margin, ((size.height - margin) * 16) / 9)} nameOpacity={fade}
           />
         ) : null}
-        {voice ? <ScreenVolume voice={voice} id={tile.id} /> : null}
+        {/* (Hidden controls can't be touched: pointerEvents "none".) */}
+        <Animated.View
+          style={[StyleSheet.absoluteFill, { opacity: fade }]} pointerEvents={shown ? 'box-none' : 'none'}
+        >
+          <Pressable
+            style={[styles.focusClose, { top: insets.top + 8, left: insets.left + 8 }]} onPress={onClose}
+            accessibilityLabel="Close" hitSlop={8}
+          >
+            <Icon name="x" size={24} color="#ffffff" />
+          </Pressable>
+          {voice ? (
+            <ScreenVolume
+              voice={voice} id={tile.id}
+              onDrag={(held) => {
+                dragging.current = held;
+                hideLater();
+              }}
+            />
+          ) : null}
+        </Animated.View>
       </Pressable>
     </Modal>
   );
 }
 
-function ScreenVolume({ voice, id }) {
+// onDrag(held): true while the slider moves, false when it's let go.
+function ScreenVolume({ voice, id, onDrag }) {
   const styles = useStyles(makeStyles);
   const [percent, setPercent] = useState(voice.screenVolume(id));
   return (
@@ -182,7 +235,9 @@ function ScreenVolume({ voice, id }) {
           onChange={(value) => {
             setPercent(value);
             voice.setScreenVolume(id, value);
+            onDrag?.(true);
           }}
+          onDone={() => onDrag?.(false)}
         />
       </View>
       <Text style={styles.screenVolumeText}>{percent}%</Text>
@@ -317,6 +372,7 @@ const makeStyles = (colors, size) => StyleSheet.create({
     paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, backgroundColor: 'rgba(0, 0, 0, 0.6)',
   },
   screenSlider: { flex: 1 },
+  focusClose: { position: 'absolute', padding: 8, borderRadius: 20, backgroundColor: 'rgba(0, 0, 0, 0.6)' },
   screenVolumeText: { width: 44, textAlign: 'right', color: '#ffffff', fontSize: size(13.6) },
   controls: { flexDirection: 'row', justifyContent: 'center', flexWrap: 'wrap', gap: 12 },
 });

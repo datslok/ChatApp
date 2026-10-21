@@ -47,7 +47,7 @@
       "items": [
         "The Lounge: a voice channel anyone can join. 📞 in a DM calls your friend, and it rings on all their devices",
         "🎤 mute and 🎧 deafen at the bottom left. 📷 camera and 🖥️ screen sharing (up to 1440p and 60 fps, with your PC's sound but not the call's) in calls and the Lounge",
-        "Click a tile to make it big, right-click it for the profile. ⛶ or double-click a screen for fullscreen, where the others float in a small window: drag it to any corner, or hide it with 👥. In a DM, drag the call's bottom edge to resize it. In the Android app, tap a tile to see it over the whole screen, and turn the phone on its side (with auto-rotate on) to watch it wide",
+        "Click a tile to make it big, right-click it for the profile. ⛶ or double-click a screen for fullscreen, where the others float in a small window: drag it to any corner, or hide it with 👥. In a DM, drag the call's bottom edge to resize it. In the Android app, tap a tile to see it over the whole screen (tap again for its controls, × or back closes it), and turn the phone on its side (with auto-rotate on) to watch it wide",
         "In a call but looking at another chat: the call floats in a small window in a corner (whoever is talking, or their camera). Click it to go back to the call, drag it to any corner",
         "Volume per person (0–200%) in their profile: click them, also in the voice list. A shared screen has its own volume: hover over it for the slider",
         "Settings → Voice & audio: microphone, speakers, volumes, sensitivity and noise suppression. Settings → Video: your camera, with a preview",
@@ -125,7 +125,7 @@
     {
       "date": "2026-10-21",
       "items": [
-        "📱 In the Android app, a call's tile opened over the whole screen (a camera or a shared screen) now turns with your phone: hold it sideways to watch it wide. It follows your phone's auto-rotate setting, and the rest of the app stays upright"
+        "📱 In the Android app, a call's tile opened over the whole screen (a camera or a shared screen) now turns with your phone: hold it sideways to watch it wide. It follows your phone's auto-rotate setting, and the rest of the app stays upright. Its volume bar, name and × fade away after a few seconds: tap the video to bring them back, × or back closes it"
       ]
     },
     {
