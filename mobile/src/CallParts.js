@@ -1,8 +1,9 @@
 // The pieces calls are drawn with, on the Lounge page (LoungeScreen.js) and in a DM's call banner
 // (CallBanner.js): the web page's .call-tile, .call-round buttons and fitTiles (rooms.js).
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { VideoTrack } from '@livekit/react-native';
+import * as ScreenOrientation from 'expo-screen-orientation';
 import Icon from './Icon';
 import { Avatar } from './people';
 import { Sheet, SheetItem } from './Sheet';
@@ -140,16 +141,26 @@ export function TileGrid({ tiles, voice, connection, style, onUserMenu }) {
 // A tile over the whole screen, on black (the web page's focus and fullscreen in one: a phone's screen is
 // small). A tap or the back button closes it. voice: given for a shared screen with sound, which then gets
 // its volume slider under it (the web page's makeScreenVolume).
+// While it's open the app may turn with the phone (the user's wish), as far as the phone's own auto-rotate
+// allows: unlockAsync is Android's UNSPECIFIED, which follows that setting (not FULL_SENSOR, which ignores
+// it). Closing it locks the app upright again, as app.json has it. Sideways, the tile fills the screen.
 export function FocusView({ tile, user, speaking, facing, onClose, voice, onLongPress }) {
   const styles = useStyles(makeStyles);
   const [size, setSize] = useState(null);
+  useEffect(() => {
+    ScreenOrientation.unlockAsync().catch(() => {});
+    return () => {
+      ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch(() => {});
+    };
+  }, []);
+  const margin = size && size.width > size.height ? 0 : 16;
   return (
-    <Modal transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent>
+    <Modal transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent navigationBarTranslucent>
       <Pressable style={styles.focus} onPress={onClose} onLayout={(event) => setSize(event.nativeEvent.layout)}>
         {size ? (
           <CallTile
             tile={tile} user={user} speaking={speaking} facing={facing} onPress={onClose} onLongPress={onLongPress}
-            width={Math.min(size.width - 16, ((size.height - 16) * 16) / 9)}
+            width={Math.min(size.width - margin, ((size.height - margin) * 16) / 9)}
           />
         ) : null}
         {voice ? <ScreenVolume voice={voice} id={tile.id} /> : null}
