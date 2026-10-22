@@ -3,7 +3,7 @@
 // again whenever a pin changes or a message is deleted while it's open, so it stays up to date.
 import { useEffect } from 'react';
 import { ScrollView, Text } from 'react-native';
-import { CardButton, MessageCard, Popup, makeStyles } from './MessageCard';
+import { CardButton, MessageCard, askToPin, Popup, makeStyles } from './MessageCard';
 import { useStyles } from './theme';
 
 // onJump(messageId): close this and go to the message.
@@ -29,7 +29,7 @@ export default function PinsScreen({ connection, onJump, onClose, onUserMenu }) 
           {pins.map((message) => (
             <MessageCard key={message.id} message={message} connection={connection} onUserMenu={onUserMenu}>
               <CardButton label="Jump" onPress={() => onJump(message.id)} />
-              <CardButton label="Unpin" secondary onPress={() => connection.pin(message.id, false)} />
+              <CardButton label="Unpin" secondary onPress={() => askToPin(connection, message.id, false)} />
             </MessageCard>
           ))}
         </ScrollView>

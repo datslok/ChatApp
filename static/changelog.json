@@ -11,7 +11,7 @@
         "Scrolled far up in a chat? The round ↓ button at the bottom right takes you back to the newest messages",
         "Click a reply's quote to jump to the original message (older ones load by themselves)",
         "A red line marked NEW shows where you stopped reading in a chat (also for messages that came while you were away from the window). Lots of new ones? The chat opens at the line. It goes away when you write something",
-        "Pin a message: hover over it and click 📌. The 📌 at the top of a channel, DM or group lists its pinned messages (up to 100), with Jump and Unpin. Anyone can pin and unpin",
+        "Pin a message: hover over it and click 📌. The 📌 at the top of a channel, DM or group lists its pinned messages (up to 100), with Jump and Unpin. Anyone can pin and unpin. It asks first, so nothing gets pinned by mistake (Shift+click skips the question)",
         "@name mentions someone, @everyone mentions everybody: they get a notification and a red count",
         "Type :name for emoji suggestions (↑↓ to choose, Enter or Tab to pick), or use the 😀 button (it only offers emoji your device can draw). Messages with only emoji show them big",
         "Pictures, videos and files up to 50 MB: the + button, drag and drop, or paste. Up to 10 at once, sent together in one message (pictures and videos as a grid). Click a picture to see it big: zoom with the mouse wheel or a pinch, drag it around, double-click for its real size, and ‹ › or the arrow keys go through the others in the message (on a phone, pinch and swipe). Videos (MP4 and WebM) play right in the chat, with play, a time bar, volume and fullscreen along the bottom (click to play or pause, double-click for fullscreen; then space, ← →, M and F). They start at 30% volume, and each one remembers where you left its volume",
@@ -125,6 +125,7 @@
     {
       "date": "2026-10-22",
       "items": [
+        "📌 Pinning and unpinning a message now asks \"are you sure?\" first, on the computer and in the Android app (on the computer, Shift+click skips it)",
         "⚡ Pictures load much faster, on the computer and in the Android app: chats, picture grids and the Media tab now get small copies of the pictures, sized for where they're shown, instead of the whole photo. Clicking a picture still opens it at full size"
       ]
     },

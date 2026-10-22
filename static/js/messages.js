@@ -1573,7 +1573,7 @@ function makePinnedItem(message) {
       pinsDialog.close();
       jumpToMessage(message.id);
     }),
-    makeCardButton("Unpin", () => sendToServer({ type: "pin", message_id: message.id, pinned: false }), true),
+    makeCardButton("Unpin", (event) => askToPin(message, false, event.shiftKey), true),
   );
   return item;
 }
@@ -1835,6 +1835,16 @@ function deleteMessage(message, skipConfirm) {
   }
 }
 
+// Pin or unpin, after asking (Shift+click skips it, like Delete).
+function askToPin(message, pinned, skipConfirm) {
+  const question = pinned
+    ? "Pin this message? Everyone in the chat will see it in the pinned list."
+    : "Unpin this message?";
+  if (skipConfirm || confirm(question)) {
+    sendToServer({ type: "pin", message_id: message.id, pinned });  // ("pinned" comes back)
+  }
+}
+
 // The edit box shown in place of a message's text.
 function makeEditor(message) {
   const box = document.createElement("div");
@@ -1983,9 +1993,7 @@ function showMessage(message, follow = true) {
     setIcon(pinButton, "pin");
     pinButton.title = message.pinned ? "Unpin" : "Pin";
     pinButton.setAttribute("aria-pressed", message.pinned ? "true" : "false");
-    pinButton.addEventListener("click", () => {
-      sendToServer({ type: "pin", message_id: message.id, pinned: !message.pinned });  // ("pinned" comes back)
-    });
+    pinButton.addEventListener("click", (event) => askToPin(message, !message.pinned, event.shiftKey));
     actions.append(pinButton);
   }
   if (canModify(message)) {

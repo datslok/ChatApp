@@ -10,7 +10,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from './Icon';
 import ImageViewer from './ImageViewer';
 import Members from './Members';
-import { CardButton, MessageCard } from './MessageCard';
+import { CardButton, MessageCard, askToPin } from './MessageCard';
 import { FileAttachment, openLink } from './MessageText';
 import VideoScreen from './VideoScreen';
 import { COVER_FACTOR, pictureUri } from './files';
@@ -84,7 +84,7 @@ function PinsTab({ connection, onJump, onUserMenu }) {
       renderItem={({ item: message }) => (
         <MessageCard message={message} connection={connection} onUserMenu={onUserMenu}>
           <CardButton label="Jump" onPress={() => onJump(message.id)} />
-          <CardButton label="Unpin" secondary onPress={() => connection.pin(message.id, false)} />
+          <CardButton label="Unpin" secondary onPress={() => askToPin(connection, message.id, false)} />
         </MessageCard>
       )}
     />

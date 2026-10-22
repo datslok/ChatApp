@@ -13,6 +13,7 @@ import * as Clipboard from 'expo-clipboard';
 import Icon from './Icon';
 import MessageText, { Attachments, CustomEmoji, LinkPreview, formatSize } from './MessageText';
 import ChatInfoScreen from './ChatInfoScreen';
+import { askToPin } from './MessageCard';
 import PinsScreen from './PinsScreen';
 import Picker from './Picker';
 import SearchScreen from './SearchScreen';
@@ -966,7 +967,7 @@ export default function ChatScreen({
   }
 
   function togglePin() {
-    connection.pin(menuFor.id, !menuFor.pinned);
+    askToPin(connection, menuFor.id, !menuFor.pinned);
     setMenuFor(null);
   }
 

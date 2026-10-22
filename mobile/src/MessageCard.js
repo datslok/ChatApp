@@ -1,7 +1,7 @@
 // The pinned messages and search popups (the web page's #pins-dialog and #search-dialog): the popup
 // itself, and the cards they list messages on (messages.js, makeMessageCard).
 import { useEffect } from 'react';
-import { KeyboardAvoidingView, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from './Icon';
 import MessageText from './MessageText';
@@ -102,6 +102,18 @@ export function DialogButton({ label, onPress, secondary, danger, disabled }) {
     >
       <Text style={styles.dialogButtonText}>{label}</Text>
     </Pressable>
+  );
+}
+
+// Pin or unpin, after asking (like the web page's askToPin).
+export function askToPin(connection, messageId, pinned) {
+  Alert.alert(
+    pinned ? 'Pin this message?' : 'Unpin this message?',
+    pinned ? 'Everyone in the chat will see it in the pinned list.' : '',
+    [
+      { text: 'Cancel', style: 'cancel' },
+      { text: pinned ? 'Pin' : 'Unpin', onPress: () => connection.pin(messageId, pinned) },
+    ],
   );
 }
 
