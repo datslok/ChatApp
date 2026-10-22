@@ -10,7 +10,7 @@ import Icon from './Icon';
 import MathView from './MathView';
 import { useStyles, useTheme } from './theme';
 import { SERVER } from './config';
-import { downloadFile, openFile, saveFile } from './files';
+import { COVER_FACTOR, downloadFile, openFile, pictureUri, saveFile } from './files';
 import { isOnlyEmoji, parseMessage, tokensToCodes } from './format';
 import VideoScreen from './VideoScreen';
 
@@ -318,7 +318,7 @@ function Attachment({ file, sender, onLongPress }) {
   return (
     <>
       <FittedImage
-        uri={`${SERVER}/uploads/${encodeURIComponent(file.id)}`} maxWidth={400} maxHeight={300}
+        uri={pictureUri(file, 400)} maxWidth={400} maxHeight={300}
         style={styles.attachmentImage} onPress={() => setViewing(true)} onLongPress={onLongPress}
       />
       {viewing ? <ImageViewer files={[file]} onClose={() => setViewing(false)} /> : null}
@@ -364,7 +364,7 @@ function MediaGrid({ media, onLongPress }) {
               ) : (
                 // resizeMethod "resize": decoded at the size shown, not the photo's (see FittedImage).
                 <Image
-                  source={{ uri: `${SERVER}/uploads/${encodeURIComponent(file.id)}` }}
+                  source={{ uri: pictureUri(file, span === 6 ? tile.width : COVER_FACTOR * tile.width) }}
                   style={tile} resizeMode="cover" resizeMethod="resize"
                 />
               )}

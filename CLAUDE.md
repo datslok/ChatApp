@@ -577,6 +577,13 @@ the point is for me to understand how it works, not just to have it done.
   `POST /feedback/{id}/done`, both admin-only on the server), or with `tools/feedback.py`
   (`--all`, `--done ID`, `--undo ID`, `--db dev.db`).
 - `uploads/`: uploaded files, saved under random names (git-ignored, like `chat.db`).
+  Thumbnails (since 2026-10-22, the user's rule: **a picture loads at the size it's shown; only the viewer loads the
+  original**): `/uploads/<id>?size=N` (N in `THUMB_SIZES` 200/400/800/1200, in LIMITS as `thumb_sizes`) sends a WebP
+  copy, longest side N, made once by `make_thumbnail` (Pillow, JPEG `draft`, `exif_transpose`, animations stay
+  animated up to MAX_THUMB_ANIMATION_PIXELS; one at a time, `thumbnail_lock`) into `uploads/thumbs/<id>-<N>.webp`;
+  the original when it's no bigger or can't be shrunk. `delete_upload` removes a file with its thumbnails. Pages:
+  messages.js `pictureUrl(file, shown)` (× devicePixelRatio; tiles × `COVER_FACTOR` 1.5), phone files.js
+  `pictureUri` (× PixelRatio). Viewer, ImageViewer, links and downloads keep the plain address.
   Videos (since 2026-10-15): `VIDEO_TYPES` (video/mp4, video/webm) are believed only if `is_video` finds the format's
   first bytes ("ftyp" at byte 4; 1A 45 DF A3), served inline like pictures (`SHOWN_TYPES`; FileResponse answers range
   requests for seeking), `file_info` has `"video"`; `mark_old_videos()` at every start turns earlier .mp4/.webm

@@ -151,6 +151,78 @@ def test_deleting_the_message_deletes_the_file(server, channel):
     assert a.get(f"/uploads/{file_id}").status == 404
 
 
+# ----- Thumbnails
+
+def sent_picture(person, channel, data, content_type="image/png", name="big.png"):
+    """Upload a picture and send it in `channel`; returns (file id, message id)."""
+    file_id = upload(person, name, data, content_type)
+    with person.connect() as ws:
+        ws.join(channel)
+        ws.send(type="message", text="", files=[file_id])
+        return file_id, ws.wait_for("message")["id"]
+
+
+def opened(reply):
+    return Image.open(io.BytesIO(reply.body))
+
+
+def test_a_picture_comes_at_the_size_asked_for(server, channel):
+    a, b = server.person(), server.person()
+    file_id, _ = sent_picture(a, channel, picture(size=(1000, 500)))
+    small = b.get(f"/uploads/{file_id}?size=200")
+    assert small.status == 200 and small.headers["Content-Type"] == "image/webp"
+    assert small.headers["Content-Disposition"].startswith("inline")
+    assert opened(small).size == (200, 100)  # its longest side, the shape kept
+    assert opened(b.get(f"/uploads/{file_id}")).size == (1000, 500)  # the original is still there
+    assert b.get(f"/uploads/{file_id}?size=123").status == 400  # only the server's sizes
+    assert Client().get(f"/uploads/{file_id}?size=200").status == 404  # the same rule as the original
+
+
+def test_a_small_picture_comes_as_it_is(server, channel):
+    a = server.person()
+    file_id, _ = sent_picture(a, channel, picture(size=(300, 300)))
+    reply = a.get(f"/uploads/{file_id}?size=400")
+    assert reply.headers["Content-Type"] == "image/png" and opened(reply).size == (300, 300)
+
+
+def test_other_files_ignore_the_size(server, channel):
+    a = server.person()
+    file_id, _ = sent_picture(a, channel, b"hello", "text/plain", "notes.txt")
+    assert a.get(f"/uploads/{file_id}?size=200").body == b"hello"
+
+
+def test_a_sideways_photo_is_turned_upright(server, channel):
+    # Cameras save a portrait photo as a landscape one with EXIF orientation 6 ("turn me 90°").
+    image = Image.new("RGB", (800, 600), (200, 100, 50))
+    exif = Image.Exif()
+    exif[0x0112] = 6
+    out = io.BytesIO()
+    image.save(out, format="JPEG", exif=exif)
+    a = server.person()
+    file_id, _ = sent_picture(a, channel, out.getvalue(), "image/jpeg", "photo.jpg")
+    assert opened(a.get(f"/uploads/{file_id}?size=400")).size == (300, 400)
+
+
+def test_an_animation_stays_animated(server, channel):
+    a = server.person()
+    file_id, _ = sent_picture(a, channel, picture("GIF", size=(600, 300), frames=3), "image/gif", "dance.gif")
+    small = opened(a.get(f"/uploads/{file_id}?size=200"))
+    assert small.format == "WEBP" and small.size == (200, 100) and small.n_frames == 3
+
+
+def test_deleting_the_message_deletes_its_thumbnails(server, channel):
+    a = server.person()
+    file_id, message_id = sent_picture(a, channel, picture(size=(1000, 1000)))
+    assert a.get(f"/uploads/{file_id}?size=400").status == 200
+    thumbnail = server.work / "uploads" / "thumbs" / f"{file_id}-400.webp"
+    assert thumbnail.exists()
+    with a.connect() as ws:
+        ws.join(channel)
+        ws.send(type="delete", message_id=message_id)
+        ws.wait_for("deleted")
+    assert not thumbnail.exists()
+
+
 # ----- Several files in one message
 
 def test_several_files_in_one_message(server, channel):

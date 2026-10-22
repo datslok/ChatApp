@@ -154,7 +154,7 @@ function makeMediaTile(file, message) {
     tile.append(video, makeIcon("play"));
   } else {
     const picture = document.createElement("img");
-    picture.src = url;
+    picture.src = pictureUrl(file, COVER_FACTOR * 110);  // (messages.js) three ~110 px squares in a row
     picture.alt = file.filename;
     picture.loading = "lazy";  // only loaded when scrolled near: a long grid doesn't fetch everything at once
     tile.appendChild(picture);

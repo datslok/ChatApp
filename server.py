@@ -32,7 +32,7 @@ from fastapi import BackgroundTasks, FastAPI, HTTPException, Request, Response, 
 from fastapi.exception_handlers import http_exception_handler
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
-from PIL import Image, ImageSequence
+from PIL import Image, ImageOps, ImageSequence
 from pydantic import BaseModel
 from pywebpush import WebPushException, webpush
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -2403,9 +2403,80 @@ def claim_attachments(file_ids, user_id, channel):
     return files
 
 
+# ---------- Thumbnails ----------
+
+# A picture in the chat is shown much smaller than it is: a phone photo is 4000 px wide, its tile in the
+# Media tab 100. Sending the original makes the browser download megabytes and decode every pixel
+# (~48 MB of memory for a 12-megapixel photo) for each tile, which is what made long lists lag. So the
+# pages ask for /uploads/<id>?size=400: a copy whose longest side is at most that, made once with Pillow
+# and kept in uploads/thumbs/. Only the viewer (a picture opened) loads the original.
+# Only these sizes, so nobody can fill the disk by asking for every number from 1 to 10,000.
+THUMB_SIZES = (200, 400, 800, 1200)  # (1200: a single picture on a very sharp screen)
+THUMB_DIR = UPLOAD_DIR / "thumbs"
+THUMB_DIR.mkdir(exist_ok=True)
+# An animation keeps every frame in memory while it's shrunk: one with more pixels than this in all
+# (frames x width x height of the copy) is sent as it is instead.
+MAX_THUMB_ANIMATION_PIXELS = 40_000_000
+thumbnail_lock = asyncio.Lock()  # one at a time: a Media tab asks for 50 at once
+
+
+def thumbnail_path(file_id, size):
+    return THUMB_DIR / f"{file_id}-{size}.webp"
+
+
+def delete_upload(file_id):
+    """Delete an attachment's file and every thumbnail made of it."""
+    (UPLOAD_DIR / file_id).unlink(missing_ok=True)
+    for size in THUMB_SIZES:
+        thumbnail_path(file_id, size).unlink(missing_ok=True)
+
+
+def make_thumbnail(source, destination, size):
+    """Save a WebP copy of the picture `source`, at most `size` pixels on its longest side; animations
+    stay animated. Returns False (and saves nothing) when the original is small enough already or
+    can't be shrunk (then it's sent as it is). Blocking: run it in a thread."""
+    try:
+        with Image.open(source, formats=["PNG", "JPEG", "GIF", "WEBP"]) as picture:
+            if max(picture.size) <= size:
+                return False
+            frame_count = getattr(picture, "n_frames", 1)
+            if frame_count > 1:
+                width, height = picture.size
+                scale = size / max(width, height)
+                if frame_count * width * height * scale * scale > MAX_THUMB_ANIMATION_PIXELS:
+                    return False
+                frames, durations = [], []
+                for frame in ImageSequence.Iterator(picture):
+                    duration = frame.info.get("duration", 100)
+                    durations.append(duration if duration >= 20 else 100)  # as in make_animated_webp
+                    copy = frame.convert("RGBA")
+                    copy.thumbnail((size, size), Image.Resampling.LANCZOS)  # shrinks, keeping its shape
+                    frames.append(copy)
+                part = destination.with_suffix(".part")
+                frames[0].save(part, format="WEBP", save_all=True, append_images=frames[1:],
+                               duration=durations, loop=0, quality=80)
+            else:
+                # A JPEG can be decoded at 1/2, 1/4 or 1/8 of its size straight away ("draft"), which
+                # is much faster than decoding all of it and shrinking afterwards.
+                picture.draft("RGB", (size, size))
+                # Phone cameras save photos sideways with a note saying "turn me"; browsers follow it,
+                # but WebP copies don't carry the note, so turn the picture itself.
+                still = ImageOps.exif_transpose(picture)
+                still = still.convert("RGBA" if still.mode in ("RGBA", "LA", "P", "PA") else "RGB")
+                still.thumbnail((size, size), Image.Resampling.LANCZOS)
+                part = destination.with_suffix(".part")
+                still.save(part, format="WEBP", quality=80)
+        # Saved under another name first and renamed when complete, so half a file is never sent.
+        os.replace(part, destination)
+        return True
+    except (OSError, ValueError, Image.DecompressionBombError, Image.DecompressionBombWarning):
+        return False
+
+
 @app.get("/uploads/{file_id}")
-async def get_upload(request: Request, file_id: str):
-    """Send a file, but only to people who may see the message it's in."""
+async def get_upload(request: Request, file_id: str, size: int | None = None):
+    """Send a file, but only to people who may see the message it's in. With ?size= (one of
+    THUMB_SIZES), a picture comes as a smaller copy (see "Thumbnails")."""
     user_id = current_user(request)
     row = db.execute(
         "SELECT filename, content_type, uploader_id, channel FROM attachments WHERE id = ?", (file_id,)
@@ -2421,6 +2492,20 @@ async def get_upload(request: Request, file_id: str):
         allowed = can_join(channel, user_id)  # sent: whoever can see that channel or DM
     if not allowed:
         raise not_found
+
+    if size is not None and content_type in IMAGE_TYPES:
+        if size not in THUMB_SIZES:
+            raise HTTPException(400, f"The sizes are {', '.join(map(str, THUMB_SIZES))}.")
+        thumbnail = thumbnail_path(file_id, size)
+        if not thumbnail.exists():
+            async with thumbnail_lock:
+                # Another request may have made it while this one waited for the lock.
+                if not thumbnail.exists():
+                    await asyncio.to_thread(make_thumbnail, UPLOAD_DIR / file_id, thumbnail, size)
+        if thumbnail.exists():  # (else the original is small already, or couldn't be shrunk: sent below)
+            return FileResponse(thumbnail, media_type="image/webp", content_disposition_type="inline",
+                                filename=Path(filename).stem + ".webp",  # "Save image as" offers photo.webp
+                                headers={"X-Content-Type-Options": "nosniff"})
 
     return FileResponse(
         UPLOAD_DIR / file_id,  # safe: file_id was found in our own table above
@@ -4067,7 +4152,7 @@ def delete_messages_in(key):
         db.execute("DELETE FROM pinned_chats WHERE channel = ?", (key,))
     # The files on disk, only once the database change has been saved (as for one message).
     for file in files:
-        (UPLOAD_DIR / file).unlink(missing_ok=True)
+        delete_upload(file)
     for image in previews:
         (PREVIEW_DIR / image).unlink(missing_ok=True)
 
@@ -5577,6 +5662,7 @@ LIMITS = {
     "files_per_message": MAX_FILES_PER_MESSAGE,  # (also how many files the tray holds)
     "gif_size": MAX_GIF_SIZE,  # profile pictures, banners and emoji (they come whole)
     "image_types": sorted(IMAGE_TYPES),  # (a set isn't JSON)
+    "thumb_sizes": THUMB_SIZES,  # the ?size= a picture can be asked for (see "Thumbnails")
     "group_size": MAX_GROUP_SIZE,
     "channel_name": MAX_CHANNEL_NAME,  # also group names
     "role_name": MAX_ROLE_NAME,
@@ -5841,7 +5927,7 @@ async def chat(websocket: WebSocket):
                         db.execute("DELETE FROM attachments WHERE message_id = ?", (message_id,))
                         db.execute("DELETE FROM messages WHERE id = ?", (message_id,))
                     for file_id in file_ids:  # the files on disk, only once the database change has been saved
-                        (UPLOAD_DIR / file_id).unlink(missing_ok=True)
+                        delete_upload(file_id)
                     if preview_image:
                         (PREVIEW_DIR / preview_image).unlink(missing_ok=True)
                     # (Replies to it keep their reply_to; their quote now says "deleted".)

@@ -9,8 +9,27 @@ import { fetch } from 'expo/fetch';
 import { Directory, File, Paths } from 'expo-file-system';
 import * as IntentLauncher from 'expo-intent-launcher';
 import * as Sharing from 'expo-sharing';
+import { PixelRatio } from 'react-native';
 import { saveToDownloads } from '../modules/downloads';
 import { SERVER } from './config';
+import { limits } from './limits';
+
+// A picture's address at about the size it's shown (the web page's pictureUrl; server.py "Thumbnails"),
+// so a list of photos doesn't download and decode each one whole. `shown`: the longest side it needs, in
+// layout pixels; a phone has ~3-4 real pixels for each (PixelRatio). Only ImageViewer (a picture opened)
+// and downloads use the original.
+export function pictureUri(file, shown) {
+  const uri = `${SERVER}/uploads/${encodeURIComponent(file.id)}`;
+  const sizes = limits.thumb_sizes || [];
+  if (sizes.length === 0) return uri;  // (a server from before thumbnails)
+  const needed = shown * PixelRatio.get();
+  const size = sizes.find((each) => each >= needed) || sizes[sizes.length - 1];
+  return `${uri}?size=${size}`;
+}
+
+// A tile cuts its picture to its own shape (resizeMode "cover"): a 4:3 photo in a square tile is as tall
+// as the tile and a third wider. So tiles ask for 1.5 times their side.
+export const COVER_FACTOR = 1.5;
 
 // Upload one file (a tray item: {uri, name, type}). Returns its id from the server; throws an
 // Error with something to show if it failed.

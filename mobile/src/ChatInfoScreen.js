@@ -13,7 +13,7 @@ import Members from './Members';
 import { CardButton, MessageCard } from './MessageCard';
 import { FileAttachment, openLink } from './MessageText';
 import VideoScreen from './VideoScreen';
-import { SERVER } from './config';
+import { COVER_FACTOR, pictureUri } from './files';
 import { clock, dayName } from './time';
 import { useStyles, useTheme } from './theme';
 
@@ -209,7 +209,7 @@ function MediaTile({ file, message, onJump }) {
         ) : (
           // resizeMethod "resize": decoded at about the square's size, not the photo's (MessageText.js, FittedImage).
           <Image
-            source={{ uri: `${SERVER}/uploads/${encodeURIComponent(file.id)}` }}
+            source={{ uri: pictureUri(file, COVER_FACTOR * side) }}
             style={{ width: side, height: side }} resizeMode="cover" resizeMethod="resize"
           />
         )}

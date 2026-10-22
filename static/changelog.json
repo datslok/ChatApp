@@ -123,6 +123,12 @@
   ],
   "changes": [
     {
+      "date": "2026-10-22",
+      "items": [
+        "⚡ Pictures load much faster, on the computer and in the Android app: chats, picture grids and the Media tab now get small copies of the pictures, sized for where they're shown, instead of the whole photo. Clicking a picture still opens it at full size"
+      ]
+    },
+    {
       "date": "2026-10-21",
       "items": [
         "📱 In the Android app, a call's tile opened over the whole screen (a camera or a shared screen) now turns with your phone: hold it sideways to watch it wide. It follows your phone's auto-rotate setting, and the rest of the app stays upright. Its volume bar, name and × fade away after a few seconds: tap the video to bring them back, × or back closes it",

@@ -245,6 +245,25 @@ function formatSize(bytes) {
   return (bytes / (1024 * 1024)).toFixed(1) + " MB";
 }
 
+// The address of a picture at about the size it's shown, so a 4000 px photo in a 100 px tile isn't
+// downloaded and decoded whole (server.py, "Thumbnails"). `shown`: the longest side it needs on
+// screen, in CSS pixels. A sharp screen (devicePixelRatio 2: two real pixels per CSS pixel) needs
+// twice as many. Takes the smallest of the server's sizes that's big enough (limits.thumb_sizes, small
+// to big), else the biggest; the server sends the original when that's smaller anyway. Only the
+// viewer (a picture opened) uses the plain "/uploads/<id>", the original.
+function pictureUrl(file, shown) {
+  const url = "/uploads/" + encodeURIComponent(file.id);
+  const sizes = limits.thumb_sizes || [];
+  if (sizes.length === 0) return url;  // (a server from before thumbnails)
+  const needed = shown * (window.devicePixelRatio || 1);
+  const size = sizes.find((each) => each >= needed) || sizes[sizes.length - 1];
+  return url + "?size=" + size;
+}
+
+// A tile cuts its picture to its own shape (object-fit: cover): a 4:3 photo in a square tile is as
+// tall as the tile and a third wider. So tiles ask for 1.5 times their side.
+const COVER_FACTOR = 1.5;
+
 // A message's files (up to 10): its pictures and videos first, then the other files as download
 // links, one under the other. A single picture or video is drawn as big as it may be; several as a
 // grid (makeMediaGrid). message: the message they're in (who sent it, for "Download this file?").
@@ -277,7 +296,7 @@ function makeAttachment(file, message) {
   });
   const img = document.createElement("img");
   img.className = "attachment-image";
-  img.src = url;
+  img.src = pictureUrl(file, 400);  // chat.css: at most 400 wide and 300 tall
   img.alt = file.filename;
   link.appendChild(img);
   return link;
@@ -312,7 +331,8 @@ function makeMediaGrid(media, message) {
       tile.append(video, makeIcon("play"));
     } else {
       const picture = document.createElement("img");
-      picture.src = url;
+      // The grid is 440 px wide (chat.css .media-group): a whole row 440 x 220, a half 220, a third ~145.
+      picture.src = pictureUrl(file, span === 6 ? 440 : COVER_FACTOR * 440 * span / 6);
       picture.alt = file.filename;
       tile.appendChild(picture);
     }
