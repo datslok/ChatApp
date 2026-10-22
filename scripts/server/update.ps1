@@ -36,7 +36,7 @@ function Restart-ChatTask($taskName, $processName, $commandPart) {
     Stop-ScheduledTask -TaskName $taskName
     Get-CimInstance Win32_Process -Filter "Name = '$processName'" |
         Where-Object { $_.CommandLine -like "*$commandPart*" -and ($_.ExecutablePath -like "$root*" -or $processName -eq "python.exe") } |
-        ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
+        ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }  # (may have ended with its task already)
     Start-Sleep -Seconds 2
     Start-ScheduledTask -TaskName $taskName
     Write-Host "Restarted '$taskName'."
