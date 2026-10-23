@@ -71,6 +71,7 @@
       "items": [
         "Real Windows notifications, and it updates itself. Get it at chat.datslok.no/download (or from the banner above the chat, in a browser on Windows)",
         "Settings → App behaviour: start ChatApp when Windows starts (on from the start; turn it off there or in Task Manager → Startup apps)",
+        "Only one copy runs at a time: opening ChatApp while it's already open brings up its window",
         "Activity: the app shows everyone what you're doing under your name: the game you're playing (from Steam, Epic, Xbox, Riot and other game libraries), the song playing in Spotify, or a program you added in Settings → App behaviour → Activity (Add a program). Turn it off there with \"Share what I'm doing\". Nothing else on your PC is shared. Click someone to see for how long"
       ]
     },
@@ -122,6 +123,12 @@
     }
   ],
   "changes": [
+    {
+      "date": "2026-10-23",
+      "items": [
+        "💻 Opening the Windows app while it's already open now brings up the window that's open, instead of starting a second copy"
+      ]
+    },
     {
       "date": "2026-10-22",
       "items": [

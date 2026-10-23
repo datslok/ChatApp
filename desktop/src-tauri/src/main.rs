@@ -16,6 +16,10 @@ use tauri_plugin_window_state::StateFlags;
 
 fn main() {
     tauri::Builder::default()
+        // Only one copy of the app at a time. Must be the first plugin: a second copy finds the first
+        // one's lock (a named mutex), tells it, and quits before anything else starts. The first copy
+        // then runs this and brings its window to the front.
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| bring_to_front(app)))
         // Real Windows notifications: replaces the page's Notification, which WebView2 blocks here.
         // (Allowed for the chat page in capabilities/default.json.)
         .plugin(tauri_plugin_notification::init())
@@ -157,6 +161,20 @@ fn show_chat(app: &tauri::AppHandle) {
     }
     if let Some(loading) = app.get_webview_window("loading") {
         let _ = loading.close();
+    }
+}
+
+// Someone opened the app while it was already running: show them the window they'd expect. The
+// update window while updating, the loading window while the chat is still hidden behind it, else
+// the chat window (even when minimized).
+fn bring_to_front(app: &tauri::AppHandle) {
+    let window = app.get_webview_window("update")
+        .or_else(|| if CHAT_SHOWN.load(Ordering::SeqCst) { None } else { app.get_webview_window("loading") })
+        .or_else(|| app.get_webview_window("main"));
+    if let Some(window) = window {
+        let _ = window.unminimize();
+        let _ = window.show();
+        let _ = window.set_focus();
     }
 }
 
