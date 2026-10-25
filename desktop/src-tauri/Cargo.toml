@@ -16,8 +16,8 @@ serde_json = "1"  # needed by generate_context!() for the "plugins" settings
 tauri-plugin-autostart = "2"
 tauri-plugin-single-instance = "2"  # only one copy of the app runs at a time
 # Microsoft's own package for calling Windows (activity.rs: the open windows, their programs, a
-# program's description; app_audio.rs: one program's sound). The same version Tauri itself uses, so
-# it's built only once.
+# program's description; app_audio.rs: one program's sound; share_bar.rs: the sharing bar). The same
+# version Tauri itself uses, so it's built only once.
 windows = { version = "0.62", features = [
     "Win32_Foundation",
     "Win32_Media_Audio",
@@ -26,6 +26,7 @@ windows = { version = "0.62", features = [
     "Win32_Storage_FileSystem",
     "Win32_System_Com",
     "Win32_System_Com_StructuredStorage",
+    "Win32_System_Diagnostics_ToolHelp",
     "Win32_System_Threading",
     "Win32_System_Variant",
     "Win32_UI_WindowsAndMessaging",

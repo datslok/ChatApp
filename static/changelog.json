@@ -127,7 +127,10 @@
       "date": "2026-10-25",
       "items": [
         "🎙️ Voices in calls sound fuller and clearer: your microphone is now sent at twice the quality, on the computer and in the Android app",
-        "🖥️ Sharing a window in the Windows app (a game, a video, Spotify) now sends that program's sound with it, in stereo, and nothing else: not your other programs, not the call. The app updates itself"
+        "🖥️ Sharing a window in the Windows app (a game, a video, Spotify) now sends that program's sound with it, in stereo, and nothing else: not your other programs, not the call. The app updates itself",
+        "🖥️ Sharing your whole screen now sends its sound in stereo and in higher quality, exactly as your PC plays it",
+        "🖥️ In the Windows app, the \"ChatApp is sharing your screen\" bar no longer pops up when you share (stop with the share button, as before)",
+        "📞 When someone hangs up in a DM call, their picture leaves the call too, on the computer and in the Android app"
       ]
     },
     {

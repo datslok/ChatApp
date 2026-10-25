@@ -3,6 +3,7 @@
 
 mod activity;  // what you're doing (activity.rs)
 mod app_audio;  // the shared program's sound (app_audio.rs)
+mod share_bar;  // hides WebView2's "sharing your screen" bar (share_bar.rs)
 
 use std::os::windows::process::CommandExt;  // raw_arg
 use std::process::Command;
@@ -49,7 +50,8 @@ fn main() {
         // Made permissions in build.rs, allowed for the chat page in capabilities/default.json.
         .invoke_handler(tauri::generate_handler![check_for_update, set_zoom, get_autostart, set_autostart, set_push_to_talk, page_ready,
                                                  activity::set_activity_settings, activity::list_programs,
-                                                 app_audio::start_app_audio, app_audio::read_app_audio, app_audio::stop_app_audio])
+                                                 app_audio::start_app_audio, app_audio::read_app_audio, app_audio::stop_app_audio,
+                                                 share_bar::hide_share_bar])
         .setup(|app| {
             // First, before the chat window opens WebView2's storage: repair it if it's damaged.
             repair_local_storage(app.handle());

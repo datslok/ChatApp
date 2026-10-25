@@ -814,8 +814,14 @@ the point is for me to understand how it works, not just to have it done.
   for more every 8 blocks (~21 ms; the audio engine's clock isn't throttled in a minimised window), the page
   `invoke("read_app_audio")` (raw bytes = an ArrayBuffer), 60 ms in hand, skips back when > 250 ms; published as
   ScreenShareAudio, musicHighQualityStereo + forceStereo (DTX/RED off). `stopAppAudio`: stopScreenShare, rooms.js's
-  LocalTrackUnpublished and leaveVoice. A whole screen keeps getDisplayMedia's systemAudio. Only tested in a real call
-  by the user (never play test sounds on this PC unasked).
+  LocalTrackUnpublished and leaveVoice. A whole screen keeps getDisplayMedia's systemAudio, asked for without echo
+  cancellation, noise suppression or AGC and published like the window's (the user's wish: shared sound as it is; only
+  the mic is processed). Only tested in a real call by the user (never play test sounds on this PC unasked).
+  The "ChatApp is sharing your screen" bar (since app 0.1.25, the user's wish; WebView2/Chromium have no switch for it):
+  video.js invokes `hide_share_bar` after a share starts; share_bar.rs looks for 5 s (every 100 ms) for a visible
+  top-level window of a process descended from ours (Toolhelp snapshot: WebView2's msedgewebview2.exe; the chat is a
+  child window of chatapp.exe's own) and ShowWindow(SW_HIDE)s it. No title matching, so any language. Look-only check
+  against the running app found 7 WebView2 processes and no such window outside a share.
 - The AI bot Chattus (milestone 23, in progress; English, friendly, short chat-sized answers). His model runs
   on the server's GTX 1070 (8 GB; i7-6700HQ, 16 GB RAM): llama.cpp's `llama-server` (`llama/`, git-ignored;
   version `$LlamaVersion` in install.ps1, the CUDA 12.4 build + cudart zip, checked against GitHub's digests)
