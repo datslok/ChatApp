@@ -124,6 +124,12 @@
   ],
   "changes": [
     {
+      "date": "2026-10-25",
+      "items": [
+        "🎙️ Voices in calls sound fuller and clearer: your microphone is now sent at twice the quality, on the computer and in the Android app"
+      ]
+    },
+    {
       "date": "2026-10-23",
       "items": [
         "💻 Opening the Windows app while it's already open now brings up the window that's open, instead of starting a second copy"

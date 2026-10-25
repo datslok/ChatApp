@@ -303,6 +303,9 @@ async function sendMic(room) {
   if (!micPublication) {
     micPublication = await room.localParticipant.publishTrack(engine.destination.stream.getAudioTracks()[0], {
       source: LivekitClient.Track.Source.Microphone,
+      // 96 kbit/s mono Opus, for a full voice (LiveKit's default is 48, Discord's 64). Its other
+      // defaults stay: DTX (almost nothing sent while we're quiet) and RED (every packet sent twice).
+      audioPreset: LivekitClient.AudioPresets.musicHighQuality,
     });
   } else if (micPublication.isMuted) {
     await micPublication.unmute();

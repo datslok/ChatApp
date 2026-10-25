@@ -17,7 +17,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   AppState, Dimensions, NativeEventEmitter, NativeModules, PermissionsAndroid, PixelRatio, Platform, Vibration,
 } from 'react-native';
-import { Room, RoomEvent, Track, VideoPresets43 } from 'livekit-client';
+import { AudioPresets, Room, RoomEvent, Track, VideoPresets43 } from 'livekit-client';
 import { AndroidAudioTypePresets, AudioSession } from '@livekit/react-native';
 import { setAudioModeAsync } from 'expo-audio';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
@@ -356,6 +356,8 @@ export function useVoice(connection, onOpenChatRef) {
         adaptiveStream: true,  // others' videos come in the size they're drawn, and not at all when hidden
         dynacast: true,        // and ours is only sent in the sizes someone watches
         audioCaptureDefaults: micOptions(),
+        // The mic at 96 kbit/s mono Opus, like the web page (LiveKit's default is 48); DTX and RED stay on.
+        publishDefaults: { audioPreset: AudioPresets.musicHighQuality },
         videoCaptureDefaults: { ...CAMERA_CAPTURE, facingMode: startFacing },
       });
       room.current = lk;
