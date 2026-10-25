@@ -28,7 +28,7 @@ use windows::Win32::Media::Audio::{
 };
 use windows::Win32::Media::Multimedia::WAVE_FORMAT_IEEE_FLOAT;
 use windows::Win32::System::Com::StructuredStorage::{PROPVARIANT, PROPVARIANT_0, PROPVARIANT_0_0, PROPVARIANT_0_0_0};
-use windows::Win32::System::Com::{CoInitializeEx, CoUninitialize, IAgileObject, IAgileObject_Impl, BLOB, COINIT_MULTITHREADED};
+use windows::Win32::System::Com::{CoInitializeEx, CoUninitialize, BLOB, COINIT_MULTITHREADED};
 use windows::Win32::System::Threading::{CreateEventW, WaitForSingleObject};
 use windows::Win32::System::Variant::VT_BLOB;
 use windows::Win32::UI::WindowsAndMessaging::GetWindowThreadProcessId;
@@ -143,8 +143,10 @@ unsafe fn open(process_id: u32, ready: HANDLE) -> windows::core::Result<(IAudioC
         },
     };
     // ...handed over as a PROPVARIANT, Windows' "any kind of value" box, holding a pointer to those
-    // bytes (a "blob"). It only points at `params`, so nothing needs freeing afterwards.
-    let boxed = PROPVARIANT {
+    // bytes (a "blob"). ManuallyDrop: when a PROPVARIANT goes away, windows-rs clears it with
+    // PropVariantClear, which frees a blob's bytes as if Windows had allocated them. Ours are
+    // `params`, right here, so that "freeing" corrupted the app's memory and Windows ended it (0.1.23).
+    let boxed = ManuallyDrop::new(PROPVARIANT {
         Anonymous: PROPVARIANT_0 {
             Anonymous: ManuallyDrop::new(PROPVARIANT_0_0 {
                 vt: VT_BLOB,
@@ -157,7 +159,7 @@ unsafe fn open(process_id: u32, ready: HANDLE) -> windows::core::Result<(IAudioC
                 ..Default::default()
             }),
         },
-    };
+    });
 
     // Windows answers this one later, by calling our Done handler (below) from one of its threads.
     let (done, answer) = mpsc::channel();
@@ -165,7 +167,7 @@ unsafe fn open(process_id: u32, ready: HANDLE) -> windows::core::Result<(IAudioC
     let operation = ActivateAudioInterfaceAsync(
         VIRTUAL_AUDIO_DEVICE_PROCESS_LOOPBACK,
         &IAudioClient::IID,
-        Some(&boxed as *const PROPVARIANT),
+        Some(&*boxed as *const PROPVARIANT),
         &handler,
     )?;
     let _ = answer.recv_timeout(Duration::from_secs(5));
@@ -241,9 +243,9 @@ unsafe fn read_loop(reader: &IAudioCaptureClient, ready: HANDLE, stop: &Arc<Atom
     Ok(())
 }
 
-// What Windows calls when the audio client is ready (or refused): wakes up `open`. IAgileObject says
-// any thread may call it, which Windows requires of this handler.
-#[implement(IActivateAudioInterfaceCompletionHandler, IAgileObject)]
+// What Windows calls when the audio client is ready (or refused): wakes up `open`. Windows requires
+// that any thread may call it ("agile"), which #[implement] objects always say they are.
+#[implement(IActivateAudioInterfaceCompletionHandler)]
 struct Done(Mutex<Option<mpsc::Sender<()>>>);
 
 impl IActivateAudioInterfaceCompletionHandler_Impl for Done_Impl {
@@ -254,5 +256,3 @@ impl IActivateAudioInterfaceCompletionHandler_Impl for Done_Impl {
         Ok(())
     }
 }
-
-impl IAgileObject_Impl for Done_Impl {}

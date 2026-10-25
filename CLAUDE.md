@@ -803,7 +803,9 @@ the point is for me to understand how it works, not just to have it done.
   `video/h264` too (LiveKit checks the name alone first; without it, it falls back to VP8). Changing it needs
   `deploy.ps1 -Voice`, which ends ongoing calls. The connection popup (voice.js) shows each share's encoder,
   profile and "held back by", to check.
-  A shared window's sound (since app 0.1.23, the user's wish; browsers send none for a window): the track's
+  A shared window's sound (since app 0.1.24, the user's wish; browsers send none for a window; 0.1.23 crashed
+  with heap corruption: windows-rs's PROPVARIANT has a Drop that runs PropVariantClear, which "freed" our stack
+  blob, so it's ManuallyDrop now; test such code in a small debug program first): the track's
   label is "window:<HWND>:0" (checked in Edge, 2026-10-25), video.js `startAppAudio` passes the HWND to main.rs's
   `start_app_audio` (app_audio.rs: GetWindowThreadProcessId, then Windows' process loopback
   (ActivateAudioInterfaceAsync on VIRTUAL_AUDIO_DEVICE_PROCESS_LOOPBACK, INCLUDE_TARGET_PROCESS_TREE, Windows 10
