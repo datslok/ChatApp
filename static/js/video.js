@@ -178,6 +178,7 @@ async function startScreenShare() {
       degradationPreference: fps === 60 ? "maintain-framerate" : "maintain-resolution",
     });
     sharing = room.localParticipant.isScreenShareEnabled;
+    if (sharing) startAppAudio(room);  // (a window, in the Windows app: its program's sound)
   } catch (error) {
     sharing = false;
     // Pressing Cancel in the browser's picker counts as "not allowed": that's not an error.
@@ -188,10 +189,93 @@ async function startScreenShare() {
 }
 
 async function stopScreenShare() {
+  stopAppAudio();
   if (voiceRoom) await voiceRoom.localParticipant.setScreenShareEnabled(false).catch(() => {});
   sharing = false;
   showShareButtons();
   renderCallPanel();
+}
+
+// ----- The shared program's sound (only in the Windows app)
+//
+// A browser sends no sound with a shared window (only with a tab or a whole screen). The Windows app
+// can capture the sound of the program a window belongs to (app_audio.rs). Our track's label says
+// which window it is, "window:<number>:0", with Windows' own number for it; the app finds its
+// program, captures what that plays (only that: not the call, not other programs), and our worklet
+// (/app-audio.js) turns the pieces into a track that we send as the share's sound, in stereo.
+// A whole screen keeps the browser's own sound: everything the PC plays except the call.
+
+let appAudio = null;        // while it runs: {node, track, invoke}
+let appAudioLoaded = null;  // the worklet's file, loaded into the audio engine once
+
+async function startAppAudio(room) {
+  if (!inDesktopApp) return;
+  const publication = room.localParticipant.getTrackPublication(LivekitClient.Track.Source.ScreenShare);
+  const label = publication && publication.track ? publication.track.mediaStreamTrack.label : "";
+  const match = /^window:(\d+):/.exec(label);
+  if (!match) return;  // a whole screen
+  const invoke = window.__TAURI_INTERNALS__.invoke;
+  try {
+    await invoke("start_app_audio", { window: Number(match[1]) });
+  } catch (error) {
+    // An app from before this (no such command), the app's own window, or Windows said no.
+    console.warn("No sound for the shared window:", error);
+    return;
+  }
+  try {
+    const { context } = await getAudio();
+    appAudioLoaded ??= context.audioWorklet.addModule("/app-audio.js?v=" + (pageVersion ?? ""));
+    await appAudioLoaded;
+    if (!sharing || voiceRoom !== room) throw new Error("the share ended");
+    // No inputs, one output with two channels (left and right), into a track.
+    const node = new AudioWorkletNode(context, "app-audio", { numberOfInputs: 0, outputChannelCount: [2] });
+    const destination = context.createMediaStreamDestination();
+    node.connect(destination);
+    // The worklet asks for more every ~20 ms; fetch what the app caught since and hand it over.
+    // ([piece] "transfers" the bytes to the audio engine instead of copying them.)
+    let asking = false;
+    node.port.onmessage = async () => {
+      if (asking) return;  // (the last answer hasn't come yet)
+      asking = true;
+      try {
+        // Raw bytes come as an ArrayBuffer; should the app's messaging hand over a list of numbers
+        // instead (its slower fallback way), turn that into one.
+        let piece = await invoke("read_app_audio");
+        if (!(piece instanceof ArrayBuffer)) piece = new Uint8Array(piece).buffer;
+        if (piece.byteLength > 0) node.port.postMessage(piece, [piece]);
+      } catch {
+        // (missed this once: the next ask gets it)
+      } finally {
+        asking = false;
+      }
+    };
+    const track = destination.stream.getAudioTracks()[0];
+    appAudio = { node, track, invoke };
+    await room.localParticipant.publishTrack(track, {
+      source: LivekitClient.Track.Source.ScreenShareAudio,
+      // 128 kbit/s in stereo, for music and games. (Stereo turns off DTX and RED: sound that
+      // keeps going gains nothing from DTX, and RED would double it.)
+      audioPreset: LivekitClient.AudioPresets.musicHighQualityStereo,
+      forceStereo: true,
+    });
+    if (!sharing) stopAppAudio();  // stopped while it was being published
+  } catch (error) {
+    console.warn("No sound for the shared window:", error);
+    if (appAudio) stopAppAudio();
+    else invoke("stop_app_audio").catch(() => {});
+  }
+}
+
+// When the share stops (our button, the "Stop sharing" bar, leaving the call).
+function stopAppAudio() {
+  if (!appAudio) return;
+  const { node, track, invoke } = appAudio;
+  appAudio = null;
+  invoke("stop_app_audio").catch(() => {});
+  node.port.onmessage = null;
+  node.disconnect();
+  if (voiceRoom) voiceRoom.localParticipant.unpublishTrack(track).catch(() => {});
+  track.stop();
 }
 
 // Someone's shared screen, if they're sharing and it has reached us (ours: if we're sharing).

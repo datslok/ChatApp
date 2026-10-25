@@ -803,6 +803,17 @@ the point is for me to understand how it works, not just to have it done.
   `video/h264` too (LiveKit checks the name alone first; without it, it falls back to VP8). Changing it needs
   `deploy.ps1 -Voice`, which ends ongoing calls. The connection popup (voice.js) shows each share's encoder,
   profile and "held back by", to check.
+  A shared window's sound (since app 0.1.23, the user's wish; browsers send none for a window): the track's
+  label is "window:<HWND>:0" (checked in Edge, 2026-10-25), video.js `startAppAudio` passes the HWND to main.rs's
+  `start_app_audio` (app_audio.rs: GetWindowThreadProcessId, then Windows' process loopback
+  (ActivateAudioInterfaceAsync on VIRTUAL_AUDIO_DEVICE_PROCESS_LOOPBACK, INCLUDE_TARGET_PROCESS_TREE, Windows 10
+  2004+), 48 kHz stereo float, event-driven; refused for the app's own window (WebView2 plays the call); stops by
+  itself after 5 s unread). `static/app-audio.js` (an AudioWorklet, served at /app-audio.js, in PAGE_VERSION) asks
+  for more every 8 blocks (~21 ms; the audio engine's clock isn't throttled in a minimised window), the page
+  `invoke("read_app_audio")` (raw bytes = an ArrayBuffer), 60 ms in hand, skips back when > 250 ms; published as
+  ScreenShareAudio, musicHighQualityStereo + forceStereo (DTX/RED off). `stopAppAudio`: stopScreenShare, rooms.js's
+  LocalTrackUnpublished and leaveVoice. A whole screen keeps getDisplayMedia's systemAudio. Only tested in a real call
+  by the user (never play test sounds on this PC unasked).
 - The AI bot Chattus (milestone 23, in progress; English, friendly, short chat-sized answers). His model runs
   on the server's GTX 1070 (8 GB; i7-6700HQ, 16 GB RAM): llama.cpp's `llama-server` (`llama/`, git-ignored;
   version `$LlamaVersion` in install.ps1, the CUDA 12.4 build + cudart zip, checked against GitHub's digests)

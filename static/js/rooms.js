@@ -118,6 +118,7 @@ async function joinVoice(roomName, label) {
     // shared window closed): LiveKit unpublishes it, and our buttons follow.
     room.on(LivekitClient.RoomEvent.LocalTrackUnpublished, (publication) => {
       if (publication.source === LivekitClient.Track.Source.ScreenShare) {
+        stopAppAudio();  // (its sound from the Windows app, if any)
         sharing = false;
         showShareButtons();
       }
@@ -200,6 +201,7 @@ function leaveVoice() {
   cameraOn = false;
   showCameraButtons();
   // The same for a screen share (and its sound): stop capturing.
+  stopAppAudio();
   for (const source of [LivekitClient.Track.Source.ScreenShare, LivekitClient.Track.Source.ScreenShareAudio]) {
     const publication = room && room.localParticipant.getTrackPublication(source);
     if (publication && publication.track) publication.track.stop();

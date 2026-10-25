@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-read-app-audio"
+description = "Enables the read_app_audio command without any pre-configured scope."
+commands.allow = ["read_app_audio"]
+
+[[permission]]
+identifier = "deny-read-app-audio"
+description = "Denies the read_app_audio command without any pre-configured scope."
+commands.deny = ["read_app_audio"]

@@ -16,10 +16,20 @@ serde_json = "1"  # needed by generate_context!() for the "plugins" settings
 tauri-plugin-autostart = "2"
 tauri-plugin-single-instance = "2"  # only one copy of the app runs at a time
 # Microsoft's own package for calling Windows (activity.rs: the open windows, their programs, a
-# program's description). The same version Tauri itself uses, so it's built only once.
+# program's description; app_audio.rs: one program's sound). The same version Tauri itself uses, so
+# it's built only once.
 windows = { version = "0.62", features = [
     "Win32_Foundation",
+    "Win32_Media_Audio",
+    "Win32_Media_Multimedia",
+    "Win32_Security",
     "Win32_Storage_FileSystem",
+    "Win32_System_Com",
+    "Win32_System_Com_StructuredStorage",
     "Win32_System_Threading",
+    "Win32_System_Variant",
     "Win32_UI_WindowsAndMessaging",
 ] }
+# The core of that package, already part of it: named here because the code its #[implement] writes
+# (app_audio.rs: our own small COM object for Windows to call) refers to it by this name.
+windows-core = "0.62"

@@ -3685,7 +3685,7 @@ def page_version():
     one letter in any of them and it comes out completely different. Each page gets it in its
     "welcome"; after a deploy that changed the page, the pages that reconnect see a new one and
     reload themselves (core.js, reloadIfOutdated). Changes to this file alone don't count."""
-    files = [Path("static/index.html"), Path("static/voice-gate.js"), Path("static/changelog.json"),
+    files = [Path("static/index.html"), Path("static/voice-gate.js"), Path("static/app-audio.js"), Path("static/changelog.json"),
              *Path("static/js").glob("*.js"), *Path("static/css").glob("*.css")]
     digest = hashlib.sha256()
     for path in sorted(files):  # always in the same order, or the same files would give another hash
@@ -3754,6 +3754,12 @@ async def voice_gate():
     # "no-cache" (check first), like the page's other files: without a Cache-Control, browsers guess
     # how long to keep it, and an app kept an old gate for days after it changed (2026-10-14).
     return FileResponse("static/voice-gate.js", media_type="text/javascript", headers={"Cache-Control": "no-cache"})
+
+
+@app.get("/app-audio.js")
+async def app_audio():
+    # The shared program's sound in the Windows app (video.js): another AudioWorklet, like the gate.
+    return FileResponse("static/app-audio.js", media_type="text/javascript", headers={"Cache-Control": "no-cache"})
 
 
 @app.get("/rnnoise-0.4.1/{name}")
