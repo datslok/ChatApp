@@ -381,7 +381,8 @@ function renderGroupCallTiles(members, inCall) {
   ]);
 }
 
-// A DM's call: always both of us, the other person faded (or "Calling…") while not in it.
+// A DM's call: us (faded while we're not in it), and the other person while they're in it or
+// while it rings for them ("Calling…"). Someone who hung up has no tile (the user's wish).
 function renderDmCallTiles(partner, members, inCall) {
   const channel = currentChannel;
   const partnerMember = members.find((member) => member.id === partner);
@@ -389,20 +390,24 @@ function renderDmCallTiles(partner, members, inCall) {
   const partnerHere = inCall
     ? Boolean(voiceRoom && voiceRoom.remoteParticipants.has(String(partner)))
     : Boolean(partnerMember);
+  const ringing = outgoingCall === channel;
   // Shared screens first (ours too, so we see what they see; only while we're in the call),
-  // then both of us: faded while not in the call, "Calling…" while it rings.
+  // then us, then them (faded with "Calling…" while it rings).
   const screens = inCall ? [myId, partner].filter((id) => screenTrack(id)).map(makeScreenTile) : [];
-  showTiles(callTiles, [
+  const tiles = [
     ...screens,
     makeTile(myId, { muted: inCall && micMuted, deafened: inCall && deafened, video: inCall ? cameraTrack(myId) : null, away: !inCall }),
-    makeTile(partner, {
+  ];
+  if (partnerHere || ringing) {
+    tiles.push(makeTile(partner, {
       muted: partnerHere && Boolean(partnerMember && partnerMember.muted),
       deafened: partnerHere && Boolean(partnerMember && partnerMember.deafened),
       video: inCall && partnerHere ? cameraTrack(partner) : null,  // (only while we're in the call too)
       away: !partnerHere,
-      note: !partnerHere && outgoingCall === channel ? "Calling…" : "",
-    }),
-  ]);
+      note: !partnerHere ? "Calling…" : "",
+    }));
+  }
+  showTiles(callTiles, tiles);
 }
 
 callPanelMute.addEventListener("click", toggleMute);  // the same as the 🎤 at the bottom left

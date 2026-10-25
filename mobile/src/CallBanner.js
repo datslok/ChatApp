@@ -1,7 +1,7 @@
 // The call banner at the top of a DM or group while it has a call (the web page's #call-panel, rooms.js
 // renderCallPanel): a dark area with the tiles, the buttons under them, or "Join call" while we're not in
-// it. In a DM always two tiles (us and them, faded while not there, "Calling…" while it rings); in a group
-// everyone in the call. After our call ended unanswered: "Declined" or "No answer" for a few seconds.
+// it. In a DM us (faded while not there) and them while they're in it or it rings for them ("Calling…"; someone
+// who hung up has no tile, the user's wish); in a group everyone in the call. After our call ended unanswered: "Declined" or "No answer" for a few seconds.
 // Its height: 40% of the screen, until it's dragged by the grip along its bottom edge (the web page's
 // #call-resize); then that, kept in the voice settings for next time.
 import { useRef, useState } from 'react';
@@ -52,11 +52,12 @@ export default function CallBanner({ chatKey, connection, voice, onUserMenu }) {
 
   let tiles;
   if (partner !== null) {
-    // A DM: us and them. They're there if LiveKit has them (in the call) or the server lists them.
+    // A DM: us, and them while they're there or it rings for them. They're there if LiveKit has them
+    // (in the call) or the server lists them.
     const there = inCall ? people.some((person) => person.id === partner) : members.some((member) => member.id === partner);
     const ringing = voice.outgoing === chatKey;
     const list = [{ id: meId, ...(members.find((m) => m.id === meId) ?? { muted: voice.muted, deafened: voice.deafened }) }];
-    list.push(members.find((m) => m.id === partner) ?? { id: partner });
+    if (there || ringing) list.push(members.find((m) => m.id === partner) ?? { id: partner });
     tiles = makeTiles({
       members: list, people, meId, inCall: inCall && voice.connected,
       extra: (id) => ({
