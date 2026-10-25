@@ -156,7 +156,8 @@ async function startScreenShare() {
       // Shows "Share audio" in the picker. A whole screen's sound is everything the PC plays,
       // including the call itself, so people would hear themselves back: restrictOwnAudio leaves
       // out the sound this page plays. (Browsers without it ignore it and capture everything.)
-      audio: { restrictOwnAudio: true },
+      // And none of the microphone's clean-up: the sound goes out as it is (the user's wish).
+      audio: { restrictOwnAudio: true, echoCancellation: false, noiseSuppression: false, autoGainControl: false },
       systemAudio: "include",    // ...also when sharing a whole screen, not only a tab
       // A hint for the video encoder: keep text crisp ("detail"), or keep movement smooth ("motion").
       contentHint: fps === 60 ? "motion" : "detail",
@@ -176,6 +177,9 @@ async function startScreenShare() {
       // default for screens keeps the resolution and drops frames: right for text (30 fps),
       // but a game at 60 should rather stay smooth and get a little less sharp.
       degradationPreference: fps === 60 ? "maintain-framerate" : "maintain-resolution",
+      // The screen's sound (these only apply to it): 128 kbit/s in stereo, like a shared window's.
+      audioPreset: LivekitClient.AudioPresets.musicHighQualityStereo,
+      forceStereo: true,
     });
     sharing = room.localParticipant.isScreenShareEnabled;
     if (sharing) startAppAudio(room);  // (a window, in the Windows app: its program's sound)
