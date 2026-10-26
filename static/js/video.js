@@ -183,9 +183,8 @@ async function startScreenShare() {
     });
     sharing = room.localParticipant.isScreenShareEnabled;
     if (sharing) startAppAudio(room);  // (a window, in the Windows app: its program's sound)
-    // The Windows app hides WebView2's "sharing your screen" bar (share_bar.rs; the user's wish).
-    // (An older app doesn't know the command: then the bar stays.)
-    if (sharing && inDesktopApp) window.__TAURI_INTERNALS__.invoke("hide_share_bar").catch(() => {});
+    // (The app's hide_share_bar isn't called any more: it could hide the closing picker instead of
+    // the "sharing your screen" bar, which left the whole app unclickable. See CLAUDE.md.)
   } catch (error) {
     sharing = false;
     // Pressing Cancel in the browser's picker counts as "not allowed": that's not an error.

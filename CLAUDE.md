@@ -817,11 +817,12 @@ the point is for me to understand how it works, not just to have it done.
   LocalTrackUnpublished and leaveVoice. A whole screen keeps getDisplayMedia's systemAudio, asked for without echo
   cancellation, noise suppression or AGC and published like the window's (the user's wish: shared sound as it is; only
   the mic is processed). Only tested in a real call by the user (never play test sounds on this PC unasked).
-  The "ChatApp is sharing your screen" bar (since app 0.1.25, the user's wish; WebView2/Chromium have no switch for it):
-  video.js invokes `hide_share_bar` after a share starts; share_bar.rs looks for 5 s (every 100 ms) for a visible
-  top-level window of a process descended from ours (Toolhelp snapshot: WebView2's msedgewebview2.exe; the chat is a
-  child window of chatapp.exe's own) and ShowWindow(SW_HIDE)s it. No title matching, so any language. Look-only check
-  against the running app found 7 WebView2 processes and no such window outside a share.
+  The "ChatApp is sharing your screen" bar (the user's wish: gone; WebView2/Chromium have no switch for it): app 0.1.25's
+  share_bar.rs `hide_share_bar` ShowWindow(SW_HIDE)s the first visible top-level window of a process descended from
+  ours (Toolhelp snapshot: WebView2's msedgewebview2.exe) within 5 s. **Not called since 2026-10-26**: it could hide
+  the still-closing share picker instead of the bar, which left the app unclickable (hand cursor everywhere) until a
+  restart, and once the picker's Share button didn't respond. A safer version would have to tell the bar from the
+  picker (e.g. wait until the picker is gone, or match the bar's size/position) and be tested on this PC first.
 - The AI bot Chattus (milestone 23, in progress; English, friendly, short chat-sized answers). His model runs
   on the server's GTX 1070 (8 GB; i7-6700HQ, 16 GB RAM): llama.cpp's `llama-server` (`llama/`, git-ignored;
   version `$LlamaVersion` in install.ps1, the CUDA 12.4 build + cudart zip, checked against GitHub's digests)
