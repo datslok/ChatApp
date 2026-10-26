@@ -73,10 +73,10 @@ async function joinVoice(roomName, label) {
       webAudioMix: { audioContext: context },
       // Leaving unpublishes our microphone track; keep it working for the next call.
       stopLocalTrackOnUnpublish: false,
-      // Video. Cameras send a small, a medium and a large version at once ("simulcast", on by
-      // default), and each viewer gets only the size it shows: adaptiveStream tells LiveKit how
-      // big our video elements are (and that hidden ones need nothing), dynacast stops sending
-      // the versions nobody watches. Our camera: 1280x720.
+      // Video. A phone's camera sends a small, a medium and a large version at once ("simulcast"),
+      // and each viewer gets only the size it shows: adaptiveStream tells LiveKit how big our
+      // video elements are (and that hidden ones need nothing), dynacast stops sending the
+      // versions nobody watches (or our one 720p version: video.js, CAMERA_PUBLISH). Our camera: 1280x720.
       adaptiveStream: true,
       dynacast: true,
       // (The camera chosen in Settings, if any: undefined means the default.)

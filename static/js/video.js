@@ -8,12 +8,23 @@
 // LiveKit opens the camera for us (setCameraEnabled): unlike the microphone, it doesn't go through
 // our own chain. Turning it off "mutes" it, which also releases the camera, so its light goes out.
 
+// How the camera is sent, like the screen share: H.264, which the graphics card's own chip encodes
+// (VP8, LiveKit's default, is encoded on the CPU), so one 720p version only: graphics cards can't
+// make the extra small copies of simulcast, and with them the browser falls back to the CPU.
+// 2.5 Mbit/s, about what the three simulcast copies used together, now all in the one people see.
+const CAMERA_PUBLISH = {
+  videoCodec: "h264",
+  simulcast: false,
+  videoEncoding: { maxBitrate: 2_500_000, maxFramerate: 30 },
+};
+
 async function toggleCamera() {
   const room = voiceRoom;
   if (!room || room.state !== "connected") return;
   const turnOn = !cameraOn;
   try {
-    await room.localParticipant.setCameraEnabled(turnOn);  // the first time, the browser asks
+    // (The second argument would be what to capture: the Room's videoCaptureDefaults, rooms.js.)
+    await room.localParticipant.setCameraEnabled(turnOn, undefined, CAMERA_PUBLISH);  // the first time, the browser asks
     cameraOn = turnOn;
   } catch {
     cameraOn = false;  // not allowed, no camera, or it's in use by another program

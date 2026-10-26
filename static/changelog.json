@@ -124,6 +124,12 @@
   ],
   "changes": [
     {
+      "date": "2026-10-26",
+      "items": [
+        "📷 Your camera on a PC is sharper in calls and easier on the computer: it now uses the graphics card, like screen sharing does"
+      ]
+    },
+    {
       "date": "2026-10-25",
       "items": [
         "🎙️ Voices in calls sound fuller and clearer: your microphone is now sent at twice the quality, on the computer and in the Android app",
