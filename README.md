@@ -506,6 +506,26 @@ the new version once they're done; a half-typed message is kept.
 If your internet provider changes your home's public IP address, restart voice
 (`.\scripts\deploy.ps1 -Voice`, or restart the server): LiveKit looks up the address when it starts.
 
+### Updating cloudflared
+
+The tunnel program doesn't update itself. Update it when Cloudflare asks (they email the account's owner
+about security fixes), or now and then. On the server, in PowerShell as administrator:
+
+```powershell
+cloudflared --version                                    # the version you have
+winget upgrade --exact --id Cloudflare.cloudflared       # install.ps1 installed it with winget
+Restart-Service cloudflared
+```
+
+winget can lag a few days behind a release. If it says there's nothing newer, take the
+`cloudflared-windows-amd64.msi` from [cloudflared's releases](https://github.com/cloudflare/cloudflared/releases),
+check it against the SHA-256 GitHub shows next to it (`Get-FileHash <file>`), install it with
+`msiexec /i <file> /quiet`, and restart the service.
+
+The restart cuts the site off for about half a minute (cloudflared lets open connections finish first, so
+`Restart-Service` may say it couldn't stop the service: wait, then `Start-Service cloudflared`). Pages and
+apps reconnect by themselves; a call going on at that moment may stutter, so pick a time nobody is in voice.
+
 ### What's new
 
 Settings → **What's new** shows `static/changelog.json`, which you write by hand, in two parts:

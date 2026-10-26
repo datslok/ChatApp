@@ -950,7 +950,8 @@ the point is for me to understand how it works, not just to have it done.
 
 The live site is https://chat.datslok.no, served from the separate server PC (`ssh chatserver`; set
 up with `scripts\server\install.ps1`) through a Cloudflare Tunnel (`cloudflared` runs there as a
-Windows service and forwards to http://localhost:8000). The domain is
+Windows service and forwards to http://localhost:8000; 2026.10.3 since 2026-10-26, for Cloudflare's emailed
+eMudhra certificate fix: winget still offered 2026.10.0, so GitHub's MSI, checksum-checked; README "Updating cloudflared"). The domain is
 registered at domene.shop with its DNS on Cloudflare. `datslok.no` itself is the landing page: a third
 route on the tunnel (`datslok.no` → http://localhost:8000) and `LANDING_HOST=datslok.no` in the server's
 `.env`. Two Cloudflare Redirect Rules (302): "www to datslok.no" (`www.datslok.no` → https://datslok.no)
