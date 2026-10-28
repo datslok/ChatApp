@@ -755,8 +755,18 @@ function updateSidebar() {
     }
   }
   // Phones: a dot on ☰ if anything is unread, since the sidebar is hidden there.
-  openSidebarButton.classList.toggle(
-    "has-unread", [...unread].some((channel) => !mutedChats.has(channel)) || mentionCounts.size > 0 || incomingIds.size > 0
-  );
+  const anythingUnread =
+    [...unread].some((channel) => !mutedChats.has(channel)) || mentionCounts.size > 0 || incomingIds.size > 0;
+  openSidebarButton.classList.toggle("has-unread", anythingUnread);
+  tellAppUnread(anythingUnread);
   updateTitle();  // "(3) ChatApp"
+}
+
+// The Windows app: the same dot on its taskbar button (set_unread_dot in main.rs). Only when the answer
+// changes, as updateSidebar runs often. (An app from before 0.1.26 doesn't know the command: ignored.)
+let appUnreadDot = null;  // what the app was last told (null: nothing yet since this page loaded)
+function tellAppUnread(on) {
+  if (!inDesktopApp || on === appUnreadDot) return;
+  appUnreadDot = on;
+  window.__TAURI_INTERNALS__.invoke("set_unread_dot", { on }).catch(() => {});
 }

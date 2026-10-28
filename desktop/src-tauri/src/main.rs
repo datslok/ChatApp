@@ -49,7 +49,7 @@ fn main() {
         // The commands the page may call (window.__TAURI_INTERNALS__.invoke("check_for_update")).
         // Made permissions in build.rs, allowed for the chat page in capabilities/default.json.
         .invoke_handler(tauri::generate_handler![check_for_update, set_zoom, get_autostart, set_autostart, set_push_to_talk, page_ready,
-                                                 activity::set_activity_settings, activity::list_programs,
+                                                 set_unread_dot, activity::set_activity_settings, activity::list_programs,
                                                  app_audio::start_app_audio, app_audio::read_app_audio, app_audio::stop_app_audio,
                                                  share_bar::hide_share_bar])
         .setup(|app| {
@@ -222,6 +222,39 @@ fn set_autostart(app: tauri::AppHandle, on: bool) -> Result<(), String> {
     let autostart = app.autolaunch();
     let result = if on { autostart.enable() } else { autostart.disable() };
     result.map_err(|error| error.to_string())
+}
+
+// ----- The unread dot on the taskbar button
+//
+// Windows lets a program put one small picture over the bottom-right corner of its taskbar button
+// (an "overlay icon"; Discord's red number). The page says whether anything is unread (core.js,
+// tellAppUnread: the same rule as the phone layout's dot on ☰), and we show a red dot or nothing.
+
+// The dot, drawn here instead of shipped as a file: 32x32 pixels (Windows shrinks it to 16x16, or
+// less, and a bigger drawing stays smooth), 4 bytes each: red, green, blue and alpha (0 = see-through).
+// A red circle (the chat's --red, #f23f43) in a dark ring, so it shows against the blue icon.
+fn unread_dot() -> tauri::image::Image<'static> {
+    const SIZE: u32 = 32;
+    let middle = SIZE as f32 / 2.0;
+    let mut pixels = Vec::with_capacity((SIZE * SIZE * 4) as usize);
+    for y in 0..SIZE {
+        for x in 0..SIZE {
+            // How far this pixel's centre is from the middle of the picture.
+            let distance = ((x as f32 + 0.5 - middle).powi(2) + (y as f32 + 0.5 - middle).powi(2)).sqrt();
+            // clamp(0, 1) blurs the edges over one pixel: partly see-through there, so no jagged steps.
+            let inside = (middle - distance).clamp(0.0, 1.0);  // within the whole dot, ring included
+            let red = (middle - 3.0 - distance).clamp(0.0, 1.0);  // within the red part, 3 pixels in
+            let mix = |ring: f32, dot: f32| (ring + (dot - ring) * red) as u8;
+            pixels.extend([mix(30.0, 242.0), mix(31.0, 63.0), mix(34.0, 67.0), (inside * 255.0) as u8]);
+        }
+    }
+    tauri::image::Image::new_owned(pixels, SIZE, SIZE)
+}
+
+// The page calls this whenever the answer changes (and once after each load).
+#[tauri::command]
+fn set_unread_dot(window: tauri::WebviewWindow, on: bool) -> Result<(), String> {
+    window.set_overlay_icon(if on { Some(unread_dot()) } else { None }).map_err(|error| error.to_string())
 }
 
 // ----- Push to talk (Settings → Voice & audio; the page's side is in voice.js)
