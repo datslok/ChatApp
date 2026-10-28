@@ -551,11 +551,15 @@ function updateTitle() {
   document.title = total > 0 ? `(${total}) ChatApp` : "ChatApp";
 }
 
-// Back to the chat: those missed ones are seen now.
+// Back to the chat: those missed ones are seen now (and the taskbar dot's open chat, core.js).
 function cameBack() {
   if (isLooking() && missedWhileAway > 0) {
     missedWhileAway = 0;
     updateTitle();
+  }
+  if (isLooking() && unreadHereWhileAway) {
+    unreadHereWhileAway = false;
+    updateSidebar();
   }
 }
 document.addEventListener("visibilitychange", cameBack);  // the tab became visible (or hidden)

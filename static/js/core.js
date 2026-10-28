@@ -157,6 +157,7 @@ let reconnectDelay = 1000;  // milliseconds to wait before the next reconnect at
 const unread = new Set();   // channels and DMs with messages we haven't seen
 const mentionCounts = new Map();  // channel -> how many unread messages there mention us
 const mutedChats = new Set();  // chats we muted (the server's "mutes"): no unread dot, greyed out
+let unreadHereWhileAway = false;  // a message came in the open chat while we weren't looking (the taskbar dot)
 const pinnedChats = new Set();  // DMs and groups we pinned to the top of the list (the server's "pinned_chats")
 // Each DM's and group's newest message id ("chat_activity"): the DM list is sorted by it, newest first.
 const chatActivity = new Map();
@@ -581,6 +582,13 @@ function handleServerMessage(event) {
       updateTitle();
       notify(data.channel, data.id, data.user_id, data.name, data.text || (data.files.length > 0 ? "📎 Attachment" : ""));
     }
+    // The Windows app's taskbar dot: the open chat counts as unread too while we're away, for the
+    // messages the sidebar would dot (any in an unmuted chat; in a muted one, only those for us).
+    const dotWorthy = data.user_id !== myId && !blockedIds.has(data.user_id) && (!mutedChats.has(currentChannel) || forMe);
+    if (dotWorthy && !isLooking() && !unreadHereWhileAway) {
+      unreadHereWhileAway = true;
+      updateSidebar();
+    }
   } else if (data.type === "preview") {
     // A link's preview arrived (a moment after its message): add it, and redraw.
     const message = shownMessages.find((m) => m.id === data.message_id);
@@ -677,6 +685,7 @@ function switchChannel(channel, label, fromHistory = false) {
   setLabel(label);
   unread.delete(channel);  // opening it means we've seen it
   mentionCounts.delete(channel);
+  unreadHereWhileAway = false;
   updateSidebar();
   joinCurrentChannel();
   clearSeenNotifications();  // ...and its push notifications on this phone (notifications.js)
@@ -758,7 +767,7 @@ function updateSidebar() {
   const anythingUnread =
     [...unread].some((channel) => !mutedChats.has(channel)) || mentionCounts.size > 0 || incomingIds.size > 0;
   openSidebarButton.classList.toggle("has-unread", anythingUnread);
-  tellAppUnread(anythingUnread);
+  tellAppUnread(anythingUnread || unreadHereWhileAway);  // (the open chat, while away: only on the taskbar)
   updateTitle();  // "(3) ChatApp"
 }
 
