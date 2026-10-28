@@ -552,12 +552,19 @@ body {
   min-width: 0;
 }
 
-/* The name: a button (it opens the chat info panel, chat-info.js) that looks like the text it was.
-   "font: inherit" takes the bar's bold text instead of the browser's button font. */
+/* The name: a button (it opens the chat info panel, chat-info.js). "font: inherit" takes the bar's bold
+   text instead of the browser's button font. In DMs and groups it looks like one: a ⌄ after the name, a
+   grey box under the mouse, and while the panel is open the box stays and the ⌄ turns up. (The padding
+   is taken back by the negative margin, so the name stays in line with the group's members under it.) */
 #dm-header-name {
-  max-width: 100%;
-  padding: 0;
+  display: inline-flex;  /* the name and its ⌄ in a row */
+  align-items: center;
+  gap: 2px;
+  max-width: calc(100% + 12px);
+  margin: 0 -6px;
+  padding: 2px 6px;
   border: none;
+  border-radius: 6px;
   background: none;
   color: inherit;
   font: inherit;
@@ -565,7 +572,28 @@ body {
   cursor: pointer;
 }
 #dm-header-name:hover:not(:disabled) {
-  text-decoration: underline;
+  background: var(--bg-hover);
+}
+#dm-header-name.open {
+  background: var(--bg-active);
+}
+#dm-header-name .icon {
+  transition: transform 0.15s;
+}
+#dm-header-name.open .icon {
+  transform: rotate(180deg);  /* ⌃: clicking closes it again */
+}
+.dm-header-label {
+  overflow: hidden;         /* a very long name gets cut off... */
+  text-overflow: ellipsis;  /* ...with "…", and the arrow stays */
+  white-space: nowrap;
+}
+/* The ⌄ after a DM's or group's name: it opens something (the chat info panel). Small and muted. */
+#dm-header-name .icon {
+  width: 1em;
+  height: 1em;
+  vertical-align: 0;
+  color: var(--icon);
 }
 #dm-header-name:disabled {
   cursor: default;  /* a channel: just its name */

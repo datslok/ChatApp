@@ -29,6 +29,7 @@ function onPhoneLayout() {
 
 function openChatInfo(tab = "members") {
   membersElement.classList.add("info-open");  // (wider, and shown even if 👥 had hidden the list: chat.css)
+  dmHeaderName.classList.add("open");  // (rooms.js: the name in the top bar looks pressed, its ⌄ turns up)
   chatInfoTop.hidden = false;
   showChatInfoTab(tab);
   if (onPhoneLayout()) openDrawer(membersElement);
@@ -39,6 +40,7 @@ function closeChatInfo() {
   if (chatInfoTab === null) return;
   chatInfoTab = null;
   membersElement.classList.remove("info-open");
+  dmHeaderName.classList.remove("open");
   chatInfoTop.hidden = true;
   memberLists.hidden = false;
   chatInfoList.hidden = chatInfoStatus.hidden = true;

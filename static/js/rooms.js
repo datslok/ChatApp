@@ -425,9 +425,15 @@ function showDmHeader() {
   const inGroup = !groupButtons.hidden;
   dmHeader.hidden = !inDm && !inGroup && !isChannel(currentChannel);
   if (dmHeader.hidden) return;
-  dmHeaderName.textContent = channelLabel(currentChannel);
-  // The name opens the chat info panel (chat-info.js), in DMs and groups only (the user's choice).
+  // The name opens the chat info panel (chat-info.js), in DMs and groups only (the user's choice). There
+  // a small ⌄ after it shows that it opens something. (The name in a span of its own, so a long one gets
+  // its "…" and the arrow stays.)
+  const name = document.createElement("span");
+  name.className = "dm-header-label";
+  name.textContent = channelLabel(currentChannel);
   dmHeaderName.disabled = !inDm && !inGroup;
+  dmHeaderName.replaceChildren(name);
+  if (!dmHeaderName.disabled) dmHeaderName.appendChild(makeIcon("chevron-down"));
   dmHeaderName.title = dmHeaderName.disabled ? "" : "Members, media, pins, links and files";
   // No calls in channels (that's what Lounge is for), nor with a bot (server.py's is_call_member says no).
   const withBot = people.get(dmPartner(currentChannel))?.bot === true;
