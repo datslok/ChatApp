@@ -527,6 +527,7 @@ form.addEventListener("submit", (event) => {
   clearInput();
   clearReply();
   lastTypingSent = 0;  // so typing the next message is announced straight away
+  backToPresent();  // (messages.js: if we were showing the past, to see what we sent)
 });
 
 // Log out: the server forgets our session, then we go back to the login page.

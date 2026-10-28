@@ -80,6 +80,17 @@ export function useConnection() {
   // Are there older messages than the ones we have (the server's "more": it sent a full batch)?
   const [more, setMore] = useState(false);
   const loadingOlder = useRef(false);  // asked for older ones, waiting for them
+  // false: showing a stretch of the past (a jump far up, jumpAround), not up to the newest message. Live
+  // messages then wait: they come with the newer batches (loadNewer) as we scroll down. (A ref as well,
+  // for the socket's handlers.)
+  const [atPresent, setAtPresentState] = useState(true);
+  const atPresentRef = useRef(true);
+  function setAtPresent(value) {
+    atPresentRef.current = value;
+    setAtPresentState(value);
+  }
+  const loadingNewer = useRef(false);  // asked for the next newer batch, waiting for it
+  const aroundWaiting = useRef(null);  // the jump waiting for its "around": {id, resolve}
   const [mutedChats, setMutedChats] = useState(new Set());  // chats we muted: no unread dot, faded
   // DMs and groups pinned to the top of the list, and each one's newest message id (the list is sorted
   // by it, newest first): the server's "Recent and pinned DMs".
@@ -292,6 +303,8 @@ export function useConnection() {
           setMessages(data.messages);
           setMore(data.more);
           loadingOlder.current = false;
+          setAtPresent(true);  // (the history is the newest messages)
+          loadingNewer.current = false;
           // A line only if something after it is new (never opened before: no line either).
           const newest = data.messages[data.messages.length - 1];
           setLastRead(data.last_read !== null && newest && newest.id > data.last_read ? data.last_read : null);
@@ -305,6 +318,31 @@ export function useConnection() {
         }
         loadingOlder.current = false;
         break;
+      case 'around': {
+        // The stretch around a message we're jumping to (jumpAround): it replaces what's shown.
+        const waiting = aroundWaiting.current;
+        if (data.channel !== currentRef.current || waiting?.id !== data.id) break;  // (no longer wanted)
+        aroundWaiting.current = null;
+        const found = data.messages.some((message) => message.id === data.id);
+        if (found) {
+          setMessages(data.messages);
+          setMore(data.more);
+          setAtPresent(!data.newer);  // (a message among the newest: this reaches the present already)
+          loadingOlder.current = false;  // (a batch still on its way belonged to what was shown before)
+          loadingNewer.current = false;
+        }
+        waiting.resolve(found);
+        break;
+      }
+      case 'newer':
+        // The next batch below a jump's stretch (loadNewer): after the others. The last one (not a full
+        // batch) brings us back to the present, where live messages show again.
+        if (data.channel === currentRef.current && loadingNewer.current) {
+          setMessages((old) => [...(old ?? []), ...data.messages]);
+          setAtPresent(!data.newer);
+        }
+        loadingNewer.current = false;
+        break;
       case 'pinned':
         if (data.channel === currentRef.current) {
           setMessages((old) => old?.map((message) => (message.id === data.message_id
@@ -317,7 +355,9 @@ export function useConnection() {
       case 'message':
         // One of ours from the outbox (its tag): the real one replaces the faded copy, in the same redraw.
         if (data.nonce) changeOutbox((old) => old.filter((item) => item.nonce !== data.nonce));
-        if (data.channel === currentRef.current) {
+        // (Showing the past: not drawn, as there'd be a gap before it. It's saved before it's sent out,
+        // so it comes with the newer batches.)
+        if (data.channel === currentRef.current && atPresentRef.current) {
           // The NEW line, live (the web page's): we wrote something (here or on another device): caught
           // up, it goes. The first message while the app is out of sight: the line moves above it, so
           // coming back shows where we left off (ids only grow: "after id - 1" is this one and what follows).
@@ -528,6 +568,9 @@ export function useConnection() {
     setLastRead(null);
     setMore(false);
     loadingOlder.current = false;
+    setAtPresent(true);
+    loadingNewer.current = false;
+    aroundWaiting.current = null;
     clearTyping();
     setUnread((old) => {
       const now = new Set(old);
@@ -581,6 +624,7 @@ export function useConnection() {
     };
     changeOutbox((old) => [...old, item]);
     sendFromOutbox(item);
+    backToPresent();  // (if we were showing the past: to see what we sent)
     setLastRead(null);  // we wrote something: caught up, the NEW line goes (like the web page)
     lastTypingSent.current = 0;  // so the next message's typing is told at once
     return true;
@@ -608,6 +652,34 @@ export function useConnection() {
     if (!more || loadingOlder.current || !messages?.length) return;
     loadingOlder.current = true;
     send({ type: 'older', before: messages[0].id });
+  }
+  // Jumping to a message that isn't loaded (ChatScreen's jumpTo): ask for the messages around it, which
+  // then replace what's shown. Resolves with whether it still exists (false: deleted, nothing changed).
+  // (Loading older batches until it was there took up to 40 trips, each redrawing the list.)
+  function jumpAround(id) {
+    return new Promise((resolve) => {
+      aroundWaiting.current = { id, resolve };
+      if (!send({ type: 'around', id })) {
+        aroundWaiting.current = null;
+        resolve(false);
+      }
+    });
+  }
+  // Scrolled down to the newest message we have while showing the past: ask for the 50 after it.
+  function loadNewer() {
+    if (atPresentRef.current || loadingNewer.current || !messages?.length) return;
+    loadingNewer.current = true;
+    send({ type: 'newer', after: messages[messages.length - 1].id });
+  }
+  // Back to the newest messages from the past (the ↓ button, or sending something): open the chat again,
+  // like at the start. Its "history" brings the newest messages (and atPresent).
+  function backToPresent() {
+    if (atPresentRef.current || !currentRef.current) return;
+    setMessages(null);
+    loadingOlder.current = false;
+    loadingNewer.current = false;
+    aroundWaiting.current = null;
+    send({ type: 'join', channel: currentRef.current });
   }
   function pin(messageId, pinned) {
     send({ type: 'pin', message_id: messageId, pinned });  // ("pinned" comes back to everyone)
@@ -707,7 +779,7 @@ export function useConnection() {
     emojiGroups, unread, mentions, current, messages, lastRead, more, typing, mutedChats, pinnedChats, chatActivity, pins, pinsFull,
     searchResults, voiceMembers, dmCalls, callListener, notifyListener,
     outbox, retryMessage, discardMessage,
-    openChat, closeChat, loadOlder, sendMessage, sendTyping, react, pin, editMessage, deleteMessage,
+    openChat, closeChat, loadOlder, jumpAround, loadNewer, backToPresent, atPresent, sendMessage, sendTyping, react, pin, editMessage, deleteMessage,
     friendAction, mute, pinChat, openPins, closePins, watchChatInfo, askChatInfo, search, setPresence, logout, sendVoice, ring, answerCall, cancelCall,
     reconnect: connect,  // after logging in
   };

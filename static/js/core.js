@@ -153,6 +153,8 @@ let pendingJump = null;     // a message id to go to once its channel's history 
 let jumpTarget = null;      // the message we last jumped to: pictures loading keep it in view (messages.js)
 let loadingOlder = false;   // asked the server for older messages, and waiting for them (messages.js)
 let reachedStart = false;   // the channel's very first message is on the page: nothing older to load
+let atPresent = true;       // false: showing a stretch of the past (a jump far up), not up to the newest message
+let loadingNewer = false;   // asked for the next newer batch (scrolling down from such a jump), and waiting
 let reconnectDelay = 1000;  // milliseconds to wait before the next reconnect attempt
 const unread = new Set();   // channels and DMs with messages we haven't seen
 const mentionCounts = new Map();  // channel -> how many unread messages there mention us
@@ -556,20 +558,30 @@ function handleServerMessage(event) {
     // since, which resets loadingOlder), it no longer fits what's on the page: ignore it.
     if (!loadingOlder) return;
     showOlderMessages(data.messages, data.more);
+  } else if (data.type === "around") {
+    showMessagesAround(data);  // a jump far up (messages.js)
+  } else if (data.type === "newer") {
+    // The batch we asked for by scrolling down from a jump (only if we still want it, like "older").
+    if (!loadingNewer) return;
+    showNewerMessages(data.messages, data.newer);
   } else if (data.type === "message") {
     stopTyping(data.name);  // their message arrived, so they're done typing
-    shownMessages.push(data);
-    if (data.user_id === myId) {
-      removeNewDivider();  // we wrote something (here or on another device): caught up
-    } else if (!isLooking() && !newWhileAway) {
-      // The first message while we're away (tab hidden, window not focused): the line moves
-      // above it, so coming back shows where we left off. (ids only grow, so "after id - 1"
-      // is this message and everything after it.)
-      removeNewDivider();
-      newMessagesAfter = data.id - 1;
-      newWhileAway = true;
+    // Showing the past (a jump far up)? Then it isn't drawn: there'd be a gap before it. It comes with
+    // the newer batches when we scroll down (it's saved before it's sent out). Notifying still happens.
+    if (atPresent) {
+      shownMessages.push(data);
+      if (data.user_id === myId) {
+        removeNewDivider();  // we wrote something (here or on another device): caught up
+      } else if (!isLooking() && !newWhileAway) {
+        // The first message while we're away (tab hidden, window not focused): the line moves
+        // above it, so coming back shows where we left off. (ids only grow, so "after id - 1"
+        // is this message and everything after it.)
+        removeNewDivider();
+        newMessagesAfter = data.id - 1;
+        newWhileAway = true;
+      }
+      showMessage(data);
     }
-    showMessage(data);
     chatInfoNews("message", data);  // (chat-info.js: a new picture, file or link in its open tab)
     // In the channel we're in, but the tab is hidden or the window isn't focused:
     // a DM or a mention still notifies, and counts in the tab title until we're back.
@@ -704,8 +716,10 @@ function joinCurrentChannel() {
   jumpTarget = null;           // a fresh channel starts at the bottom
   loadingOlder = false;        // an answer still on its way belongs to what we just cleared
   reachedStart = false;        // (the history says whether there's more)
-  pendingJump = null;          // (openMessage sets it again right after switching)
-  jumpLoading = null;          // (messages.js: loading older messages to reach one, in the old channel)
+  atPresent = true;            // (the history is the newest messages)
+  loadingNewer = false;
+  pendingJump = null;         // (openMessage sets it again right after switching)
+  jumpLoading = null;          // (messages.js: a jump we were waiting for "around" for, in the old channel)
   clearReply();                // a reply belongs to the channel we just left
   clearTyping();
   closeChatInfo();             // (chat-info.js: its tabs belonged to the chat we left)

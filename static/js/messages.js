@@ -133,6 +133,7 @@ async function sendTray(caption) {
       for (const { item } of uploaded) takeFromTray(item, list);
       clearReply();
       if (caption) clearInput();
+      backToPresent();  // (if we were showing the past, to see what we sent)
     } else {
       for (const { item } of uploaded) item.failed = true;
     }
@@ -909,6 +910,7 @@ async function sendGif(gif) {
   uploadStatus.textContent = "";
   sendToServer({ type: "message", text: "", files: [result.data.id], reply_to: replyingTo?.id });
   clearReply();
+  backToPresent();  // (if we were showing the past, to see what we sent)
 }
 
 gifButton.addEventListener("click", () => {
@@ -1450,36 +1452,30 @@ function makeReplyLine(reply) {
 }
 
 // Scroll to a message and light it up briefly, if it's on the page.
-// A message we're loading older batches to reach (a pin or a reply's quote far up): {id, batches}.
-// showOlderMessages calls jumpToMessage again with each batch, until it's there. joinCurrentChannel
-// forgets it. At most MAX_JUMP_BATCHES batches of 50 (2,000 messages), then it gives up.
+// Not on the page (a pin, a search result or a reply's quote far up): we ask the server for the
+// messages around it ({"type": "around"}) and show just that stretch of the chat (showMessagesAround).
+// Loading older batches until it was there used to take up to 40 trips, each redrawing everything.
+// jumpLoading is the message we're waiting for, {id}; joinCurrentChannel forgets it.
 let jumpLoading = null;
-const MAX_JUMP_BATCHES = 40;
 
 function jumpToMessage(messageId) {
   // The id is a number from the server, so it's safe to put in a CSS selector.
   const target = messages.querySelector(`[data-id="${messageId}"]`);
   if (!target) {
-    // Not on the page. Older than everything loaded (ids only grow): load older messages until it
-    // is. Otherwise (between loaded ones, or nothing older left) it was deleted.
+    // Not on the page. Outside what's loaded (ids only grow: older than the oldest, or newer than
+    // the newest while showing the past): ask for it. Between loaded ones (or older than the very
+    // first message) it was deleted.
     const oldest = shownMessages[0]?.id;
-    const batches = jumpLoading?.id === messageId ? jumpLoading.batches : 0;
-    if (oldest !== undefined && messageId < oldest && !reachedStart && batches < MAX_JUMP_BATCHES) {
-      jumpLoading = { id: messageId, batches: batches + 1 };
+    const newest = shownMessages.at(-1)?.id;
+    const outside = oldest === undefined || (messageId < oldest && !reachedStart) || (messageId > newest && !atPresent);
+    if (outside && sendToServer({ type: "around", id: messageId })) {
+      jumpLoading = { id: messageId };
       uploadStatus.className = "";
       uploadStatus.textContent = "Finding the message…";
-      loadOlderMessages();  // (if a batch is already on its way, its arrival brings us back here)
       return;
     }
-    jumpLoading = null;
-    uploadStatus.textContent = "";
-    showUploadError(batches >= MAX_JUMP_BATCHES ? "That message is very far up: scroll up to find it."
-      : "That message has been deleted.");
+    showUploadError("That message has been deleted.");
     return;
-  }
-  if (jumpLoading) {
-    jumpLoading = null;
-    uploadStatus.textContent = "";  // ("Finding the message…")
   }
   jumpTarget = target;
   target.scrollIntoView({ block: "center", behavior: "smooth" });
@@ -1488,6 +1484,66 @@ function jumpToMessage(messageId) {
   target.classList.remove("flash");
   void target.offsetWidth;
   target.classList.add("flash");
+}
+
+// The server's answer to "around" (core.js): that stretch of the chat replaces what's shown, and we go to
+// the message in it. "more" / "newer": whether there's more above and below it to load by scrolling.
+function showMessagesAround(data) {
+  if (jumpLoading?.id !== data.id) return;  // (no longer wanted: we asked for another one since)
+  jumpLoading = null;
+  uploadStatus.textContent = "";  // ("Finding the message…")
+  if (!data.messages.some((message) => message.id === data.id)) {
+    showUploadError("That message has been deleted.");
+    return;
+  }
+  shownMessages = data.messages;
+  reachedStart = !data.more;
+  atPresent = !data.newer;  // (a message among the newest: this reaches the present already)
+  loadingOlder = false;     // (a batch still on its way belonged to what was shown before)
+  loadingNewer = false;
+  drawAllMessages(false);
+  // Straight there (a smooth scroll from wherever the new stretch starts could meet older batches
+  // arriving above it), then jumpToMessage lights it up.
+  messages.querySelector(`[data-id="${data.id}"]`).scrollIntoView({ block: "center" });
+  jumpToMessage(data.id);
+  showToBottom();
+}
+
+// Scrolling down while showing the past: the next newer batch.
+function loadNewerMessages() {
+  if (atPresent || loadingNewer || shownMessages.length === 0) return;
+  loadingNewer = true;  // (like loadingOlder: if we're disconnected, the reconnect's rejoin resets it)
+  sendToServer({ type: "newer", after: shownMessages.at(-1).id });
+}
+
+// Its answer (core.js): put the batch after the others. Below the view, so nothing we're reading moves.
+// `newer` false: that was the last of them, so we're at the present again and live messages show.
+function showNewerMessages(newer, more) {
+  loadingNewer = false;
+  atPresent = !more;
+  const scrollTop = messages.scrollTop;
+  shownMessages = shownMessages.concat(newer);
+  drawAllMessages(false);  // a full redraw, so grouping and date dividers are right where they meet
+  messages.scrollTop = scrollTop;
+  showToBottom();
+}
+
+// Back to the newest messages from a jump far up (the ↓ button, or sending something): open the chat
+// again, like at the start. Its "history" draws the newest messages, at the bottom.
+function backToPresent() {
+  if (atPresent) return;
+  messages.replaceChildren();
+  shownMessages = [];
+  lastShown = null;
+  newDividerDrawn = false;
+  jumpTarget = null;
+  loadingOlder = false;
+  loadingNewer = false;
+  reachedStart = false;
+  jumpLoading = null;
+  atPresent = true;
+  toBottomButton.classList.remove("shown");
+  sendToServer({ type: "join", channel: currentChannel });
 }
 
 // ---------- Pinned messages ----------
@@ -1753,6 +1809,8 @@ function loadOlderMessages() {
 // "near the top": the next batch then usually arrives before you get there.
 messages.addEventListener("scroll", () => {
   if (messages.scrollTop < 300) loadOlderMessages();
+  // Showing the past (a jump far up): within 300 pixels of the bottom, the next newer batch.
+  if (messages.scrollHeight - messages.scrollTop - messages.clientHeight < 300) loadNewerMessages();
   showToBottom();
 });
 
@@ -1766,10 +1824,15 @@ const toBottomButton = document.getElementById("to-bottom");
 function showToBottom() {
   // How far the bottom is: everything's height, less what's above the view and the view itself.
   const fromBottom = messages.scrollHeight - messages.scrollTop - messages.clientHeight;
-  toBottomButton.classList.toggle("shown", fromBottom > messages.clientHeight * 1.5);
+  // (Always while showing the past: the newest messages aren't on the page.)
+  toBottomButton.classList.toggle("shown", fromBottom > messages.clientHeight * 1.5 || !atPresent);
 }
 
 toBottomButton.addEventListener("click", () => {
+  if (!atPresent) {
+    backToPresent();  // (from a jump far up: the newest messages aren't loaded)
+    return;
+  }
   jumpTarget = null;  // (no longer staying at a message we jumped to)
   messages.scrollTo({ top: messages.scrollHeight, behavior: "smooth" });
 });
@@ -1786,10 +1849,6 @@ function showOlderMessages(older, more) {
   shownMessages = older.concat(shownMessages);  // older ones first
   drawAllMessages(false);  // a full redraw, so grouping and date dividers are right where they meet
   messages.scrollTop = topBefore + (messages.scrollHeight - heightBefore);
-  if (jumpLoading) {
-    jumpToMessage(jumpLoading.id);  // on the way to a message further up: there yet? (or the next batch)
-    return;
-  }
   // Still near the top (a tall screen, or a batch of short messages)? Then the next batch.
   if (messages.scrollTop < 300) loadOlderMessages();
 }

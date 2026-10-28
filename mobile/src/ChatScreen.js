@@ -41,10 +41,6 @@ const COUNT_FROM = 200;
 // Statuses in words, for the @ suggestions (the web page's PRESENCE_NAMES, lower case).
 const PRESENCE_NAMES = { online: 'online', idle: 'idle', dnd: 'do not disturb' };
 
-// Going to a message further up (a pin, a search result, a reply's quote): at most this many batches
-// of 50 older messages are loaded to reach it (2,000 messages, like the web page's MAX_JUMP_BATCHES).
-const MAX_JUMP_BATCHES = 40;
-
 // ----- Text
 
 // Messages store mentions and custom emoji by id ("<@3>", "<@everyone>", "<:17>"), so renames
@@ -465,9 +461,9 @@ export default function ChatScreen({
   const [picker, setPicker] = useState(null);      // the emoji/GIF picker: null, "insert", or {react: message}
   // The status line's right side: {text, error}, like "Uploading cat.jpg…", or what went wrong; or null.
   const [status, setStatus] = useState(null);
-  // The message we're on our way to, {chat, id} (loading older batches until it's there), or null.
+  // The message we're on our way to, {chat, id} (its chat's history or the stretch around it coming), or null.
   const [jump, setJump] = useState(null);
-  const jumpBatches = useRef({ count: 0, waitingFor: null });  // batches asked for, and our oldest id then
+  const jumpAsked = useRef(false);  // asked for the messages around it (connection.jumpAround), waiting
   const [flash, setFlash] = useState(null);  // the message that lights up: {id, n}
   const [charNote, setCharNote] = useState(null);  // the counter's warning for now ("No room for that emoji…")
   const list = useRef(null);     // the FlatList, to scroll it
@@ -639,12 +635,12 @@ export default function ChatScreen({
   // ----- Going to a message (the web page's jumpToMessage and openMessage)
   //
   // From a pin, a search result or a reply's quote. Another chat opens first, and its history comes.
-  // A message older than everything loaded: older batches load until it's there (each batch changes
-  // `messages`, which runs the effect below again). Then the list scrolls to it and it lights up.
+  // A message outside everything loaded: the messages around it replace what's shown (jumpAround, which
+  // changes `messages` and runs the effect below again). Then the list scrolls to it and it lights up.
 
   function jumpTo(chat, id) {
     setPopup(null);
-    jumpBatches.current = { count: 0, waitingFor: null };
+    jumpAsked.current = false;
     if (chat !== current) onOpenChat(chat);
     setJump({ chat, id });
   }
@@ -669,22 +665,26 @@ export default function ChatScreen({
       setFlash({ id: jump.id, n: Date.now() });
       return;
     }
-    // Not loaded. Older than everything we have (ids only grow): load older ones, if there are any.
-    // Otherwise (between loaded ones, or nothing older left) it was deleted.
+    if (jumpAsked.current) return;  // its stretch is on its way
+    // Not loaded. Outside what we have (ids only grow: older than the oldest, or newer than the newest
+    // while showing the past): ask for the messages around it. Otherwise (between loaded ones, or older
+    // than the very first message) it was deleted.
     const oldest = messages[0]?.id;
-    const batches = jumpBatches.current;
-    if (oldest !== undefined && jump.id < oldest && more && batches.count < MAX_JUMP_BATCHES) {
-      if (batches.waitingFor === oldest) return;  // asked already; that batch hasn't come yet
-      batches.count += 1;
-      batches.waitingFor = oldest;
-      setStatus({ text: 'Finding the message…', finding: true });
-      connection.loadOlder();
+    const newest = messages[messages.length - 1]?.id;
+    const outside = oldest === undefined || (jump.id < oldest && more) || (jump.id > newest && !connection.atPresent);
+    const deleted = () => {
+      setJump(null);
+      setStatus((now) => (now?.finding ? null : now));
+      showError('That message has been deleted.');
+    };
+    if (!outside) {
+      deleted();
       return;
     }
-    setJump(null);
-    setStatus((now) => (now?.finding ? null : now));
-    showError(batches.count >= MAX_JUMP_BATCHES ? 'That message is very far up: scroll up to find it.'
-      : 'That message has been deleted.');
+    jumpAsked.current = true;
+    setStatus({ text: 'Finding the message…', finding: true });
+    // (Found: `messages` changes, and this effect finds its row.)
+    connection.jumpAround(jump.id).then((found) => { if (!found) deleted(); });
   }, [jump, messages, current]);
 
   // scrollToIndex only knows where rows are that have been drawn, and FlatList only draws the rows
@@ -1042,6 +1042,13 @@ export default function ChatScreen({
         keyboardShouldPersistTaps="handled"  // a tap on a chip works even while the keyboard is up
         onEndReached={connection.loadOlder}
         onEndReachedThreshold={0.5}
+        // ...and its "start" is the bottom: showing the past (a jump far up), getting near it loads newer ones.
+        onStartReached={connection.loadNewer}
+        onStartReachedThreshold={0.5}
+        // Those go in at the bottom, the list's start, which would push what we're reading up out of view:
+        // this keeps the row on screen where it was. At the very bottom of the present (within 40 px), it
+        // follows new messages instead, as before. (Not while showing the past: a batch would skip by.)
+        maintainVisibleContentPosition={{ minIndexForVisible: 0, autoscrollToTopThreshold: connection.atPresent ? 40 : undefined }}
         onViewableItemsChanged={onViewableItemsChanged}
         onLayout={(event) => { listHeight.current = event.nativeEvent.layout.height; }}
         // (setFarUp with the value it already has redraws nothing; at most every 100 ms while scrolling.)
@@ -1074,9 +1081,11 @@ export default function ChatScreen({
       {/* The messages, with the scroll-down button over their bottom right corner. */}
       <View style={styles.middle}>
         {body}
-        {farUp && messages !== null ? (
+        {(farUp || !connection.atPresent) && messages !== null ? (
           <Pressable
-            onPress={toBottom} accessibilityLabel="Back to the newest messages"
+            // (Showing the past: the newest messages aren't loaded, so the chat opens again at them.)
+            onPress={connection.atPresent ? toBottom : () => { setFarUp(false); connection.backToPresent(); }}
+            accessibilityLabel="Back to the newest messages"
             style={({ pressed }) => [styles.toBottom, pressed && styles.toBottomPressed]}
           >
             <Icon name="arrow-down" size={20} color={colors.iconStrong} />

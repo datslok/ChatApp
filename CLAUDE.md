@@ -173,8 +173,8 @@ the point is for me to understand how it works, not just to have it done.
   (`openPins`/`closePins`: asked again on "pinned"/"deleted" while open), `src/SearchScreen.js` (300 ms after typing,
   `search()` returns its `ask`; This chat / Everywhere as two buttons; From is the type-to-search picker, its list a
   child of the popup since Android ignores taps outside a parent's edges). ChatScreen's `jumpTo(chat, id)` (pins,
-  results, a reply's quote) opens the chat (App.js `go` as `onOpenChat`), loads older batches (40 at most) until the
-  row is there, `scrollToIndex` (`onScrollToIndexFailed` scrolls to a guess and retries) and `Flash` fades it.
+  results, a reply's quote) opens the chat (App.js `go` as `onOpenChat`), asks connection.js `jumpAround` (the server's
+  "around", see Pinned messages) unless it's loaded, `scrollToIndex` (`onScrollToIndexFailed` scrolls to a guess and retries) and `Flash` fades it.
   `src/time.js`: dayName, clock, headerTime.
   Calls parity (2026-10-16, needs the APK after 1.0.1): `MicProcessor.kt` has the noise gate after RNNoise and the
   mic volume (`gateDb`, voice-gate.js's 0.3 s hold and 5 ms fade; settings `gate`, default -60) and publishes `level`/
@@ -555,7 +555,12 @@ the point is for me to understand how it works, not just to have it done.
   `{"type": "pins"}` answers with `pinned_messages(channel)`. `MESSAGES_QUERY` + `message_dicts` build both
   the history and that list (every message has "pinned"). Page: 📌 in each message's hover bar, and in the
   top bar (#dm-header, now on every chat; the call button only in DMs and groups), #pins-dialog with Jump and
-  Unpin. `jumpToMessage` loads older batches by itself (`jumpLoading`, up to 40 x 50) to reach an old message.
+  Unpin. Jumping to a message that isn't loaded (since 2026-10-29; 40 older batches with a full redraw each
+  lagged): `{"type": "around", "id"}` -> "around" (server.py `messages_around`: `AROUND_EACH_SIDE` 25 each side,
+  `more`/`newer`) replaces what's shown with that stretch; `atPresent` false (web core.js; phone connection.js)
+  until `{"type": "newer", "after"}` batches (scrolling down; phone `onStartReached`, the inverted list's
+  `maintainVisibleContentPosition`) reach the newest; meanwhile live messages aren't drawn (they're in the DB, so
+  the batches bring them); ↓ (always shown then) and sending call `backToPresent` (a fresh "join").
 - Search: `messages_fts`, an FTS5 index of `messages.text` (external content, `content_rowid='id'`, unicode61
   with remove_diacritics), filled once with 'rebuild' and kept in step by three triggers (insert, delete,
   update of text). WebSocket `{"type": "search", "query", "channel" (or null: everywhere), "from" (a user id

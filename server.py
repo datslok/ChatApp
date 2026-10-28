@@ -1182,6 +1182,39 @@ def recent_messages(channel, before=None):
     return message_dicts(rows)
 
 
+# Jumping to an old message (a search result, a pin, a reply's quote): instead of loading older
+# batches until it's there (slow: 40 trips and a redraw each), the page asks for the messages around it
+# and shows that stretch of the chat on its own. Scrolling down from there loads newer batches until it
+# reaches the present again.
+AROUND_EACH_SIDE = 25  # messages before and after the one jumped to
+
+
+def messages_around(channel, message_id):
+    """The stretch of a channel around one message, oldest first: up to AROUND_EACH_SIDE before it, the
+    message itself (if it still exists) and up to AROUND_EACH_SIDE after it. Also whether there may be
+    more above ("more") and below ("newer"): a full side means there may be."""
+    before = db.execute(
+        MESSAGES_QUERY + " WHERE messages.channel = ? AND messages.id < ? ORDER BY messages.id DESC LIMIT ?",
+        (channel, message_id, AROUND_EACH_SIDE),
+    ).fetchall()
+    before.reverse()
+    after = db.execute(  # the message itself and the ones after it (one more than a side, for itself)
+        MESSAGES_QUERY + " WHERE messages.channel = ? AND messages.id >= ? ORDER BY messages.id LIMIT ?",
+        (channel, message_id, AROUND_EACH_SIDE + 1),
+    ).fetchall()
+    newer = len([row for row in after if row[0] != message_id]) == AROUND_EACH_SIDE
+    return message_dicts(before + after), len(before) == AROUND_EACH_SIDE, newer
+
+
+def newer_messages(channel, after):
+    """The HISTORY_LIMIT messages just after message `after`, oldest first (scrolling down from a jump)."""
+    rows = db.execute(
+        MESSAGES_QUERY + " WHERE messages.channel = ? AND messages.id > ? ORDER BY messages.id LIMIT ?",
+        (channel, after, HISTORY_LIMIT),
+    ).fetchall()
+    return message_dicts(rows)
+
+
 MAX_PINS = 100  # pinned messages per channel, DM or group (Discord allows 50)
 
 
@@ -5801,6 +5834,24 @@ async def chat(websocket: WebSocket):
                 older = recent_messages(channel, before)
                 more = len(older) == HISTORY_LIMIT
                 await send(websocket, {"type": "older", "channel": channel, "messages": older, "more": more})
+
+            elif kind in ("around", "newer") and channel is not None:
+                # {"type": "around", "id": 1234}: jumping to message 1234, far up: the messages around it
+                # (messages_around). {"type": "newer", "after": 1234}: scrolling down from there, the next
+                # batch. Checked like "older".
+                number = data.get("id" if kind == "around" else "after")
+                if not isinstance(number, int) or isinstance(number, bool) or not 0 < number < 2**63:
+                    continue
+                if not can_join(channel, user_id):
+                    continue
+                if kind == "around":
+                    stretch, more, newer = messages_around(channel, number)
+                    await send(websocket, {"type": "around", "channel": channel, "id": number,
+                                           "messages": stretch, "more": more, "newer": newer})
+                else:
+                    batch = newer_messages(channel, number)
+                    await send(websocket, {"type": "newer", "channel": channel, "messages": batch,
+                                           "newer": len(batch) == HISTORY_LIMIT})
 
             elif kind == "message" and (channel is not None or data.get("channel") is not None):
                 # The chat we're in, or the one the message names (the app's outbox sends a message again

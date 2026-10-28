@@ -127,7 +127,8 @@
     {
       "date": "2026-10-29",
       "items": [
-        "🔴 The Windows app shows a red dot on its taskbar button when you have unread messages, a mention or a friend request, also in the chat you have open while the app is in the background. The app updates itself"
+        "🔴 The Windows app shows a red dot on its taskbar button when you have unread messages, a mention or a friend request, also in the chat you have open while the app is in the background. The app updates itself",
+        "🔍 Jumping to an old message (a search result, a pin or a reply's quote) is now instant, however far back it is. Scroll down from there to read on, or tap ↓ to get back to the newest messages. Also in the Android app"
       ]
     },
     {
