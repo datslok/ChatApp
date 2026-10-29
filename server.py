@@ -3718,8 +3718,7 @@ def page_version():
     one letter in any of them and it comes out completely different. Each page gets it in its
     "welcome"; after a deploy that changed the page, the pages that reconnect see a new one and
     reload themselves (core.js, reloadIfOutdated). Changes to this file alone don't count."""
-    files = [Path("static/index.html"), Path("static/voice-gate.js"), Path("static/voice-denoiser.js"), Path("static/app-audio.js"),
-             Path("static/changelog.json"),
+    files = [Path("static/index.html"), Path("static/voice-gate.js"), Path("static/app-audio.js"), Path("static/changelog.json"),
              *Path("static/js").glob("*.js"), *Path("static/css").glob("*.css")]
     digest = hashlib.sha256()
     for path in sorted(files):  # always in the same order, or the same files would give another hash
@@ -3790,13 +3789,6 @@ async def voice_gate():
     return FileResponse("static/voice-gate.js", media_type="text/javascript", headers={"Cache-Control": "no-cache"})
 
 
-@app.get("/voice-denoiser.js")
-async def voice_denoiser():
-    # Noise suppression "On" (voice.js): our AudioWorklet around RNNoise, which also tells the gate
-    # how sure it is that it hears a voice.
-    return FileResponse("static/voice-denoiser.js", media_type="text/javascript", headers={"Cache-Control": "no-cache"})
-
-
 @app.get("/app-audio.js")
 async def app_audio():
     # The shared program's sound in the Windows app (video.js): another AudioWorklet, like the gate.
@@ -3805,10 +3797,10 @@ async def app_audio():
 
 @app.get("/rnnoise-0.4.1/{name}")
 async def rnnoise(name: str):
-    # RNNoise, the AI noise filter for "Noise suppression: On": the compiled filter (WebAssembly) that
-    # static/voice-denoiser.js runs, from npm's @sapphi-red/web-noise-suppressor (see CLAUDE.md).
-    # Only this file; the version is in the address, so browsers may keep it for a week.
-    media_types = {"rnnoise_simd.wasm": "application/wasm"}
+    # RNNoise, the AI noise filter for "Noise suppression: On" (voice.js): an AudioWorklet and the
+    # compiled filter it runs (WebAssembly), from npm's @sapphi-red/web-noise-suppressor (see CLAUDE.md).
+    # Only these two files; the version is in the address, so browsers may keep them for a week.
+    media_types = {"rnnoise-worklet.js": "text/javascript", "rnnoise_simd.wasm": "application/wasm"}
     if name not in media_types:
         raise HTTPException(404)
     return FileResponse("static/rnnoise-0.4.1/" + name, media_type=media_types[name],

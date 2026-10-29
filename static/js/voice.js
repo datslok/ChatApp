@@ -13,8 +13,8 @@
 //
 // The sound goes through the browser's Web Audio engine, as a chain of "nodes" (like guitar
 // pedals), all in one AudioContext:
-//   microphone → noise suppression (RNNoise, when it's "On": static/voice-denoiser.js) → mic volume
-//     (a GainNode) → noise gate (static/voice-gate.js) → a track LiveKit sends
+//   microphone → noise suppression (RNNoise, when it's "On") → mic volume (a GainNode)
+//     → noise gate (static/voice-gate.js) → a track LiveKit sends
 //   each other person → their volume (a GainNode LiveKit makes for them) → speakers or headphones
 
 const voiceBar = document.getElementById("voice-bar");
@@ -105,15 +105,14 @@ async function setUpAudio() {
 }
 
 // RNNoise: a small neural network, trained to tell speech from everything else (keyboards, fans,
-// dogs, ...). Every 10 ms it looks at the last 480 samples and turns down what isn't voice, and
-// scores how sure it is that there's a voice, which our gate uses (static/voice-denoiser.js). It's
+// dogs, ...). Every 10 ms it looks at the last 480 samples and turns down what isn't voice. It's
 // written in C and compiled to WebAssembly (the .wasm file: code the browser runs almost as fast as
-// a normal program, from npm's @sapphi-red/web-noise-suppressor), and runs in our own AudioWorklet
-// like the gate, which gets the .wasm file's bytes from here. Returns the node, or null if it
-// couldn't load ("On" then works like "Light").
+// a normal program), and runs in an AudioWorklet like our gate. Both come from npm's
+// @sapphi-red/web-noise-suppressor; its worklet expects the .wasm file's bytes, so we fetch them
+// here and hand them over. Returns the node, or null if it couldn't load ("On" then works like "Light").
 async function loadDenoiser(context) {
   try {
-    await context.audioWorklet.addModule("/voice-denoiser.js?v=" + (pageVersion ?? ""));
+    await context.audioWorklet.addModule("/rnnoise-0.4.1/rnnoise-worklet.js");
     const response = await fetch("/rnnoise-0.4.1/rnnoise_simd.wasm");
     if (!response.ok) throw new Error("RNNoise wasn't found");
     const wasmBinary = await response.arrayBuffer();
@@ -121,11 +120,11 @@ async function loadDenoiser(context) {
     // (stereo), even a mono one: "explicit" makes the browser mix those into one before RNNoise.
     // Otherwise RNNoise only cleans the first (left) one, the right stays silent, and the others
     // hear us in one ear. After it, the chain spreads the one channel over both ears again.
-    return new AudioWorkletNode(context, "voice-denoiser", {
+    return new AudioWorkletNode(context, "@sapphi-red/web-noise-suppressor/rnnoise", {
       channelCount: 1,
       channelCountMode: "explicit",
       outputChannelCount: [1],
-      processorOptions: { wasmBinary },
+      processorOptions: { wasmBinary, maxChannels: 1 },
     });
   } catch (error) {
     console.warn("Noise suppression (RNNoise) didn't load:", error);

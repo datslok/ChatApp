@@ -771,13 +771,8 @@ the point is for me to understand how it works, not just to have it done.
   (the UMD build from npm, checked against npm's integrity hash; served at `/livekit-client-<version>.umd.js`).
   The microphone goes through Web Audio (noise suppression, mic volume, then the noise gate
   `static/voice-gate.js`, an AudioWorklet) before LiveKit sends it. Noise suppression "On" (the default)
-  is RNNoise: `static/rnnoise-0.4.1/rnnoise_simd.wasm` (from npm's `@sapphi-red/web-noise-suppressor` 0.4.1,
-  checked against npm's integrity hash; served at `/rnnoise-0.4.1/`), run by our own worklet
-  `static/voice-denoiser.js` (since 2026-10-29; the npm worklet threw away `rnnoise_process_frame`'s voice score):
-  10 ms latency, and it puts the score in the worklets' shared global scope (`voiceScore`/`voiceScoreFrame`), so the
-  gate opens only when loud enough **and** `VOICE_SCORE` > 0.5 (typing, the user's report); no fresh score ("Light",
-  "Off") or the line at -100 = loudness alone. Its `emscripten_memcpy_big` must return nothing (returning the array
-  made V8 turn 16 MB into a number, ~1 s a frame). The phone's MicProcessor.kt doesn't use the score (yet).
+  is RNNoise: `static/rnnoise-0.4.1/` (worklet + `rnnoise_simd.wasm`, from npm's
+  `@sapphi-red/web-noise-suppressor` 0.4.1, checked against npm's integrity hash; served at `/rnnoise-0.4.1/`);
   "Light" is the browser's own, "Off" neither. The AudioContext runs at 48 kHz for RNNoise; voice settings are kept in the browser (localStorage "voiceSettings").
   Push to talk (voice.js, "Push to talk"; voice-settings.js "Input mode"; not on phones): `inputMode` "ptt" sends the
   gate `{ptt, talking}` and the key opens it instead of the line (same 0.3 s hold). The key is kept as `pttKey`
