@@ -50,7 +50,7 @@
         "Click a tile to make it big, right-click it for the profile. ⛶ or double-click a screen for fullscreen, where the others float in a small window: drag it to any corner, or hide it with 👥. In a DM, drag the call's bottom edge to resize it. In the Android app, tap a tile to see it over the whole screen (tap again for its controls, × or back closes it), and turn the phone on its side (with auto-rotate on) to watch it wide",
         "In a call but looking at another chat: the call floats in a small window in a corner (whoever is talking, or their camera). Click it to go back to the call, drag it to any corner",
         "Volume per person (0–200%) in their profile: click them, also in the voice list. A shared screen has its own volume: hover over it for the slider",
-        "Settings → Voice & audio: microphone, speakers, volumes, sensitivity and noise suppression. Settings → Video: your camera, with a preview",
+        "Settings → Voice & audio: microphone, speakers, volumes, sensitivity and noise suppression. With noise suppression On (the default), your microphone only turns on for your voice, so typing, clicks and bumps on their own aren't heard (on PC). Settings → Video: your camera, with a preview",
         "Push to talk: Settings → Voice & audio → Input mode → Push to talk, then Set key (a key, or a mouse button like the side ones). Your microphone is only on while you hold it. In the Windows app it also works while you're in a game or another program; in a browser only while the chat is in front. Not on phones",
         "The signal icon in a call shows your ping. Click it for details, including how a screen share is doing (frame rate, data, and whether the graphics card encodes it)",
         "Sharing one browser window and covering it with another window makes the share go black (the browser stops drawing covered windows). Share the entire screen instead, or keep the window uncovered"
@@ -129,7 +129,8 @@
       "items": [
         "🔴 The Windows app shows a red dot on its taskbar button when you have unread messages, a mention or a friend request, also in the chat you have open while the app is in the background. The app updates itself",
         "🔍 Jumping to an old message (a search result, a pin or a reply's quote) is now instant, however far back it is. Scroll down from there to read on, or tap ↓ to get back to the newest messages. Also in the Android app",
-        "⌄ The name at the top of a DM or group now has a small arrow and lights up under the mouse, so you can see it opens the members, pictures, pins, links and files"
+        "⌄ The name at the top of a DM or group now has a small arrow and lights up under the mouse, so you can see it opens the members, pictures, pins, links and files",
+        "⌨️ Less keyboard noise in calls on PC: with noise suppression On (the default), your microphone now only turns on when it hears a voice, not for typing, clicks or bumps. Typing while you talk still gets through a little"
       ]
     },
     {
