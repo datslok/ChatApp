@@ -127,7 +127,8 @@
     {
       "date": "2026-11-02",
       "items": [
-        "📄 Android app: saving a file that's already in Download no longer breaks it. A second copy is now called \"notes (1).pdf\" instead of \"notes.pdf (1)\", so it opens like the first. Needs the new version of the app"
+        "📄 Android app: saving a file that's already in Download no longer breaks it. A second copy is now called \"notes (1).pdf\" instead of \"notes.pdf (1)\", so it opens like the first. Needs the new version of the app",
+        "📞 Making a call bigger by dragging the bar under it no longer pushes the newest messages out of sight: the chat stays at the bottom, like when the window gets smaller"
       ]
     },
     {

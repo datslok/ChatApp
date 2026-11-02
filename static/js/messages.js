@@ -1814,6 +1814,22 @@ messages.addEventListener("scroll", () => {
   showToBottom();
 });
 
+// ---------- Keeping the bottom in place ----------
+// The browser keeps scrollTop (how far we've scrolled past the top) when the box changes height, so
+// a shorter box (the call banner dragged taller, the file tray, a smaller window) hid the newest
+// messages at the bottom. Instead, move the scroll by as much as the height changed: the bottom
+// edge then stays on the same message. (ResizeObserver: see rooms.js. It runs after the layout but
+// before drawing, so nothing wobbles. At the very bottom, scrolling further just stops at the end.)
+
+let messagesHeight = messages.clientHeight;
+new ResizeObserver(() => {
+  const change = messagesHeight - messages.clientHeight;  // shorter: positive, scroll down
+  // (Hidden, on the People page or the Lounge, it's 0 high: not a change to follow, either way.)
+  const hiddenBefore = messagesHeight === 0;
+  messagesHeight = messages.clientHeight;
+  if (change && !hiddenBefore && messagesHeight > 0) messages.scrollTop += change;
+}).observe(messages);
+
 // ---------- The scroll-down button ----------
 // More than one and a half screens above the newest message: a round ↓ over the bottom of the chat
 // (index.html #to-bottom). Every message scrolled past is still on the page, so the bottom is
