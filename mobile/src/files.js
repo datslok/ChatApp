@@ -149,12 +149,12 @@ export async function shareFile(copy) {
 // Save a downloaded attachment in the phone's Download folder (our own module, modules/downloads),
 // under its name in the chat, then delete the app's own copy: the one in Download is the one to keep.
 // Returns {name, uri, type}: the name it got there ("cat (2).jpg" when "cat.jpg" was already in
-// Download), its content:// address, and its type (both for openFile).
+// Download), its content:// address, and its type (both for openFile; the module picks the type from
+// the name's ending when it can, as the server calls most files "application/octet-stream").
 export async function saveFile(file, copy) {
-  const type = copy.type || 'application/octet-stream';
-  const saved = await saveToDownloads(copy.uri, file.filename, type);
+  const saved = await saveToDownloads(copy.uri, file.filename, copy.type);
   localCopy(file).folder.delete();
-  return { ...saved, type };
+  return saved;
 }
 
 // Empty the app's folders of copies (at every start): downloads/ was only needed for Open and Share,

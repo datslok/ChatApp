@@ -151,8 +151,9 @@ the point is for me to understand how it works, not just to have it done.
   there); a tapped file asks "Download this file?" like the desktop app, shows a bar, saves it in Download straight away (like a browser; the user's wish) and asks Close / Open (opens the
   Download copy by its content:// Uri). The viewer's download button saves too, with a toast; Share is only there. Saving is our own native module `mobile/modules/downloads` (Kotlin, made with
   `create-expo-module --local`, autolinked from `modules/`): `saveAsync` inserts into MediaStore.Downloads with
-  IS_PENDING, copies the bytes, and returns {name, uri}: the name MediaStore gave it (it adds " (1)", " (2)" from the clean name;
-  after 32 it throws and we add the time). No permission (Android 10+; older ones get an error). expo-media-library
+  IS_PENDING, copies the bytes, and returns {name, uri, type}: the name MediaStore gave it (it adds " (1)", " (2)" from the clean name;
+  after 32 it throws and we add the time). The type is the name's ending's (`typeFor`, MimeTypeMap), else the given one: with the
+  server's application/octet-stream, MediaStore counted ".pdf" as part of the name and made "x.pdf (1)" (fixed 2026-11-02). No permission (Android 10+; older ones get an error). expo-media-library
   was tried first and dropped: it only knows Pictures/DCIM. `saveFile` then deletes the app's own copy, and App.js
   empties `Paths.cache/downloads` (and `shared`) at every start (`clearOldCopies`), so nothing stays twice.
   Sharing to the app (since 2026-10-15): `plugins/share-intent.js` adds SEND / SEND_MULTIPLE `*/*` intent filters to

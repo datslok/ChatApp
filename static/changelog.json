@@ -125,6 +125,12 @@
   ],
   "changes": [
     {
+      "date": "2026-11-02",
+      "items": [
+        "📄 Android app: saving a file that's already in Download no longer breaks it. A second copy is now called \"notes (1).pdf\" instead of \"notes.pdf (1)\", so it opens like the first. Needs the new version of the app"
+      ]
+    },
+    {
       "date": "2026-10-29",
       "items": [
         "🔴 The Windows app shows a red dot on its taskbar button when you have unread messages, a mention or a friend request, also in the chat you have open while the app is in the background. The app updates itself",

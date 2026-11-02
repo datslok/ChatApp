@@ -11,6 +11,7 @@ import android.content.ContentValues
 import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
+import android.webkit.MimeTypeMap
 import expo.modules.kotlin.exception.CodedException
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
@@ -27,9 +28,9 @@ class DownloadsModule : Module() {
     Name("Downloads")
 
     // path: our own copy (a file:// address in the app's cache); name: the file's name, like "cat.jpg";
-    // mimeType: like "image/jpeg". Returns {name, uri}: the name it got there ("cat (2).jpg" if there
-    // were others) and its content:// address, for opening it in another app. (A Kotlin Map becomes a
-    // JavaScript object.)
+    // mimeType: like "image/jpeg". Returns {name, uri, type}: the name it got there ("cat (2).jpg" if
+    // there were others), its content:// address and the type it was saved as, for opening it in
+    // another app. (A Kotlin Map becomes a JavaScript object.)
     AsyncFunction("saveAsync") { path: String, name: String, mimeType: String ->
       // MediaStore.Downloads came with Android 10 (API 29); the app runs from Android 7 (API 24).
       if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
@@ -41,10 +42,11 @@ class DownloadsModule : Module() {
     }
   }
 
-  private fun save(source: File, name: String, mimeType: String): Map<String, String> {
+  private fun save(source: File, name: String, givenType: String): Map<String, String> {
     // A ContentResolver is how an app talks to databases like MediaStore. (`!!` is Kotlin for
     // "this isn't null, or throw": the React context is there while the app runs.)
     val resolver = appContext.reactContext!!.contentResolver
+    val mimeType = typeFor(name, givenType)
 
     // The new entry: its name, its type, and IS_PENDING = 1 ("still being written"), so no other app
     // (the gallery, say) sees a half-written file. `apply { }` runs the block on the new object, like
@@ -80,7 +82,17 @@ class DownloadsModule : Module() {
     val savedAs = resolver.query(target, projection, null, null, null)?.use { row ->
       if (row.moveToFirst()) row.getString(0) else null
     } ?: name
-    return mapOf("name" to savedAs, "uri" to target.toString())
+    return mapOf("name" to savedAs, "uri" to target.toString(), "type" to mimeType)
+  }
+
+  // The type that goes with the name's ending ("notes.pdf" -> "application/pdf"), from Android's own
+  // table, else the one we were given. It matters for the name: when a name is taken, MediaStore only
+  // puts the number before the ending if the type matches it ("notes (1).pdf"); otherwise it counts
+  // the ending as part of the name ("notes.pdf (1)"), and nothing can open the file any more. The
+  // server sends every file that isn't a picture or video as "application/octet-stream" (type unknown).
+  private fun typeFor(name: String, given: String): String {
+    val ending = name.substringAfterLast('.', "").lowercase(Locale.ROOT)
+    return MimeTypeMap.getSingleton().getMimeTypeFromExtension(ending) ?: given
   }
 
   // "cat.jpg" -> "cat 2026-10-15 05.31.12.jpg"
