@@ -26,6 +26,12 @@ def upload(person, name, data, content_type):
 
 # ----- Uploads
 
+def test_the_upload_limit_stays_under_cloudflares(server):
+    """Cloudflare's Free plan refuses requests over 100 MB, and each upload is one request."""
+    with server.person().connect() as ws:
+        assert ws.wait_for("welcome")["limits"]["upload_size"] < 100_000_000
+
+
 def test_a_file_in_a_message(server, channel):
     a, b = server.person(), server.person()
     file_id = upload(a, "notes.txt", b"hello file", "text/plain")

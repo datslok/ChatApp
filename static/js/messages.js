@@ -162,7 +162,7 @@ async function uploadFile(file) {
     return null;
   }
   if (!response.ok) {
-    // Show the server's reason if it gave one, e.g. "Files can be at most 50 MB."
+    // Show the server's reason if it gave one, e.g. "Files can be at most 95 MB."
     const error = await response.json().catch(() => ({}));
     showUploadError(typeof error.detail === "string" ? error.detail : `Couldn't upload ${file.name}`);
     return null;

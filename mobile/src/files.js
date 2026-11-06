@@ -48,7 +48,7 @@ export async function uploadFile(item) {
   }
   const answer = await response.json().catch(() => ({}));
   if (!response.ok) {
-    // The server's reason if it gave one, like "Files can be at most 50 MB."
+    // The server's reason if it gave one, like "Files can be at most 95 MB."
     throw new Error(typeof answer.detail === 'string' ? answer.detail : `Couldn't upload ${item.name}`);
   }
   return answer.id;

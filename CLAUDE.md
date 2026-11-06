@@ -145,7 +145,7 @@ the point is for me to understand how it works, not just to have it done.
   (expo-image-picker's photo picker and camera, which give no real names: named from the EXIF DateTimeOriginal like
   Samsung's camera, `20261014_182205.jpg`, else `photo-<time>.jpg`; real names would need photo access, see ROADMAP's Maybe;
   expo-document-picker for any file, as it asks Android for the real name: `File.pickFileAsync` gave "document:1000006562"),
-  the `Tray` above the box (the web's #tray: limits.files_per_message files, 50 MB each, all in one message with the
+  the `Tray` above the box (the web's #tray: limits.files_per_message files, limits.upload_size each, all in one message with the
   caption, failed ones in red), "Uploading x…" on the status line. A tapped picture opens `src/ImageViewer.js` (a Modal with
   its own GestureHandlerRootView: pinch, drag, double tap via react-native-gesture-handler + reanimated; zoom only
   there); a tapped file asks "Download this file?" like the desktop app, shows a bar, saves it in Download straight away (like a browser; the user's wish) and asks Close / Open (opens the
@@ -583,6 +583,8 @@ the point is for me to understand how it works, not just to have it done.
   `POST /feedback/{id}/done`, both admin-only on the server), or with `tools/feedback.py`
   (`--all`, `--done ID`, `--undo ID`, `--db dev.db`).
 - `uploads/`: uploaded files, saved under random names (git-ignored, like `chat.db`).
+  `MAX_UPLOAD_SIZE` is 95 MB (2026-11-06; the user wanted 120): each upload is one request and Cloudflare's Free plan
+  refuses requests over 100 MB, so going higher needs chunked uploads or a Business plan.
   Thumbnails (since 2026-10-22, the user's rule: **a picture loads at the size it's shown; only the viewer loads the
   original**): `/uploads/<id>?size=N` (N in `THUMB_SIZES` 200/400/800/1200, in LIMITS as `thumb_sizes`) sends a WebP
   copy, longest side N, made once by `make_thumbnail` (Pillow, JPEG `draft`, `exif_transpose`, animations stay

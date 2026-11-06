@@ -124,7 +124,9 @@ INVITE_DAYS = 7     # how long an invite link works (once)
 MAX_OPEN_INVITES = 10  # unused invite links per person
 
 UPLOAD_DIR.mkdir(exist_ok=True)  # create the folder if it isn't there yet
-MAX_UPLOAD_SIZE = 50 * 1024 * 1024  # 50 MB, in bytes
+# 95 MB, in bytes. Uploads are one request each, and Cloudflare refuses requests over 100 MB on its
+# Free plan before they reach us, so more than this needs uploads split into pieces.
+MAX_UPLOAD_SIZE = 95 * 1024 * 1024
 MAX_FILENAME_LENGTH = 200
 # Only these are shown in the page. They're pure pictures and can't contain scripts.
 # Everything else (including SVG, which can) is only ever offered as a download.
