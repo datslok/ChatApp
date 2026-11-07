@@ -125,6 +125,12 @@
   ],
   "changes": [
     {
+      "date": "2026-11-07",
+      "items": [
+        "🎙️ Calls on a PC: the AI noise suppression has a newer, smarter model (the one the Android app has), and it never cuts sound out completely any more. Keyboard clicks no longer turn into odd ticking sounds, and words it wasn't sure about don't suddenly jump in loud"
+      ]
+    },
+    {
       "date": "2026-11-06",
       "items": [
         "📎 Files can be up to 95 MB now (it was 50 MB): longer videos fit"

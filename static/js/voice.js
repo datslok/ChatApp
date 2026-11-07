@@ -105,26 +105,22 @@ async function setUpAudio() {
 }
 
 // RNNoise: a small neural network, trained to tell speech from everything else (keyboards, fans,
-// dogs, ...). Every 10 ms it looks at the last 480 samples and turns down what isn't voice. It's
-// written in C and compiled to WebAssembly (the .wasm file: code the browser runs almost as fast as
-// a normal program), and runs in an AudioWorklet like our gate. Both come from npm's
-// @sapphi-red/web-noise-suppressor; its worklet expects the .wasm file's bytes, so we fetch them
-// here and hand them over. Returns the node, or null if it couldn't load ("On" then works like "Light").
+// dogs, ...). Every 10 ms it looks at the last 480 samples and turns down what isn't voice, never by
+// more than 20 dB (the cap, see the file). It's written in C and compiled to WebAssembly (code the
+// browser runs almost as fast as a normal program), and runs in an AudioWorklet like our gate:
+// static/voice-denoiser.js, which brings RNNoise along itself (an import). "?v=" like the gate's.
+// Returns the node, or null if it couldn't load ("On" then works like "Light").
 async function loadDenoiser(context) {
   try {
-    await context.audioWorklet.addModule("/rnnoise-0.4.1/rnnoise-worklet.js");
-    const response = await fetch("/rnnoise-0.4.1/rnnoise_simd.wasm");
-    if (!response.ok) throw new Error("RNNoise wasn't found");
-    const wasmBinary = await response.arrayBuffer();
+    await context.audioWorklet.addModule("/voice-denoiser.js?v=" + (pageVersion ?? ""));
     // One channel (mono) in and out. Windows often gives the browser a microphone as two channels
     // (stereo), even a mono one: "explicit" makes the browser mix those into one before RNNoise.
     // Otherwise RNNoise only cleans the first (left) one, the right stays silent, and the others
     // hear us in one ear. After it, the chain spreads the one channel over both ears again.
-    return new AudioWorkletNode(context, "@sapphi-red/web-noise-suppressor/rnnoise", {
+    return new AudioWorkletNode(context, "voice-denoiser", {
       channelCount: 1,
       channelCountMode: "explicit",
       outputChannelCount: [1],
-      processorOptions: { wasmBinary, maxChannels: 1 },
     });
   } catch (error) {
     console.warn("Noise suppression (RNNoise) didn't load:", error);

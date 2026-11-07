@@ -1,6 +1,6 @@
 """Puts RNNoise (Xiph's AI noise suppression, the C library) into the phone app's call-service module.
 
-The web page runs RNNoise as WebAssembly (static/rnnoise-0.4.1/); the phone app compiles the C library into
+The web page runs RNNoise as WebAssembly (static/jitsi-rnnoise-0.2.1/, Jitsi's build); the phone app compiles the C library into
 its own native code instead (mobile/modules/call-service/android/src/main/cpp, see CMakeLists.txt there).
 This downloads Xiph's release, checks it against the hash below and copies only the library's files and
 its licence, into mobile/modules/call-service/android/src/main/cpp/rnnoise-<version>/ (committed, like the

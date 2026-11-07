@@ -31,4 +31,5 @@ Not covered by this license:
   copy of ChatApp, please use your own icon.
 - Third-party files included under their own licenses:
   static/livekit-client-*.umd.js (LiveKit, Apache License 2.0) and
-  static/rnnoise-0.4.1/ (see the LICENSE file in that folder).
+  static/jitsi-rnnoise-0.2.1/ (Jitsi's build of Xiph's RNNoise: Apache
+  License 2.0 in its LICENSE file, RNNoise's BSD license in COPYING-rnnoise).

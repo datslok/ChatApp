@@ -34,10 +34,24 @@ def test_the_page_files_are_always_checked_for_changes(server):
         assert Client().get(path).headers["Cache-Control"] == "no-cache", path
 
 
+def test_the_voice_worklets_and_rnnoise(server):
+    # The audio engine's scripts (voice.js loads them) are always checked for changes; RNNoise itself is
+    # a fixed version, kept a week. The old one (sapphi-red's) is gone.
+    for path in ["/voice-gate.js", "/voice-denoiser.js", "/app-audio.js"]:
+        answer = Client().get(path)
+        assert answer.status == 200 and answer.headers["Cache-Control"] == "no-cache", path
+        assert answer.headers["content-type"].startswith("text/javascript"), path
+    rnnoise = Client().get("/jitsi-rnnoise-0.2.1/rnnoise-sync.js")
+    assert rnnoise.status == 200 and rnnoise.headers["content-type"].startswith("text/javascript")
+    assert "max-age=604800" in rnnoise.headers["Cache-Control"]
+    assert Client().get("/jitsi-rnnoise-0.2.1/LICENSE").status == 404
+    assert Client().get("/rnnoise-0.4.1/rnnoise-worklet.js").status == 404
+
+
 def test_nothing_outside_static_is_reachable(server):
     stranger = Client()
     for path in ["/static/../server.py", "/static/js/../../server.py", "/static/js/..%2F..%2Fserver.py",
-                 "/releases/.env", "/releases/..%2F.env", "/seasonal/..%2F.env", "/rnnoise-0.4.1/..%2F..%2Fserver.py",
+                 "/releases/.env", "/releases/..%2F.env", "/seasonal/..%2F.env", "/jitsi-rnnoise-0.2.1/..%2F..%2Fserver.py",
                  "/app-update/assets/..%2Fserver.py", "/server.py", "/.env", "/chat.db"]:
         assert stranger.get(path).status == 404, path
 
