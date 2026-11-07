@@ -915,7 +915,9 @@ the point is for me to understand how it works, not just to have it done.
   conversation into `system` + messages (image blocks from the data URLs; no leading or trailing assistant
   message) and `claude_schema` closes every object (`additionalProperties: false`) and drops `maxItems` etc.;
   `output_config` effort `low` + `format` json_schema, `CLAUDE_MAX_TOKENS` 2000 (its thinking counts), no
-  temperature. My API key (platform.claude.com) expires 2026-11-12: replace it in `.env` before then. While on
+  temperature. My API key (platform.claude.com, "Chattus server", made 2026-11-07) expires 2027-02-28: make a new one before then
+  and put it in with `scripts\set-server-secret.ps1` (the user runs it; the key is shown only once, right after Create key,
+  and starts with sk-ant-: the list's `apikey_...` is its ID). While on
   Claude, the task "ChatApp AI" (llama-server) is disabled on the server, freeing the GPU; to go back to Qwen:
   `Enable-ScheduledTask "ChatApp AI"; Start-ScheduledTask "ChatApp AI"`, empty `CHATTUS_MODEL`, restart the bot. The friends
   were told in What's new that what he reads goes to Anthropic. The prompt makes him catlike (puns, nyan, ^-^,
