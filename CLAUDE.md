@@ -672,6 +672,9 @@ the point is for me to understand how it works, not just to have it done.
   `~/.ssh/config`): `scripts\deploy.ps1` pushes if needed and runs `scripts\server\update.ps1` on the server over SSH;
   `scripts\release-upload.ps1` copies a new desktop app release into the server's `releases\`, deletes
   the older installers there and locally (only the one latest.json names stays), and then runs deploy.ps1 (the restart makes open apps reconnect and update);
+  `scripts\set-server-secret.ps1 NAME` changes one existing value in the server's .env (Read-Host -AsSecureString; the
+  value goes in through ssh's stdin, never a command line, the server part as -EncodedCommand; drops Windows PowerShell's
+  piped BOM; then restarts "ChatApp" and "ChatApp bot"): the user runs it, so keys never pass through me;
   `scripts\usage.ps1` shows the space used there (runs `scripts\server\usage.ps1`: database, uploads by
   kind, releases, logs, leftover .db/.zip files, backups, free disk; only reads). The server
   PC's SSH server (step 7 of scripts\server\install.ps1) only accepts the home network.
