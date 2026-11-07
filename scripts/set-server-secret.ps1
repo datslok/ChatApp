@@ -16,8 +16,14 @@ param([Parameter(Mandatory = $true)][string]$Name)
 $ServerFolder = "C:\ChatApp"  # where the code is on the server PC, as in deploy.ps1
 
 # Capital letters, digits and _ only, like every name in .env: so it's safe to put in the command below.
+#     (Not repeated back: if a key was pasted here by mistake, it mustn't end up on the screen.)
 if ($Name -cnotmatch '^[A-Z][A-Z0-9_]*$') {
-    Write-Host "'$Name' doesn't look like a name from .env (capital letters, digits and _, like ANTHROPIC_API_KEY)."
+    if ($Name.Length -gt 30 -or $Name -match '^sk-') {
+        Write-Host "That looks like the value itself, not its name. Give the name after the script; it asks for the value afterwards:"
+    } else {
+        Write-Host "That isn't a name from .env (capital letters, digits and _ only). Like this:"
+    }
+    Write-Host "  .\scripts\set-server-secret.ps1 ANTHROPIC_API_KEY"
     exit 1
 }
 
