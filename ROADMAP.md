@@ -185,6 +185,7 @@ with Windows, activity detection, zoom, drag-and-drop, hover bars and keyboard s
 - [ ] Android developer verification, before Google enforces it in Norway (worldwide from 2027): register as a developer (the hobbyist account, if it fits 5-20 phones) and the app's package and release key, so our own APKs keep installing. No Play Store needed
 - [ ] Discord-style photo picker in the phone app: our own grid of recent photos under the text box (needs photo access, "limited access" included), which also gives the photos' real names
 - [ ] Soundboard in voice (short clips anyone in a call can play for everyone; uploads like custom emoji, a few built-in ones, its own volume)
+- [ ] DeepFilterNet 3 noise suppression on PCs, if RNNoise 0.2 with the -20 dB cap (2026-11-07) still lets keyboards through: a stronger AI filter (rebuilds the voice's overtones instead of only turning bands down), as a choice in Settings → Voice & audio next to On/Light/Off. Runs on each PC (roughly 5-20% of one core, to measure first; ~40 ms delay), not on the server. Only our own files: the model from Rikorose/DeepFilterNet's GitHub (8 MB, pinned hash), the wasm built from its Rust source, our own worklet with `atten_lim` as the cap. The npm package `deepfilternet3-noise-filter` (Mezon) was read and is clean, but downloads both files from cdn.mezon.ai unchecked
 
 ## Known limitations
 
