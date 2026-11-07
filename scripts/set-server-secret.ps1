@@ -42,6 +42,13 @@ if (-not $value) {
     Write-Host "Nothing entered, so nothing changed."
     exit 1
 }
+# An Anthropic key starts with "sk-ant-". The console's list of keys also shows each key's ID
+# ("apikey_01..."), which is easy to copy instead; the key itself is only shown once, when it's made.
+if ($Name -eq "ANTHROPIC_API_KEY" -and -not $value.StartsWith("sk-ant-")) {
+    Write-Host "That isn't an API key: those start with sk-ant-. (Something starting with apikey_ is the key's ID," -ForegroundColor Yellow
+    Write-Host "from the list of keys.) The key itself is only shown once, right after Create key. Nothing changed." -ForegroundColor Yellow
+    exit 1
+}
 
 # What runs on the server, in its PowerShell: read the value from the input, swap the line "NAME=..."
 # in .env for "NAME=<value>" (everything else stays as it was, line endings too), then restart the
