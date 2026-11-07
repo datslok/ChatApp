@@ -1,7 +1,8 @@
 # From the development PC: change one value in the server's .env (a new API key, a new password), then
 # restart the chat and the bot there so they read it.
 #
-#   .\scripts\set-server-secret.ps1 ANTHROPIC_API_KEY
+#   .\scripts\set-server-secret.ps1                     Chattus's Anthropic API key (ANTHROPIC_API_KEY)
+#   .\scripts\set-server-secret.ps1 LIVEKIT_API_SECRET  any other value in .env, by its name
 #
 # It asks for the new value without showing it (paste it and press Enter), and sends it to the server
 # over SSH's input, never on a command line: command lines can be seen by other programs on the server
@@ -11,7 +12,7 @@
 #
 # The server's backup saves the new .env the next night (scripts\server\backup.ps1).
 
-param([Parameter(Mandatory = $true)][string]$Name)
+param([string]$Name = "ANTHROPIC_API_KEY")
 
 $ServerFolder = "C:\ChatApp"  # where the code is on the server PC, as in deploy.ps1
 
@@ -19,16 +20,17 @@ $ServerFolder = "C:\ChatApp"  # where the code is on the server PC, as in deploy
 #     (Not repeated back: if a key was pasted here by mistake, it mustn't end up on the screen.)
 if ($Name -cnotmatch '^[A-Z][A-Z0-9_]*$') {
     if ($Name.Length -gt 30 -or $Name -match '^sk-') {
-        Write-Host "That looks like the value itself, not its name. Give the name after the script; it asks for the value afterwards:"
+        Write-Host "Don't put the key after the script: run it on its own, and paste the key when it asks."
+        Write-Host "  .\scripts\set-server-secret.ps1"
     } else {
-        Write-Host "That isn't a name from .env (capital letters, digits and _ only). Like this:"
+        Write-Host "That isn't a name from .env (capital letters, digits and _ only)."
     }
-    Write-Host "  .\scripts\set-server-secret.ps1 ANTHROPIC_API_KEY"
     exit 1
 }
 
 # -AsSecureString: what's typed or pasted isn't shown. Turned back into ordinary text only to send it.
-$secure = Read-Host "New value for $Name (it won't show; paste it and press Enter)" -AsSecureString
+$what = if ($Name -eq "ANTHROPIC_API_KEY") { "Chattus's new Anthropic API key" } else { "The new value for $Name" }
+$secure = Read-Host "$what (paste it and press Enter; it won't show)" -AsSecureString
 $pointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
 try {
     $value = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($pointer)

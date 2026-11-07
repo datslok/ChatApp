@@ -81,7 +81,7 @@ the same PC, but the scripts assume two).
 | `scripts\server-connect.ps1` | your PC | once: SSH access to the server, named `chatserver` |
 | `scripts\deploy.ps1` | your PC | pushes your code and runs `update.ps1` on the server (`-Voice`, `-AI`: also restarts those) |
 | `scripts\usage.ps1` | your PC | runs `usage.ps1` on the server |
-| `scripts\set-server-secret.ps1 NAME` | your PC | changes one value in the server's `.env` (a new API key, say): asks for it without showing it, sends it over SSH, restarts the chat and the bot |
+| `scripts\set-server-secret.ps1` | your PC | a new API key for Chattus (or, with a name after it, any value in the server's `.env`): asks for it without showing it, sends it over SSH, restarts the chat and the bot |
 | `scripts\backup-fetch.ps1` | your PC | copies the server's newest backup here (`-Install`: every day) |
 | `scripts\release-upload.ps1` | your PC | puts a new desktop app version on the server |
 | `scripts\app-release.ps1` | your PC | a new version of the phone app (the APK, when its native side changed): builds, signs, uploads; phones offer it when they next connect |
