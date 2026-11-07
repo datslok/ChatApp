@@ -641,9 +641,16 @@ export default function ChatScreen({
   function jumpTo(chat, id) {
     setPopup(null);
     jumpAsked.current = false;
+    stopLanding();
     if (chat !== current) onOpenChat(chat);
     setJump({ chat, id });
   }
+  const jumpNow = useRef(null);  // `jump` at this moment, for timers set earlier
+  jumpNow.current = jump;
+  const findTimer = useRef(null);  // gives up on "Finding the message…" (see below)
+
+  // Another chat: a landing still going belonged to the old one.
+  useEffect(() => stopLanding, [current]);
 
   // A tapped notification's message (App.js has opened its chat already).
   useEffect(() => {
@@ -657,12 +664,9 @@ export default function ChatScreen({
     const index = rowsNow.current.findIndex((row) => row.message?.id === jump.id);
     if (index !== -1) {
       setJump(null);
+      clearTimeout(findTimer.current);
       setStatus((now) => (now?.finding ? null : now));
-      scrollTries.current = 0;
-      // viewPosition 0.5: in the middle of the screen.
-      scrollPosition.current = 0.5;
-      list.current?.scrollToIndex({ index, viewPosition: 0.5, animated: true });
-      setFlash({ id: jump.id, n: Date.now() });
+      startLanding(jump.id);
       return;
     }
     if (jumpAsked.current) return;  // its stretch is on its way
@@ -683,18 +687,101 @@ export default function ChatScreen({
     }
     jumpAsked.current = true;
     setStatus({ text: 'Finding the message…', finding: true });
-    // (Found: `messages` changes, and this effect finds its row.)
-    connection.jumpAround(jump.id).then((found) => { if (!found) deleted(); });
+    // (Found: `messages` changes, and this effect finds its row.) If the connection dropped on the way,
+    // the answer never comes: after 10 s, say so instead of "Finding…" for ever.
+    const id = jump.id;
+    clearTimeout(findTimer.current);
+    findTimer.current = setTimeout(() => {
+      if (jumpNow.current?.id !== id || !jumpAsked.current) return;
+      setJump(null);
+      setStatus((now) => (now?.finding ? null : now));
+      showError("Couldn't find the message, try again in a moment.");
+    }, 10000);
+    connection.jumpAround(id).then((found) => {
+      if (found || jumpNow.current?.id !== id) return;  // (gave up already: no second message)
+      clearTimeout(findTimer.current);
+      deleted();
+    });
   }, [jump, messages, current]);
+
+  // ----- Landing on it
+  //
+  // FlatList doesn't know how tall rows are until it has drawn them, so scrollToIndex often guesses:
+  // the row's number times the average height. Its guesses can be wrong without it saying so (what
+  // it measured before a jump's batch replaced the messages, or before new messages renumbered the
+  // rows, still counts), and pictures grow from a 120 px space as they load. So one scroll isn't
+  // trusted: after each, a moment later, we look whether the row is on screen (onViewableItemsChanged
+  // keeps `visibleKeys`). Not yet: scroll again; the rows where we landed are measured now, so each
+  // try gets closer. On screen: its place is known exactly, so one more scroll puts it in the middle,
+  // it lights up, and a last centring later catches pictures that finished loading meanwhile.
+  const landing = useRef(null);  // {id, tries, centred, timer}: the message we're scrolling to, or null
+  const visibleKeys = useRef(new Set());  // the rows on screen now
+  const LANDING_TRIES = 15;  // ~4 s at most
+
+  function stopLanding() {
+    clearTimeout(landing.current?.timer);
+    landing.current = null;
+  }
+  function startLanding(id) {
+    stopLanding();
+    // (A moment first: the list may have just been given new rows it hasn't drawn yet.)
+    landing.current = { id, tries: 0, centred: false, timer: setTimeout(scrollToLanding, 50) };
+  }
+  // Where its row is now, or -1 (deleted meanwhile).
+  function landingIndex() {
+    return rowsNow.current.findIndex((row) => row.message?.id === landing.current?.id);
+  }
+  function scrollToLanding() {
+    const target = landing.current;
+    if (!target) return;
+    const index = landingIndex();
+    if (index === -1) {
+      stopLanding();
+      return;
+    }
+    // viewPosition 0.5: in the middle of the screen. Not animated: straight there, so the check
+    // below sees where it really ended up (and a wrong guess doesn't slide past everything).
+    list.current?.scrollToIndex({ index, viewPosition: 0.5, animated: false });
+    target.timer = setTimeout(checkLanding, 250);
+  }
+  function checkLanding() {
+    const target = landing.current;
+    if (!target) return;
+    const index = landingIndex();
+    if (index === -1) {
+      stopLanding();
+      return;
+    }
+    if (visibleKeys.current.has(rowsNow.current[index].key)) {
+      list.current?.scrollToIndex({ index, viewPosition: 0.5, animated: true });
+      if (target.centred) {
+        stopLanding();  // (the second centring: done)
+        return;
+      }
+      target.centred = true;
+      setFlash({ id: target.id, n: Date.now() });
+      target.timer = setTimeout(checkLanding, 800);
+      return;
+    }
+    target.tries += 1;
+    if (target.tries >= LANDING_TRIES) {
+      stopLanding();
+      return;
+    }
+    scrollToLanding();
+  }
+  useEffect(() => stopLanding, []);  // (leaving the screen: no timers left behind)
 
   // scrollToIndex only knows where rows are that have been drawn, and FlatList only draws the rows
   // near the screen (that's what keeps a long list fast). For one further away it calls this
   // instead: scroll to a guess (its number times the rows' average height), which draws the rows
-  // there, then try again a moment later. A few times at most.
+  // there. While landing on a message, its checks try again; otherwise (the NEW line) we do, a
+  // moment later, a few times at most.
   function onScrollToIndexFailed(info) {
+    list.current?.scrollToOffset({ offset: info.averageItemLength * info.index, animated: false });
+    if (landing.current) return;
     if (scrollTries.current >= 10) return;
     scrollTries.current += 1;
-    list.current?.scrollToOffset({ offset: info.averageItemLength * info.index, animated: false });
     setTimeout(() => list.current?.scrollToIndex({ index: info.index, viewPosition: scrollPosition.current, animated: true }), 100);
   }
 
@@ -707,6 +794,7 @@ export default function ChatScreen({
   if (messages !== null && !hadMessages.current && lastRead !== null && !jump && !jumpRequest) checkNewLine.current = true;
   hadMessages.current = messages !== null;
   const onViewableItemsChanged = useRef(({ viewableItems }) => {
+    visibleKeys.current = new Set(viewableItems.map((viewable) => viewable.key));  // (for landing on a message)
     if (!checkNewLine.current) return;
     checkNewLine.current = false;
     if (viewableItems.some((viewable) => viewable.item.type === 'new')) return;  // in view already
@@ -1053,6 +1141,7 @@ export default function ChatScreen({
         onLayout={(event) => { listHeight.current = event.nativeEvent.layout.height; }}
         // (setFarUp with the value it already has redraws nothing; at most every 100 ms while scrolling.)
         onScroll={(event) => setFarUp(event.nativeEvent.contentOffset.y > listHeight.current * 1.5)}
+        onScrollBeginDrag={stopLanding}  // (scrolling yourself: we stop steering)
         scrollEventThrottle={100}
       />
     );
