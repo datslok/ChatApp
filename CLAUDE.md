@@ -984,6 +984,15 @@ Firewall rules ("LiveKit voice (UDP 7882)" / "(TCP 7881)") let them in, only to 
 The router's and the server PC's local addresses aren't written here (the repo is public): look them
 up on the server (`ipconfig`, "Default Gateway" is the router) when needed.
 
+SSH from outside the home network (set up 2026-11-08 for the laptop, for the UK trip): the server's firewall
+allows port 22 only from `LocalSubnet` and the router doesn't forward it, so SSH goes through the tunnel:
+route `ssh.datslok.no` → `ssh://localhost:22` (a loopback hop, so the firewall rule is unchanged), behind a
+Cloudflare Access self-hosted application `ssh` (the user's email only, One-time PIN, 1-month session; the
+"Cloudflare" login method failed with "Failed to fetch user/group information"). The laptop's `Host chatserver` uses
+`ProxyCommand "C:\Users\axelk\bin\cloudflared.exe" access ssh --hostname %h` (copied from the server, 2026.10.3,
+hash and signature checked, while GitHub was down). When the session expires:
+`cloudflared access login https://ssh.datslok.no`, interactively. The dev PC keeps its LAN-only entry.
+
 ## Running it
 
 Python comes from Anaconda; conda is already hooked into PowerShell. First time (or after changing

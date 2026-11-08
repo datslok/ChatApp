@@ -480,6 +480,36 @@ It makes an SSH key on this PC (if you don't have one), puts it on the server (a
 password there once), and names the server **chatserver**: after that, `ssh chatserver` logs in
 without a password, and `scripts\deploy.ps1` works.
 
+#### Reaching the server from outside your home network
+
+The server only accepts SSH from its own network, and that's worth keeping: no port on your router has to
+open. The Cloudflare Tunnel already leaves the server on its own, so SSH can travel through it too, with a
+Cloudflare login in front. The server sees the connection coming from itself, so its firewall rule stays as it is.
+
+Do this while your PC is still at home, because the first step needs the home network:
+
+- **Give this PC its key:** run `server-connect.ps1` as above.
+- **Add the login first:** in Cloudflare's Zero Trust dashboard, add a self-hosted Access application for
+  `ssh.example.com`. Allow only your own email address, and turn on One-time PIN as a login method. Set the
+  session as long as you'll be away. Do this before the next step, so SSH is never exposed without it.
+- **Add the route:** on the tunnel, add a published application route from `ssh.example.com` to
+  `ssh://localhost:22`.
+- **Install `cloudflared` on this PC,** and point `chatserver` at the tunnel in `~\.ssh\config`, with the
+  real path to `cloudflared.exe`:
+
+  ```
+  Host chatserver
+      HostName ssh.example.com
+      User yourname
+      IdentityFile ~/.ssh/id_ed25519
+      ProxyCommand "C:\path\to\cloudflared.exe" access ssh --hostname %h
+  ```
+
+- **Log in once:** `cloudflared access login https://ssh.example.com`. Do it before running any script,
+  because the scripts use SSH without a terminal to log in from. When the session runs out, log in again.
+
+To check it, connect your PC to a phone's hotspot and run `ssh chatserver "Write-Output ok"`.
+
 ---
 
 ## Running it
