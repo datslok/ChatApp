@@ -21,17 +21,18 @@ function Measure-Folder($path, [switch]$TopOnly) {
 }
 
 # Bytes as something readable: 512 B, 3.4 MB, 1.2 GB.
+# F, not N: N groups thousands with the server's non-breaking space, which SSH garbles into a "?" box.
 function Format-Size([double]$bytes) {
-    if ($bytes -ge 1GB) { return "{0:N1} GB" -f ($bytes / 1GB) }
-    if ($bytes -ge 1MB) { return "{0:N1} MB" -f ($bytes / 1MB) }
-    if ($bytes -ge 1KB) { return "{0:N0} KB" -f ($bytes / 1KB) }
-    return "{0:N0} B" -f $bytes
+    if ($bytes -ge 1GB) { return "{0:F1} GB" -f ($bytes / 1GB) }
+    if ($bytes -ge 1MB) { return "{0:F1} MB" -f ($bytes / 1MB) }
+    if ($bytes -ge 1KB) { return "{0:F0} KB" -f ($bytes / 1KB) }
+    return "{0:F0} B" -f $bytes
 }
 
 # One line: a name, its size, and (if asked) how many files.
 function Write-Row($name, $measured, [switch]$Files) {
     $line = "  {0,-26}{1,10}" -f $name, (Format-Size $measured.Bytes)
-    if ($Files) { $line += "   {0,6:N0} files" -f $measured.Count }
+    if ($Files) { $line += "   {0,6} files" -f $measured.Count }
     Write-Output $line
 }
 
