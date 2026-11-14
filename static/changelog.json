@@ -127,7 +127,8 @@
     {
       "date": "2026-11-14",
       "items": [
-        "🔑 Forgot your password? With the apps you can do the whole reset in them. On Android, \"Forgot password?\" asks for the link in the app, and the link in the email opens the app. On Windows, the email's link page has an \"Open in the Windows app\" button"
+        "🔑 Forgot your password? With the apps you can do the whole reset in them. On Android, \"Forgot password?\" asks for the link in the app, and the link in the email opens the app. On Windows, the email's link page has an \"Open in the Windows app\" button",
+        "📜 Coming back to the chat (alt+tab, or clicking it) no longer leaves it scrolled a little above the newest messages. Also fixed: making the window taller, or closing the reply bar or the file tray, nudged it up the same way"
       ]
     },
     {

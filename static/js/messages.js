@@ -1821,14 +1821,37 @@ messages.addEventListener("scroll", () => {
 // edge then stays on the same message. (ResizeObserver: see rooms.js. It runs after the layout but
 // before drawing, so nothing wobbles. At the very bottom, scrolling further just stops at the end.)
 
+// Were we at the bottom (within 50 px, like showMessage's test)? Kept up to date by every scroll,
+// ours included (scrolling by code fires "scroll" too). Content that grows by itself fires none, so
+// this still says "at the bottom" afterwards: that's what lets us go back down (below).
+let stuckToBottom = true;
+messages.addEventListener("scroll", () => {
+  stuckToBottom = messages.scrollHeight - messages.scrollTop - messages.clientHeight < 50;
+});
+
 let messagesHeight = messages.clientHeight;
 new ResizeObserver(() => {
   const change = messagesHeight - messages.clientHeight;  // shorter: positive, scroll down
   // (Hidden, on the People page or the Lounge, it's 0 high: not a change to follow, either way.)
   const hiddenBefore = messagesHeight === 0;
   messagesHeight = messages.clientHeight;
-  if (change && !hiddenBefore && messagesHeight > 0) messages.scrollTop += change;
+  if (!change || hiddenBefore || messagesHeight === 0) return;
+  // At the bottom: stay there. (Moving by `change` was wrong when the box grew: the browser had
+  // already pulled the scroll back by itself, since there was less to scroll, and we then moved it
+  // up a second time, leaving the newest messages part hidden.)
+  if (stuckToBottom) messages.scrollTop = messages.scrollHeight;
+  else messages.scrollTop += change;
 }).observe(messages);
+
+// Back at the window (alt+tab, a click on it, the tab shown again): if we were at the bottom, be at
+// the bottom. Something sometimes made the messages taller while the window was in the background
+// (seen in the Windows app; what exactly wasn't found), which left them scrolled a little up.
+// (Showing the past after a jump far up isn't "the bottom": the newest messages aren't loaded.)
+function backToBottom() {
+  if (isLooking() && stuckToBottom && atPresent) messages.scrollTop = messages.scrollHeight;
+}
+document.addEventListener("visibilitychange", backToBottom);
+window.addEventListener("focus", backToBottom);
 
 // ---------- The scroll-down button ----------
 // More than one and a half screens above the newest message: a round ↓ over the bottom of the chat
