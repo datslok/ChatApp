@@ -11,6 +11,7 @@ use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use tauri::webview::{DownloadEvent, NewWindowResponse};
 use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
 use tauri_plugin_autostart::ManagerExt as AutostartExt;  // app.autolaunch()
+use tauri_plugin_deep_link::DeepLinkExt;  // app.deep_link()
 use tauri_plugin_notification::NotificationExt;
 use tauri_plugin_opener::OpenerExt;
 use tauri_plugin_updater::UpdaterExt;
@@ -21,7 +22,13 @@ fn main() {
         // Only one copy of the app at a time. Must be the first plugin: a second copy finds the first
         // one's lock (a named mutex), tells it, and quits before anything else starts. The first copy
         // then runs this and brings its window to the front.
+        // (With its "deep-link" feature, a chatapp:// link given to that second copy reaches the first
+        // one's on_open_url below before this runs.)
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| bring_to_front(app)))
+        // chatapp:// links (tauri.conf.json's plugins.deep-link): Windows starts ChatApp.exe with the
+        // link as its argument when one is clicked. Only for password resets so far: reset.html's
+        // "Open in the Windows app" (Windows gives https:// links to the browser, never to an app).
+        .plugin(tauri_plugin_deep_link::init())
         // Real Windows notifications: replaces the page's Notification, which WebView2 blocks here.
         // (Allowed for the chat page in capabilities/default.json.)
         .plugin(tauri_plugin_notification::init())
@@ -96,6 +103,28 @@ fn main() {
                 })
                 .build()?;
 
+            // chatapp:// links. Registered with Windows at every start, whatever the installer did (the
+            // user's own registry, HKCU\Software\Classes\chatapp, pointing at
+            // this ChatApp.exe; an update keeps the same path). Not in development builds, which would
+            // take the links away from the installed app.
+            if !cfg!(debug_assertions) {
+                if let Err(error) = app.deep_link().register_all() {
+                    eprintln!("Couldn't register chatapp:// links: {error}");
+                }
+            }
+            // A link that started the app, and those clicked while it runs (handed over by the
+            // single-instance plugin).
+            if let Ok(Some(urls)) = app.deep_link().get_current() {
+                for url in urls {
+                    open_link(app.handle(), &url);
+                }
+            }
+            let handle = app.handle().clone();
+            app.deep_link().on_open_url(move |event| {
+                for url in event.urls() {
+                    open_link(&handle, &url);
+                }
+            });
 
             // A click on one of our notifications ("tap"): bring the chat to the front and let the
             // page open the message. The page put its channel and message id in the notification's
@@ -180,6 +209,38 @@ fn bring_to_front(app: &tauri::AppHandle) {
         let _ = window.show();
         let _ = window.set_focus();
     }
+}
+
+// A chatapp:// link (see the deep-link plugin in main). Only one kind so far:
+// chatapp://reset?token=... -> our own reset page with that token, in the chat window, shown at once
+// (that page never says page_ready). Anyone can make a chatapp:// link, so we never take an address
+// from it: only the token, which must look like the server's (secrets.token_urlsafe: letters, digits,
+// - and _), and the page is always the chat's own (tauri.conf.json's url, chat.datslok.no).
+fn open_link(app: &tauri::AppHandle, link: &tauri::Url) {
+    if link.host_str() != Some("reset") {
+        return;
+    }
+    let Some(token) = link.query_pairs().find(|(name, _)| name == "token").map(|(_, value)| value.into_owned()) else {
+        return;
+    };
+    if token.is_empty() || !token.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
+        return;
+    }
+    let Some(tauri::WebviewUrl::External(mut page)) = app.config().app.windows.first().map(|window| window.url.clone()) else {
+        return;
+    };
+    page.set_path("/reset");
+    page.set_query(Some(&format!("token={token}")));
+    page.set_fragment(None);
+    if let Some(main) = app.get_webview_window("main") {
+        if let Err(error) = main.navigate(page) {
+            eprintln!("Couldn't open the reset page: {error}");
+            return;
+        }
+    }
+    // Over the loading window if the link started the app, else to the front.
+    show_chat(app);
+    bring_to_front(app);
 }
 
 #[tauri::command]

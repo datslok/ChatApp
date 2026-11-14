@@ -33,6 +33,11 @@
               "scheme": "https",
               "host": "chat.datslok.no",
               "path": "/"
+            },
+            {
+              "scheme": "https",
+              "host": "chat.datslok.no",
+              "path": "/reset"
             }
           ],
           "category": [

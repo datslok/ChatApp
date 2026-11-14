@@ -833,8 +833,9 @@ Once, before the first release:
 
 1. Your server's address in `mobile\src\config.js` (`SERVER`, for release builds) and in `mobile\app.json`
    (`updates.url`: the same address with `/app-update`; and `android.intentFilters`' `host`: just the name,
-   like `chat.example.com`). That last one makes links to your chat (`https://chat.example.com/?channel=...`)
-   open in the app ("App Links"). Android only allows it if your server agrees, at
+   like `chat.example.com`; it's there twice). That last one makes links to your chat
+   (`https://chat.example.com/?channel=...`) and password reset links (`/reset?token=...`, so the whole reset
+   happens in the app) open in the app ("App Links"). Android only allows it if your server agrees, at
    `/.well-known/assetlinks.json`, which it makes from the package and key fingerprint that
    `app-release.ps1` writes into `releases\android.json`. Android checks it when the app is installed, so
    it works from the first APK on (`adb shell pm get-app-links no.datslok.chat` on a phone shows
@@ -885,7 +886,9 @@ it again, then `npx expo run:android`. If prebuild says `EBUSY: resource busy or
 Optional: everything works in the browser. The Windows app (`desktop\`, made with
 [Tauri](https://tauri.app/)) is a small window around your site, with real Windows notifications,
 links opening in the default browser, automatic updates, and (Settings → App behaviour, switched on the first time the app runs)
-starting when Windows starts. Changes to the chat reach it through the
+starting when Windows starts. It also registers `chatapp://` links with Windows: an email's password reset
+link opens in the browser (Windows only gives `https://` links to browsers), and that page's
+"Open in the Windows app" button hands it to the app, which does the reset in its own window. Changes to the chat reach it through the
 site; a new app version is only needed when the app itself changes (its Rust code, plugins, the icon).
 People download it from `https://chat.example.com/download`.
 
@@ -910,6 +913,9 @@ The app in this repository points at the original chat and is signed with its ke
    Keep the private key safe and never commit it: without it, installed apps can't update any more,
    and everyone would have to reinstall by hand.
 4. **Your own icon** (see [Changing the icon](#changing-the-icon)).
+5. Optionally **your own link scheme**: `plugins.deep-link.desktop.schemes` in `tauri.conf.json` (`chatapp`,
+   for `chatapp://` links; two apps with the same one would fight over it). Change it in
+   `static\reset.html` too (`offerWindowsApp`).
 
 ### Releasing a version
 

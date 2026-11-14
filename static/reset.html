@@ -93,6 +93,25 @@
       font-size: 0.9rem;
       color: #00a8fc;
     }
+
+    /* "Open in the Windows app": a quieter, grey button above the form's own. */
+    .app-button {
+      padding: 10px;
+      border-radius: 6px;
+      background: #4e5058;
+      color: white;
+      font-size: 1rem;
+      text-decoration: none;
+    }
+
+    .app-note {
+      text-align: center;
+      color: #949ba4;
+    }
+
+    [hidden] {
+      display: none !important;
+    }
   </style>
 </head>
 <body>
@@ -112,6 +131,9 @@
   <!-- Step 2 (the link from the email, with ?token=...): choose a new password. -->
   <form id="reset-form" hidden>
     <h1>Choose a new password</h1>
+    <!-- Only in a browser on Windows (see the script): the same step in the Windows app instead. -->
+    <a id="open-in-app" class="app-button" hidden>Open in the Windows app</a>
+    <p id="app-note" class="app-note" hidden>Or here in the browser:</p>
     <label>
       New password
       <input id="password" type="password" autocomplete="new-password" required>
@@ -139,8 +161,23 @@
     const token = new URLSearchParams(location.search).get("token");
     if (token) {
       resetForm.hidden = false;
+      offerWindowsApp();
     } else {
       requestForm.hidden = false;
+    }
+
+    // The Windows app (desktop/) registers chatapp:// links with Windows; a click on one hands it to
+    // the app, which opens this same page with this token in its own window. A web page can't tell
+    // whether the app is installed, so it's a button to choose, not a jump: without the app, nothing
+    // happens and the form is still here. Not inside the app itself (it has Tauri's object), and not
+    // on other systems (the app is Windows only; Android's app opens these links by itself).
+    function offerWindowsApp() {
+      const inApp = "__TAURI_INTERNALS__" in window;
+      if (inApp || !navigator.userAgent.includes("Windows") || !/^[A-Za-z0-9_-]+$/.test(token)) return;
+      const button = document.getElementById("open-in-app");
+      button.href = "chatapp://reset?token=" + token;
+      button.hidden = false;
+      document.getElementById("app-note").hidden = false;
     }
 
     function showStatus(element, text, kind) {

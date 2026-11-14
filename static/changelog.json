@@ -116,7 +116,7 @@
         "Admin (admins only): Settings → Admin has the Inbox (bug reports and ideas), Channels, Roles, Invites (everyone's open invite links, with × to cancel one, and who joined with whose link), Bans and, for the owner, Admins (make someone an admin, or remove it; also by right-clicking them)",
         "Banning (admins only): right-click someone → Ban…, or Settings → Admin → Bans. Choose how long (a day, a week, a month or for good) and an optional reason they'll see. They're logged out straight away, can't log in until it ends, and disappear from the lists; their messages stay. Unban in Settings → Admin → Bans. Only the owner (the first account) can ban an admin, and nobody can ban the owner or a bot",
         "Channels: admins add, rename, move and delete channels in Settings → Admin → Channels, and add headings that group the channels under them in the sidebar",
-        "My Account: change your username, email and password. A new email address only takes over once you click the link we send to it. Forgot your password? There's a link on the login page",
+        "My Account: change your username, email and password. A new email address only takes over once you click the link we send to it. Forgot your password? There's a link on the login page (in the apps too). With the Android app installed, the link in the email opens the app; on Windows, its page has \"Open in the Windows app\"",
         "Appearance: eight themes (Dark, Darker, Light, Blue, Purple, Green, Pink, Light pink), your own colours on top, a font and a text size, and in the Windows app a scale (everything bigger or smaller). Theme, colours and font are saved with your account, so they're the same on every device; the text size and scale are each device's own",
         "What's new: what changed lately (a red dot on ⚙️ means something new), and everything the chat can do",
         "Bugs & ideas: tell us what's broken or what you'd like"
@@ -124,6 +124,12 @@
     }
   ],
   "changes": [
+    {
+      "date": "2026-11-14",
+      "items": [
+        "🔑 Forgot your password? With the apps you can do the whole reset in them. On Android, \"Forgot password?\" asks for the link in the app, and the link in the email opens the app. On Windows, the email's link page has an \"Open in the Windows app\" button"
+      ]
+    },
     {
       "date": "2026-11-07",
       "items": [

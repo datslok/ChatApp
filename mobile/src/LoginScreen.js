@@ -9,6 +9,7 @@ import { useStyles } from './theme';
 import { getJson } from './api';
 import { SERVER } from './config';
 import VerifyScreen from './VerifyScreen';
+import ResetScreen from './ResetScreen';
 
 // Logged in, but is the account's email verified? If not, the server treats us as logged out until
 // it is, so: "Check your inbox" (VerifyScreen). The address it waits for, or null (verified, or not
@@ -18,8 +19,11 @@ async function waitingFor() {
   return answer.ok && answer.data.logged_in && !answer.data.verified ? answer.data.email : null;
 }
 
-export default function LoginScreen({ onLoggedIn }) {
+// note: a green line over the button (after a password reset), or null.
+export default function LoginScreen({ onLoggedIn, note }) {
   const styles = useStyles(makeStyles);
+  // "Forgot password?" tapped: asking for a reset link (ResetScreen), until its Back.
+  const [forgot, setForgot] = useState(false);
   // The address a new account's link went to, while we wait for it to be clicked (else null).
   const [unverified, setUnverified] = useState(null);
   // Here with a cookie already (the app started, or the connection said "not logged in"): that may be
@@ -66,6 +70,7 @@ export default function LoginScreen({ onLoggedIn }) {
   if (unverified) {
     return <VerifyScreen email={unverified} onVerified={onLoggedIn} onLogOut={() => setUnverified(null)} />;
   }
+  if (forgot) return <ResetScreen token={null} onBack={() => setForgot(false)} />;
 
   return (
     <KeyboardAvoidingView style={styles.screen} behavior="padding">
@@ -98,12 +103,12 @@ export default function LoginScreen({ onLoggedIn }) {
             />
           </View>
           {/* Always there (empty or not), so the card doesn't jump when an error appears. */}
-          <Text style={styles.error}>{error}</Text>
+          <Text style={error || !note ? styles.error : styles.note}>{error || note}</Text>
           <Pressable style={({ pressed }) => [styles.button, (pressed || busy) && styles.pressed]} onPress={logIn}>
             {busy ? <ActivityIndicator color="#ffffff" /> : <Text style={styles.buttonText}>Log in</Text>}
           </Pressable>
-          {/* These two pages are the web page's own for now: they open in the phone's browser. */}
-          <Text style={styles.link} onPress={() => Linking.openURL(`${SERVER}/reset`)}>Forgot password?</Text>
+          <Text style={styles.link} onPress={() => setForgot(true)}>Forgot password?</Text>
+          {/* Creating an account is still the web page's own: it opens in the phone's browser. */}
           <Text style={styles.switch}>
             No account yet?{' '}
             <Text style={styles.linkButton} onPress={() => Linking.openURL(`${SERVER}/login?register`)}>Create one</Text>
@@ -128,6 +133,7 @@ const makeStyles = (colors, size) => StyleSheet.create({
     color: colors.text, fontSize: size(16),
   },
   error: { minHeight: 18, color: colors.red, fontSize: size(14.4) },
+  note: { minHeight: 18, color: colors.green, fontSize: size(14.4) },
   button: { padding: 10, borderRadius: 6, backgroundColor: colors.accent, alignItems: 'center' },
   pressed: { opacity: 0.8 },
   buttonText: { color: '#ffffff', fontSize: size(16) },

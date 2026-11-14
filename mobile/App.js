@@ -21,6 +21,7 @@ import Icon from './src/Icon';
 import IncomingCall from './src/IncomingCall';
 import InviteScreen from './src/InviteScreen';
 import LoginScreen from './src/LoginScreen';
+import ResetScreen from './src/ResetScreen';
 import LoungeScreen from './src/LoungeScreen';
 import MeScreen from './src/MeScreen';
 import MessageBanner from './src/MessageBanner';
@@ -81,6 +82,13 @@ function linkTarget(url) {
   }
   if (!params.channel) return null;
   return { channel: params.channel, messageId: Number(params.message) || null, action: 'open' };
+}
+
+// A password reset link from the email, "https://chat.example.com/reset?token=abc..." (app.json claims
+// /reset too): its token, or null. Only the characters the server's tokens have (secrets.token_urlsafe),
+// so nothing odd goes into the request.
+function resetToken(url) {
+  return url?.match(/^https:[/][/][^/?#]+[/]reset[?](?:[^#]*&)?token=([A-Za-z0-9_-]+)(?:[&#]|$)/)?.[1] ?? null;
 }
 
 // share: something shared to the app from another one, waiting for "Share to…" (or null);
@@ -450,8 +458,11 @@ function Loading({ text }) {
   );
 }
 
-function Screen({ share, onShareDone, opened, onOpenedDone }) {
+// reset: a reset link's token (resetToken), or null; onResetDone: its screen is closed.
+function Screen({ share, onShareDone, opened, onOpenedDone, reset, onResetDone }) {
   const connection = useConnection();
+  // "Password changed…" for the login screen, after a reset (the server logs us out everywhere).
+  const [loginNote, setLoginNote] = useState(null);
   // Calls, kept up here: this stays while we're logged in, so a call goes on whatever the screens do.
   const openChatRef = useRef(null);
   const voice = useVoice(connection, openChatRef);
@@ -479,7 +490,26 @@ function Screen({ share, onShareDone, opened, onOpenedDone }) {
     wasInCall.current = !!voice.roomName;
   }, [voice.roomName]);
 
-  if (status === 'logged-out') return <LoginScreen onLoggedIn={connection.reconnect} />;
+  // A reset link, before anything else: whether we're logged in or not (a reset logs us out anyway).
+  // Back = cancel (the chat or the login screen, as before).
+  if (reset) {
+    return (
+      <ResetScreen
+        token={reset} onBack={onResetDone}
+        onDone={() => {
+          setLoginNote('Password changed. Log in with your new one.');
+          onResetDone();
+        }}
+      />
+    );
+  }
+  if (status === 'logged-out') {
+    const loggedIn = () => {
+      setLoginNote(null);
+      connection.reconnect();
+    };
+    return <LoginScreen onLoggedIn={loggedIn} note={loginNote} />;
+  }
   // Not connected yet (we don't know who we are until "welcome").
   if (me === null) return <Loading text={status === 'offline' ? "Can't reach the server, trying again…" : null} />;
   return (
@@ -551,17 +581,22 @@ export default function App() {
       subscription.remove();
     };
   }, []);
+  // A password reset link (resetToken), kept up here like the rest: shown over everything (Screen).
+  const [reset, setReset] = useState(null);
   // A link to the chat (linkTarget): the one that started the app, and those tapped while it's open.
-  // They go the same way as a tapped notification.
+  // They go the same way as a tapped notification. A reset link opens the reset screen instead.
   useEffect(() => {
-    Linking.getInitialURL().then((url) => {
+    function follow(url) {
+      const token = resetToken(url);
+      if (token) {
+        setReset(token);
+        return;
+      }
       const target = linkTarget(url);
       if (target) setOpened(target);
-    }).catch(() => {});
-    const subscription = Linking.addEventListener('url', ({ url }) => {
-      const target = linkTarget(url);
-      if (target) setOpened(target);
-    });
+    }
+    Linking.getInitialURL().then(follow).catch(() => {});
+    const subscription = Linking.addEventListener('url', ({ url }) => follow(url));
     return () => subscription.remove();
   }, []);
   // Android draws apps "edge to edge", under the status bar and the navigation bar.
@@ -573,6 +608,7 @@ export default function App() {
         <Frame>
           <Screen
             share={share} onShareDone={() => setShare(null)} opened={opened} onOpenedDone={() => setOpened(null)}
+            reset={reset} onResetDone={() => setReset(null)}
           />
           {/* A newer APK to install (release builds; the JavaScript updates itself, expo-updates). */}
           <UpdateScreen />
