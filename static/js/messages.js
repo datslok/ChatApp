@@ -1844,14 +1844,23 @@ new ResizeObserver(() => {
 }).observe(messages);
 
 // Back at the window (alt+tab, a click on it, the tab shown again): if we were at the bottom, be at
-// the bottom. Something sometimes made the messages taller while the window was in the background
-// (seen in the Windows app; what exactly wasn't found), which left them scrolled a little up.
+// the bottom, whatever happened to the messages while we were away.
 // (Showing the past after a jump far up isn't "the bottom": the newest messages aren't loaded.)
 function backToBottom() {
   if (isLooking() && stuckToBottom && atPresent) messages.scrollTop = messages.scrollHeight;
 }
 document.addEventListener("visibilitychange", backToBottom);
 window.addEventListener("focus", backToBottom);
+
+// The window's "resize" (also when only the pixel ratio changed): at the bottom, stay there. This was
+// the cause above: a Windows app window on a 100% screen, when minimized, counts as on the laptop's
+// 150% one, so the page is laid out again at another scale (minimizing, while minimized, restoring),
+// and each time the scroll position slipped up (54, then 600 px). "resize" comes before the scroll
+// events those cause, so stuckToBottom still says where we were. (Moving the window between two
+// screens is the same.)
+window.addEventListener("resize", () => {
+  if (stuckToBottom && atPresent) messages.scrollTop = messages.scrollHeight;
+});
 
 // ---------- The scroll-down button ----------
 // More than one and a half screens above the newest message: a round ↓ over the bottom of the chat
