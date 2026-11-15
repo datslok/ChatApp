@@ -38,24 +38,33 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.websockets import WebSocketDisconnected
 
 from chatapp.config import (
-    ALLOWED_EMOJI, EMAIL_PATTERN, EMOJI_NAME_PATTERN, FAILURE_WINDOW, FIREBASE_KEY_FILE, HISTORY_LIMIT,
-    IMAGE_TYPES, INVITE_DAYS, LANDING_HOST, LIVEKIT_API_KEY, LIVEKIT_API_SECRET, LIVEKIT_URL, MAIL_FROM,
-    MAX_BIO_LENGTH, MAX_CHANNELS, MAX_CHANNEL_NAME, MAX_CROP_SIDE, MAX_CUSTOM_EMOJI, MAX_EMAIL_LENGTH,
-    MAX_EMOJI_NAME, MAX_FAILURES, MAX_FILENAME_LENGTH, MAX_GIF_FRAMES, MAX_GIF_SIZE, MAX_OPEN_INVITES,
-    MAX_PASSWORD_LENGTH, MAX_STATUS_LENGTH, MAX_TEXT_LENGTH, MAX_UPLOAD_SIZE, MIN_PASSWORD_LENGTH,
-    PICTURE_EXTENSIONS, PICTURE_KINDS, PUBLIC_URL, RELEASES_DIR, REQUIRE_INVITE, RESERVED_NAMES,
-    RESET_MINUTES, SECURE_COOKIES, SESSION_COOKIE, SESSION_DAYS, SHOWN_TYPES, SMTP_HOST, SMTP_PASSWORD,
-    SMTP_PORT, SMTP_USER, UPLOAD_DIR, USERNAME_PATTERN, VAPID_PRIVATE_KEY, VAPID_PUBLIC_KEY, VERIFY_HOURS,
-    VIDEO_TYPES
+    ALLOWED_EMOJI, EMAIL_PATTERN, EMOJI_NAME_PATTERN, FAILURE_WINDOW, FIREBASE_KEY_FILE, HEX_COLOUR,
+    HISTORY_LIMIT, IMAGE_TYPES, INVITE_DAYS, LANDING_HOST, LIVEKIT_API_KEY, LIVEKIT_API_SECRET, LIVEKIT_URL,
+    MAIL_FROM, MAX_BIO_LENGTH, MAX_CHANNELS, MAX_CHANNEL_NAME, MAX_CROP_SIDE, MAX_CUSTOM_EMOJI,
+    MAX_EMAIL_LENGTH, MAX_EMOJI_NAME, MAX_FAILURES, MAX_FILENAME_LENGTH, MAX_GIF_FRAMES, MAX_GIF_SIZE,
+    MAX_OPEN_INVITES, MAX_PASSWORD_LENGTH, MAX_STATUS_LENGTH, MAX_TEXT_LENGTH, MAX_UPLOAD_SIZE,
+    MIN_PASSWORD_LENGTH, PICTURE_EXTENSIONS, PICTURE_KINDS, PUBLIC_URL, RELEASES_DIR, REQUIRE_INVITE,
+    RESERVED_NAMES, RESET_MINUTES, SECURE_COOKIES, SESSION_COOKIE, SESSION_DAYS, SHOWN_TYPES, SMTP_HOST,
+    SMTP_PASSWORD, SMTP_PORT, SMTP_USER, UPLOAD_DIR, USERNAME_PATTERN, VAPID_PRIVATE_KEY, VAPID_PUBLIC_KEY,
+    VERIFY_HOURS, VIDEO_TYPES
 )
-from chatapp.connections import (
-    NONCE_MEMORY, clients, device_of, disconnect_user, message_nonce, recent_nonces, send, send_to_channel,
-    send_to_everyone, send_to_user
-)
-from chatapp.db import BANNED_NOW, db
+from chatapp.db import BANNED_NOW, db, iso_time
 from chatapp.sessions import (
     current_user, is_admin, logged_in_admin, logged_in_user, session_user, unverified_user,
     user_id_from_token
+)
+from chatapp.users import (
+    are_friends, befriend_bots, blockers_of, friends_message, friendship, has_blocked, is_bot, is_owner,
+    pair, username_of
+)
+from chatapp.access import (
+    can_join, can_mute, channel_list, channel_name, dm_people, group_members, group_people, group_title,
+    hidden_role_ids, is_channel, is_dm_member, is_dm_or_group, is_group_member, may_see_channel,
+    may_use_lounge, visible_chats
+)
+from chatapp.connections import (
+    NONCE_MEMORY, background_tasks, clients, device_of, disconnect_user, message_nonce, recent_nonces, send,
+    send_to_channel, send_to_everyone, send_to_user
 )
 
 
@@ -90,49 +99,6 @@ def is_video(path, content_type):
 
 
 hasher = PasswordHasher()
-
-
-def is_bot(user_id):
-    """Is this the AI bot's account (tools/make_bot.py)? Bots may be invited into DMs (see can_join)."""
-    row = db.execute("SELECT is_bot FROM users WHERE id = ?", (user_id,)).fetchone()
-    return row is not None and row[0] == 1
-
-
-def befriend_bots():
-    """Everyone is friends with every bot (so anyone can DM Chattus without a request): adds the
-    missing friendships as accepted, and turns open requests with a bot into friendships. At every
-    start (for everyone so far, and a bot made by tools/make_bot.py since) and for each new account."""
-    with db:
-        # Every pair of a person and a bot, smallest id first (the table's rule), unless the pair
-        # already has a row: "INSERT OR IGNORE" skips those (PRIMARY KEY (user_a, user_b)).
-        db.execute("""
-            INSERT OR IGNORE INTO friendships (user_a, user_b, requested_by, accepted)
-            SELECT MIN(person.id, bot.id), MAX(person.id, bot.id), bot.id, 1
-            FROM users AS person, users AS bot
-            WHERE bot.is_bot = 1 AND person.id != bot.id
-        """)
-        db.execute("""
-            UPDATE friendships SET accepted = 1
-            WHERE accepted = 0 AND (user_a IN (SELECT id FROM users WHERE is_bot = 1)
-                                    OR user_b IN (SELECT id FROM users WHERE is_bot = 1))
-        """)
-
-
-befriend_bots()
-
-
-def add_bots_to_groups():
-    """Every bot is in every group DM (Chattus answers @mentions there). New groups get them when
-    they're made (create_group); this adds them to the groups made before, and a bot made since.
-    INSERT OR IGNORE: skip the rows that are already there (the table's PRIMARY KEY)."""
-    with db:
-        db.execute(
-            "INSERT OR IGNORE INTO group_members (group_key, user_id)"
-            " SELECT group_dms.key, users.id FROM group_dms, users WHERE users.is_bot = 1"
-        )
-
-
-add_bots_to_groups()
 
 
 def mark_old_videos():
@@ -479,18 +445,14 @@ async def repack_old_videos():
 repacker = None  # the task above, started by the first connection (it needs the running loop)
 
 
-def username_of(user_id):
-    row = db.execute("SELECT username FROM users WHERE id = ?", (user_id,)).fetchone()
-    return row[0] if row else None
+def start_repacking():
+    """Start repack_old_videos once: called by every new connection, only the first one starts it."""
+    global repacker  # (this function gives the name a new value, so it must say it means the global one)
+    if repacker is None:
+        repacker = asyncio.create_task(repack_old_videos())
 
 
 # ---------- Messages ----------
-
-def iso_time(sqlite_time):
-    """SQLite stores times as "2026-10-10 14:03:12" (in UTC, but without saying so). Browsers would
-    read that as *local* time. "2026-10-10T14:03:12Z" is the standard (ISO 8601) way to write it:
-    the Z means UTC, and every browser understands it."""
-    return sqlite_time.replace(" ", "T") + "Z"
 
 
 def save_message(channel, user_id, text, files, reply_to, kind=None, sent_from=None):
@@ -774,14 +736,6 @@ def chat_info(channel, tab, before=None):
 
 MAX_SEARCH_RESULTS = 50
 MAX_SEARCH_WORDS = 10
-
-
-def visible_chats(user_id):
-    """Every chat this person may read (see can_join): the channels, their DMs with friends, their groups."""
-    chats = [item["key"] for item in channel_list(user_id) if not item["heading"]]
-    chats += [f"dm:{min(user_id, friend)}:{max(user_id, friend)}" for friend in friends_message(user_id)["friends"]]
-    chats += [key for (key,) in db.execute("SELECT group_key FROM group_members WHERE user_id = ?", (user_id,))]
-    return chats
 
 
 def search_messages(user_id, text, chat=None, author=None):
@@ -1462,11 +1416,6 @@ async def admin_cancel_invite(code: str, request: Request):
 
 BAN_DAYS = (1, 7, 30)  # the lengths on offer; None = for good
 MAX_BAN_REASON = 200
-
-
-def is_owner(user_id):
-    row = db.execute("SELECT is_owner FROM users WHERE id = ?", (user_id,)).fetchone()
-    return bool(row and row[0])
 
 
 def ban_message(user_id):
@@ -2277,7 +2226,6 @@ APPEARANCE_THEMES = {"dark", "darker", "light", "blue", "purple", "green", "pink
 APPEARANCE_FONTS = {"system", "calibri", "georgia", "consolas", "comic"}
 # The colours with a picker: names of the CSS variables in chat.css (without the "--").
 APPEARANCE_COLOURS = {"bg-main", "bg-panel", "text", "text-muted", "accent", "link"}
-HEX_COLOUR = re.compile(r"#[0-9a-fA-F]{6}")  # "#" and six hex digits, like "#5865f2"
 
 
 class Appearance(BaseModel):
@@ -2923,40 +2871,6 @@ async def get_custom_emoji(request: Request, file: str):
 
 # ---------- Friends ----------
 
-def pair(a, b):
-    """Two user ids, smallest first: how a pair is stored in the friendships table."""
-    return (a, b) if a < b else (b, a)
-
-
-def friendship(a, b):
-    """(requested_by, accepted) for two people, or None if there's nothing between them."""
-    return db.execute(
-        "SELECT requested_by, accepted FROM friendships WHERE user_a = ? AND user_b = ?", pair(a, b)
-    ).fetchone()
-
-
-def are_friends(a, b):
-    row = friendship(a, b)
-    return row is not None and row[1] == 1
-
-
-def friends_message(user_id):
-    """One person's own view: {"type": "friends", "friends": [...], "incoming": [...], "outgoing": [...]}."""
-    friends, incoming, outgoing = [], [], []
-    rows = db.execute(
-        "SELECT user_a, user_b, requested_by, accepted FROM friendships WHERE user_a = ? OR user_b = ?",
-        (user_id, user_id),
-    )
-    for user_a, user_b, requested_by, accepted in rows:
-        other = user_b if user_a == user_id else user_a
-        if accepted:
-            friends.append(other)
-        elif requested_by == user_id:
-            outgoing.append(other)  # we asked them
-        else:
-            incoming.append(other)  # they asked us
-    return {"type": "friends", "friends": friends, "incoming": incoming, "outgoing": outgoing}
-
 
 async def send_friends_update(*user_ids):
     """Friendships are personal, so they aren't sent to everyone: each of these people gets
@@ -3050,14 +2964,6 @@ async def friend_remove(data: FriendAction, request: Request):
 # (save_mentions: no notifications, counts or pushes) and their calls don't ring us; their messages in
 # chats we share are hidden on our page, and left out of our searches. They aren't told. Admins
 # can't be blocked (the chat's rule), nor bots (they're everyone's friend, at every start).
-
-def has_blocked(blocker, blocked):
-    return db.execute("SELECT 1 FROM blocks WHERE blocker_id = ? AND blocked_id = ?", (blocker, blocked)).fetchone() is not None
-
-
-def blockers_of(user_id):
-    """Everyone who blocked this person (they don't hear from them)."""
-    return {blocker for (blocker,) in db.execute("SELECT blocker_id FROM blocks WHERE blocked_id = ?", (user_id,))}
 
 
 def blocks_message(user_id):
@@ -3420,91 +3326,6 @@ async def release_file(name: str):
 # Each person's pages get only the channels they may see, and can_join checks the same rule, so a page
 # asking for another channel by hand gets nothing.
 
-def channel_list(user_id=None):
-    """The sidebar, top to bottom, as this person may see it (None: all of it):
-    [{"key": "general", "name": "general", "heading": False, "private": False, "roles": []}, ...]
-    "roles" (admins only, as roles can be hidden): the role ids that see a private channel. "members" (private
-    channels): the ids of everyone who sees it (the owner and its roles' people), for the member list. A heading
-    with nothing visible under it goes too."""
-    rows = db.execute("SELECT key, name, heading, private FROM channels ORDER BY position").fetchall()
-    roles_of = {}
-    for channel, role_id in db.execute("SELECT channel, role_id FROM channel_roles"):
-        roles_of.setdefault(channel, []).append(role_id)
-    everywhere = {person for (person,) in db.execute("SELECT id FROM users WHERE is_owner = 1 OR is_bot = 1")}  # (in every channel)
-    holders = {}  # role id -> its people
-    for holder, role_id in db.execute("SELECT user_id, role_id FROM user_roles"):
-        holders.setdefault(role_id, set()).add(holder)
-    items = []
-    for key, name, heading, private in rows:
-        item = {"key": key, "name": name, "heading": bool(heading), "private": bool(private), "roles": roles_of.get(key, [])}
-        if private:
-            item["members"] = sorted(everywhere.union(*(holders.get(r, set()) for r in item["roles"])))
-        items.append(item)
-    if user_id is None or is_owner(user_id) or is_bot(user_id):
-        return items if user_id is None or is_admin(user_id) else [{k: v for k, v in item.items() if k != "roles"} for item in items]
-    mine, limited = role_ids_of(user_id), is_limited(user_id)
-    shown = []
-    for item in items:
-        if item["heading"]:
-            # Kept for now; dropped below if no channel of its own made it.
-            if shown and shown[-1]["heading"]:
-                shown.pop()
-            shown.append(item)
-        elif sees_channel(item["private"], item["roles"], mine, limited):
-            shown.append(item)
-    if shown and shown[-1]["heading"]:
-        shown.pop()
-    if is_admin(user_id):
-        return shown
-    return [{k: v for k, v in item.items() if k != "roles"} for item in shown]  # (the role ids: admins only)
-
-
-def role_ids_of(user_id):
-    return {role_id for (role_id,) in db.execute("SELECT role_id FROM user_roles WHERE user_id = ?", (user_id,))}
-
-
-def is_limited(user_id):
-    """Does this person have a limited role (only their private channels, no Lounge)? Never admins or bots."""
-    if is_admin(user_id) or is_bot(user_id):
-        return False
-    row = db.execute("SELECT 1 FROM user_roles JOIN roles ON roles.id = user_roles.role_id"
-                     " WHERE user_roles.user_id = ? AND roles.limited = 1", (user_id,)).fetchone()
-    return row is not None
-
-
-def sees_channel(private, channel_roles, my_roles, limited):
-    """The rule (not for the owner, who sees all): a private channel needs one of its roles; an open one
-    is for everyone not limited (admins never are)."""
-    if private:
-        return any(role_id in my_roles for role_id in channel_roles)
-    return not limited
-
-
-def may_see_channel(key, user_id):
-    """May this person see this channel (which exists; see is_channel)?"""
-    if is_owner(user_id) or is_bot(user_id):
-        return True
-    private = db.execute("SELECT private FROM channels WHERE key = ?", (key,)).fetchone()[0]
-    roles = [role_id for (role_id,) in db.execute("SELECT role_id FROM channel_roles WHERE channel = ?", (key,))]
-    return sees_channel(bool(private), roles, role_ids_of(user_id), is_limited(user_id))
-
-
-def may_use_lounge(user_id):
-    return not is_limited(user_id)
-
-
-def is_channel(key):
-    """Is this a channel that exists? (Headings aren't: nobody can join one.)"""
-    if not isinstance(key, str):
-        return False  # (the page could send anything as a channel, a list say)
-    return db.execute("SELECT 1 FROM channels WHERE key = ? AND heading = 0", (key,)).fetchone() is not None
-
-
-def channel_name(key):
-    """A channel's name, for notifications ("kari in #memes"). Its key if it's gone."""
-    row = db.execute("SELECT name FROM channels WHERE key = ?", (key,)).fetchone()
-    return row[0] if row else key
-
 
 def channels_message(user_id):
     """{"type": "channels", "channels": [...], "lounge": True}: their sidebar, and whether it has the Lounge."""
@@ -3711,10 +3532,6 @@ def roles_message(user_id):
     ]}
 
 
-def hidden_role_ids():
-    return {role_id for (role_id,) in db.execute("SELECT id FROM roles WHERE hidden = 1")}
-
-
 async def announce_roles():
     for websocket, client in list(clients.items()):
         await send(websocket, roles_message(client["user_id"]))
@@ -3863,32 +3680,6 @@ async def set_role_member(request: Request, role_id: int, data: RoleMember):
 # Each member's pages get {"type": "groups"} with their groups at the start and after every change.
 
 MAX_GROUP_SIZE = 10  # people in a group, its starter included (bots not counted)
-
-
-def group_members(key):
-    """A group's members' ids, bots included, in the order they joined."""
-    rows = db.execute("SELECT user_id FROM group_members WHERE group_key = ? ORDER BY rowid", (key,))
-    return [user_id for (user_id,) in rows]
-
-
-def group_people(key):
-    """A group's members without the bots."""
-    return [user_id for user_id in group_members(key) if not is_bot(user_id)]
-
-
-def is_group_member(key, user_id):
-    if not isinstance(key, str) or not key.startswith("g:"):
-        return False
-    row = db.execute("SELECT 1 FROM group_members WHERE group_key = ? AND user_id = ?", (key, user_id)).fetchone()
-    return row is not None
-
-
-def group_title(key):
-    """What a group is called in notifications: its name, or its people's names ("axel, kari, ola")."""
-    row = db.execute("SELECT name FROM group_dms WHERE key = ?", (key,)).fetchone()
-    if row and row[0]:
-        return row[0]
-    return ", ".join(username_of(user_id) for user_id in group_people(key))
 
 
 def groups_message(user_id):
@@ -4233,6 +4024,13 @@ async def watch_presences():
 presence_watcher = None  # the task above, started by the first connection (it needs the running loop)
 
 
+def start_watching_presences():
+    """Start watch_presences once: called by every new connection, only the first one starts it."""
+    global presence_watcher
+    if presence_watcher is None:
+        presence_watcher = asyncio.create_task(watch_presences())
+
+
 # ---------- Muting ----------
 #
 # Anyone can mute a chat (channel, DM or group) for themselves: no unread dot (the page), and no
@@ -4252,9 +4050,6 @@ def mutes_message(user_id):
 # id of each of their DMs and groups at connect ("chat_activity" with all of them), and after each new
 # message in one ("chat_activity" with that one, to every member's pages, their own other devices too).
 # Ids only grow, so a bigger id is a more recent chat: no times needed. Pins are kept per person, like mutes.
-
-def is_dm_or_group(channel):
-    return isinstance(channel, str) and (channel.startswith("dm:") or channel.startswith("g:"))
 
 
 def chat_activity_message(user_id):
@@ -4283,70 +4078,6 @@ def pinned_chats_message(user_id):
     """Someone's pinned DMs and groups, for their pages: {"type": "pinned_chats", "channels": ["dm:3:7"]}."""
     rows = db.execute("SELECT channel FROM pinned_chats WHERE user_id = ?", (user_id,))
     return {"type": "pinned_chats", "channels": [channel for (channel,) in rows]}
-
-
-def can_mute(channel, user_id):
-    """May this person mute this chat? Any they can see, except a DM with an admin."""
-    if not can_join(channel, user_id):
-        return False
-    people = dm_people(channel)
-    return people is None or not any(is_admin(person) for person in people if person != user_id)
-
-
-BOT_INVITE_TIME = "-1 hour"  # how long a mention lets a bot into a DM (SQLite's way of writing it)
-
-
-def dm_people(channel):
-    """The two user ids of a DM's name ("dm:3:7" -> (3, 7)), or None if it isn't exactly the
-    shape the page builds (smallest first, no leading zeros)."""
-    if not isinstance(channel, str) or not channel.startswith("dm:"):
-        return None
-    parts = channel.split(":")[1:]  # "dm:3:7" -> ["3", "7"]
-    if len(parts) != 2 or not all(part.isdigit() for part in parts):
-        return None
-    first, second = int(parts[0]), int(parts[1])
-    if channel != f"dm:{first}:{second}" or first >= second:
-        return None
-    return first, second
-
-
-def is_dm_member(channel, user_id):
-    """Is this one of the two people of this DM, and are they still friends? (Calls only ever
-    use this: a bot invited to read a DM is never let into its calls.)"""
-    people = dm_people(channel)
-    if people is None or user_id not in people:
-        return False
-    other = people[1] if user_id == people[0] else people[0]
-    return are_friends(user_id, other)  # (a friendship also means the other person exists)
-
-
-def bot_invited(channel, user_id):
-    """A bot may read and write in someone else's DM for an hour after one of them mentions it
-    there (that's how you invite it). Only a bot (users.is_bot), and only while they're friends."""
-    people = dm_people(channel)
-    if people is None or not is_bot(user_id) or not are_friends(*people):
-        return False
-    row = db.execute(
-        """
-        SELECT 1 FROM mentions JOIN messages ON messages.id = mentions.message_id
-        WHERE mentions.user_id = ? AND messages.channel = ? AND messages.sent_at > datetime('now', ?)
-        LIMIT 1
-        """,
-        (user_id, channel, BOT_INVITE_TIME),
-    ).fetchone()
-    return row is not None
-
-
-def can_join(channel, user_id):
-    """May this user read and write in this channel? Normal channels: anyone logged in.
-    DMs ("dm:3:7", the two user ids, smallest first): the two people in it, while they're
-    friends; and the AI bot for an hour after one of them mentioned it there."""
-    if is_channel(channel):
-        return may_see_channel(channel, user_id)  # (a private channel: only its roles; see "Channels")
-    if is_dm_member(channel, user_id) or is_group_member(channel, user_id):
-        return True
-    people = dm_people(channel)  # (a member who's no longer friends stays out, even a bot)
-    return people is not None and user_id not in people and bot_invited(channel, user_id)
 
 
 # ---------- Voice ----------
@@ -4650,7 +4381,6 @@ PREVIEW_LIMIT = 10                # previews per person...
 PREVIEW_WINDOW = 60               # ...within this many seconds
 PREVIEW_USER_AGENT = f"Mozilla/5.0 (compatible; ChatAppBot/1.0; +{PUBLIC_URL})"  # sites see who's asking
 preview_times = {}                # user id -> times of their recent previews (for the limit)
-background_tasks = set()          # running previews (asyncio only keeps a weak reference to tasks)
 
 
 def message_links(text):
@@ -5159,12 +4889,10 @@ async def chat(websocket: WebSocket):
         return
 
     await websocket.accept()
-    global presence_watcher
-    if presence_watcher is None:  # the first connection since the server started: start watching for idle
-        presence_watcher = asyncio.create_task(watch_presences())
-    global repacker
-    if repacker is None:  # and re-pack older videos once (see "Re-packing videos")
-        repacker = asyncio.create_task(repack_old_videos())
+    # The first connection since the server started starts watching for idle, and re-packs older videos
+    # once (see "Re-packing videos"); later ones find them running.
+    start_watching_presences()
+    start_repacking()
     # No channel until they "join", no voice room until they say they joined one.
     clients[websocket] = {"user_id": user_id, "channel": None, "voice": None, "muted": False, "deafened": False,
                           "looking": False,  # looking at it right now (the page says, see "looking")

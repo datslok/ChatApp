@@ -37,10 +37,15 @@ the point is for me to understand how it works, not just to have it done.
 
 - `server.py`: FastAPI app. Serves the page and the `/ws` WebSocket endpoint that broadcasts messages.
   Being split into `chatapp/` (milestone 24; started with `uvicorn server:app` as before): `config.py`
-  (environment settings, shared limits), `db.py` (`db`, tables, migrations), `connections.py` (`clients`,
-  `send`/`send_to_*`, nonces), `sessions.py` (`current_user`, `logged_in_user`/`_admin`, `is_admin`).
-  Layers: a module imports only from lower ones (config < db < sessions; connections), never server.py;
-  names are imported explicitly. A global another module reassigns must be read as `module.name`.
+  (environment settings, shared limits, HEX_COLOUR), `db.py` (`db`, tables, migrations, `iso_time`),
+  `sessions.py` (`current_user`, `logged_in_user`/`_admin`, `is_admin`), `users.py` (is_bot, username_of,
+  is_owner, friendships, blocks, befriend_bots/add_bots_to_groups at start), `access.py` (read-only: channel
+  visibility, group/DM membership, `can_join`, `visible_chats`), `connections.py` (`clients`, `send`/`send_to_*`,
+  nonces, `background_tasks`). Layers, low to high: config, db, sessions, users, access, connections, then the
+  topics (planned: files, web, presence, push, messages, emoji, people, groups, voice, channels, accounts,
+  admin; pages beside them). A module imports only from lower ones, never server.py; names are imported
+  explicitly. Background starters are functions in their module (`start_repacking`, `start_watching_presences`),
+  so no module reassigns another's global.
 - `static/index.html`: the chat page's markup. Its styles are in `static/css/chat.css`, its script in
   `static/js/`: plain scripts (not ES modules) sharing one global scope, loaded in this order:
   `icon-shapes.js` and `icons.js` (the line icons, see "Icons"), `core.js` (elements, connecting, server messages, channels, sidebar), `notifications.js` (and every

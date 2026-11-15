@@ -572,3 +572,10 @@ if "message_id" not in table_columns("attachments") or "attachment_id" in table_
             db.execute("ALTER TABLE messages DROP COLUMN attachment_id")
 # An index: a sorted lookup SQLite keeps next to the table, so "the files of message 42" doesn't read them all.
 db.execute("CREATE INDEX IF NOT EXISTS attachments_message ON attachments (message_id, position)")
+
+
+def iso_time(sqlite_time):
+    """SQLite stores times as "2026-10-10 14:03:12" (in UTC, but without saying so). Browsers would
+    read that as *local* time. "2026-10-10T14:03:12Z" is the standard (ISO 8601) way to write it:
+    the Z means UTC, and every browser understands it."""
+    return sqlite_time.replace(" ", "T") + "Z"

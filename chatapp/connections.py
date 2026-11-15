@@ -110,3 +110,8 @@ async def send_to_channel(channel, data, except_user_id=None):
     for websocket, client in list(clients.items()):
         if client["channel"] == channel and client["user_id"] != except_user_id:
             await send(websocket, data)
+
+
+# Work started in the background (link previews, push notifications): asyncio only keeps a weak reference
+# to a task, so one nobody holds could be cleaned away half-way. Each removes itself when it's done.
+background_tasks = set()

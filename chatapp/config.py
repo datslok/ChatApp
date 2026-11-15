@@ -134,3 +134,7 @@ Image.MAX_IMAGE_PIXELS = 25_000_000  # e.g. 5000 x 5000
 warnings.simplefilter("error", Image.DecompressionBombWarning)
 MAX_STATUS_LENGTH = 60
 MAX_BIO_LENGTH = 300
+
+
+# A colour as the pages send it (Settings → Appearance, roles):
+HEX_COLOUR = re.compile(r"#[0-9a-fA-F]{6}")  # "#" and six hex digits, like "#5865f2"
