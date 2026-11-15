@@ -15,6 +15,7 @@
         "@name mentions someone, @everyone mentions everybody: they get a notification and a red count",
         "Type :name for emoji suggestions (↑↓ to choose, Enter or Tab to pick), or use the 😀 button (it only offers emoji your device can draw). Messages with only emoji show them big",
         "Pictures, videos and files up to 95 MB: the + button, drag and drop, or paste. Up to 10 at once, sent together in one message (pictures and videos as a grid). Click a picture to see it big: zoom with the mouse wheel or a pinch, drag it around, double-click for its real size, and ‹ › or the arrow keys go through the others in the message (on a phone, pinch and swipe). Videos (MP4 and WebM) play right in the chat, with play, a time bar, volume and fullscreen along the bottom (click to play or pause, double-click for fullscreen; then space, ← →, M and F). They start at 30% volume, and each one remembers where you left its volume",
+        "Photos and videos you send lose their hidden details (where and when they were taken, which phone took them), so nobody who downloads them can see where you were. The picture itself stays exactly the same. Other files (PDFs, documents...) are sent as they are",
         "Each chat keeps its own half-written message and files: switch to another chat and back, and they're still waiting there",
         "GIFs: the GIF button next to the text box (on phones: the smiley, then the GIF tab). Type to search (from GIPHY), or pick one of the trending ones, and click one to send it (as a reply, if you're replying). Esc closes it",
         "Links are clickable, and the first link in a message gets a preview card: the site, title, description and picture",
@@ -131,7 +132,8 @@
         "📱 Forgot to close the Windows app before leaving? Your phone no longer stays quiet: once nobody has touched the PC's keyboard or mouse for 10 minutes, the notifications go to your phone again, and you show as idle. Settings → Notifications → \"Away from the Windows app after\" sets the time (1 minute to 1 hour). Needs the Windows app's update",
         "😀 In the Android app, big emoji written together now sit side by side touching, like on a PC (a space between them still shows as a space)",
         "📷 Photos taken with an iPhone no longer flash between the picture and black in the chat",
-        "🧹 The Android app no longer keeps a copy of every photo, video and file you've sent: it could fill up to a gigabyte. The old copies are cleared the next time the app starts"
+        "🧹 The Android app no longer keeps a copy of every photo, video and file you've sent: it could fill up to a gigabyte. The old copies are cleared the next time the app starts",
+        "📍 Photos and videos sent in the chat no longer carry where and when they were taken or which phone took them: the server removes those hidden details from every new one, and has removed them from the ones already sent. The pictures themselves are untouched"
       ]
     },
     {

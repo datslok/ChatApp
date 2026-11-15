@@ -156,6 +156,9 @@ the point is for me to understand how it works, not just to have it done.
   server's application/octet-stream, MediaStore counted ".pdf" as part of the name and made "x.pdf (1)" (fixed 2026-11-02). No permission (Android 10+; older ones get an error). expo-media-library
   was tried first and dropped: it only knows Pictures/DCIM. `saveFile` then deletes the app's own copy, and App.js
   empties `Paths.cache/downloads` (and `shared`) at every start (`clearOldCopies`), so nothing stays twice.
+  The pickers copy what's picked into the cache too and never delete it (the user's phone had ~1 GB, 2026-11-15):
+  files.js `COPY_FOLDERS` adds ImagePicker, DocumentPicker, ImageManipulator and Audio (expo-audio's recordings) to
+  clearOldCopies, and ChatScreen's sendTray calls `forgetCopies` on the sent items (only files under Paths.cache).
   Sharing to the app (since 2026-10-15): `plugins/share-intent.js` adds SEND / SEND_MULTIPLE `*/*` intent filters to
   MainActivity; our module `mobile/modules/shared-files` (Kotlin) reads the Intent: `getInitialShareAsync` (started by
   a share) and an "onShare" event from `OnNewIntent` (already open; singleTask), each `{files: [{uri, name, size, type}],
@@ -629,6 +632,17 @@ the point is for me to understand how it works, not just to have it done.
   video-player.js `setVideoAudio(frame, hasSound)` disables `.video-mute` and the slider; the phone's VideoScreen
   `audio` prop (MessageText.js, ChatInfoScreen.js pass `file.audio !== false`) fades them with pointerEvents "none". ffmpeg: winget's
   Gyan.FFmpeg (install.ps1 step 1, machine scope; this PC has it per user, its bin folder on the user PATH).
+- Removing metadata (server.py, "Removing metadata"; since 2026-11-15, the user's wish, after an iPhone photo showed
+  its street address in a phone's gallery): `/upload` runs `remove_metadata` on IMAGE_TYPES (format from the first
+  bytes) before the INSERT: files are cut, not re-saved (lossless; tests compare pixels). JPEG
+  (`jpeg_without_metadata`): only APP0 JFIF, APP2 ICC_PROFILE and APP14 Adobe kept, no COM, a tiny EXIF with only the
+  orientation put back, nothing after the first EOI (an MPO's gain map); PNG: PNG_NOTES chunks dropped; WebP: EXIF and
+  "XMP " chunks dropped and VP8X's flags cleared; GIFs and downloads untouched (incl. iPhone .mov/HEIC sent as
+  downloads). The result must decode at the same size or the original stays. Videos: `-map_metadata -1` in
+  repack_video (rotation is display-matrix side data and stays; checked with the server's ffmpeg 9.0.2).
+  `attachments.cleaned` (1 = done or tried); `clean_old_uploads` (start of repack_old_videos, so the first
+  connection) does older files once, updating `size`; videos wait for ffmpeg. The laptop has no ffmpeg: the video
+  test skips there.
 - GIFs (server.py, "GIFs"; messages.js, "GIFs"): the GIF button by the text box opens #gif-picker. `/gifs/search?q=`
   (trending without q) asks GIPHY's API with `GIPHY_API_KEY` (.env; on this PC in the git-ignored `dev-secrets.env`,
   which start.ps1 loads) via `fetch_url`; answers kept an hour in `gif_cache` (the free key: ~100 requests an hour

@@ -849,7 +849,10 @@ def repack_video(path, content_type):
         return False
     container = "mp4" if content_type == "video/mp4" else "webm"
     temporary = path.with_name(path.name + ".repack")
-    command = [FFMPEG, "-v", "error", "-y", "-i", str(path), "-map", "0:v", "-map", "0:a?", "-c", "copy"]
+    # -map_metadata -1: none of the file's notes are copied (where and when it was filmed, the phone; see
+    # "Removing metadata"). Which way up it is isn't one of them (it's "side data"), so that stays.
+    command = [FFMPEG, "-v", "error", "-y", "-i", str(path), "-map", "0:v", "-map", "0:a?", "-c", "copy",
+               "-map_metadata", "-1"]
     if container == "mp4":
         command += ["-movflags", "+faststart"]
     command += ["-f", container, str(temporary)]
@@ -914,10 +917,169 @@ def mp4_is_fragmented(path):
     return b"mdat" in seen and b"moov" in seen and seen.index(b"mdat") < seen.index(b"moov")
 
 
+# ---------- Removing metadata ----------
+#
+# Besides its pixels, a photo carries notes the camera wrote: where it was taken (GPS), when, the phone,
+# sometimes the owner's name. Anyone who downloads it gets them, so they're removed from every picture and
+# video sent in the chat. Each format keeps its notes in its own way:
+#   JPEG: a row of "segments", each a marker (FF and a byte) and a 2-byte length. The notes are APP1
+#         (EXIF and XMP), APP13 (IPTC) and COM (comments); iPhones add more pictures after the photo (MPO).
+#   PNG:  a row of "chunks" (length, 4-letter kind, data, checksum); the text ones and eXIf hold notes.
+#   WebP: a row of RIFF chunks; EXIF and "XMP " are the notes, announced by two flags in the VP8X chunk.
+# The files are cut, not saved again: everything but the notes is copied byte for byte, so a JPEG loses
+# no quality (saving it again would compress it again). Two notes stay, since without them the picture
+# would look wrong: which way up it is (EXIF orientation, put back as a tiny EXIF of its own) and its
+# colours' meaning (the ICC profile). Videos: ffmpeg's -map_metadata -1 in repack_video. GIFs (cameras
+# don't make them) and other files (the sender's own documents) are left as they are.
+
+PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
+PNG_NOTES = {b"tEXt", b"zTXt", b"iTXt", b"eXIf", b"tIME"}
+
+
+def jpeg_without_metadata(data, orientation):
+    """The JPEG `data` without its notes (above), with only `orientation` (2-8) as EXIF if given. None if
+    it isn't laid out as expected (then the file is left alone)."""
+    if data[:2] != b"\xff\xd8":
+        return None
+    out = bytearray(b"\xff\xd8")
+    exif_written = orientation is None
+    i = 2
+    while True:
+        if i >= len(data) or data[i] != 0xFF:
+            return None
+        while i < len(data) and data[i] == 0xFF:  # (a marker may have extra FF bytes before it)
+            i += 1
+        if i >= len(data) or data[i] == 0x00:
+            return None
+        marker = data[i]
+        i += 1
+        if marker == 0xD9:  # the end of the picture: anything after it (an iPhone's extra pictures) goes
+            out += b"\xff\xd9"
+            return bytes(out)
+        if 0xD0 <= marker <= 0xD7 or marker == 0x01:  # markers without a length
+            out += bytes((0xFF, marker))
+            continue
+        length = int.from_bytes(data[i:i + 2], "big")  # (counts its own 2 bytes)
+        if length < 2 or i + length > len(data):
+            return None
+        content = data[i + 2:i + length]
+        segment = bytes((0xFF, marker)) + data[i:i + length]
+        i += length
+        if 0xE0 <= marker <= 0xEF:  # APP0-APP15: what programs add. Only three are needed:
+            keep = (marker == 0xE0 and content.startswith(b"JFIF\x00")          # the basic header
+                    or marker == 0xE2 and content.startswith(b"ICC_PROFILE\x00")  # the colour profile
+                    or marker == 0xEE and content.startswith(b"Adobe"))          # how CMYK colours are stored
+        else:
+            keep = marker != 0xFE  # COM: a comment. Everything else is the picture itself.
+        if not keep:
+            continue
+        if not exif_written and marker != 0xE0:  # the orientation goes right after JFIF (if any)
+            exif = Image.Exif()
+            exif[0x0112] = orientation
+            payload = exif.tobytes()  # b"Exif\0\0" and the rest
+            out += b"\xff\xe1" + (len(payload) + 2).to_bytes(2, "big") + payload
+            exif_written = True
+        out += segment
+        if marker == 0xDA:  # start of scan: the compressed picture follows, up to the next real marker
+            start = i
+            while True:
+                i = data.find(b"\xff", i)
+                if i < 0 or i + 1 >= len(data):
+                    return None
+                after = data[i + 1]
+                if after == 0x00 or 0xD0 <= after <= 0xD7:  # FF 00 is a plain FF byte; D0-D7 restarts
+                    i += 2
+                    continue
+                break
+            out += data[start:i]
+
+
+def png_without_metadata(data):
+    """The PNG `data` without its note chunks (PNG_NOTES), up to IEND. None if it isn't laid out as expected."""
+    if data[:8] != PNG_SIGNATURE:
+        return None
+    out = bytearray(data[:8])
+    i = 8
+    while i + 12 <= len(data):
+        length = int.from_bytes(data[i:i + 4], "big")
+        kind = data[i + 4:i + 8]
+        end = i + 12 + length  # length, kind, data, checksum
+        if end > len(data):
+            return None
+        if kind not in PNG_NOTES:
+            out += data[i:end]
+        i = end
+        if kind == b"IEND":
+            return bytes(out)
+    return None
+
+
+def webp_without_metadata(data):
+    """The WebP `data` without its EXIF and XMP chunks. None if it isn't laid out as expected."""
+    if data[:4] != b"RIFF" or data[8:12] != b"WEBP":
+        return None
+    end = min(len(data), 8 + int.from_bytes(data[4:8], "little"))  # RIFF's size counts from byte 8
+    out = bytearray()
+    i = 12
+    while i + 8 <= end:
+        kind = data[i:i + 4]
+        size = int.from_bytes(data[i + 4:i + 8], "little")
+        if i + 8 + size > end:
+            return None
+        chunk_end = min(end, i + 8 + size + (size & 1))  # chunks are padded to an even length
+        chunk = bytearray(data[i:chunk_end])
+        if kind == b"VP8X":  # the header of an extended WebP: its flags say which chunks there are
+            chunk[8] &= ~(0x08 | 0x04) & 0xFF  # no EXIF (0x08) or XMP (0x04) any more
+        if kind not in (b"EXIF", b"XMP "):
+            out += chunk
+        i = chunk_end
+    return b"RIFF" + (len(out) + 4).to_bytes(4, "little") + b"WEBP" + bytes(out)
+
+
+def remove_metadata(path):
+    """Remove the notes from the picture at `path` in place (see above). The format comes from the file's
+    first bytes, not its name. True if the file changed. Reads it whole: run it in a thread."""
+    try:
+        data = path.read_bytes()
+        with Image.open(BytesIO(data)) as picture:
+            size = picture.size
+            orientation = picture.getexif().get(0x0112)
+        if data[:3] == b"\xff\xd8\xff":
+            cleaned = jpeg_without_metadata(data, orientation if orientation in range(2, 9) else None)
+        elif data[:8] == PNG_SIGNATURE:
+            cleaned = png_without_metadata(data)
+        elif data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+            cleaned = webp_without_metadata(data)
+        else:
+            return False  # a GIF
+        if cleaned is None:
+            print(f"Couldn't remove the metadata from {path.name}: not laid out as expected.", flush=True)
+            return False
+        if cleaned == data:
+            return False
+        with Image.open(BytesIO(cleaned)) as check:  # still the same picture? (all of it decoded)
+            check.load()
+            if check.size != size:
+                print(f"Couldn't remove the metadata from {path.name}: the result didn't match.", flush=True)
+                return False
+        temporary = path.with_name(path.name + ".clean")
+        temporary.write_bytes(cleaned)
+        os.replace(temporary, path)  # swapped in one go, like repack_video
+        return True
+    except (OSError, ValueError, SyntaxError, Image.DecompressionBombError, Image.DecompressionBombWarning) as error:
+        print(f"Couldn't remove the metadata from {path.name}: {error}", flush=True)
+        return False
+
+
 if "repacked" not in table_columns("attachments"):
     # 1 once a video has been through repack_video (whether or not it needed it), so each is done once.
     with db:
         db.execute("ALTER TABLE attachments ADD COLUMN repacked INTEGER NOT NULL DEFAULT 0")
+if "cleaned" not in table_columns("attachments"):
+    # 1 once a picture's or video's metadata has been removed (or tried: see "Removing metadata"). Files
+    # from before are 0, cleaned once by clean_old_uploads.
+    with db:
+        db.execute("ALTER TABLE attachments ADD COLUMN cleaned INTEGER NOT NULL DEFAULT 0")
 if "audio" not in table_columns("attachments"):
     # A video's sound (has_audio): 1 has some, 0 is silent, NULL not known (yet: repack_old_videos asks).
     with db:
@@ -943,10 +1105,35 @@ if "message_id" not in table_columns("attachments") or "attachment_id" in table_
 db.execute("CREATE INDEX IF NOT EXISTS attachments_message ON attachments (message_id, position)")
 
 
+async def clean_old_uploads():
+    """Pictures and videos sent before metadata was removed: cleaned once, in the background (from
+    repack_old_videos). A video goes through repack_video again, now without its notes; without ffmpeg,
+    videos wait for a later start."""
+    rows = db.execute(
+        "SELECT id, content_type FROM attachments WHERE cleaned = 0"
+        f" AND content_type IN ({', '.join('?' * len(SHOWN_TYPES))})", tuple(SHOWN_TYPES)
+    ).fetchall()
+    for file_id, content_type in rows:
+        path = UPLOAD_DIR / file_id
+        if content_type in VIDEO_TYPES:
+            if FFMPEG is None:
+                continue
+            changed = path.exists() and await asyncio.to_thread(repack_video, path, content_type)
+        else:
+            changed = path.exists() and await asyncio.to_thread(remove_metadata, path)
+        with db:
+            if changed:
+                db.execute("UPDATE attachments SET size = ? WHERE id = ?", (path.stat().st_size, file_id))
+            db.execute("UPDATE attachments SET cleaned = 1, repacked = repacked OR ? WHERE id = ?",
+                       (int(content_type in VIDEO_TYPES), file_id))
+
+
 async def repack_old_videos():
     """Videos uploaded before re-packing existed, and the seasonal videos (seasonal/, see "Seasons"):
     re-packed once, in the background, started by the first connection (like watch_presences).
-    The database is only touched here, in the server's own thread; ffmpeg runs in another."""
+    The database is only touched here, in the server's own thread; ffmpeg runs in another.
+    First, old files' metadata (clean_old_uploads)."""
+    await clean_old_uploads()
     if FFMPEG is None:
         return
     rows = db.execute(
@@ -2393,6 +2580,10 @@ async def upload(request: Request, filename: str):
     size = await receive_file(request, UPLOAD_DIR / file_id, MAX_UPLOAD_SIZE)
     if content_type in VIDEO_TYPES and not is_video(UPLOAD_DIR / file_id, content_type):
         content_type = "application/octet-stream"
+    # A picture: its metadata (where and when it was taken...) removed before anyone can download it
+    # (see "Removing metadata"; a video's goes in repack_video below).
+    if content_type in IMAGE_TYPES and await asyncio.to_thread(remove_metadata, UPLOAD_DIR / file_id):
+        size = (UPLOAD_DIR / file_id).stat().st_size
     # A video: re-packed before anyone sees it, so every player knows its length (see "Re-packing
     # videos"). In a background thread: the chat keeps running meanwhile.
     repacked = content_type in VIDEO_TYPES and FFMPEG is not None
@@ -2403,9 +2594,10 @@ async def upload(request: Request, filename: str):
 
     with db:
         db.execute(
-            "INSERT INTO attachments (id, filename, content_type, size, uploader_id, repacked, audio)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (file_id, filename, content_type, size, user_id, int(repacked), None if audio is None else int(audio)),
+            "INSERT INTO attachments (id, filename, content_type, size, uploader_id, repacked, audio, cleaned)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (file_id, filename, content_type, size, user_id, int(repacked), None if audio is None else int(audio),
+             int(content_type in IMAGE_TYPES or repacked)),
         )
     return {"id": file_id}
 

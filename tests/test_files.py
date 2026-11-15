@@ -102,6 +102,28 @@ def test_a_video_says_whether_it_has_sound(server, channel, tmp_path):
     assert "audio" not in upload_info(a, channel)  # only videos say
 
 
+def test_a_video_loses_its_metadata_but_not_its_rotation(server, channel, tmp_path):
+    # A phone writes where a video was filmed into it, and which way up it is (a different thing:
+    # "side data" on the picture's track, which must stay).
+    ffmpeg = shutil.which("ffmpeg")
+    plain = tmp_path / "plain.mp4"
+    plain.write_bytes(made_video(tmp_path, "made.mp4", sound=False))  # (skips without ffmpeg)
+    phone = tmp_path / "phone.mp4"
+    subprocess.run([ffmpeg, "-v", "error", "-y", "-display_rotation", "90", "-i", str(plain), "-c", "copy",
+                    "-metadata", "location=+59.9139+010.7522/", "-metadata", "comment=secret-note",
+                    str(phone)], check=True)
+    a = server.person()
+    file_id, _ = sent_picture(a, channel, phone.read_bytes(), "video/mp4", "phone.mp4")
+    sent = tmp_path / "sent.mp4"
+    sent.write_bytes(a.get(f"/uploads/{file_id}").body)
+    assert b"+59.9139" not in sent.read_bytes() and b"secret-note" not in sent.read_bytes()
+    ffprobe = shutil.which("ffprobe")
+    shown = subprocess.run([ffprobe, "-v", "error", "-select_streams", "v", "-show_entries",
+                            "stream_side_data=rotation", "-of", "csv=p=0", str(sent)],
+                           capture_output=True, check=True).stdout
+    assert b"90" in shown  # (-90 or 90, as ffprobe writes it)
+
+
 def upload_info(person, channel):
     """A text file's info as a message brings it."""
     file_id = upload(person, "notes.txt", b"hello", "text/plain")
@@ -228,6 +250,82 @@ def test_an_iphone_photo_is_no_animation(server, channel):
     assert small.format == "WEBP" and small.size == (400, 300)
     assert getattr(small, "n_frames", 1) == 1
     assert small.convert("RGB").getpixel((200, 150))[1] > 100  # the photo (green), not the gain map
+
+
+# ----- Metadata
+
+def phone_exif(orientation=None):
+    """EXIF like a phone's: the phone, the owner, when and where (GPS), and maybe an orientation."""
+    exif = Image.Exif()
+    exif[0x010F] = "SecretPhone"     # Make
+    exif[0x013B] = "Secret Owner"    # Artist
+    exif[0x0132] = "2026:11:15 10:14:00"  # DateTime
+    if orientation:
+        exif[0x0112] = orientation
+    gps = exif.get_ifd(0x8825)       # the GPS part
+    gps[1], gps[2] = "N", (59.0, 54.0, 50.0)
+    gps[3], gps[4] = "E", (10.0, 45.0, 8.0)
+    return exif
+
+
+def sent_original(person, channel, data, content_type, name):
+    """Send a picture and download it back as anyone would (the original, not a thumbnail)."""
+    file_id, _ = sent_picture(person, channel, data, content_type, name)
+    return person.get(f"/uploads/{file_id}").body
+
+
+def test_a_jpeg_loses_its_metadata_but_not_its_pixels_or_orientation(server, channel):
+    image = Image.effect_noise((300, 200), 60).convert("RGB")  # (noise: every pixel different)
+    out = io.BytesIO()
+    image.save(out, format="JPEG", exif=phone_exif(orientation=6), comment=b"secret comment", quality=90,
+               icc_profile=b"\x00" * 128)
+    original = out.getvalue()
+    xmp = b"http://ns.adobe.com/xap/1.0/\x00<x:xmpmeta>secret-xmp</x:xmpmeta>"
+    original = original[:2] + b"\xff\xe1" + (len(xmp) + 2).to_bytes(2, "big") + xmp + original[2:]
+    sent = sent_original(server.person(), channel, original, "image/jpeg", "photo.jpg")
+    for secret in (b"SecretPhone", b"Secret Owner", b"2026:11:15", b"secret comment", b"secret-xmp"):
+        assert secret not in sent
+    picture = opened_bytes(sent)
+    exif = picture.getexif()
+    assert dict(exif) == {0x0112: 6} and not exif.get_ifd(0x8825)  # only which way up; no GPS
+    assert picture.info.get("icc_profile") == b"\x00" * 128  # the colour profile stays
+    assert picture.tobytes() == opened_bytes(original).tobytes()  # cut, not saved again: the same pixels
+
+
+def test_an_iphone_photo_comes_as_one_picture(server, channel):
+    photo, gain_map = Image.new("RGB", (400, 300), (40, 160, 60)), Image.new("RGB", (100, 75), (0, 0, 0))
+    out = io.BytesIO()
+    photo.save(out, format="MPO", save_all=True, append_images=[gain_map], exif=phone_exif())
+    picture = opened_bytes(sent_original(server.person(), channel, out.getvalue(), "image/jpeg", "IMG.jpeg"))
+    assert picture.format == "JPEG" and getattr(picture, "n_frames", 1) == 1 and not dict(picture.getexif())
+
+
+def test_a_png_loses_its_text_and_exif(server, channel):
+    from PIL.PngImagePlugin import PngInfo
+    notes = PngInfo()
+    notes.add_text("Location", "secret-place")
+    notes.add_itxt("Author", "secret-author")
+    out = io.BytesIO()
+    image = Image.new("RGBA", (64, 64), (10, 20, 30, 128))
+    image.save(out, format="PNG", pnginfo=notes, exif=phone_exif())
+    sent = sent_original(server.person(), channel, out.getvalue(), "image/png", "screenshot.png")
+    assert b"secret-place" not in sent and b"secret-author" not in sent and b"SecretPhone" not in sent
+    assert opened_bytes(sent).tobytes() == image.tobytes()
+
+
+def test_a_webp_loses_its_exif_and_xmp(server, channel):
+    out = io.BytesIO()
+    image = Image.new("RGB", (64, 64), (200, 30, 30))
+    image.save(out, format="WEBP", exif=phone_exif(), xmp=b"<x:xmpmeta>secret-xmp</x:xmpmeta>", lossless=True)
+    sent = sent_original(server.person(), channel, out.getvalue(), "image/webp", "picture.webp")
+    assert b"SecretPhone" not in sent and b"secret-xmp" not in sent
+    assert sent[20] & 0x0C == 0  # the VP8X flags no longer announce EXIF or XMP
+    picture = opened_bytes(sent)
+    assert not dict(picture.getexif()) and picture.convert("RGB").tobytes() == image.tobytes()
+
+
+def opened_bytes(data):
+    return Image.open(io.BytesIO(data))
 
 
 def test_deleting_the_message_deletes_its_thumbnails(server, channel):
