@@ -20,7 +20,7 @@ import SearchScreen from './SearchScreen';
 import { useStyles, useTheme } from './theme';
 import { chatLabel } from './chats';
 import { SERVER } from './config';
-import { uploadFile } from './files';
+import { forgetCopies, uploadFile } from './files';
 import { copySharedFile } from '../modules/shared-files';
 import { Avatar, BotBadge, nameColor } from './people';
 import { dayName, headerTime, isSameDay } from './time';
@@ -968,6 +968,7 @@ export default function ChatScreen({
     if (currentNow.current === chat && uploaded.length > 0) {
       if (connection.sendMessage(caption, replyTo?.id, uploaded.map((upload) => upload.id))) {
         const sent = new Set(uploaded.map((upload) => upload.key));
+        forgetCopies(tray.filter((item) => sent.has(item.key)));  // the pickers' copies (files.js)
         setTrayOf(chat, (old) => old.filter((other) => !sent.has(other.key)));
         if (caption) setDraftOf(chat, '');
         setReplyTo(null);

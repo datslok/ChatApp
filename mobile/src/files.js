@@ -159,14 +159,38 @@ export async function saveFile(file, copy) {
 
 // Empty the app's folders of copies (at every start): downloads/ was only needed for Open and Share,
 // and the other app has long since read it; shared/ holds files shared to the app (modules/shared-files)
-// for the tray, which doesn't outlive the app.
+// for the tray, which doesn't outlive the app. The pickers copy what's picked into the cache too, and
+// never delete it (every photo and video sent from the phone added up to a gigabyte, 2026-11-15):
+// ImagePicker/ (photos, videos, the camera), DocumentPicker/ (any file), ImageManipulator/ (the picture
+// editor's working copies) and Audio/ (the mic test's recordings, Voice settings).
+const COPY_FOLDERS = ['downloads', 'shared', 'apk', 'ImagePicker', 'DocumentPicker', 'ImageManipulator', 'Audio'];
+
 export function clearOldCopies() {
-  for (const name of ['downloads', 'shared', 'apk']) {  // (apk: appUpdate.js's)
+  for (const name of COPY_FOLDERS) {  // (apk: appUpdate.js's)
     try {
       const folder = new Directory(Paths.cache, name);
       if (folder.exists) folder.delete();
     } catch {
       // Not worth bothering anyone about: Android empties the cache by itself when space runs low.
+    }
+  }
+}
+
+// Delete the cache copies of tray items once their message is sent (the server has them now), so the
+// cache stays small while the app runs for days. Only files in our own cache: an item could also point
+// at a file elsewhere, which isn't ours to delete.
+export function forgetCopies(items) {
+  // (Addresses are file:///data/..., sometimes written file:/data/...: compared without that part.)
+  const path = (uri) => uri.replace(/^file:\/*/, '/');
+  const cache = path(Paths.cache.uri);
+  for (const item of items) {
+    try {
+      if (path(item.uri).startsWith(cache)) {
+        const copy = new File(item.uri);
+        if (copy.exists) copy.delete();
+      }
+    } catch {
+      // Left for clearOldCopies at the next start.
     }
   }
 }
