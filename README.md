@@ -992,6 +992,15 @@ It's a plain `.bat` file, so you can send it to the people using your chat (in t
 example) and they can run it with a double-click. Downloaded files make Windows ask first: choose
 **Run** (or **More info → Run anyway**).
 
+### The camera is black (or snowy) in the app
+
+If the camera shows only black, or flickers into snow like an old TV, in the app (Settings → Video →
+Test camera, and in calls) while it works in Edge, Discord and Windows' Camera app, an antivirus with
+webcam protection is probably blocking the app: Malwarebytes did this, and Avast's Webcam Shield does
+the same to programs it doesn't know. It doesn't refuse the camera outright (which would show an error
+under the button), it just hands over an empty picture. Allow ChatApp in the antivirus's settings, then
+quit the app completely (also from the tray) and start it again.
+
 ---
 
 ## Working on the code
