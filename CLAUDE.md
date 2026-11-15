@@ -489,7 +489,11 @@ the point is for me to understand how it works, not just to have it done.
   grey. `device_presence`: a phone is online while looking, idle from the moment it's locked/left, gone after
   `PHONE_AWAY_FOR` (10 min) even if still connected (in voice: stays idle); `phones_away` keeps a phone whose connection
   closed while away (from its away_since; a reconnecting phone's "looking" takes it over); each person shows their
-  most present device. Page: the picker in #me-popup
+  most present device. Away from the PC (since 2026-11-15, the user's wish): the Windows app (0.1.28+, main.rs
+  `seconds_idle` = GetLastInputInfo) is polled every 15 s by notifications.js `checkIdle`; past the account's
+  `users.idle_minutes` (`IDLE_MINUTES_CHOICES`, default 10; `POST /settings/idle` -> "idle_minutes", in "welcome";
+  Settings → Notifications on web and phone) "looking" carries `idle: true` -> `pc_idle`: not looking, not
+  `has_app_open` (phones get pushes again), and that device shows idle. Page: the picker in #me-popup
   (people.js, `renderPresencePicker`), dots `.dot.online/.idle/.dnd/.invisible` (our own Invisible as a ring).
   The users' "status" field is still the line they write about themselves.
 - Recent and pinned DMs (server.py, "Recent and pinned DMs"; since 2026-10-16): the Direct messages list (web

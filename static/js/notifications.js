@@ -167,9 +167,67 @@ if (canPush) currentSubscription().then((subscription) => { pushOn = Boolean(sub
 // each new connection (core.js). "blur": the window lost the focus. "app": this is the Windows
 // app, which notifies by itself: while it's open at all, our phones get no pushes either.
 function sendLooking() {
-  if (socket) sendToServer({ type: "looking", looking: isLooking(), app: inDesktopApp, mobile: onPhone });  // (no connection yet: on "open")
+  if (socket) sendToServer({ type: "looking", looking: isLooking(), app: inDesktopApp, mobile: onPhone, idle: pcIdle });  // (no connection yet: on "open")
   clearSeenNotifications();
 }
+
+// ----- Away from the PC (Settings → Notifications; server.py, "Away from the PC")
+// While the Windows app is open, the server sends our phones nothing: we'd see it here. But maybe nobody
+// is at the PC. So every 15 s the app tells us how long Windows' keyboard and mouse have gone unused
+// (main.rs, seconds_idle), and past our minutes we tell the server "idle" (a "looking" message). Then
+// the phones get pushes again, and we show as idle. The minutes are kept with the account ("welcome").
+
+const idleSelect = document.getElementById("idle-minutes");
+const idleStatus = document.getElementById("idle-status");
+let idleMinutes = 10;  // the account's choice, from "welcome" (core.js) and "idle_minutes"
+let pcIdle = false;    // nobody at this PC for idleMinutes? (only the Windows app can tell)
+
+// The choices, from the server's list (limits.idle_minutes), with the account's one picked.
+function showIdleMinutes(minutes) {
+  idleMinutes = minutes;
+  idleSelect.replaceChildren();
+  for (const choice of limits.idle_minutes) {
+    const option = document.createElement("option");
+    option.value = choice;
+    option.textContent = choice < 60 ? `${choice} minute${choice === 1 ? "" : "s"}` : `${choice / 60} hour`;
+    idleSelect.append(option);
+  }
+  idleSelect.value = minutes;
+  checkIdle();  // (a new number may already be passed)
+}
+
+idleSelect.addEventListener("change", async () => {
+  const minutes = Number(idleSelect.value);
+  idleStatus.textContent = "";
+  try {
+    const response = await fetch("/settings/idle", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ minutes }),
+    });
+    if (!response.ok) throw new Error();
+    // (The server sends "idle_minutes" to all our pages, this one too, which then calls showIdleMinutes.)
+  } catch {
+    idleSelect.value = idleMinutes;  // back to what's saved
+    idleStatus.textContent = "Couldn't save it. Try again in a moment.";
+  }
+});
+
+async function checkIdle() {
+  if (!inDesktopApp) return;
+  let seconds;
+  try {
+    seconds = await window.__TAURI_INTERNALS__.invoke("seconds_idle");
+  } catch {
+    return;  // an app from before 0.1.28, which can't tell: as before, never idle
+  }
+  const idle = seconds >= idleMinutes * 60;
+  if (idle !== pcIdle) {
+    pcIdle = idle;
+    sendLooking();
+  }
+}
+if (inDesktopApp) setInterval(checkIdle, 15 * 1000);
 
 // Push notifications for the channel we're looking at have been seen: take them off the phone.
 // (They belong to the phone, not the page: only tapping one, or this, removes them. Each one

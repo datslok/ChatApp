@@ -58,7 +58,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![check_for_update, set_zoom, get_autostart, set_autostart, set_push_to_talk, page_ready,
                                                  set_unread_dot, activity::set_activity_settings, activity::list_programs,
                                                  app_audio::start_app_audio, app_audio::read_app_audio, app_audio::stop_app_audio,
-                                                 share_bar::hide_share_bar])
+                                                 share_bar::hide_share_bar, seconds_idle])
         .setup(|app| {
             // First, before the chat window opens WebView2's storage: repair it if it's damaged.
             repair_local_storage(app.handle());
@@ -360,6 +360,42 @@ fn watch_push_to_talk(app: tauri::AppHandle) {
             std::thread::sleep(std::time::Duration::from_millis(if key == 0 { 250 } else { 15 }));
         }
     });
+}
+
+// ----- Away from the PC (Settings → Notifications; the page's side is in notifications.js)
+//
+// While the app is open, the server keeps our phones quiet: we'd be notified here. That's wrong when
+// nobody is at the PC. Windows remembers when the keyboard or mouse was last used, in any program
+// (GetLastInputInfo), so the page asks how long ago that was and tells the server when it's too long.
+
+// What GetLastInputInfo fills in: its own size (Windows checks it), then the moment of the last
+// input, as GetTickCount's milliseconds since Windows started. #[repr(C)]: laid out like Windows'.
+#[repr(C)]
+struct LastInputInfo {
+    size: u32,
+    time: u32,
+}
+
+#[link(name = "user32")]
+extern "system" {
+    fn GetLastInputInfo(info: *mut LastInputInfo) -> i32;
+}
+
+#[link(name = "kernel32")]
+extern "system" {
+    fn GetTickCount() -> u32;
+}
+
+// Seconds since the keyboard or mouse was last used anywhere on this PC (0 if Windows won't say).
+#[tauri::command]
+fn seconds_idle() -> u32 {
+    let mut info = LastInputInfo { size: std::mem::size_of::<LastInputInfo>() as u32, time: 0 };
+    // unsafe: Rust can't check code outside Rust. These two only read the time and fill in `info`.
+    if unsafe { GetLastInputInfo(&mut info) } == 0 {
+        return 0;
+    }
+    // wrapping_sub: both counters start again from 0 every 49.7 days, and the difference still comes out right.
+    unsafe { GetTickCount() }.wrapping_sub(info.time) / 1000
 }
 
 // On by default: the first time the app runs (0.1.17 or newer, so also after updating from an older

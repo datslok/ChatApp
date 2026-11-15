@@ -62,6 +62,7 @@ export function useConnection() {
   const [myPresence, setMyPresence] = useState('online');  // the status we chose (others may see another)
   // Settings → Appearance as the server keeps it (null: not heard yet; App.js applies it).
   const [appearance, setAppearance] = useState(null);
+  const [idleMinutes, setIdleMinutesShown] = useState(10);  // away from the PC after (Settings → Notifications)
   const [emoji, setEmoji] = useState({});        // custom emoji by id: {17: {id, name, file, owner_id}}
   // Every Unicode emoji, for the picker and ":" suggestions: the server's /emoji.json, fetched once
   // ({groups: [{name, emoji: [["😀", "grinning face"], ...]}, ...]}). null until it has come.
@@ -194,10 +195,14 @@ export function useConnection() {
         });
         setMyPresence(data.presence);
         setAppearance(data.appearance ?? DEFAULT_APPEARANCE);  // (null: never changed: the defaults)
+        if (data.idle_minutes) setIdleMinutesShown(data.idle_minutes);
         break;
       case 'appearance':
         // Changed in Settings, here or on another device (the server sends it to all our devices).
         setAppearance(data.appearance);
+        break;
+      case 'idle_minutes':
+        setIdleMinutesShown(data.minutes);  // (likewise)
         break;
       case 'my_presence':
         setMyPresence(data.presence);
@@ -775,7 +780,7 @@ export function useConnection() {
   }
 
   return {
-    status, me, myPresence, appearance, channels, lounge, groups, groupsKnown, friends, incoming, outgoing, blocked, users, roles, emoji,
+    status, me, myPresence, appearance, idleMinutes, channels, lounge, groups, groupsKnown, friends, incoming, outgoing, blocked, users, roles, emoji,
     emojiGroups, unread, mentions, current, messages, lastRead, more, typing, mutedChats, pinnedChats, chatActivity, pins, pinsFull,
     searchResults, voiceMembers, dmCalls, callListener, notifyListener,
     outbox, retryMessage, discardMessage,

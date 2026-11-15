@@ -295,6 +295,32 @@ def test_a_phone_shows_as_a_phone(server):
         assert ws_w.wait_for("users", lambda m: any(u["id"] == a.id and u["mobile"] for u in m["users"]))
 
 
+def test_nobody_at_the_pc_shows_as_idle(server):
+    a, watcher = server.person(), server.person()
+    with watcher.connect() as ws_w, a.connect() as ws_a:
+        ws_a.send(type="looking", looking=True, app=True)
+        assert ws_w.wait_for("users", lambda m: any(u["id"] == a.id and u["presence"] == "online" for u in m["users"]))
+        ws_a.send(type="looking", looking=True, app=True, idle=True)
+        assert ws_w.wait_for("users", lambda m: any(u["id"] == a.id and u["presence"] == "idle" for u in m["users"]))
+        ws_a.send(type="looking", looking=True, app=True, idle=False)  # back at the PC
+        assert ws_w.wait_for("users", lambda m: any(u["id"] == a.id and u["presence"] == "online" for u in m["users"]))
+        ws_w.drain()
+        ws_a.send(type="looking", looking=True, idle=True)  # a browser can't tell: ignored
+        ws_w.nothing("users")
+
+
+def test_idle_minutes_setting(server):
+    a = server.person()
+    with a.connect() as ws:
+        welcome = ws.wait_for("welcome")
+        assert welcome["idle_minutes"] == 10 and 5 in welcome["limits"]["idle_minutes"]
+        assert a.post("/settings/idle", {"minutes": 5}).status == 200
+        assert ws.wait_for("idle_minutes")["minutes"] == 5
+    assert a.post("/settings/idle", {"minutes": 7}).status == 400  # not a choice
+    with a.connect() as ws:
+        assert ws.wait_for("welcome")["idle_minutes"] == 5
+
+
 def test_activities(server):
     a, watcher = server.person(), server.person()
     with watcher.connect() as ws_w, a.connect() as ws_a:

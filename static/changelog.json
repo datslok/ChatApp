@@ -63,7 +63,8 @@
         "Unread channels get a dot, mentions a red count",
         "Mute a chat: the 🔔 at the top of a channel, DM or group (🔕 when muted, click again to unmute). A muted chat is faded and gets no unread dot or notifications, except when someone @mentions you by name or an admin writes. DMs with an admin can't be muted",
         "Settings → Notifications: turn them on or off, the volume, and mute them for 1 hour, 8 hours, until morning, or until you turn them back on",
-        "On your phone, also while the chat is closed: Settings → Notifications → \"Notifications on this device when the chat is closed\". For DMs, mentions and calls, and not while you're looking at the chat somewhere else or have the Windows app open (it notifies you itself)"
+        "On your phone, also while the chat is closed: Settings → Notifications → \"Notifications on this device when the chat is closed\". For DMs, mentions and calls, and not while you're looking at the chat somewhere else or have the Windows app open (it notifies you itself)",
+        "Left the Windows app open and walked away? Once your PC's keyboard and mouse haven't been used for 10 minutes, your phone gets notifications again and you show as idle. Choose how long in Settings → Notifications → \"Away from the Windows app after\""
       ]
     },
     {
@@ -124,6 +125,12 @@
     }
   ],
   "changes": [
+    {
+      "date": "2026-11-15",
+      "items": [
+        "📱 Forgot to close the Windows app before leaving? Your phone no longer stays quiet: once nobody has touched the PC's keyboard or mouse for 10 minutes, the notifications go to your phone again, and you show as idle. Settings → Notifications → \"Away from the Windows app after\" sets the time (1 minute to 1 hour). Needs the Windows app's update"
+      ]
+    },
     {
       "date": "2026-11-14",
       "items": [

@@ -711,6 +711,12 @@ if "banned_at" not in table_columns("users"):
         db.execute("ALTER TABLE users ADD COLUMN banned_by INTEGER REFERENCES users(id)")
         db.execute("ALTER TABLE users ADD COLUMN ban_reason TEXT")
 
+if "idle_minutes" not in table_columns("users"):
+    # Away from the PC (see "Statuses"): after how many minutes without the keyboard or mouse the
+    # Windows app counts as left alone. Everyone starts with 10.
+    with db:
+        db.execute("ALTER TABLE users ADD COLUMN idle_minutes INTEGER NOT NULL DEFAULT 10")
+
 # Private channels and limited roles (see "Who sees which channel").
 if "private" not in table_columns("channels"):
     # From before private channels: every channel is open to everyone (0).
@@ -3011,13 +3017,16 @@ def readable_text(text):
 
 def is_looking(user_id):
     """Is this person looking at the chat right now, on any device? (Each page says so: "looking".)"""
-    return any(client["user_id"] == user_id and client["looking"] for client in clients.values())
+    return any(client["user_id"] == user_id and client["looking"] and not client["pc_idle"]
+               for client in clients.values())
 
 
 def has_app_open(user_id):
-    """Has this person got the Windows app open (focused or not)? It notifies by itself, so their
-    phones stay quiet meanwhile. (The page says it's the app in its "looking" messages.)"""
-    return any(client["user_id"] == user_id and client["app"] for client in clients.values())
+    """Has this person got the Windows app open (focused or not), and been at the PC lately? It notifies
+    by itself, so their phones stay quiet meanwhile. (The page says it's the app in its "looking"
+    messages, and when nobody has been at the PC for a while: see "Away from the PC".)"""
+    return any(client["user_id"] == user_id and client["app"] and not client["pc_idle"]
+               for client in clients.values())
 
 
 async def send_push(user_ids, payload, ttl=24 * 60 * 60, urgency="normal", always=False):
@@ -4561,7 +4570,11 @@ phones_away = {}  # {user_id: since when}: a phone whose connection closed while
 def device_presence(client, now, bot=False):
     """What one open page or app says about its person: "online", "idle" or None (nothing: a phone
     away for too long)."""
-    if bot or client["away_since"] is None:  # (bots never "look", and are always there)
+    if bot:  # (bots never "look", and are always there)
+        return "online"
+    if client["pc_idle"]:  # the Windows app, with nobody at the PC (see "Away from the PC")
+        return "idle"
+    if client["away_since"] is None:
         return "online"
     away = now - client["away_since"]
     if client["mobile"]:
@@ -4597,6 +4610,34 @@ def on_phone_only(user_id, presence):
     if not tabs:
         return user_id in phones_away
     return all(client["mobile"] for client in tabs)
+
+
+# Away from the PC (since 2026-11-15, the user's wish): with the Windows app left open, the phones got no
+# pushes at all (has_app_open), even with nobody at the PC. Now the app asks Windows how long the keyboard
+# and mouse have gone unused (main.rs, seconds_idle), and after the person's own number of minutes the
+# page says "idle" in its "looking" messages (notifications.js). Then that app no longer counts as
+# looking or as open (so the phones get pushes again), and it shows its person as idle.
+IDLE_MINUTES_CHOICES = [1, 2, 5, 10, 15, 30, 60]  # Settings → Notifications (also in LIMITS)
+
+
+def idle_minutes_of(user_id):
+    return db.execute("SELECT idle_minutes FROM users WHERE id = ?", (user_id,)).fetchone()[0]
+
+
+class IdleMinutes(BaseModel):
+    minutes: int
+
+
+@app.post("/settings/idle")
+async def change_idle_minutes(data: IdleMinutes, request: Request):
+    user_id, username, password_hash, email = logged_in_user(request)
+    if data.minutes not in IDLE_MINUTES_CHOICES:
+        raise HTTPException(400, "Not one of the choices.")
+    with db:
+        db.execute("UPDATE users SET idle_minutes = ? WHERE id = ?", (data.minutes, user_id))
+    # Every page of theirs: the Windows app does the measuring, wherever it was changed.
+    await send_to_user(user_id, {"type": "idle_minutes", "minutes": data.minutes})
+    return {"ok": True}
 
 
 # What someone is doing (the Windows app sees it: desktop/src-tauri/src/activity.rs; the page sends it
@@ -5716,6 +5757,7 @@ LIMITS = {
     "bio": MAX_BIO_LENGTH,
     "ban_reason": MAX_BAN_REASON,
     "feedback": MAX_FEEDBACK_LENGTH,
+    "idle_minutes": IDLE_MINUTES_CHOICES,  # Settings → Notifications' choices (see "Away from the PC")
 }
 
 
@@ -5742,6 +5784,7 @@ async def chat(websocket: WebSocket):
                           "looking": False,  # looking at it right now (the page says, see "looking")
                           "away_since": time.time(),  # since when it isn't (None while it is): for "idle"
                           "app": False,      # the Windows app (the page says so in "looking" too)
+                          "pc_idle": False,  # nobody at that PC for a while ("looking" too; "Away from the PC")
                           "mobile": False,   # a phone (in "looking" too): see on_phone_only
                           "android": False,  # the Android app, not a phone's browser ("looking" too): device_of
                           "bot": is_bot(user_id),  # a bot gets each message's device (see send)
@@ -5757,6 +5800,7 @@ async def chat(websocket: WebSocket):
             "page_version": PAGE_VERSION,  # a different one than it was loaded with: it reloads
             "appearance": appearance_of(user_id),  # Settings → Appearance (None: the defaults)
             "presence": presence_of(user_id),  # the status they chose (the others may see another: users)
+            "idle_minutes": idle_minutes_of(user_id),  # away from the PC after (see "Away from the PC")
             "vapid_public_key": VAPID_PUBLIC_KEY or None,  # for subscribing to push (None: not set up)
             "phone_push": firebase_account is not None,  # can the phone app get pushes (FCM)?
             "season": current_season(),  # the seasonal easter egg ("Seasons"; None: none now)
@@ -6105,6 +6149,10 @@ async def chat(websocket: WebSocket):
                 clients[websocket]["looking"] = looking
                 clients[websocket]["app"] = data.get("app") is True  # (then no pushes at all: has_app_open)
                 clients[websocket]["android"] = data.get("android") is True
+                # "idle": the Windows app's keyboard and mouse unused for the person's minutes (only the app can tell)
+                pc_idle = data.get("idle") is True and clients[websocket]["app"]
+                idle_changed = pc_idle != clients[websocket]["pc_idle"]
+                clients[websocket]["pc_idle"] = pc_idle
                 mobile = data.get("mobile") is True
                 phone_changed = mobile != clients[websocket]["mobile"]
                 clients[websocket]["mobile"] = mobile
@@ -6113,9 +6161,9 @@ async def chat(websocket: WebSocket):
                 left_at = phones_away.pop(user_id, None) if mobile else None
                 if left_at is not None and not looking:
                     clients[websocket]["away_since"] = min(left_at, clients[websocket]["away_since"] or left_at)
-                if looking_changed or phone_changed:
+                if looking_changed or phone_changed or idle_changed:
                     await announce_presences()  # back from idle, a phone locked (idle), now known to be a phone
-                if looking:  # back at the page: the chat on it has been seen (or the People page)
+                if looking and not pc_idle:  # back at the page: the chat on it has been seen (or the People page)
                     clear_on_phones(user_id, clients[websocket]["channel"] or "friends")
 
             elif kind == "activity":

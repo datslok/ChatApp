@@ -116,7 +116,7 @@ export default function SettingsScreen({ connection, voice, notifications, chang
             {tab === 'profile' ? <ProfileSettings connection={connection} /> : null}
             {tab === 'appearance' ? <AppearanceSettings /> : null}
             {tab === 'emoji' ? <EmojiSettings connection={connection} /> : null}
-            {tab === 'notifications' ? <NotificationSettings notifications={notifications} /> : null}
+            {tab === 'notifications' ? <NotificationSettings notifications={notifications} connection={connection} /> : null}
             {tab === 'voice' ? <VoiceSettings voice={voice} /> : null}
             {tab === 'video' ? <VideoSettings voice={voice} /> : null}
             {tab === 'changelog' ? <ChangelogSettings connection={connection} changelog={changelog} /> : null}

@@ -9,6 +9,8 @@ import { Button, Heading, Help, Title } from './SettingsParts';
 import Slider from './Slider';
 import { Choices } from './VoiceSettings';
 import { MUTE_CHOICES, isMuted } from './notifications';
+import { postJson } from './api';
+import { limits } from './limits';
 import { clock, isSameDay } from './time';
 import { useStyles } from './theme';
 import {
@@ -37,9 +39,19 @@ function muteText(settings) {
   return `Muted until ${isSameDay(until, new Date()) ? '' : 'tomorrow '}${clock(until)}.`;
 }
 
-export default function NotificationSettings({ notifications }) {
+// "5 minutes", "1 hour" (the web page's showIdleMinutes).
+const idleLabel = (minutes) => (minutes < 60 ? `${minutes} minute${minutes === 1 ? '' : 's'}` : `${minutes / 60} hour`);
+
+export default function NotificationSettings({ notifications, connection }) {
   const styles = useStyles(makeStyles);
   const { settings, problem, busy, available } = notifications;
+  const [idleProblem, setIdleProblem] = useState('');
+  // Away from the PC: kept with the account; the server tells every device (connection.js "idle_minutes").
+  const pickIdleMinutes = async (minutes) => {
+    setIdleProblem('');
+    const answer = await postJson('/settings/idle', { minutes });
+    if (!answer.ok) setIdleProblem(answer.error);
+  };
   const [volume, setVolume] = useState(settings.volume);
   // What Android allows. Asked again when we come back from its settings (the app was in the background).
   const [allowed, setAllowed] = useState(notificationsAllowed);
@@ -115,6 +127,19 @@ export default function NotificationSettings({ notifications }) {
       />
       <Help>No sound, no notifications; the red numbers still show.</Help>
       {isMuted(settings) ? <Text style={styles.muted}>{muteText(settings)}</Text> : null}
+
+      <Heading>Away from the Windows app after</Heading>
+      {limits.idle_minutes ? (
+        <Choices
+          choices={limits.idle_minutes.map((minutes) => [minutes, idleLabel(minutes)])}
+          value={connection.idleMinutes} onPick={pickIdleMinutes}
+        />
+      ) : null}
+      <Help>
+        While the Windows app is open, this phone stays quiet. Once its PC's keyboard and mouse have gone unused
+        this long, the phone gets notifications again and you show as idle.
+      </Help>
+      {idleProblem ? <Text style={styles.error}>{idleProblem}</Text> : null}
     </View>
   );
 }

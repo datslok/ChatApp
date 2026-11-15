@@ -385,6 +385,7 @@ function handleServerMessage(event) {
     applyLimits();
     applyAccountAppearance(data.appearance || {});  // the account's (appearance.js); null: the defaults
     vapidPublicKey = data.vapid_public_key;  // for push notifications (notifications.js)
+    showIdleMinutes(data.idle_minutes);  // away from the PC after (notifications.js)
     season = data.season;  // the seasonal easter egg, or null (people.js, renderUserPanel)
     showPhoneBanner();  // now that we know whether the server has push (notifications.js)
     offerAndroidApp();  // on an Android phone: the real app (notifications.js)
@@ -444,6 +445,10 @@ function handleServerMessage(event) {
   }
   if (data.type === "appearance") {
     applyAccountAppearance(data.appearance);  // changed in Settings, here or on another device
+    return;
+  }
+  if (data.type === "idle_minutes") {
+    showIdleMinutes(data.minutes);  // changed in Settings, here or on another device (notifications.js)
     return;
   }
   if (data.type === "renamed") {
