@@ -1,4 +1,4 @@
-# Runs the chat for real (the Cloudflare Tunnel connects to it, see README, "Host your own").
+# Runs the chat for real (the Cloudflare Tunnel connects to it, see docs/guides/hosting.md, "Host your own").
 # For development, use start.ps1 instead.
 #
 # Run it from this folder with:   .\serve.ps1
@@ -15,7 +15,7 @@ Set-Location $PSScriptRoot
 # Refuse to start without settings, or with sign-ups open to anyone (REQUIRE_INVITE=0 is only for
 # development), so the real site is never accidentally open to everyone.
 if (-not (Test-Path .env)) {
-    Write-Host "No settings yet. Copy .env.example to .env and fill it in (README, Host your own)."
+    Write-Host "No settings yet. Copy .env.example to .env and fill it in (docs/guides/hosting.md, Host your own)."
     exit 1
 }
 if (Select-String -Path .env -Pattern '^REQUIRE_INVITE=0' -Quiet) {

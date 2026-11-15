@@ -3,7 +3,7 @@
 #   .\llama.ps1     only reachable from this PC, at http://127.0.0.1:8080, with LLAMA_API_KEY from .env
 #
 # Stop it with Ctrl+C. llama-server and the model are downloaded into llama/ by
-# scripts\server\install.ps1 -AI (see README, "Optional: an AI bot"), not committed.
+# scripts\server\install.ps1 -AI (see docs/guides/ai-bot.md, "Optional: an AI bot"), not committed.
 #
 # On the server PC, a scheduled task starts it at boot (see scripts\server\install.ps1), with
 # -LogFile logs\ai.log: then there's no window, and everything it prints goes to that file.

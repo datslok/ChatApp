@@ -1,6 +1,6 @@
 # From the development PC: releases a new version of the phone app (the APK), for when its native
 # side changed: a new module or package with native code, a permission, the icon, app.json. (Only
-# JavaScript changed? scripts\app-update.ps1 instead: no new APK needed.) See README, "Releasing the
+# JavaScript changed? scripts\app-update.ps1 instead: no new APK needed.) See docs/guides/phone-app.md, "Releasing the
 # phone app".
 #
 #   .\scripts\app-release.ps1            build, then upload to the server
@@ -27,7 +27,7 @@ Set-Location $root
 # Signed with the release key, or not at all: a debug-signed APK could never be updated.
 $gradleProperties = Join-Path $HOME ".gradle\gradle.properties"
 if (-not ((Test-Path $gradleProperties) -and (Select-String -Path $gradleProperties -Pattern "^CHATAPP_RELEASE_STORE_FILE=" -Quiet))) {
-    Write-Host "No release key set up in $gradleProperties (README, 'Releasing the phone app')."; exit 1
+    Write-Host "No release key set up in $gradleProperties (docs/guides/phone-app.md, 'Releasing the phone app')."; exit 1
 }
 # The version goes into a commit, along with what's built: everything in mobile\ must be committed first.
 if (git status --porcelain mobile) { Write-Host "mobile\ has uncommitted changes: commit them first."; exit 1 }

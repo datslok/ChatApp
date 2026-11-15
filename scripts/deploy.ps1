@@ -11,7 +11,7 @@
 
 param([switch]$Voice, [switch]$AI)
 
-$ServerFolder = "C:\ChatApp"  # where the code is on the server PC (README, Host your own, step 2)
+$ServerFolder = "C:\ChatApp"  # where the code is on the server PC (docs/guides/hosting.md, Host your own, step 2)
 
 Set-Location (Split-Path $PSScriptRoot)  # the project folder: one up from scripts\
 

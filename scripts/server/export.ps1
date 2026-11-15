@@ -1,5 +1,5 @@
 # Packs everything the real chat needs that isn't in git into chatapp-data.zip, for moving the
-# server to another PC (see README, "Moving to another PC"):
+# server to another PC (see docs/guides/running.md, "Moving to another PC"):
 #
 #   chat.db     the messages and accounts (a safe copy, even while the server runs)
 #   uploads/    pictures and files

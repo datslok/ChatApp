@@ -1,4 +1,4 @@
-// Updates of the app itself, the kind that needs a new APK (README, "Updating the phone app").
+// Updates of the app itself, the kind that needs a new APK (docs/guides/phone-app.md, "Updating the phone app").
 //
 // Two kinds of update reach the phone app:
 //   - JavaScript only (most changes): expo-updates fetches those by itself at every start, from the

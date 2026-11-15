@@ -1389,7 +1389,7 @@ async def main():
     claude_model = settings.get("CHATTUS_MODEL") or None
     for name in ("CHATTUS_PASSWORD", "ANTHROPIC_API_KEY" if claude_model else "LLAMA_API_KEY"):
         if not settings.get(name):
-            raise SystemExit(f"{name} is missing in {args.env} (see the README, 'Optional: an AI bot').")
+            raise SystemExit(f"{name} is missing in {args.env} (see docs/guides/ai-bot.md, 'Optional: an AI bot').")
     log(f"Using {claude_model or 'the local model (llama-server)'}.")
 
     while True:  # forever: when the chat restarts (every deploy), the connection drops; log in again

@@ -4,7 +4,7 @@
 #
 # At home: SSH's file copy (scp), over the home network.
 #
-# -ViaGitHub, from outside the home network: scp then goes through the Cloudflare tunnel (README, "Reaching
+# -ViaGitHub, from outside the home network: scp then goes through the Cloudflare tunnel (docs/guides/hosting.md, "Reaching
 # the server from outside your home network"), which crawls for big files (~70 KB/s) and can break off.
 # Instead the files go into a temporary release of the project's GitHub repository (the gh command, logged
 # in), and the server downloads them from there itself, which is fast. Each file's SHA-256 is worked out

@@ -1,7 +1,7 @@
 # From the development PC: sends the phone app's JavaScript to the phones, without a new APK. Most
 # changes are only JavaScript (mobile\App.js, mobile\src\). At the end the chat restarts (deploy.ps1, like
 # release-upload.ps1): every open app reconnects, finds the new bundle and switches to it as soon as
-# nothing would be lost (mobile\src\liveUpdates.js); closed ones get it when they start. See README,
+# nothing would be lost (mobile\src\liveUpdates.js); closed ones get it when they start. See docs/guides/phone-app.md,
 # "Releasing the phone app".
 #
 #   .\scripts\app-update.ps1

@@ -92,7 +92,7 @@ def find_ffmpeg():
 
 FFMPEG = find_ffmpeg()
 if FFMPEG is None:
-    print("ffmpeg isn't installed: uploaded videos are kept as they are (see README, \"Videos\").", flush=True)
+    print("ffmpeg isn't installed: uploaded videos are kept as they are (see docs/guides/development.md, \"Videos\").", flush=True)
 
 
 def repack_video(path, content_type):

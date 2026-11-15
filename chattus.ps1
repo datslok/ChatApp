@@ -2,7 +2,7 @@
 #
 #   .\chattus.ps1         the real chat (port 8000), with CHATTUS_PASSWORD and LLAMA_API_KEY from .env
 #   .\chattus.ps1 -Dev    the development chat (start.ps1, port 8001), with dev-chattus.env; the model
-#                         comes from the server through an SSH tunnel (README, "Optional: an AI bot")
+#                         comes from the server through an SSH tunnel (docs/guides/ai-bot.md, "Optional: an AI bot")
 #
 # Stop it with Ctrl+C.
 #

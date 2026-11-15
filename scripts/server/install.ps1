@@ -1,4 +1,4 @@
-# Sets up this PC as the chat's server (see README, "Host your own"):
+# Sets up this PC as the chat's server (see docs/guides/hosting.md, "Host your own"):
 #
 #   1. Python, and a virtual environment (.venv) with the packages from requirements.txt; and ffmpeg,
 #      which re-packs uploaded videos so every player knows their length (chatapp/files.py, "Re-packing videos")
@@ -366,5 +366,5 @@ if (Test-Path .env) {
 }
 
 Write-Host ""
-Write-Host "Done. Still to do by hand (README, Host your own): the router's port forwarding to this PC" -ForegroundColor Cyan
+Write-Host "Done. Still to do by hand (docs/guides/hosting.md, Host your own): the router's port forwarding to this PC" -ForegroundColor Cyan
 Write-Host "(step 5), and making yourself an admin (step 6). Moving from an old PC? Remove cloudflared there." -ForegroundColor Cyan
