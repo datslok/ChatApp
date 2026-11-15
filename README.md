@@ -1016,7 +1016,9 @@ quit the app completely (also from the tray) and start it again.
   metadata, cropping pictures), `web.py` (link previews and GIFs), `presence.py` (statuses and the list of
   everyone), `push.py` (push notifications), `messages.py` (saving messages, replies, reactions, mentions,
   pins, search, chat info, unread), `emoji.py` (custom emoji), `people.py` (profiles, friends, blocking),
-  `groups.py` (group DMs) and `voice.py` (voice tokens, the Lounge, calls and ringing). A module only imports from the ones below it, never from server.py.
+  `groups.py` (group DMs), `voice.py` (voice tokens, the Lounge, calls and ringing), `channels.py`
+  (channels, private channels, roles), `accounts.py` (registering, logging in, invites, email, passwords,
+  account settings) and `admin.py` (bans, admins, the bug reports inbox). A module only imports from the ones below it, never from server.py.
 - `static/index.html`, `static/css/chat.css` and `static/js/`: the chat page. The scripts are plain
   scripts sharing one global scope, loaded in the order listed in `index.html`.
 - `static/login.html`, `reset.html`, `download.html`: the other pages.

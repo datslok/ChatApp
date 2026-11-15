@@ -51,7 +51,8 @@ the point is for me to understand how it works, not just to have it done.
   messages (no routes: save_message, MESSAGES_QUERY, history/around/newer, pins, chat_info, search, mentions,
   muting, chat activity, unread, delete_messages_in, announce_new_message), emoji (custom emoji), people
   (profiles, friends, blocking), groups (group DMs), voice (tokens, make_jwt, remove_from_voice, `calls`,
-  ringing), then (planned) channels, accounts, admin. A module imports only from lower ones, never server.py; names are imported
+  ringing), channels (Channels, Roles), accounts (login, sessions, resets, verification, Invites incl. the
+  admin invite list, Settings, Appearance, `hasher`, ban_message), admin (Bans and admins, Feedback). A module imports only from lower ones, never server.py; names are imported
   explicitly. Background starters are functions in their module (`start_repacking`, `start_watching_presences`),
   so no module reassigns another's global.
 - `static/index.html`: the chat page's markup. Its styles are in `static/css/chat.css`, its script in
