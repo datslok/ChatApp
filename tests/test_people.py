@@ -60,6 +60,30 @@ def test_declining_cancelling_and_unfriending(server):
 
 # ----- Blocking
 
+def mutual(viewer, other):
+    reply = viewer.get(f"/profile/{other.id}/mutual-friends")
+    assert reply.status == 200, reply
+    return reply.json["user_ids"]
+
+
+def test_mutual_friends_whether_or_not_we_are_friends(server, bot):
+    a, b, c, d = server.person(), server.person(), server.person(), server.person()
+    befriend(a, c)
+    befriend(b, c)
+    befriend(b, d)  # only b's friend: never shown to a
+    assert mutual(a, b) == [c.id]  # a and b aren't friends
+    befriend(a, b)
+    assert mutual(a, b) == [c.id] and mutual(b, a) == [c.id]  # now they are; the bot is left out
+    a.post("/friends/remove", {"user_id": c.id})
+    assert mutual(a, b) == []
+
+
+def test_mutual_friends_needs_a_login(server, person):
+    stranger = server.person()
+    stranger.post("/logout")
+    assert stranger.get(f"/profile/{person.id}/mutual-friends").status == 401
+
+
 def test_blocking_ends_the_friendship_and_stops_requests(server):
     a, b = server.person(), server.person()
     befriend(a, b)

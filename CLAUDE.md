@@ -47,7 +47,7 @@ the point is for me to understand how it works, not just to have it done.
 | [server.md](docs/notes/server.md) | server.py and the `chatapp/` modules and their layers, `LIMITS`, the test suite, dev.env |
 | [operations.md](docs/notes/operations.md) | the scripts, setting up and moving the server, backups, deploying, the .env files |
 | [accounts.md](docs/notes/accounts.md) | emails, admins and the owner, invites, email verification, bans, feedback, Settings → Admin |
-| [people.md](docs/notes/people.md) | group DMs, statuses (phones, away from the PC), blocking, activity |
+| [people.md](docs/notes/people.md) | group DMs, statuses (phones, away from the PC), mutual friends, blocking, activity |
 | [channels-and-roles.md](docs/notes/channels-and-roles.md) | channels and headings, private channels, limited and hidden roles, roles |
 | [messages.md](docs/notes/messages.md) | several files per message, the viewer, recent and pinned DMs, muting, pins, jumping, search |
 | [files.md](docs/notes/files.md) | uploads, thumbnails, videos and our player, re-packing, removing metadata, GIFs, link previews |

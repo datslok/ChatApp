@@ -333,7 +333,10 @@ function friendsChanged() {
   requestsTabCount.textContent = incomingIds.size > 0 ? `(${incomingIds.size})` : "";
   updateSidebar();  // the dot on ☰ (phones) also counts friend requests
   if (currentChannel === FRIENDS) renderPeopleList();
-  if (profileDialog.open) renderProfile(profileUserId);
+  if (profileDialog.open) {
+    renderProfile(profileUserId);
+    loadMutualFriends();  // (a friendship of yours changed: the overlap may have too)
+  }
 
   // Looking at a DM with someone who's no longer a friend? Then it's gone: go to the first channel.
   const other = dmPartner(currentChannel);
@@ -857,9 +860,49 @@ const roleSections = document.getElementById("role-sections");
 function openProfile(userId) {
   if (!people.has(userId)) return;  // pre-account messages have no profile
   profileUserId = userId;
+  mutualIds = [];  // (not the last profile's, while this one's are on their way)
   closeDrawers();
   renderProfile(userId);
   profileDialog.showModal();
+  loadMutualFriends();
+}
+
+// ----- Mutual friends
+
+// The ids of the people who are friends with both you and the person whose profile is open. Only the
+// server knows everyone's friendships, so it compares the two lists and sends just the overlap.
+let mutualIds = [];
+const profileMutual = document.getElementById("profile-mutual");
+
+// Ask the server, then redraw. Called when a profile opens and when friendships change.
+async function loadMutualFriends() {
+  const userId = profileUserId;
+  if (userId === myId) return;  // (nothing to compare on your own profile)
+  const response = await fetch(`/profile/${userId}/mutual-friends`).catch(() => null);
+  if (!response?.ok) return;  // (?. : no response at all counts as not ok too)
+  const { user_ids } = await response.json();
+  // Another profile may have been opened while we waited: then this answer is old news.
+  if (userId !== profileUserId) return;
+  mutualIds = user_ids;
+  renderMutualFriends();
+}
+
+// Draw mutualIds as small buttons: picture + name. Clicking one opens that person's profile.
+function renderMutualFriends() {
+  const shown = profileUserId === myId ? [] : mutualIds.filter((id) => people.has(id));
+  profileMutual.hidden = shown.length === 0;
+  document.getElementById("profile-mutual-heading").textContent =
+    shown.length === 1 ? "1 mutual friend" : `${shown.length} mutual friends`;
+  document.getElementById("profile-mutual-list").replaceChildren(...shown.map((id) => {
+    const person = people.get(id);
+    const button = document.createElement("button");
+    button.type = "button";
+    button.append(makeAvatar(id, person.name, "small"), person.name);  // (append adds text safely, as text)
+    button.addEventListener("click", () => openProfile(id));
+    const item = document.createElement("li");
+    item.append(button);
+    return item;
+  }));
 }
 
 // Fill the popup with someone's profile. Also used to refresh it while it's open.
@@ -892,6 +935,7 @@ function renderProfile(userId) {
   profileActivity.hidden = !person.activity;
   if (person.activity) showActivity(profileActivity, person.activity, " · " + activityDuration(person.activity));
   profileBio.textContent = person.bio || "";
+  renderMutualFriends();  // (from what was last fetched: names and pictures may have changed)
   profileActionStatus.textContent = "";
   // Message / Add friend / Accept / ... (nothing on your own profile).
   profileActions.replaceChildren(...(userId === myId ? [] : makeFriendButtons(userId, profileActionStatus)));

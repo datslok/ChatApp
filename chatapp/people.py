@@ -5,7 +5,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from chatapp.config import MAX_BIO_LENGTH, MAX_STATUS_LENGTH, PICTURE_EXTENSIONS, PICTURE_KINDS
-from chatapp.db import db
+from chatapp.db import BANNED_NOW, db
 from chatapp.sessions import current_user, is_admin, logged_in_user
 from chatapp.users import friends_message, friendship, has_blocked, is_bot, pair, username_of
 from chatapp.connections import clients, send, send_to_user
@@ -211,6 +211,33 @@ async def friend_remove(data: FriendAction, request: Request):
     clear_on_phones(me, "friends")  # (a declined request; harmless for the other two)
     await send_friends_update(me, other)
     return {"ok": True}
+
+
+# A person's friends, as a query to use twice: user_a/user_b hold the pair in either order, so the
+# friend is whichever of the two isn't them.
+FRIENDS_OF = """
+    SELECT CASE WHEN user_a = :{0} THEN user_b ELSE user_a END FROM friendships
+    WHERE accepted = 1 AND (user_a = :{0} OR user_b = :{0})
+"""
+
+
+@router.get("/profile/{user_id}/mutual-friends")
+async def mutual_friends(user_id: int, request: Request):
+    """For someone's profile: the people who are friends with both of us (whether or not we two are
+    friends). The server compares the two lists and sends only the overlap, so no page ever gets
+    anyone else's whole friend list. Bots are everyone's friend, so they're left out; banned people
+    aren't in the page's lists, so neither are they here."""
+    me = logged_in_user(request)[0]
+    rows = db.execute(
+        f"""
+        SELECT id FROM users
+        WHERE id IN ({FRIENDS_OF.format("me")} INTERSECT {FRIENDS_OF.format("them")})
+          AND is_bot = 0 AND NOT {BANNED_NOW}
+        ORDER BY username COLLATE NOCASE
+        """,
+        {"me": me, "them": user_id},
+    )
+    return {"user_ids": [row[0] for row in rows]}
 
 
 # ---------- Blocking ----------

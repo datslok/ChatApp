@@ -391,7 +391,7 @@ function Main({ connection, voice, notifications, openChatRef, share, onShareDon
       </Drawer>
 
       {dialog?.type === 'profile' ? (
-        <ProfileScreen connection={connection} voice={voice} userId={dialog.id} onOpen={go} onClose={closeDialog} />
+        <ProfileScreen connection={connection} voice={voice} userId={dialog.id} onOpen={go} onProfile={openProfile} onClose={closeDialog} />
       ) : null}
       {dialog?.type === 'userMenu' ? (
         <UserMenu

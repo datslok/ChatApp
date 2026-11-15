@@ -4944,6 +4944,61 @@ button.download-button {
   text-align: left;
 }
 
+/* Mutual friends (people.js, renderMutualFriends): a heading like Settings' section headings, then a
+   wrapping row of small pictures with names, each a button that opens that person's profile. */
+#profile-mutual {
+  margin-top: 16px;
+  text-align: left;
+}
+
+#profile-mutual[hidden] {
+  display: none;
+}
+
+#profile-mutual-heading {
+  margin: 0 0 8px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+#profile-mutual-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+#profile-mutual-list button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px 4px 4px;
+  border: none;
+  border-radius: 16px;
+  background: var(--bg-hover-dim);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+#profile-mutual-list button:hover {
+  background: var(--bg-hover);
+}
+
+/* (#profile .avatar is the big picture at the top: these small ones undo its size, ring and margin.) */
+#profile #profile-mutual-list .avatar {
+  width: 24px;
+  height: 24px;
+  margin: 0;
+  border: none;
+  font-size: 0.75rem;
+}
+
 /* Friend buttons: Message, Add friend, Accept, Remove... */
 .friend-actions {
   display: flex;

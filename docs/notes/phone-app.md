@@ -282,6 +282,8 @@ Since 2026-10-15. See [people.md](people.md).
   the web page's size they wrapped. (At first there was no Invite someone or profiles yet: their own sub-step.)
 - App.js's `dialog` state draws these over everything:
   - `src/ProfileScreen.js`: #profile: Banner, roles, Activity with activityDuration, bio, the friend buttons.
+    Since 2026-11-15 also MutualFriends (connection.js `mutualFriends`, asked again when `friends` changes;
+    a tap calls App.js `openProfile`). See [people.md](people.md), "Mutual friends".
   - `src/UserMenu.js`: userMenuItems as a `src/Sheet.js` bottom sheet. At first no Call, Ban or Make admin; it has
     since got Call, Edit profile, Make/Remove admin and Ban…. Mention appends "@name " to `drafts` and bumps
     `focusTick`.

@@ -2,7 +2,7 @@
 // roles, what they're doing, their status line and bio, and the friend buttons. Opened by tapping a
 // picture or name (App.js keeps which one is open). It redraws by itself when "users" changes, so a
 // new status or an accepted request shows at once.
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from './Icon';
@@ -65,13 +65,46 @@ function VoiceVolume({ voice, userId }) {
   );
 }
 
-// onOpen(key): open a chat (Message); onClose: close it. voice: useVoice()'s (the volume slider).
-export default function ProfileScreen({ connection, voice, userId, onOpen, onClose }) {
+// Friends you both have (#profile-mutual): a heading, then a wrapping row of small pictures with names.
+// Tapping one shows that person's profile instead.
+function MutualFriends({ ids, users, onProfile }) {
+  const styles = useStyles(makeStyles);
+  const shown = ids.filter((id) => users[id]);  // (someone banned or deleted meanwhile)
+  if (shown.length === 0) return null;
+  return (
+    <View style={styles.mutual}>
+      <Text style={styles.mutualHeading}>
+        {shown.length === 1 ? '1 MUTUAL FRIEND' : `${shown.length} MUTUAL FRIENDS`}
+      </Text>
+      <View style={styles.mutualList}>
+        {shown.map((id) => (
+          <Pressable key={id} onPress={() => onProfile(id)} style={({ pressed }) => [styles.mutualPerson, pressed && styles.mutualPressed]}>
+            <Avatar user={users[id]} size={24} />
+            <Text style={styles.mutualName}>{users[id].name}</Text>
+          </Pressable>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+// onOpen(key): open a chat (Message); onProfile(id): show someone else's profile; onClose: close it.
+// voice: useVoice()'s (the volume slider).
+export default function ProfileScreen({ connection, voice, userId, onOpen, onProfile, onClose }) {
   const styles = useStyles(makeStyles);
   const { colors } = useTheme();
-  const { users, roles, me } = connection;
+  const { users, roles, me, friends } = connection;
   const insets = useSafeAreaInsets();
   const [error, setError] = useState('');  // what the server said no with (a request, a block)
+  const [mutualIds, setMutualIds] = useState([]);
+  // Ask the server when the profile opens (or shows someone else), and again when our own friends
+  // change. `current` is false once this answer is old news (another profile, or closed).
+  useEffect(() => {
+    let current = true;
+    setMutualIds([]);
+    if (userId !== me.id) connection.mutualFriends(userId).then((ids) => current && setMutualIds(ids));
+    return () => { current = false; };
+  }, [userId, friends]);
   const user = users[userId];
   if (!user) return null;  // (gone meanwhile)
 
@@ -119,6 +152,7 @@ export default function ProfileScreen({ connection, voice, userId, onOpen, onClo
               {user.activity ? <Activity activity={user.activity} /> : null}
               {user.status ? <Text style={styles.status}>{user.status}</Text> : null}
               {user.bio ? <Text style={styles.bio}>{user.bio}</Text> : null}
+              <MutualFriends ids={mutualIds} users={users} onProfile={onProfile} />
               {buttons.length > 0 ? (
                 <View style={styles.buttons}>
                   {buttons.map((button) => (
@@ -176,6 +210,17 @@ const makeStyles = (colors, size) => StyleSheet.create({
   status: { marginTop: 4, fontSize: size(16), color: colors.textMuted, textAlign: 'center' },
   // #profile-bio: 16px above, left-aligned, the line breaks kept (Text keeps them by itself).
   bio: { alignSelf: 'stretch', marginTop: 16, fontSize: size(16), color: colors.text },
+  // #profile-mutual: 16px above, left-aligned; its heading 0.75rem, bold, muted, 8px above the list;
+  // the list wraps, 6px apart; each person a 16px-round pill, padding 4px 10px 4px 4px, 0.9rem.
+  mutual: { alignSelf: 'stretch', marginTop: 16 },
+  mutualHeading: { marginBottom: 8, fontSize: size(12), fontWeight: '600', color: colors.textMuted },
+  mutualList: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  mutualPerson: {
+    flexDirection: 'row', alignItems: 'center', gap: 6, paddingTop: 4, paddingBottom: 4, paddingLeft: 4,
+    paddingRight: 10, borderRadius: 16, backgroundColor: colors.bgHoverDim,
+  },
+  mutualPressed: { backgroundColor: colors.bgHover },
+  mutualName: { fontSize: size(14.4), color: colors.text },
   // #profile .friend-actions: 20px above, the buttons sharing the width, padding 10px, 1rem.
   buttons: { flexDirection: 'row', gap: 6, marginTop: 20, alignSelf: 'stretch' },
   button: { flex: 1, alignItems: 'center', padding: 10, borderRadius: 6, backgroundColor: colors.accent },

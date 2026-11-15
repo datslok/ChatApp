@@ -1,7 +1,7 @@
 # People
 
-Group DMs, statuses (online, idle, do not disturb, invisible; phones; being away from the PC), blocking, and
-activities (games, Spotify, programs) reported by the Windows app.
+Group DMs, statuses (online, idle, do not disturb, invisible; phones; being away from the PC), mutual friends,
+blocking, and activities (games, Spotify, programs) reported by the Windows app.
 
 ## Group DMs
 
@@ -97,6 +97,35 @@ Since 2026-11-15, the user's wish.
 
 - The picker in #me-popup (people.js, `renderPresencePicker`).
 - Dots: `.dot.online/.idle/.dnd/.invisible`. Invisible is our own, drawn as a ring.
+
+## Mutual friends
+
+Since 2026-11-15, the user's wish: a profile shows the people who are friends with both you and them, also
+when you two aren't friends.
+
+### Server
+
+- people.py, "Friends": `GET /profile/{user_id}/mutual-friends` -> `{"user_ids": [...]}`, sorted by name.
+- `FRIENDS_OF` (one person's accepted friends) twice, joined with SQL `INTERSECT`.
+- Bots are left out (they're everyone's friend, so they'd be on every profile), and so are banned people (they
+  aren't in "users").
+- Why a route and not the lists in "friends"/"users": each page only ever gets its own friend list
+  (`friends_message`). Sending everyone's would show all friendships to anyone with the developer tools; the
+  overlap only shows people who are your own friends anyway. Not admin-gated, and blocking needs nothing extra
+  (a block deletes the friendship row).
+
+### On the page
+
+- people.js, "Mutual friends": `openProfile` empties `mutualIds` and calls `loadMutualFriends`, which ignores
+  an answer for a profile that's no longer open. A "friends" update while the popup is open asks again.
+- `renderProfile` redraws it from `mutualIds` (names and pictures from "users"), so presence updates don't
+  refetch.
+- #profile-mutual under the bio: "n mutual friends", then a wrapping row of small pictures with names (buttons
+  that open that profile). Hidden when empty and on your own profile.
+- The phone app: ProfileScreen.js `MutualFriends` (see [phone-app.md](phone-app.md)).
+
+Who invited whom isn't on profiles: Settings → Admin → Invites already lists it (see
+[accounts.md](accounts.md)); the user decided that's enough.
 
 ## Blocking
 

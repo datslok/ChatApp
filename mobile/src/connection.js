@@ -779,13 +779,24 @@ export function useConnection() {
     }
   }
 
+  // For a profile: the ids of the people who are friends with both us and them (the server compares
+  // the two lists and sends only the overlap). [] if it couldn't be asked.
+  async function mutualFriends(userId) {
+    try {
+      const response = await fetch(`${SERVER}/profile/${userId}/mutual-friends`);
+      return response.ok ? (await response.json()).user_ids : [];
+    } catch {
+      return [];
+    }
+  }
+
   return {
     status, me, myPresence, appearance, idleMinutes, channels, lounge, groups, groupsKnown, friends, incoming, outgoing, blocked, users, roles, emoji,
     emojiGroups, unread, mentions, current, messages, lastRead, more, typing, mutedChats, pinnedChats, chatActivity, pins, pinsFull,
     searchResults, voiceMembers, dmCalls, callListener, notifyListener,
     outbox, retryMessage, discardMessage,
     openChat, closeChat, loadOlder, jumpAround, loadNewer, backToPresent, atPresent, sendMessage, sendTyping, react, pin, editMessage, deleteMessage,
-    friendAction, mute, pinChat, openPins, closePins, watchChatInfo, askChatInfo, search, setPresence, logout, sendVoice, ring, answerCall, cancelCall,
+    friendAction, mutualFriends, mute, pinChat, openPins, closePins, watchChatInfo, askChatInfo, search, setPresence, logout, sendVoice, ring, answerCall, cancelCall,
     reconnect: connect,  // after logging in
   };
 }
