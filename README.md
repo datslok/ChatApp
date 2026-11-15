@@ -1015,7 +1015,8 @@ quit the app completely (also from the tray) and start it again.
   files, seasons, downloads, the phone app's updates), `files.py` (uploads, thumbnails, videos, removing
   metadata, cropping pictures), `web.py` (link previews and GIFs), `presence.py` (statuses and the list of
   everyone), `push.py` (push notifications), `messages.py` (saving messages, replies, reactions, mentions,
-  pins, search, chat info, unread) and `emoji.py` (custom emoji). A module only imports from the ones below it, never from server.py.
+  pins, search, chat info, unread), `emoji.py` (custom emoji), `people.py` (profiles, friends, blocking),
+  `groups.py` (group DMs) and `voice.py` (voice tokens, the Lounge, calls and ringing). A module only imports from the ones below it, never from server.py.
 - `static/index.html`, `static/css/chat.css` and `static/js/`: the chat page. The scripts are plain
   scripts sharing one global scope, loaded in the order listed in `index.html`.
 - `static/login.html`, `reset.html`, `download.html`: the other pages.

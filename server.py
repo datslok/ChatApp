@@ -1,13 +1,11 @@
 import asyncio
 import hashlib
-import hmac
 import json
 import secrets
 import smtplib
 import sqlite3
 import ssl
 import time
-import urllib.request
 from email.message import EmailMessage
 from email.utils import formatdate, make_msgid, parseaddr
 
@@ -26,27 +24,25 @@ import chatapp.web
 import chatapp.presence
 import chatapp.push
 import chatapp.emoji
+import chatapp.people
+import chatapp.groups
+import chatapp.voice
 from chatapp.config import (
     ALLOWED_EMOJI, EMAIL_PATTERN, FAILURE_WINDOW, HEX_COLOUR, HISTORY_LIMIT, IMAGE_TYPES, INVITE_DAYS,
-    LANDING_HOST, LIVEKIT_API_KEY, LIVEKIT_API_SECRET, LIVEKIT_URL, MAIL_FROM, MAX_BIO_LENGTH, MAX_CHANNELS,
-    MAX_CHANNEL_NAME, MAX_CUSTOM_EMOJI, MAX_EMAIL_LENGTH, MAX_EMOJI_NAME, MAX_FAILURES, MAX_GIF_SIZE,
-    MAX_OPEN_INVITES, MAX_PASSWORD_LENGTH, MAX_STATUS_LENGTH, MAX_TEXT_LENGTH, MAX_UPLOAD_SIZE,
-    MIN_PASSWORD_LENGTH, PICTURE_EXTENSIONS, PICTURE_KINDS, PUBLIC_URL, REQUIRE_INVITE, RESERVED_NAMES,
-    RESET_MINUTES, SECURE_COOKIES, SESSION_COOKIE, SESSION_DAYS, SMTP_HOST, SMTP_PASSWORD, SMTP_PORT,
-    SMTP_USER, USERNAME_PATTERN, VAPID_PUBLIC_KEY, VERIFY_HOURS
+    LANDING_HOST, MAIL_FROM, MAX_BIO_LENGTH, MAX_CHANNELS, MAX_CHANNEL_NAME, MAX_CUSTOM_EMOJI,
+    MAX_EMAIL_LENGTH, MAX_EMOJI_NAME, MAX_FAILURES, MAX_GIF_SIZE, MAX_OPEN_INVITES, MAX_PASSWORD_LENGTH,
+    MAX_STATUS_LENGTH, MAX_TEXT_LENGTH, MAX_UPLOAD_SIZE, MIN_PASSWORD_LENGTH, PUBLIC_URL, REQUIRE_INVITE,
+    RESERVED_NAMES, RESET_MINUTES, SECURE_COOKIES, SESSION_COOKIE, SESSION_DAYS, SMTP_HOST, SMTP_PASSWORD,
+    SMTP_PORT, SMTP_USER, USERNAME_PATTERN, VAPID_PUBLIC_KEY, VERIFY_HOURS
 )
 from chatapp.db import BANNED_NOW, db, iso_time
 from chatapp.sessions import (
     current_user, is_admin, logged_in_admin, logged_in_user, session_user, unverified_user,
     user_id_from_token
 )
-from chatapp.users import (
-    are_friends, befriend_bots, blockers_of, friends_message, friendship, has_blocked, is_bot, is_owner,
-    pair, username_of
-)
+from chatapp.users import befriend_bots, friends_message, is_bot, is_owner, username_of
 from chatapp.access import (
-    can_join, can_mute, channel_list, dm_people, group_members, group_people, group_title, is_channel,
-    is_dm_member, is_dm_or_group, is_group_member, may_see_channel, may_use_lounge
+    can_join, can_mute, channel_list, is_channel, is_dm_or_group, may_see_channel, may_use_lounge
 )
 from chatapp.connections import (
     NONCE_MEMORY, clients, device_of, disconnect_user, message_nonce, recent_nonces, send, send_to_channel,
@@ -54,14 +50,14 @@ from chatapp.connections import (
 )
 from chatapp.pages import FreshStaticFiles, LastingStaticFiles, PAGE_VERSION, current_season
 from chatapp.files import (
-    MAX_FILES_PER_MESSAGE, THUMB_SIZES, claim_attachments, delete_upload, receive_picture, start_repacking
+    MAX_FILES_PER_MESSAGE, THUMB_SIZES, claim_attachments, delete_upload, start_repacking
 )
 from chatapp.web import PREVIEW_DIR, delete_preview, start_preview
 from chatapp.presence import (
     IDLE_MINUTES_CHOICES, PRESENCES, announce_presences, announce_users, clean_activity, idle_minutes_of,
     phones_away, presence_of, start_watching_presences, users_for, users_message
 )
-from chatapp.push import base64url, clear_on_phones, firebase_account, push_in_background, push_message
+from chatapp.push import clear_on_phones, firebase_account, push_message
 from chatapp.messages import (
     CHAT_INFO_TABS, MAX_PINS, announce_new_message, chat_activity_message, chat_info, check_reply,
     clean_text, delete_messages_in, expand_mentions, live_reply_preview, mark_read, messages_around,
@@ -70,6 +66,13 @@ from chatapp.messages import (
     with_files
 )
 from chatapp.emoji import custom_emoji_exists, custom_emoji_message, expand_custom_emoji
+from chatapp.people import blocks_message
+from chatapp.groups import MAX_GROUP_SIZE, groups_message
+from chatapp.voice import (
+    VOICE_ROOMS, announce_dm_call, announce_voice_members, answer_call, call_message, calls, check_call,
+    dm_call_message, end_call, is_call_member, is_private_room, may_join_voice, remove_from_voice,
+    start_call, voice_members_message
+)
 
 
 # docs_url etc. = None: turn off FastAPI's automatic API explorer pages (/docs, /redoc),
@@ -96,6 +99,9 @@ app.include_router(chatapp.web.router)
 app.include_router(chatapp.presence.router)
 app.include_router(chatapp.push.router)
 app.include_router(chatapp.emoji.router)
+app.include_router(chatapp.people.router)
+app.include_router(chatapp.groups.router)
+app.include_router(chatapp.voice.router)
 
 # The chat page's styles and scripts (static/index.html loads them). Only these two folders:
 # the rest of static/ is served by its own routes, some of them only when logged in.
@@ -760,28 +766,6 @@ def ban_refusal(admin_id, target_id):
     return None
 
 
-def remove_from_voice(room, user_id):
-    """Throw someone out of a LiveKit room. Closing their chat connection makes their page leave by
-    itself, but a page that doesn't play along could stay connected to LiveKit (tickets are only
-    checked when joining). LiveKit's own API can remove them: an HTTP request to its RoomService,
-    with a short ticket of our own that says we may run that room ("roomAdmin"). Blocking: run it in
-    a thread. LiveKit's address for the API is the same as for browsers, with http(s) for ws(s)."""
-    if not (LIVEKIT_URL and LIVEKIT_API_KEY and LIVEKIT_API_SECRET):
-        return
-    base = LIVEKIT_URL.replace("wss://", "https://", 1).replace("ws://", "http://", 1).rstrip("/")
-    now = int(time.time())
-    token = make_jwt({"iss": LIVEKIT_API_KEY, "nbf": now, "exp": now + 60, "video": {"room": room, "roomAdmin": True}})
-    request = urllib.request.Request(
-        base + "/twirp/livekit.RoomService/RemoveParticipant",
-        data=json.dumps({"room": room, "identity": str(user_id)}).encode(),
-        headers={"Content-Type": "application/json", "Authorization": "Bearer " + token},
-    )
-    try:
-        urllib.request.urlopen(request, timeout=5).close()
-    except Exception as error:  # (not in the room any more, for one: LiveKit answers "not found")
-        print(f"Couldn't remove user {user_id} from voice room {room}: {error}", flush=True)
-
-
 def ban_list():
     """Everyone banned right now, the newest ban first, for Settings → Admin → Bans. Times as ISO."""
     rows = db.execute(
@@ -1062,115 +1046,6 @@ async def change_password(data: PasswordChange, request: Request, background_tas
     return {"ok": True}
 
 
-# ---------- Profiles ----------
-
-# Profile pictures and banners work the same way; `kind` ("avatar" or "banner") picks the
-# column, folder and size limit from PICTURE_KINDS. The column names in the SQL below come from
-# that table of ours, never from a request, so putting them into the SQL text is safe.
-
-
-async def set_picture(request, kind):
-    """A new profile picture or banner."""
-    user_id, username, password_hash, email = logged_in_user(request)
-    settings = PICTURE_KINDS[kind]
-    picture_id = await receive_picture(request, kind)
-
-    old = db.execute(f"SELECT {settings['column']} FROM users WHERE id = ?", (user_id,)).fetchone()[0]
-    with db:
-        db.execute(f"UPDATE users SET {settings['column']} = ? WHERE id = ?", (picture_id, user_id))
-    if old:
-        (settings["folder"] / old).unlink(missing_ok=True)
-    await announce_users()  # everyone's page shows the new picture
-    return {"ok": True, kind: picture_id}
-
-
-async def remove_picture(request, kind):
-    user_id, username, password_hash, email = logged_in_user(request)
-    settings = PICTURE_KINDS[kind]
-    old = db.execute(f"SELECT {settings['column']} FROM users WHERE id = ?", (user_id,)).fetchone()[0]
-    with db:
-        db.execute(f"UPDATE users SET {settings['column']} = NULL WHERE id = ?", (user_id,))
-    if old:
-        (settings["folder"] / old).unlink(missing_ok=True)
-    await announce_users()
-    return {"ok": True}
-
-
-def serve_picture(request, kind, picture_id):
-    """A profile picture or banner, for logged-in people only."""
-    settings = PICTURE_KINDS[kind]
-    row = db.execute(f"SELECT 1 FROM users WHERE {settings['column']} = ?", (picture_id,)).fetchone()
-    if current_user(request) is None or row is None:
-        raise HTTPException(404, "Not found.")
-    # Our own table said this name exists, so it's safe to use as a file name. Its extension
-    # (which we chose ourselves when saving) gives the type.
-    extension = picture_id.rsplit(".", 1)[-1]
-    content_type = {ext: type_ for type_, ext in PICTURE_EXTENSIONS.items()}[extension]
-    return FileResponse(
-        settings["folder"] / picture_id,
-        media_type=content_type,
-        headers={
-            "X-Content-Type-Options": "nosniff",
-            # A picture's address never changes what's behind it (a new picture gets a new address),
-            # so the browser may keep it for a year without asking again. "private": only in
-            # the person's own browser, not in shared caches along the way.
-            "Cache-Control": "private, max-age=31536000, immutable",
-        },
-    )
-
-
-@app.post("/settings/avatar")
-async def change_avatar(request: Request):
-    return await set_picture(request, "avatar")
-
-
-@app.delete("/settings/avatar")
-async def remove_avatar(request: Request):
-    return await remove_picture(request, "avatar")
-
-
-@app.get("/avatars/{picture_id}")
-async def get_avatar(request: Request, picture_id: str):
-    return serve_picture(request, "avatar", picture_id)
-
-
-@app.post("/settings/banner")
-async def change_banner(request: Request):
-    return await set_picture(request, "banner")
-
-
-@app.delete("/settings/banner")
-async def remove_banner(request: Request):
-    return await remove_picture(request, "banner")
-
-
-@app.get("/banners/{picture_id}")
-async def get_banner(request: Request, picture_id: str):
-    return serve_picture(request, "banner", picture_id)
-
-
-class ProfileChange(BaseModel):
-    status: str
-    bio: str
-
-
-@app.post("/settings/profile")
-async def change_profile(data: ProfileChange, request: Request):
-    """Status and bio. No password needed: nothing about the account's security depends on them."""
-    user_id, username, password_hash, email = logged_in_user(request)
-    status = data.status.strip()
-    bio = data.bio.strip()
-    if len(status) > MAX_STATUS_LENGTH:
-        raise HTTPException(400, f"Your status can be at most {MAX_STATUS_LENGTH} characters.")
-    if len(bio) > MAX_BIO_LENGTH:
-        raise HTTPException(400, f"Your bio can be at most {MAX_BIO_LENGTH} characters.")
-    with db:
-        # `status or None`: an empty text is stored as NULL, meaning "none".
-        db.execute("UPDATE users SET status = ?, bio = ? WHERE id = ?", (status or None, bio or None, user_id))
-    await announce_users()
-    return {"ok": True}
-
-
 # ---------- Appearance (Settings → Appearance): theme, colours and font ----------
 #
 # Kept with the account, so it's the same on every device. (The text size and the Windows app's scale
@@ -1309,134 +1184,6 @@ async def mark_feedback_done(feedback_id: int, data: FeedbackDone, request: Requ
         cursor = db.execute("UPDATE feedback SET done = ? WHERE id = ?", (int(data.done), feedback_id))
     if cursor.rowcount == 0:
         raise HTTPException(404, "There's no such report.")
-    return {"ok": True}
-
-
-# ---------- Friends ----------
-
-
-async def send_friends_update(*user_ids):
-    """Friendships are personal, so they aren't sent to everyone: each of these people gets
-    their own up-to-date list, in all their open tabs."""
-    for user_id in user_ids:
-        message = friends_message(user_id)
-        for websocket, client in list(clients.items()):
-            if client["user_id"] == user_id:
-                await send(websocket, message)
-
-
-class FriendAction(BaseModel):
-    user_id: int  # the other person
-
-
-def other_person(data, request):
-    """(my id, their id) for a friend action, after checking it makes sense."""
-    me = current_user(request)
-    if me is None:
-        raise HTTPException(401, "You're not logged in.")
-    if data.user_id == me or username_of(data.user_id) is None:
-        raise HTTPException(400, "That's not someone you can add.")
-    return me, data.user_id
-
-
-@app.post("/friends/request")
-async def friend_request(data: FriendAction, request: Request):
-    me, other = other_person(data, request)
-    if has_blocked(me, other):
-        raise HTTPException(400, "You've blocked them: unblock them first.")
-    if has_blocked(other, me):  # (said plainly, without telling them they're blocked)
-        raise HTTPException(400, "You can't send a friend request to this person.")
-    row = friendship(me, other)
-    user_a, user_b = pair(me, other)
-    if row is None:
-        with db:
-            db.execute(
-                "INSERT INTO friendships (user_a, user_b, requested_by) VALUES (?, ?, ?)", (user_a, user_b, me)
-            )
-        # Their phones too (the page notifies by itself: notifyFriendRequest). Tapping it opens the
-        # Friends page ("friends" as the channel, like the page's own name for it).
-        avatar = db.execute("SELECT avatar_id FROM users WHERE id = ?", (me,)).fetchone()[0]
-        push_in_background([other], {
-            "title": username_of(me), "body": "👋 sent you a friend request", "channel": "friends",
-            "icon": f"/avatars/{avatar}" if avatar else "/icons/icon-192.png", "kind": "friend",
-        })
-    elif row[1] == 0 and row[0] == other:
-        # They had already asked us: asking back counts as accepting.
-        with db:
-            db.execute("UPDATE friendships SET accepted = 1 WHERE user_a = ? AND user_b = ?", (user_a, user_b))
-    # Otherwise we're already friends, or we already asked: nothing to change.
-    await send_friends_update(me, other)
-    return {"ok": True}
-
-
-@app.post("/friends/accept")
-async def friend_accept(data: FriendAction, request: Request):
-    me, other = other_person(data, request)
-    user_a, user_b = pair(me, other)
-    with db:
-        # Only a request *they* sent can be accepted by us.
-        cursor = db.execute(
-            "UPDATE friendships SET accepted = 1 WHERE user_a = ? AND user_b = ? AND requested_by = ? AND accepted = 0",
-            (user_a, user_b, other),
-        )
-    if cursor.rowcount != 1:
-        raise HTTPException(400, "There's no friend request from them.")
-    clear_on_phones(me, "friends")
-    await send_friends_update(me, other)
-    return {"ok": True}
-
-
-@app.post("/friends/remove")
-async def friend_remove(data: FriendAction, request: Request):
-    """Decline a request, cancel your own, or end a friendship: all three remove the row.
-    The DM's messages stay in the database, hidden; becoming friends again brings them back."""
-    me, other = other_person(data, request)
-    if is_bot(me) or is_bot(other):  # (the page shows no Remove for bots; this is for anyone who asks by hand)
-        raise HTTPException(400, "Bots stay everyone's friend.")
-    with db:
-        db.execute("DELETE FROM friendships WHERE user_a = ? AND user_b = ?", pair(me, other))
-    clear_on_phones(me, "friends")  # (a declined request; harmless for the other two)
-    await send_friends_update(me, other)
-    return {"ok": True}
-
-
-# ---------- Blocking ----------
-#
-# Blocking someone ends the friendship (and any request), so DMs, group invites and DM calls stop:
-# all of those need friends. They can't send a new request; they never count as mentioning us
-# (save_mentions: no notifications, counts or pushes) and their calls don't ring us; their messages in
-# chats we share are hidden on our page, and left out of our searches. They aren't told. Admins
-# can't be blocked (the chat's rule), nor bots (they're everyone's friend, at every start).
-
-
-def blocks_message(user_id):
-    """The people someone blocked, for their own pages: {"type": "blocks", "blocked": [7, 12]}."""
-    rows = db.execute("SELECT blocked_id FROM blocks WHERE blocker_id = ? ORDER BY created_at", (user_id,))
-    return {"type": "blocks", "blocked": [blocked for (blocked,) in rows]}
-
-
-@app.post("/friends/block")
-async def block(data: FriendAction, request: Request):
-    me, other = other_person(data, request)
-    if is_admin(other):
-        raise HTTPException(400, "Admins can't be blocked.")
-    if is_bot(other):
-        raise HTTPException(400, "Bots can't be blocked. To quiet one, mute its channel (🔔).")
-    with db:
-        db.execute("INSERT OR IGNORE INTO blocks (blocker_id, blocked_id) VALUES (?, ?)", (me, other))
-        db.execute("DELETE FROM friendships WHERE user_a = ? AND user_b = ?", pair(me, other))
-    await send_friends_update(me, other)  # (they see the friendship gone, as if it had been removed)
-    await send_to_user(me, blocks_message(me))
-    return {"ok": True}
-
-
-@app.post("/friends/unblock")
-async def unblock(data: FriendAction, request: Request):
-    """Unblocking doesn't make them a friend again: that takes a new request."""
-    me, other = other_person(data, request)
-    with db:
-        db.execute("DELETE FROM blocks WHERE blocker_id = ? AND blocked_id = ?", (me, other))
-    await send_to_user(me, blocks_message(me))
     return {"ok": True}
 
 
@@ -1773,412 +1520,6 @@ async def set_role_member(request: Request, role_id: int, data: RoleMember):
     await announce_users()
     await announce_channels()  # (their roles may open or close channels for them)
     return {"ok": True}
-
-
-# ---------- Group DMs ----------
-#
-# Private chats for 3 to 10 people. Anyone can start one with their friends; any member can add
-# more of their own friends and rename it; anyone can leave, and the last one out deletes it.
-# The members don't have to be friends with each other (as in Discord). Calls: see "Calls in DMs
-# and group DMs". Every bot is in every group too (add_bots_to_groups), answering @mentions, but
-# bots don't count as people: not for the size, and the last *person* out deletes the group.
-# Each member's pages get {"type": "groups"} with their groups at the start and after every change.
-
-MAX_GROUP_SIZE = 10  # people in a group, its starter included (bots not counted)
-
-
-def groups_message(user_id):
-    """One person's groups, oldest first: {"type": "groups", "groups": [{"key", "name", "members"}, ...]}"""
-    rows = db.execute(
-        "SELECT key, name FROM group_dms JOIN group_members ON group_members.group_key = group_dms.key"
-        " WHERE group_members.user_id = ? ORDER BY group_dms.created_at, group_dms.rowid",
-        (user_id,),
-    ).fetchall()
-    return {"type": "groups", "groups": [
-        {"key": key, "name": name, "members": group_members(key)} for key, name in rows
-    ]}
-
-
-async def announce_groups(user_ids):
-    """Send these people their groups again (each their own list), after a change."""
-    for user_id in set(user_ids):
-        await send_to_user(user_id, groups_message(user_id))
-
-
-def logged_in_member(request, key):
-    """The logged-in user's id if they're in this group, or an error. A 404 also for groups that
-    exist but aren't theirs: nobody can find out about other people's groups by trying keys."""
-    user_id = current_user(request)
-    if user_id is None:
-        raise HTTPException(401, "You're not logged in.")
-    if not is_group_member(key, user_id):
-        raise HTTPException(404, "That group doesn't exist (any more).")
-    return user_id
-
-
-def new_group_members(user_id, wanted, already):
-    """The people to add (sorted, without those already in it): each must be a friend of whoever adds
-    them, and the group may not grow past MAX_GROUP_SIZE people. (Bots are in every group already.)"""
-    new = sorted(set(wanted) - set(already))
-    if any(other == user_id or not are_friends(user_id, other) or is_bot(other) for other in new):
-        raise HTTPException(400, "You can only add your friends.")
-    if len([member for member in already if not is_bot(member)]) + len(new) > MAX_GROUP_SIZE:
-        raise HTTPException(400, f"A group has at most {MAX_GROUP_SIZE} people.")
-    return new
-
-
-def clean_group_name(name):
-    """A group's name as typed, tidied like a channel's; empty means none (called after its members)."""
-    name = " ".join(name.split())
-    if len(name) > MAX_CHANNEL_NAME:
-        raise HTTPException(400, f"That's a bit long: at most {MAX_CHANNEL_NAME} characters.")
-    return name or None
-
-
-class NewGroup(BaseModel):
-    user_ids: list[int]  # the friends to start it with (not yourself)
-    name: str = ""
-
-
-@app.post("/groups")
-async def create_group(request: Request, data: NewGroup):
-    user_id = current_user(request)
-    if user_id is None:
-        raise HTTPException(401, "You're not logged in.")
-    others = new_group_members(user_id, data.user_ids, [user_id])
-    if len(others) < 2:
-        raise HTTPException(400, "Pick at least two friends (for one, send them a DM).")
-    name = clean_group_name(data.name)
-    key = "g:" + secrets.token_hex(4)  # random, like a new channel's key
-    bots = [bot for (bot,) in db.execute("SELECT id FROM users WHERE is_bot = 1")]  # in every group
-    with db:
-        db.execute("INSERT INTO group_dms (key, name) VALUES (?, ?)", (key, name))
-        db.executemany("INSERT INTO group_members (group_key, user_id) VALUES (?, ?)",
-                       [(key, member) for member in [user_id, *others, *bots]])  # (*: the list's items, one by one)
-    await announce_groups([user_id, *others, *bots])
-    return {"key": key}
-
-
-class GroupName(BaseModel):
-    name: str  # "" = no name (called after its members)
-
-
-@app.post("/groups/{key}/rename")
-async def rename_group(request: Request, key: str, data: GroupName):
-    logged_in_member(request, key)
-    with db:
-        db.execute("UPDATE group_dms SET name = ? WHERE key = ?", (clean_group_name(data.name), key))
-    await announce_groups(group_members(key))
-    return {"ok": True}
-
-
-class GroupAdd(BaseModel):
-    user_ids: list[int]
-
-
-@app.post("/groups/{key}/add")
-async def add_to_group(request: Request, key: str, data: GroupAdd):
-    """Add some of your friends to a group you're in. They see its whole history, as in Discord."""
-    user_id = logged_in_member(request, key)
-    members = group_members(key)
-    new = new_group_members(user_id, data.user_ids, members)
-    if not new:
-        raise HTTPException(400, "Pick someone to add.")
-    with db:
-        db.executemany("INSERT INTO group_members (group_key, user_id) VALUES (?, ?)", [(key, other) for other in new])
-    await announce_groups(members + new)
-    return {"ok": True}
-
-
-@app.post("/groups/{key}/leave")
-async def leave_group(request: Request, key: str):
-    user_id = logged_in_member(request, key)
-    with db:
-        db.execute("DELETE FROM group_members WHERE group_key = ? AND user_id = ?", (key, user_id))
-        db.execute("DELETE FROM last_read WHERE user_id = ? AND channel = ?", (user_id, key))
-        db.execute("DELETE FROM chat_mutes WHERE user_id = ? AND channel = ?", (user_id, key))
-        db.execute("DELETE FROM pinned_chats WHERE user_id = ? AND channel = ?", (user_id, key))
-    remaining = group_members(key)
-    if not group_people(key):  # the last person out (only bots left): nobody will see it again, so it goes
-        with db:
-            db.execute("DELETE FROM group_members WHERE group_key = ?", (key,))
-            db.execute("DELETE FROM group_dms WHERE key = ?", (key,))
-        delete_messages_in(key)
-    for client in clients.values():
-        if client["user_id"] == user_id and client["channel"] == key:
-            client["channel"] = None  # (their page moves to the first channel when it hears)
-    await announce_groups([user_id, *remaining])
-    return {"ok": True}
-
-
-# ---------- Voice ----------
-
-VOICE_ROOMS = ["lounge"]  # voice channels anyone logged in can join (DM calls use the DM's name)
-VOICE_TOKEN_LIFETIME = 10 * 60  # seconds: only needed to get in; LiveKit renews it after that
-
-
-def make_jwt(payload):
-    """A JSON Web Token: header.payload.signature, each part base64url. The signature is an HMAC
-    (a fingerprint that needs the secret to make) of the first two parts, so anyone can read the
-    token, but nobody without LIVEKIT_API_SECRET can change it or make a new one."""
-    header = {"alg": "HS256", "typ": "JWT"}  # HS256: HMAC with SHA-256
-    signed_part = base64url(json.dumps(header).encode()) + "." + base64url(json.dumps(payload).encode())
-    signature = hmac.new(LIVEKIT_API_SECRET.encode(), signed_part.encode(), hashlib.sha256).digest()
-    return signed_part + "." + base64url(signature)
-
-
-def make_voice_token(user_id, name, room):
-    """A ticket into one LiveKit room for one person, valid for VOICE_TOKEN_LIFETIME seconds."""
-    now = int(time.time())
-    return make_jwt({
-        "iss": LIVEKIT_API_KEY,  # issued by: tells LiveKit which secret to check the signature with
-        "sub": str(user_id),     # who it's for: their "identity" in the room
-        "name": name,            # the name the others see
-        "nbf": now,              # not valid before
-        "exp": now + VOICE_TOKEN_LIFETIME,
-        # What they may do there (LiveKit calls it "video", but it covers audio too): join this
-        # room, send their own audio and hear the others.
-        "video": {"room": room, "roomJoin": True, "canPublish": True, "canSubscribe": True},
-    })
-
-
-def members_in(room):
-    """Who's in a voice room (in the order their tabs connected), and whether they're muted or
-    deafened (hear nobody): [{"id": 3, "muted": False, "deafened": False}, ...]. Someone in it from
-    two tabs is listed once (muted or deafened only if they are in all of them)."""
-    members = {}  # user id -> their entry (a dict keeps the order things were added: who came first)
-    for client in clients.values():
-        if client["voice"] == room:
-            member = members.setdefault(client["user_id"], {"id": client["user_id"], "muted": True, "deafened": True})
-            member["muted"] = member["muted"] and client["muted"]
-            member["deafened"] = member["deafened"] and client["deafened"]
-    return list(members.values())
-
-
-def voice_members_message(user_id):
-    """Who's in each voice channel: {"type": "voice_members", "rooms": {"lounge": [...members_in]}}.
-    Nothing for someone limited (see "Channels"), who has no Lounge."""
-    rooms = {room: members_in(room) for room in VOICE_ROOMS} if may_use_lounge(user_id) else {}
-    return {"type": "voice_members", "rooms": rooms}
-
-
-async def announce_voice_members():
-    for websocket, client in list(clients.items()):
-        await send(websocket, voice_members_message(client["user_id"]))
-
-
-def may_join_voice(room, user_id):
-    """The Lounge: anyone not limited. A DM's or group's call: only its people (see is_call_member)."""
-    if room in VOICE_ROOMS:
-        return may_use_lounge(user_id)
-    return is_call_member(room, user_id)
-
-
-# ---------- Calls in DMs and group DMs ----------
-#
-# A call is a LiveKit room named after the DM or group ("dm:3:7", "g:5f3a9b21"). Our server only
-# does the ringing, over the chat's WebSocket:
-#   caller's page:     {"type": "call", "channel": "dm:3:7"}                 (and joins the room)
-#   the others' tabs:  {"type": "call", "channel": ..., "from": 3, "name": "axel"}  (they ring)
-#   one who answers:   {"type": "call_answer", "channel": ..., "accept": true}      (and joins)
-#   their tabs (and the caller's, the first time): {"type": "call_answered", "channel": ...}  (the
-#                      ringing, or the caller's "Calling…", stops)
-#   everyone:          {"type": "call_ended", "channel": ..., "reason": "no_answer"}
-# In a DM, declining ends the call. In a group, it only stops your own ringing: the others ring
-# until they answer or 30 seconds pass, and the call goes on as long as anyone is in it.
-# When it's over, a call note goes into the chat: "📞 Call · 12 min", or "📞 Missed call".
-
-RING_SECONDS = 30
-
-# The calls ringing or going on, by DM or group:
-# {"dm:3:7": {"caller": 3, "ringing": {7} (those still being rung), "started": None until someone
-#             answered (then the time), "caller_joined": True once the caller's page is in the room,
-#             "ring": the 30 s timer}}
-calls = {}
-
-
-def is_private_room(room):
-    """A DM's or group's call (not Lounge)?"""
-    return isinstance(room, str) and (room.startswith("dm:") or room.startswith("g:"))
-
-
-def is_call_member(room, user_id):
-    """May this person be in this DM's or group's call? The two friends of a DM, or a group's members.
-    Never a bot: not one invited to read a DM, nor one added to a group."""
-    return is_dm_member(room, user_id) or (is_group_member(room, user_id) and not is_bot(user_id))
-
-
-def call_people(channel):
-    """Everyone a DM's or group's call belongs to: who hears about it."""
-    people = dm_people(channel)
-    return list(people) if people else group_members(channel)
-
-
-def dm_call_message(channel):
-    """Who's in a DM's or group's call right now, for the call banner and "Join call":
-    {"type": "dm_call", "channel": "dm:3:7", "members": [{"id": 7, "muted": false, "deafened": false}]}."""
-    return {"type": "dm_call", "channel": channel, "members": members_in(channel)}
-
-
-async def announce_dm_call(channel):
-    """Tell the people of this DM or group (and nobody else) who's in its call."""
-    message = dm_call_message(channel)
-    for person in call_people(channel):
-        await send_to_user(person, message)
-
-
-def voice_user_ids(room):
-    """Everyone whose page says it's in this voice room."""
-    return {client["user_id"] for client in clients.values() if client["voice"] == room}
-
-
-def call_message(channel):
-    call = calls[channel]
-    return {"type": "call", "channel": channel, "from": call["caller"], "name": username_of(call["caller"])}
-
-
-async def start_call(channel, caller):
-    if not is_call_member(channel, caller):
-        return  # only in your own DMs with friends, and your groups
-    call = calls.get(channel)
-    if call is not None:
-        if caller in call["ringing"]:
-            await answer_call(channel, caller, True)  # it rang for them while they called: that's an answer
-        return  # already ringing or going on: the page just joins the room
-    # Ring everyone else who could join (in a group: not its bots).
-    others = {person for person in call_people(channel) if person != caller and is_call_member(channel, person)}
-    others -= blockers_of(caller)  # (in a group: who blocked the caller isn't rung)
-    calls[channel] = {
-        "caller": caller, "ringing": others, "started": None, "caller_joined": False,
-        # A background task that ends the call if nobody answers in time. (asyncio runs it while
-        # we wait for other things, like the next WebSocket message.)
-        "ring": asyncio.create_task(ring_timeout(channel)),
-    }
-    for person in others:
-        await send_to_user(person, call_message(channel))  # every tab and device they have open rings
-    # ...and their phones: "high" urgency (wake it now), and gone after the 30 s it rings.
-    if channel.startswith("dm:"):
-        title, body = username_of(caller), "📞 Calling you"
-    else:
-        title, body = group_title(channel), f"📞 {username_of(caller)} is calling"
-    avatar = db.execute("SELECT avatar_id FROM users WHERE id = ?", (caller,)).fetchone()[0]
-    push_in_background(list(others), {
-        "title": title, "body": body, "channel": channel, "call": True, "icon": "/icons/icon-192.png",
-        # For the phone app's incoming call (its picture is the caller's):
-        "kind": "call", "sender": username_of(caller), "sender_id": caller,
-        "avatar": f"/avatars/{avatar}" if avatar else None,
-    }, ttl=RING_SECONDS, urgency="high")
-
-
-def stop_ringing(people, channel):
-    """Take a ringing call off these people's phones: answered on another device, declined, or over.
-    (Their pages stop by themselves, from "call_answered" or "call_ended".)"""
-    if people:
-        push_in_background(list(people), {"kind": "call_end", "channel": channel}, ttl=RING_SECONDS, always=True)
-
-
-async def ring_timeout(channel):
-    await asyncio.sleep(RING_SECONDS)
-    call = calls.get(channel)
-    if call is None:
-        return
-    if call["started"] is None:
-        await end_call(channel, "no_answer")
-        return
-    # A group call that's going on: those who never answered stop ringing (they can still join).
-    stop_ringing(call["ringing"], channel)
-    for person in list(call["ringing"]):
-        call["ringing"].discard(person)
-        await send_to_user(person, {"type": "call_answered", "channel": channel})
-
-
-async def answer_call(channel, user_id, accept):
-    call = calls.get(channel)
-    if call is None or user_id not in call["ringing"]:
-        return  # not ringing, or not for them
-    if not accept and channel.startswith("dm:"):
-        await end_call(channel, "declined")  # in a DM, a no ends it
-        return
-    call["ringing"].discard(user_id)
-    await send_to_user(user_id, {"type": "call_answered", "channel": channel})  # all their tabs stop ringing
-    stop_ringing([user_id], channel)  # ...and their phones
-    if not accept:
-        if not call["ringing"] and call["started"] is None:
-            await end_call(channel, "declined")  # everyone in the group said no
-        return
-    if call["started"] is None:  # the first to answer: the call has started
-        call["started"] = time.time()
-        await send_to_user(call["caller"], {"type": "call_answered", "channel": channel})
-    if not call["ringing"]:
-        call["ring"].cancel()  # nobody left to ring
-
-
-async def end_call(channel, reason):
-    """reason: "no_answer", "declined", "cancelled" (hung up before an answer) or "ended"."""
-    call = calls.pop(channel, None)
-    if call is None:
-        return
-    if call["ring"] is not asyncio.current_task():  # (cancelling ourselves would stop us right here)
-        call["ring"].cancel()
-    stop_ringing(call["ringing"], channel)  # (those still ringing: their phones too)
-    for person in call_people(channel):
-        await send_to_user(person, {"type": "call_ended", "channel": channel, "reason": reason})
-
-    if call["started"] is None:
-        text = "📞 Declined call" if reason == "declined" else "📞 Missed call"
-    else:
-        minutes = round((time.time() - call["started"]) / 60)
-        text = f"📞 Call · {minutes} min" if minutes >= 1 else "📞 Call · under a minute"
-    # The note comes from the caller, and is saved and sent like any message (so it gets unread
-    # dots and stays in the history).
-    message_id, sent_at = save_message(channel, call["caller"], text, [], None, kind="call")
-    message = with_files({
-        "type": "message", "channel": channel, "id": message_id, "sent_at": sent_at,
-        "user_id": call["caller"], "name": username_of(call["caller"]), "text": text,
-        "reply": None, "reactions": [], "edited_at": None, "kind": "call", "pinned": False,
-    }, [])
-    await send_to_channel(channel, message)
-    await announce_new_message(channel)
-
-
-async def check_call(channel):
-    """After someone's voice room changed: has this DM's or group's call been called off, or ended?"""
-    call = calls.get(channel)
-    if call is None:
-        return
-    in_room = voice_user_ids(channel)
-    if call["started"] is None:  # still ringing
-        if call["caller"] in in_room:
-            call["caller_joined"] = True
-        elif call["caller_joined"]:
-            await end_call(channel, "cancelled")  # the caller hung up (or closed the tab)
-    elif not in_room:
-        await end_call(channel, "ended")  # the last one left
-
-
-class CallChannel(BaseModel):
-    channel: str
-
-
-@app.post("/calls/decline")
-async def decline_call(data: CallChannel, request: Request):
-    """Decline on a ringing call's notification in the phone app, which may not even be running (so
-    there's no WebSocket to say it with): the same as {"type": "call_answer", "accept": false}."""
-    user_id, username, password_hash, email = logged_in_user(request)
-    await answer_call(data.channel, user_id, False)
-    return {"ok": True}
-
-
-@app.get("/voice-token")
-async def voice_token(room: str, request: Request):
-    """Where the LiveKit server is, and a ticket into this voice room. The page asks for this when
-    you join voice, and gives both to LiveKit."""
-    user_id, username, password_hash, email = logged_in_user(request)
-    if not (LIVEKIT_URL and LIVEKIT_API_KEY and LIVEKIT_API_SECRET):
-        raise HTTPException(503, "Voice isn't set up on this server.")
-    if not may_join_voice(room, user_id):
-        raise HTTPException(403, "You can't join that voice room.")
-    return {"url": LIVEKIT_URL, "token": make_voice_token(user_id, username, room)}
 
 
 # The limits the pages need to know (to grey out a button or say "too big" before trying), sent
