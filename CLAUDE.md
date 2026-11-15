@@ -83,6 +83,12 @@ Gathered from the notes; the notes have the details and the reasons.
 - The Bash tool doesn't see user environment variables (ANDROID_HOME, JAVA_HOME): use PowerShell and
   `[Environment]::GetEnvironmentVariable(..., 'User')`.
 
+**Going live**
+- A feature that goes live goes live everywhere, in the same go: deploying the server (web page and Windows
+  app pages) always comes with the phone app's live update (`scripts\app-update.ps1`, which also deploys), and
+  changed desktop app code with a desktop release. If the phone part needs a new APK (native changes,
+  app-update.ps1 refuses), say so rather than leaving it out silently. From away: `-ViaGitHub`.
+
 **What's new**
 - In the same commit as every feature friends would notice: a line in `static/changelog.json`'s `changes`
   (same day: add to that day's entry) and an updated `features` (short, for friends, no technical details;
