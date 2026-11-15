@@ -47,8 +47,10 @@ the point is for me to understand how it works, not just to have it done.
   line each, then the static mounts (Mounts stay on `app`). FastAPI 0.163 keeps an included router whole in
   app.routes (`_IncludedRouter`, `.original_router.routes`). Layers, low to high: config, db, sessions,
   users, access, connections, pages, files, web (previews, GIFs, fetch_url), presence (Statuses,
-  users_message/announce_users, start_watching_presences), push (Web Push, FCM, on_phones, base64url), then
-  (planned) messages, emoji, people, groups, voice, channels, accounts, admin. A module imports only from lower ones, never server.py; names are imported
+  users_message/announce_users, start_watching_presences), push (Web Push, FCM, on_phones, base64url),
+  messages (no routes: save_message, MESSAGES_QUERY, history/around/newer, pins, chat_info, search, mentions,
+  muting, chat activity, unread, delete_messages_in, announce_new_message), emoji (custom emoji), then
+  (planned) people, groups, voice, channels, accounts, admin. A module imports only from lower ones, never server.py; names are imported
   explicitly. Background starters are functions in their module (`start_repacking`, `start_watching_presences`),
   so no module reassigns another's global.
 - `static/index.html`: the chat page's markup. Its styles are in `static/css/chat.css`, its script in

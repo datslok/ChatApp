@@ -1014,7 +1014,8 @@ quit the app completely (also from the tray) and start it again.
   (a FastAPI `APIRouter` that server.py adds with `app.include_router`): `pages.py` (the HTML pages, static
   files, seasons, downloads, the phone app's updates), `files.py` (uploads, thumbnails, videos, removing
   metadata, cropping pictures), `web.py` (link previews and GIFs), `presence.py` (statuses and the list of
-  everyone) and `push.py` (push notifications). A module only imports from the ones below it, never from server.py.
+  everyone), `push.py` (push notifications), `messages.py` (saving messages, replies, reactions, mentions,
+  pins, search, chat info, unread) and `emoji.py` (custom emoji). A module only imports from the ones below it, never from server.py.
 - `static/index.html`, `static/css/chat.css` and `static/js/`: the chat page. The scripts are plain
   scripts sharing one global scope, loaded in the order listed in `index.html`.
 - `static/login.html`, `reset.html`, `download.html`: the other pages.
