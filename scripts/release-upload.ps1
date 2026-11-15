@@ -3,6 +3,8 @@
 # look for updates.
 #
 #   .\scripts\release-upload.ps1
+#   .\scripts\release-upload.ps1 -ViaGitHub   away from home: the installer goes through GitHub
+#                                             (scripts\send-to-server.ps1)
 #
 # It copies what releases\latest.json points to (the installer and its .sig), then latest.json
 # itself, last: so an app that checks in the meantime never sees a version whose installer isn't
@@ -11,6 +13,8 @@
 #
 # Then it restarts the chat (with scripts\deploy.ps1, so newly pushed code goes along): every open
 # app reconnects, looks for an update and installs it (someone in a call: once they leave it).
+
+param([switch]$ViaGitHub)
 
 $ServerFolder = "C:/ChatApp"  # where the code is on the server PC (scp prefers / in paths)
 
@@ -23,8 +27,8 @@ foreach ($file in "releases\$installer", "releases\$installer.sig") {
 }
 
 Write-Host "Version $($latest.version): copying $installer and its .sig..."
-scp "releases\$installer" "releases\$installer.sig" "chatserver:$ServerFolder/releases/"
-if ($LASTEXITCODE -ne 0) { Write-Host "Copying failed (see above)."; exit 1 }
+. .\scripts\send-to-server.ps1
+if (-not (Send-ToServer "releases\$installer", "releases\$installer.sig" "$ServerFolder/releases" -ViaGitHub:$ViaGitHub)) { Write-Host "Copying failed (see above)."; exit 1 }
 
 Write-Host "Copying latest.json..."
 scp releases\latest.json "chatserver:$ServerFolder/releases/"

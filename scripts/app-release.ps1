@@ -5,6 +5,7 @@
 #
 #   .\scripts\app-release.ps1            build, then upload to the server
 #   .\scripts\app-release.ps1 -NoUpload  only build (the APK lands in releases\)
+#   .\scripts\app-release.ps1 -ViaGitHub away from home: the APK goes through GitHub (send-to-server.ps1)
 #
 # 1. Raises the version in mobile\app.json (1.0.3 -> 1.0.4, and versionCode, which Android compares),
 #    and commits that.
@@ -17,7 +18,7 @@
 # 4. Copies both to the server (the APK first, android.json last, like release-upload.ps1) and removes
 #    older APKs there and here. Phones offer the update when they next connect; /download/android gives it.
 
-param([switch]$NoUpload)
+param([switch]$NoUpload, [switch]$ViaGitHub)
 
 $ServerFolder = "C:/ChatApp"  # where the code is on the server PC (scp prefers / in paths)
 $root = Split-Path $PSScriptRoot
@@ -109,8 +110,8 @@ Write-Host "Built releases\$apk ($size MB)."
 if ($NoUpload) { exit 0 }
 
 # 4. Upload: the APK first, android.json last (a phone that checks meanwhile never sees a missing APK).
-scp "releases\$apk" "chatserver:$ServerFolder/releases/"
-if ($LASTEXITCODE -ne 0) { Write-Host "Copying the APK failed (see above)."; exit 1 }
+. .\scripts\send-to-server.ps1
+if (-not (Send-ToServer "releases\$apk" "$ServerFolder/releases" -ViaGitHub:$ViaGitHub)) { Write-Host "Copying the APK failed (see above)."; exit 1 }
 scp releases\android.json "chatserver:$ServerFolder/releases/"
 if ($LASTEXITCODE -ne 0) { Write-Host "Copying android.json failed (see above)."; exit 1 }
 ssh chatserver "Get-ChildItem $ServerFolder/releases -File -Filter 'ChatApp-android-*.apk' | Where-Object { `$_.Name -ne '$apk' } | Remove-Item -Verbose"

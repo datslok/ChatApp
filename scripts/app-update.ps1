@@ -5,6 +5,8 @@
 # "Releasing the phone app".
 #
 #   .\scripts\app-update.ps1
+#   .\scripts\app-update.ps1 -ViaGitHub   away from home: the bundle goes through GitHub
+#                                         (scripts\send-to-server.ps1)
 #
 # New JavaScript only goes to phones whose native code it was made for: their APK's version (the
 # "runtime version"). So if anything native changed since the last APK (mobile\modules\, mobile\plugins\,
@@ -13,6 +15,8 @@
 # 1. Exports the bundle (npx expo export), 2. turns it into an update (tools\make_app_update.py: the
 # files in releases\app-assets\, a manifest in releases\app-updates\<version>\), 3. copies those to the
 # server, the manifest last, 4. deletes old updates here and there (tools\prune_app_updates.py).
+
+param([switch]$ViaGitHub)
 
 $ServerFolder = "C:/ChatApp"  # where the code is on the server PC (scp prefers / in paths)
 $root = Split-Path $PSScriptRoot
@@ -59,8 +63,9 @@ $names = @($files.launchAsset.file) + @($files.assets | ForEach-Object { $_.file
 
 # 3. Upload: its files first, the manifest last (a phone asking meanwhile never gets a missing file).
 ssh chatserver "New-Item -ItemType Directory -Force $ServerFolder/releases/app-assets, $ServerFolder/releases/app-updates/$version | Out-Null"
-scp ($names | ForEach-Object { "releases\app-assets\$_" }) "chatserver:$ServerFolder/releases/app-assets/"
-if ($LASTEXITCODE -ne 0) { Write-Host "Copying the files failed (see above)."; exit 1 }
+. .\scripts\send-to-server.ps1
+$sent = Send-ToServer ($names | ForEach-Object { "releases\app-assets\$_" }) "$ServerFolder/releases/app-assets" -ViaGitHub:$ViaGitHub
+if (-not $sent) { Write-Host "Copying the files failed (see above)."; exit 1 }
 scp $manifest.FullName "chatserver:$ServerFolder/releases/app-updates/$version/"
 if ($LASTEXITCODE -ne 0) { Write-Host "Copying the manifest failed (see above)."; exit 1 }
 

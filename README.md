@@ -86,6 +86,7 @@ the same PC, but the scripts assume two).
 | `scripts\release-upload.ps1` | your PC | puts a new desktop app version on the server |
 | `scripts\app-release.ps1` | your PC | a new version of the phone app (the APK, when its native side changed): builds, signs, uploads; phones offer it when they next connect |
 | `scripts\app-update.ps1` | your PC | the phone app's JavaScript only: phones fetch it by themselves, no new APK |
+| `-ViaGitHub` (on the three above) | your PC | away from home: the big files go through a temporary GitHub release instead of the slow tunnel (see [Releasing from away](#reaching-the-server-from-outside-your-home-network)); `scripts\send-to-server.ps1` does it |
 | `scripts\seasonal-upload.ps1` | your PC | puts a seasonal easter egg's video on the server (see [Optional: a seasonal easter egg](#optional-a-seasonal-easter-egg)) |
 | `scripts\refresh-icons.bat` | any Windows PC | double-click: Windows shows programs' new icons (after a new app icon) |
 | `tools\make_admin.py` | either | make someone an admin, or take it away (the owner can also do it in Settings → Admin → Admins) |
@@ -509,6 +510,16 @@ Do this while your PC is still at home, because the first step needs the home ne
   because the scripts use SSH without a terminal to log in from. When the session runs out, log in again.
 
 To check it, connect your PC to a phone's hotspot and run `ssh chatserver "Write-Output ok"`.
+
+**Releasing from away.** Big files crawl through the tunnel (around 70 KB/s) and the copy can break off, so
+the release scripts have a `-ViaGitHub` switch: `scripts\app-release.ps1 -ViaGitHub`,
+`scripts\release-upload.ps1 -ViaGitHub` and `scripts\app-update.ps1 -ViaGitHub`. The big files then go into
+a temporary release of your GitHub repository, the server downloads them from there and checks each one's
+SHA-256 before putting it in place, and the GitHub release is deleted again. Only small files and commands
+go through the tunnel. It needs GitHub's `gh` command, logged in (`winget install GitHub.cli`, then
+`gh auth login`), and a public repository, since the server downloads without logging in. For that minute
+anyone could download the files, but they're the same ones `/download` hands out. At home, leave the switch
+off: scp over the home network is quicker.
 
 ---
 

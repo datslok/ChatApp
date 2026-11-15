@@ -996,6 +996,9 @@ Cloudflare Access self-hosted application `ssh` (the user's email only, One-time
 `ProxyCommand "C:\Users\axelk\bin\cloudflared.exe" access ssh --hostname %h` (copied from the server, 2026.10.3,
 hash and signature checked, while GitHub was down). When the session expires:
 `cloudflared access login https://ssh.datslok.no`, interactively. The dev PC keeps its LAN-only entry.
+From away, every release script runs with `-ViaGitHub` (since 2026-11-15; scp through the tunnel crawled and broke
+off): `scripts/send-to-server.ps1` `Send-ToServer` puts the big files in a temporary pre-release `upload-<time>`,
+the server curls them into .tmp, checks SHA-256, then moves them in place; the release is deleted in `finally`.
 
 ## Running it
 
