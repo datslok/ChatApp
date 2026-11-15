@@ -2480,7 +2480,10 @@ def make_thumbnail(source, destination, size):
         with Image.open(source, formats=["PNG", "JPEG", "GIF", "WEBP"]) as picture:
             if max(picture.size) <= size:
                 return False
-            frame_count = getattr(picture, "n_frames", 1)
+            # iPhones (and some other cameras) save a photo as an MPO: a JPEG with more pictures after it,
+            # such as the HDR "gain map", a small dark one. Pillow counts those as frames, but they're no
+            # animation: only the first is the photo (as two frames, the copy flashed photo/black).
+            frame_count = 1 if picture.format == "MPO" else getattr(picture, "n_frames", 1)
             if frame_count > 1:
                 width, height = picture.size
                 scale = size / max(width, height)
@@ -2512,6 +2515,32 @@ def make_thumbnail(source, destination, size):
         return True
     except (OSError, ValueError, Image.DecompressionBombError, Image.DecompressionBombWarning):
         return False
+
+
+def remove_flashing_thumbnails():
+    """Before 2026-11-15, an iPhone photo's thumbnails were made as two-frame animations (see MPO in
+    make_thumbnail). A JPEG never animates, so an animated copy of one is such a mistake: delete it, and
+    the next look makes it again. Once only (afterwards a marker file is in uploads/thumbs/)."""
+    marker = THUMB_DIR / "mpo-fixed"
+    if marker.exists():
+        return
+    rows = db.execute("SELECT id FROM attachments WHERE content_type = 'image/jpeg'").fetchall()
+    for (file_id,) in rows:
+        for size in THUMB_SIZES:
+            thumbnail = thumbnail_path(file_id, size)
+            if not thumbnail.exists():
+                continue
+            try:
+                with Image.open(thumbnail) as copy:
+                    animated = getattr(copy, "n_frames", 1) > 1
+            except OSError:
+                animated = True  # can't be read either: make it again
+            if animated:
+                thumbnail.unlink(missing_ok=True)
+    marker.touch()
+
+
+remove_flashing_thumbnails()
 
 
 @app.get("/uploads/{file_id}")

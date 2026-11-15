@@ -216,6 +216,20 @@ def test_an_animation_stays_animated(server, channel):
     assert small.format == "WEBP" and small.size == (200, 100) and small.n_frames == 3
 
 
+def test_an_iphone_photo_is_no_animation(server, channel):
+    # iPhones save photos as MPO: a JPEG with a second, small and dark picture after it (the HDR gain
+    # map). Pillow counts two frames, and the thumbnail used to flash between the photo and black.
+    photo, gain_map = Image.new("RGB", (800, 600), (40, 160, 60)), Image.new("RGB", (200, 150), (0, 0, 0))
+    out = io.BytesIO()
+    photo.save(out, format="MPO", save_all=True, append_images=[gain_map])
+    a = server.person()
+    file_id, _ = sent_picture(a, channel, out.getvalue(), "image/jpeg", "IMG_4543.jpeg")
+    small = opened(a.get(f"/uploads/{file_id}?size=400"))
+    assert small.format == "WEBP" and small.size == (400, 300)
+    assert getattr(small, "n_frames", 1) == 1
+    assert small.convert("RGB").getpixel((200, 150))[1] > 100  # the photo (green), not the gain map
+
+
 def test_deleting_the_message_deletes_its_thumbnails(server, channel):
     a = server.person()
     file_id, message_id = sent_picture(a, channel, picture(size=(1000, 1000)))
