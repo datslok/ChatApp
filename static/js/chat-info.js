@@ -1,7 +1,7 @@
 // The chat info panel: a DM's or group's name in the top bar opens it in the right column, like
 // Discord's. Five tabs: Members (the member list that's already there, people.js renderMembers),
 // Media (pictures and videos as a grid), Pins (the pinned messages, as in the 📌 popup), Links and
-// Files. The last three come from the server ({"type": "chat_info"}, server.py "Chat info"), 50
+// Files. The last three come from the server ({"type": "chat_info"}, chatapp/messages.py, "Chat info"), 50
 // messages at a time, newest first: scrolling to the bottom asks for the next 50.
 //
 // One of the chat page's scripts (static/js/), loaded in order by static/index.html. They're
@@ -166,7 +166,7 @@ function makeMediaTile(file, message) {
 }
 
 // One link: the preview card's title and site for the first link of a message that got one (the
-// server only previews the first, server.py first_link), else the address and its host name.
+// server only previews the first, chatapp/web.py, first_link), else the address and its host name.
 function makeLinkRow(message, url, index) {
   const row = document.createElement("div");
   row.className = "info-row";

@@ -101,7 +101,7 @@ export const THEME_CHOICES = [
   ['purple', 'Purple'], ['green', 'Green'], ['pink', 'Pink'], ['lightpink', 'Light pink'],
 ];
 
-// The colours you can pick by hand (server.py's APPEARANCE_COLOURS), with the web page's labels.
+// The colours you can pick by hand (chatapp/accounts.py's APPEARANCE_COLOURS), with the web page's labels.
 export const PICKABLE_COLOURS = [
   ['bg-main', 'Background'], ['bg-panel', 'Panels'], ['text', 'Text'],
   ['text-muted', 'Faded text'], ['accent', 'Accent'], ['link', 'Links'],

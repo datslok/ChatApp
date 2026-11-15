@@ -1,7 +1,7 @@
 // A DM's or group's info (the web page's chat info panel, chat-info.js): a tap on its name in the top bar
 // opens it. Five tabs: Members (the right drawer's list), Media (pictures and videos in a grid of squares),
 // Pins (the pinned messages, as in the 📌 popup), Links and Files. The last three come from the server
-// ({"type": "chat_info"}, server.py "Chat info") 50 messages at a time, newest first; scrolling to the end
+// ({"type": "chat_info"}, chatapp/messages.py, "Chat info") 50 messages at a time, newest first; scrolling to the end
 // asks for the next 50. (Phone reason for a whole screen instead of the web page's side panel: no room.)
 // The layout is Settings' on a phone: a row of tabs along the top that scrolls sideways, × at its end.
 import { useEffect, useRef, useState } from 'react';

@@ -191,7 +191,7 @@ def can_join(channel, user_id):
     DMs ("dm:3:7", the two user ids, smallest first): the two people in it, while they're
     friends; and the AI bot for an hour after one of them mentioned it there."""
     if is_channel(channel):
-        return may_see_channel(channel, user_id)  # (a private channel: only its roles; see "Channels")
+        return may_see_channel(channel, user_id)  # (a private channel: only its roles; see channels.py, "Channels")
     if is_dm_member(channel, user_id) or is_group_member(channel, user_id):
         return True
     people = dm_people(channel)  # (a member who's no longer friends stays out, even a bot)

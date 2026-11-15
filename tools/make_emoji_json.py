@@ -19,7 +19,7 @@ SKIP_GROUPS = {"Component"}  # skin tones and hair styles on their own, not emoj
 groups = []
 # Which Unicode emoji version each emoji came in: {"17.0": ["🫫", ...], ...}. The phone app hides the
 # ones newer than its Android can draw (the web page tests drawing instead, on a canvas). Kept apart
-# from "groups", whose entries stay [emoji, name] pairs (server.py and chattus.py read them as pairs).
+# from "groups", whose entries stay [emoji, name] pairs (the server's chatapp/config.py and chattus.py read them as pairs).
 versions = {}
 for line in Path(sys.argv[1]).read_text(encoding="utf-8").splitlines():
     if line.startswith("# group: "):

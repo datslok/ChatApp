@@ -325,7 +325,7 @@
   </style>
 </head>
 <body>
-  <!-- {{CHAT}} is replaced by the chat's address by the server (server.py, landing_page). -->
+  <!-- {{CHAT}} is replaced by the chat's address by the server (chatapp/pages.py, landing_page). -->
   <header>
     <div class="wrap">
       <a class="brand" href="/"><img src="/landing/logo.png" alt=""> ChatApp</a>
@@ -451,7 +451,7 @@
     // Logged in to the chat in this browser? Then show who, and "Log out" instead of "Log in".
     //
     // The chat is at another address ({{CHAT}}), so we ask it: "credentials: include" sends the
-    // chat's login cookie along, and the chat allows this page to read the answer (server.py,
+    // chat's login cookie along, and the chat allows this page to read the answer (chatapp/accounts.py,
     // allow_landing_page). If anything fails (offline, chat down), the page stays as it is.
     const CHAT = "{{CHAT}}";
     const me = document.getElementById("me");
@@ -497,7 +497,7 @@
       showLoggedIn(null, null);
     });
 
-    // Came here from an invite link? Then the chat has kept its code as a cookie (server.py,
+    // Came here from an invite link? Then the chat has kept its code as a cookie (chatapp/accounts.py,
     // open_invite_link), and tells us whose invite it is, if it still works. The cookie goes along the
     // same way as the login cookie above.
     async function checkInvite() {

@@ -182,7 +182,7 @@ db.execute("""
     )
 """)
 # Roles (Settings → Roles, for admins): a name and a colour; people can have several, and the one
-# highest in the list colours their name and places them in the member list (see "Roles").
+# highest in the list colours their name and places them in the member list (see channels.py, "Roles").
 db.execute("""
     CREATE TABLE IF NOT EXISTS roles (
         id       INTEGER PRIMARY KEY,
@@ -198,7 +198,7 @@ db.execute("""
         PRIMARY KEY (user_id, role_id)  -- each role once per person
     )
 """)
-# Blocked people: one row per person someone blocked (see "Blocking").
+# Blocked people: one row per person someone blocked (see people.py, "Blocking").
 db.execute("""
     CREATE TABLE IF NOT EXISTS blocks (
         blocker_id INTEGER NOT NULL REFERENCES users(id),  -- who blocked
@@ -207,7 +207,7 @@ db.execute("""
         PRIMARY KEY (blocker_id, blocked_id)
     )
 """)
-# Muted chats: one row per person per chat they muted (the 🔔 at the top of a chat; see "Muting").
+# Muted chats: one row per person per chat they muted (the 🔔 at the top of a chat; see messages.py, "Muting").
 db.execute("""
     CREATE TABLE IF NOT EXISTS chat_mutes (
         user_id INTEGER NOT NULL REFERENCES users(id),
@@ -216,7 +216,7 @@ db.execute("""
     )
 """)
 # Pinned DMs and groups: one row per person per chat they pinned to the top of their list (see
-# "Recent and pinned DMs").
+# messages.py, "Recent and pinned DMs").
 db.execute("""
     CREATE TABLE IF NOT EXISTS pinned_chats (
         user_id INTEGER NOT NULL REFERENCES users(id),
@@ -492,7 +492,7 @@ if "email_verified" not in table_columns("users"):
         db.execute("ALTER TABLE users ADD COLUMN pending_email TEXT")
 
 if "is_owner" not in table_columns("users"):
-    # The owner (see "Bans and admins"): the first account, which made the server. On a server from
+    # The owner (see admin.py, "Bans and admins"): the first account, which made the server. On a server from
     # before owners existed, that's the oldest admin who isn't a bot.
     with db:
         db.execute("ALTER TABLE users ADD COLUMN is_owner INTEGER NOT NULL DEFAULT 0")
@@ -507,12 +507,12 @@ if "banned_at" not in table_columns("users"):
         db.execute("ALTER TABLE users ADD COLUMN ban_reason TEXT")
 
 if "idle_minutes" not in table_columns("users"):
-    # Away from the PC (see "Statuses"): after how many minutes without the keyboard or mouse the
+    # Away from the PC (see presence.py, "Statuses"): after how many minutes without the keyboard or mouse the
     # Windows app counts as left alone. Everyone starts with 10.
     with db:
         db.execute("ALTER TABLE users ADD COLUMN idle_minutes INTEGER NOT NULL DEFAULT 10")
 
-# Private channels and limited roles (see "Who sees which channel").
+# Private channels and limited roles (see channels.py, "Who sees which channel").
 if "private" not in table_columns("channels"):
     # From before private channels: every channel is open to everyone (0).
     with db:
@@ -545,7 +545,7 @@ if "repacked" not in table_columns("attachments"):
     with db:
         db.execute("ALTER TABLE attachments ADD COLUMN repacked INTEGER NOT NULL DEFAULT 0")
 if "cleaned" not in table_columns("attachments"):
-    # 1 once a picture's or video's metadata has been removed (or tried: see "Removing metadata"). Files
+    # 1 once a picture's or video's metadata has been removed (or tried: see files.py, "Removing metadata"). Files
     # from before are 0, cleaned once by clean_old_uploads.
     with db:
         db.execute("ALTER TABLE attachments ADD COLUMN cleaned INTEGER NOT NULL DEFAULT 0")

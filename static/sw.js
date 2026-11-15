@@ -1,9 +1,9 @@
 // The service worker: a script the browser installs for this site and keeps in the background,
-// even while the chat isn't open. Registered by notifications.js; served at /sw.js (server.py),
+// even while the chat isn't open. Registered by notifications.js; served at /sw.js (chatapp/pages.py),
 // because a service worker only looks after the pages at or below its own address.
 //
 // With it and static/manifest.json, phones offer "Install app" (a PWA: the chat with its own icon,
-// in its own window). And it shows push notifications: the server sends them (server.py,
+// in its own window). And it shows push notifications: the server sends them (chatapp/push.py,
 // send_push) to devices that turned them on, while nobody's looking at the chat; the browser
 // wakes this script up for each one, even with the chat closed.
 //

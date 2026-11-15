@@ -1,6 +1,6 @@
 // Banning someone (the web page's people.js, "Banning", and its #ban-dialog): an optional reason (shown
 // to them when they try to log in), how long, and Ban. Opened by Ban… in the user menu and by Settings →
-// Admin → Bans. The server (server.py, "Bans and admins") decides who may ban whom; mayBan only decides
+// Admin → Bans. The server (chatapp/admin.py, "Bans and admins") decides who may ban whom; mayBan only decides
 // whether to offer it.
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';

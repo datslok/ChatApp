@@ -11,7 +11,7 @@ export function dmPartner(key, myId) {
   return key.slice(3).split(':').map(Number).find((id) => id !== myId) ?? null;
 }
 
-// May this person see this channel? The server's rule (server.py, "Who sees which channel"), like the
+// May this person see this channel? The server's rule (chatapp/channels.py, "Who sees which channel"), like the
 // web page's seesChannel: a private channel comes with everyone who sees it ("members"; its roles may be
 // hidden from us), an open one is for everyone not limited, and the owner sees all. (Only for drawing.)
 export function seesChannel(user, channel) {
@@ -20,7 +20,7 @@ export function seesChannel(user, channel) {
   return !user.limited;
 }
 
-// A group's people: its members without the bots (every bot is in every group, see server.py).
+// A group's people: its members without the bots (every bot is in every group, see chatapp/users.py, add_bots_to_groups).
 export function groupPeople(group, users) {
   return group.members.filter((id) => !users[id]?.bot);
 }

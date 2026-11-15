@@ -223,7 +223,7 @@ def is_looking(user_id):
 def has_app_open(user_id):
     """Has this person got the Windows app open (focused or not), and been at the PC lately? It notifies
     by itself, so their phones stay quiet meanwhile. (The page says it's the app in its "looking"
-    messages, and when nobody has been at the PC for a while: see "Away from the PC".)"""
+    messages, and when nobody has been at the PC for a while: see presence.py, "Away from the PC".)"""
     return any(client["user_id"] == user_id and client["app"] and not client["pc_idle"]
                for client in clients.values())
 

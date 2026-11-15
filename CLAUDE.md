@@ -35,26 +35,28 @@ the point is for me to understand how it works, not just to have it done.
 
 ## Layout
 
-- `server.py`: FastAPI app. Serves the page and the `/ws` WebSocket endpoint that broadcasts messages.
-  Being split into `chatapp/` (milestone 24; started with `uvicorn server:app` as before): `config.py`
-  (environment settings, shared limits, HEX_COLOUR), `db.py` (`db`, tables, migrations, `iso_time`),
-  `sessions.py` (`current_user`, `logged_in_user`/`_admin`, `is_admin`), `users.py` (is_bot, username_of,
-  is_owner, friendships, blocks, befriend_bots/add_bots_to_groups at start), `access.py` (read-only: channel
-  visibility, group/DM membership, `can_join`, `visible_chats`), `connections.py` (`clients`, `send`/`send_to_*`,
-  nonces, `background_tasks`), `pages.py` (pages, Seasons, static file classes, PAGE_VERSION, downloads,
+- `server.py`: puts the server together (started with `uvicorn server:app`): the FastAPI app and its
+  error handler, one `app.include_router` line per topic, the static mounts (Mounts stay on `app`), `LIMITS`
+  and the `/ws` WebSocket handler. Everything else is in `chatapp/` (milestone 24, split 2026-11-15), one
+  module per topic, in layers; a module imports only from lower ones, never server.py, names explicitly:
+  `config.py` (environment settings, shared limits, HEX_COLOUR), `db.py` (`db`, tables, every migration,
+  `iso_time`), `sessions.py` (`current_user`, `logged_in_user`/`_admin`, `is_admin`), `users.py` (is_bot,
+  username_of, is_owner, friendships, blocks; befriend_bots/add_bots_to_groups at start), `access.py`
+  (read-only: channel visibility, group/DM membership, `can_join`, `visible_chats`), `connections.py`
+  (`clients`, `send`/`send_to_*`, nonces, `background_tasks`, "Stuck connections"), then the topics, each
+  with `router = APIRouter()`: `pages.py` (pages, Seasons, static file classes, PAGE_VERSION, downloads,
   /app-update), `files.py` (uploads, thumbnails, re-packing, removing metadata, is_video, file_info/files_note,
-  crop/receive_picture). Topic modules have `router = APIRouter()`; server.py has one `app.include_router`
-  line each, then the static mounts (Mounts stay on `app`). FastAPI 0.163 keeps an included router whole in
-  app.routes (`_IncludedRouter`, `.original_router.routes`). Layers, low to high: config, db, sessions,
-  users, access, connections, pages, files, web (previews, GIFs, fetch_url), presence (Statuses,
-  users_message/announce_users, start_watching_presences), push (Web Push, FCM, on_phones, base64url),
-  messages (no routes: save_message, MESSAGES_QUERY, history/around/newer, pins, chat_info, search, mentions,
-  muting, chat activity, unread, delete_messages_in, announce_new_message), emoji (custom emoji), people
-  (profiles, friends, blocking), groups (group DMs), voice (tokens, make_jwt, remove_from_voice, `calls`,
-  ringing), channels (Channels, Roles), accounts (login, sessions, resets, verification, Invites incl. the
-  admin invite list, Settings, Appearance, `hasher`, ban_message), admin (Bans and admins, Feedback). A module imports only from lower ones, never server.py; names are imported
-  explicitly. Background starters are functions in their module (`start_repacking`, `start_watching_presences`),
-  so no module reassigns another's global.
+  cropping pictures), `web.py` (link previews, GIFs, fetch_url), `presence.py` (Statuses, Away from the PC,
+  users_message/announce_users), `push.py` (Web Push, FCM, on_phones), `messages.py` (no routes: saving,
+  MESSAGES_QUERY, history/around/newer, pins, chat info, search, mentions, muting, recent and pinned DMs,
+  unread, delete_messages_in, announce_new_message), `emoji.py` (custom emoji), `people.py` (profiles,
+  friends, blocking), `groups.py` (group DMs), `voice.py` (tokens, remove_from_voice, `calls`, ringing),
+  `channels.py` (Channels, Who sees which channel, Roles), `accounts.py` (login, sessions, resets,
+  verification, Invites, Settings, Appearance) and `admin.py` (Bans and admins, Feedback).
+  References like `channels.py, "Roles"` below name a module and its `# ---------- Roles ----------` section.
+  Background starters are functions in their module (`start_repacking`, `start_watching_presences`), so no
+  module reassigns another's global. FastAPI 0.163 keeps an included router whole in app.routes
+  (`_IncludedRouter`, `.original_router.routes`).
 - `static/index.html`: the chat page's markup. Its styles are in `static/css/chat.css`, its script in
   `static/js/`: plain scripts (not ES modules) sharing one global scope, loaded in this order:
   `icon-shapes.js` and `icons.js` (the line icons, see "Icons"), `core.js` (elements, connecting, server messages, channels, sidebar), `notifications.js` (and every
@@ -68,7 +70,7 @@ the point is for me to understand how it works, not just to have it done.
   earlier files declare. `appearance.js` alone is loaded in `<head>`, before anything is drawn:
   Settings → Appearance (theme via `data-theme` on `<html>`, picked colours, `--font`, text size),
   theme/colours/font kept with the account (`users.appearance`, `POST /settings/appearance`, checked against the lists in
-  server.py, in "welcome" and sent to all the user's pages), with a copy in localStorage for the first paint.
+  accounts.py, in "welcome" and sent to all the user's pages), with a copy in localStorage for the first paint.
   Text size and scale are per device (since 2026-10-18, the user's wish): only in that localStorage copy
   (`applyAccountAppearance` keeps them when the server's arrive; phone: appearance.json, App.js); the server
   ignores them but keeps the old saved ones in users.appearance for pages from before.
@@ -94,7 +96,7 @@ the point is for me to understand how it works, not just to have it done.
   server itself so the private key never left it; development ones in `dev.env`), the `push_subscriptions`
   table (one row per device), `/push/subscribe` and `/push/unsubscribe` (only https endpoints at the known
   push services, against SSRF), the switch in Settings → Notifications (notifications.js; not in the
-  Windows app). Sent by server.py's `send_push` (in a thread, in the background; 404/410 deletes the
+  Windows app). Sent by push.py's `send_push` (in a thread, in the background; 404/410 deletes the
   subscription) for new messages to `save_mentions`' people (DMs, mentions, @everyone) and for DM calls
   (ttl 30 s, urgency high), but never to someone "looking" at the chat on any device (each page sends
   `{"type": "looking"}` on focus/visibility changes), nor while they have the Windows app open at all (the
@@ -227,7 +229,7 @@ the point is for me to understand how it works, not just to have it done.
   without saving it twice, "sent"/"not_sent" to the sending page, `nonce` in "message". The web page doesn't use them.
   Stuck connections (2026-10-19, mongri's report: phones reconnecting in a loop for up to a minute): a connection
   that stops reading fills its buffer and uvicorn's send then waits; we send to everyone one after another, so it
-  held up every sender, and new connections hung at `announce_presences` without answering pings. server.py `send`:
+  held up every sender, and new connections hung at `announce_presences` without answering pings. connections.py `send`:
   `SEND_TIMEOUT` 5 s, then the client is marked `stuck` (skipped) and its chat() task cancelled (cleaned up like a
   close). tests/test_messages.py `never_reading` reproduces it. The app: `OPEN_WAIT` 10 s for a connection still
   opening (React Native waits for the upgrade's answer for ever), onopen closes one already replaced. Expo's dev-menu gear can cover the top bar's buttons in development builds: drag it.
@@ -327,7 +329,7 @@ the point is for me to understand how it works, not just to have it done.
   `prebuild --clean` failing with EBUSY on `android/`: the adb server started by run:android stands in it (`adb kill-server`).
   Push notifications (since 2026-10-15): Firebase project `chatapp-e2944` (my Google account, Spark plan, no Analytics or
   Gemini); `mobile/google-services.json` (app.json `googleServicesFile`) and the service account key `firebase-key.json`
-  in the repo folder (server.py's `FIREBASE_KEY_FILE`), both git-ignored; the key goes with export/import/backup.ps1.
+  in the repo folder (config.py's `FIREBASE_KEY_FILE`), both git-ignored; the key goes with export/import/backup.ps1.
   **The real server doesn't have the key yet** (copy it with scp when the app is distributed). Server: `/push/fcm` stores the
   token in push_subscriptions as `fcm:<token>` (an upsert that keeps the mute), `send_push` sends data messages through
   `send_fcm` (FCM HTTP v1; the access token from an RS256 JWT we sign with `cryptography`, cached an hour; 404 deletes),
@@ -367,7 +369,7 @@ the point is for me to understand how it works, not just to have it done.
   the user keeps a copy). `plugins/dev-variant.js`: debug builds are `no.datslok.chat.dev` "ChatApp Dev" (the user's
   choice: both on the phone; google-services.json has both apps), so `adb shell am start` etc. need the .dev package.
   `config.js` SERVER: `__DEV__` ? localhost:8001 : https://chat.datslok.no. Updates: **expo-updates** with
-  runtimeVersion policy appVersion (fingerprint hashed generated folders) against server.py's `/app-update` (Expo's
+  runtimeVersion policy appVersion (fingerprint hashed generated folders) against pages.py's `/app-update` (Expo's
   protocol 1: newest `releases/app-updates/<version>/*.json`, URLs filled from PUBLIC_URL, 204 when none; files in
   `releases/app-assets/<md5>.<ext>`, immutable; `src/liveUpdates.js` checks at every connect and return to the app and
   switches with Updates.reloadAsync when safe (no call, trays, share or popup; view + drafts kept through cache
@@ -422,7 +424,7 @@ the point is for me to understand how it works, not just to have it done.
   `features`** (short, for friends, no technical details; say where things are, like "Settings → Notifications":
   Chattus reads `features` as the chat's manual, see below). Part of `PAGE_VERSION`, so a changelog-only
   deploy reloads open pages.
-- Seasons (server.py, "Seasons"; people.js, "The seasonal easter egg"): `SEASONS` (name, months, emoji or image
+- Seasons (pages.py, "Seasons"; people.js, "The seasonal easter egg"): `SEASONS` (name, months, emoji or image
   (worn like a hat: `.season-hat`; Christmas, December: static/seasonal/santa-hat.svg, our own drawing), video);
   `current_season()` (this month's, only if `seasonal/<video>` exists) goes in "welcome" as `season`; the page
   puts its emoji on our own picture in #user-panel (`.season-badge`), which opens #season-dialog with the video
@@ -456,7 +458,7 @@ the point is for me to understand how it works, not just to have it done.
 - The first account on an empty server (bots don't count) becomes admin by itself (`/register`, decided inside
   the INSERT). `tools/make_admin.py`: make someone an admin (or `--remove`, or `--list`); `--db dev.db` for development.
   Admins can edit and delete anyone's messages and custom emoji, and manage the channels.
-- Channels (server.py, "Channels"): the `channels` table, one ordered list (`position`) of channels and
+- Channels (channels.py, "Channels"): the `channels` table, one ordered list (`position`) of channels and
   headings (`heading` 1; a heading groups the channels below it until the next one). Messages and the rest
   store a channel's `key`, which never changes; renaming changes `name` only. The first three keep their old
   names as keys (general, memes, chattus, seeded when the table is empty); new ones get `c:` + 8 random hex
@@ -486,7 +488,7 @@ the point is for me to understand how it works, not just to have it done.
   user's `limited` instead of role ids ("roles" in channel items is admin-only). `topRole` skips hidden roles on
   both pages (no colour or member list section, even for admins; only the profile tag shows, to admins).
   `delete_messages_in(key)` removes a channel's or group's messages with everything belonging to them.
-- Group DMs (server.py, "Group DMs"; people.js, "Group DMs"): `group_dms` (key `g:` + 8 hex, name or NULL =
+- Group DMs (groups.py, "Group DMs"; people.js, "Group DMs"): `group_dms` (key `g:` + 8 hex, name or NULL =
   the members' names) and `group_members`. Their messages are saved under the key, so `can_join`
   (`is_group_member`) is the only gate. 3–10 people (`MAX_GROUP_SIZE`): `POST /groups` (2+ of your friends),
   `/groups/{key}/add` (any member, their own friends), `/rename`, `/leave` (the last one out deletes it all);
@@ -498,7 +500,7 @@ the point is for me to understand how it works, not just to have it done.
   it) and aren't offered in the page's friend picker.
   Page: + next to "Direct messages" (#group-dialog with friend checkboxes), groups first in the DM list,
   #dm-header shows members and Add people / Rename (prompt()) / Leave (confirm()) / 📞 Call.
-- Statuses (server.py, "Statuses"): `users.presence` is the chosen one (online, idle, dnd, invisible), set over
+- Statuses (presence.py, "Statuses"): `users.presence` is the chosen one (online, idle, dnd, invisible), set over
   the WebSocket (`{"type": "presence"}` -> "my_presence" to all their pages; also in "welcome"). "users" has
   each one's shown `presence` (online, idle, dnd, offline; invisible shows offline) and `online` (not offline).
   Online turns idle after `IDLE_AFTER` (10 min) with every page out of sight (`away_since`, from "looking";
@@ -518,27 +520,27 @@ the point is for me to understand how it works, not just to have it done.
   `has_app_open` (phones get pushes again), and that device shows idle. Page: the picker in #me-popup
   (people.js, `renderPresencePicker`), dots `.dot.online/.idle/.dnd/.invisible` (our own Invisible as a ring).
   The users' "status" field is still the line they write about themselves.
-- Recent and pinned DMs (server.py, "Recent and pinned DMs"; since 2026-10-16): the Direct messages list (web
+- Recent and pinned DMs (messages.py, "Recent and pinned DMs"; since 2026-10-16): the Direct messages list (web
   people.js `sortedDmKeys`/`renderDmList`, phone chats.js `sortedDmKeys` in Sidebar and ShareScreen) is groups and DMs
   mixed: pinned first, then newest message first (no messages: last, alphabetical). "chat_activity" {chats: {key:
   newest message id}}: all at connect, then one from `announce_new_message` (`announce_chat_activity`) to every member's
   pages. `pinned_chats` table, `{"type": "pin_chat", "channel", "pinned"}` (DMs and groups only) -> "pinned_chats" to
   all their pages (also at connect). Pin: the user menu's Pin DM, a group's Pin button (web #group-pin) / GroupMenu
   (phone; also a long press on a group in the sidebar); a pin icon on the row (`.dm-pin`, hidden under a red count).
-- Muting (server.py, "Muting"): `chat_mutes` (user_id, channel), set over the WebSocket (`{"type": "mute",
+- Muting (messages.py, "Muting"): `chat_mutes` (user_id, channel), set over the WebSocket (`{"type": "mute",
   "channel", "muted"}` -> "mutes" to all their pages; also at connect). `save_mentions` leaves out people who
   muted the chat unless they're named in it (`<@id>`) or the sender is an admin, so no red count, notification
   or push. **Admins can't be muted or blocked** (the user's rule): `can_mute` refuses a DM with an admin, and the
   page hides 🔔 there. Page: `mutedChats` (core.js) fades sidebar items (`.channel.muted`) without unread dots;
   🔔/🔕 in the top bar (rooms.js).
-- Blocking (server.py, "Blocking"): `blocks` (blocker_id, blocked_id); `POST /friends/block` (refused for
+- Blocking (people.py, "Blocking"): `blocks` (blocker_id, blocked_id); `POST /friends/block` (refused for
   admins and bots; deletes the friendship row, so DMs, group invites and DM calls stop) and `/friends/unblock`
   (not friends again: that takes a new request); "blocks" to the blocker's pages (also at connect). Neither
   side can send a request (the blocked one gets a neutral message). `save_mentions` drops the sender's
   blockers, `start_call` doesn't ring them, `search_messages` skips blocked senders. Page: `blockedIds`
   (people.js); their messages drawn as "🚫 A message from someone you blocked · Show" (`shownBlocked`);
   Block / Unblock in `makeFriendButtons` (profile, Friends page), and a Blocked tab on the Friends page.
-- Roles (server.py, "Roles"): `roles` (id, name, colour "#rrggbb", position) and `user_roles`; admin-only
+- Roles (channels.py, "Roles"): `roles` (id, name, colour "#rrggbb", position) and `user_roles`; admin-only
   `POST /roles` (create), `/roles/{id}/edit`, `/roles/order` (all ids), `/roles/{id}/delete`, `/roles/{id}/members`
   ({user_id, member}). "roles" (the list, top first; at connect before "users") and "users" (each person's
   `roles`, top first) go to everyone after each change. Page (people.js): `topRole` / `nameColour` colour names
@@ -555,7 +557,7 @@ the point is for me to understand how it works, not just to have it done.
   even when 👥 closed the list; on phones the right drawer). chat-info.js: tabs Members (#member-lists, renderMembers'
   lists), Media (a grid; a tile opens #image-viewer, which got #viewer-video and #viewer-jump), Pins ("pins", makePinnedItem),
   Links and Files (makeFileLink); Jump = jumpToMessage. Server: WebSocket `{"type": "chat_info", "tab", "before"}` ->
-  "chat_info" {items, more, oldest} (server.py "Chat info", `chat_info()`: MESSAGES_QUERY rows with SHOWN_TYPES
+  "chat_info" {items, more, oldest} (messages.py, "Chat info", `chat_info()`: MESSAGES_QUERY rows with SHOWN_TYPES
   attachments / other attachments / http in the text, 50 per batch, `message_links()` = every link, first_link's rule;
   only `is_dm_or_group` + can_join). core.js calls `chatInfoNews` on message/edited/deleted/preview/pinned (reloads the
   tab if affected) and `closeChatInfo` in joinCurrentChannel. Phone: `src/ChatInfoScreen.js` (full screen, Settings'
@@ -583,7 +585,7 @@ the point is for me to understand how it works, not just to have it done.
   the history and that list (every message has "pinned"). Page: 📌 in each message's hover bar, and in the
   top bar (#dm-header, now on every chat; the call button only in DMs and groups), #pins-dialog with Jump and
   Unpin. Jumping to a message that isn't loaded (since 2026-10-29; 40 older batches with a full redraw each
-  lagged): `{"type": "around", "id"}` -> "around" (server.py `messages_around`: `AROUND_EACH_SIDE` 25 each side,
+  lagged): `{"type": "around", "id"}` -> "around" (messages.py `messages_around`: `AROUND_EACH_SIDE` 25 each side,
   `more`/`newer`) replaces what's shown with that stretch; `atPresent` false (web core.js; phone connection.js)
   until `{"type": "newer", "after"}` batches (scrolling down; phone `onStartReached`, the inverted list's
   `maintainVisibleContentPosition`) reach the newest; meanwhile live messages aren't drawn (they're in the DB, so
@@ -596,7 +598,7 @@ the point is for me to understand how it works, not just to have it done.
   only `\w+` words (max 10) as `"word"*` (no FTS5 syntax gets through), skips notes, newest 50 first, and
   adds each message's "channel". Page: 🔍 in the top bar, #search-dialog (searches 300 ms after typing
   stops); its results and the pinned list share `makeMessageCard`; Jump uses `openMessage`.
-- Calls in DMs and groups (server.py, "Calls in DMs and group DMs"): the room is the DM's or group's key;
+- Calls in DMs and groups (voice.py, "Calls in DMs and group DMs"): the room is the DM's or group's key;
   `is_call_member` (never bots) gates /voice-token and "voice"; `calls[channel]["ringing"]` is the set still
   being rung (a DM: the other one). Group: everyone else rings, a decline only stops your own ringing
   (`call_answered` to you), the first accept starts it, the rest stop ringing after 30 s, it ends when the
@@ -639,7 +641,7 @@ the point is for me to understand how it works, not just to have it done.
   see-through Pressable lies over the VideoView because the native view swallowed taps, so in-message controls never worked); its player downloads with its own OkHttp client without
   React Native's cookies, so `mobile/modules/cookies` (Kotlin, CookieManager.getCookie) hands it the login cookie
   as a header.
-- Re-packing videos (server.py, "Re-packing videos"; since 2026-10-15): fragmented MP4s (screen recorders, browser
+- Re-packing videos (files.py, "Re-packing videos"; since 2026-10-15): fragmented MP4s (screen recorders, browser
   recordings) say length 0 in their header; Android's player then shows no length and can't skip. Every uploaded
   video is re-packed by ffmpeg (`-c copy`, `+faststart`, `-map 0:v -map 0:a?`, 60 s limit, in a thread; the original
   stays if it fails) before /upload answers; `attachments.repacked`; `repack_old_videos` (started by the first
@@ -651,7 +653,7 @@ the point is for me to understand how it works, not just to have it done.
   video-player.js `setVideoAudio(frame, hasSound)` disables `.video-mute` and the slider; the phone's VideoScreen
   `audio` prop (MessageText.js, ChatInfoScreen.js pass `file.audio !== false`) fades them with pointerEvents "none". ffmpeg: winget's
   Gyan.FFmpeg (install.ps1 step 1, machine scope; this PC has it per user, its bin folder on the user PATH).
-- Removing metadata (server.py, "Removing metadata"; since 2026-11-15, the user's wish, after an iPhone photo showed
+- Removing metadata (files.py, "Removing metadata"; since 2026-11-15, the user's wish, after an iPhone photo showed
   its street address in a phone's gallery): `/upload` runs `remove_metadata` on IMAGE_TYPES (format from the first
   bytes) before the INSERT: files are cut, not re-saved (lossless; tests compare pixels). JPEG
   (`jpeg_without_metadata`): only APP0 JFIF, APP2 ICC_PROFILE and APP14 Adobe kept, no COM, a tiny EXIF with only the
@@ -662,7 +664,7 @@ the point is for me to understand how it works, not just to have it done.
   `attachments.cleaned` (1 = done or tried); `clean_old_uploads` (start of repack_old_videos, so the first
   connection) does older files once, updating `size`; videos wait for ffmpeg. The laptop has no ffmpeg: the video
   test skips there.
-- GIFs (server.py, "GIFs"; messages.js, "GIFs"): the GIF button by the text box opens #gif-picker. `/gifs/search?q=`
+- GIFs (web.py, "GIFs"; messages.js, "GIFs"): the GIF button by the text box opens #gif-picker. `/gifs/search?q=`
   (trending without q) asks GIPHY's API with `GIPHY_API_KEY` (.env; on this PC in the git-ignored `dev-secrets.env`,
   which start.ps1 loads) via `fetch_url`; answers kept an hour in `gif_cache` (the free key: ~100 requests an hour
   for the site), 20 requests per person a minute (`gif_allowed`), rating pg-13, `bundle=messaging_non_clips`.
@@ -670,7 +672,7 @@ the point is for me to understand how it works, not just to have it done.
   downloads the original WebP (or the 200 px one if over 5 MB), checks it with Pillow and saves it as an ordinary
   attachment; the page then sends it as a message with that file. "Powered by GIPHY" is required by GIPHY.
   Tenor was the other option, but Google shut its API down on 2026-06-30.
-- Link previews (server.py, "Link previews"): after a message with a link goes out, a background task fetches
+- Link previews (web.py, "Link previews"): after a message with a link goes out, a background task fetches
   the first link's page, reads its Open Graph tags and saves a card in `link_previews` (one per message) with a
   shrunk WebP copy of its picture in `uploads/previews/` (served at `/previews/<name>` to whoever can see the
   message); then a "preview" WebSocket message adds it. Against SSRF: http/https on ports 80/443 only, every
@@ -683,7 +685,7 @@ the point is for me to understand how it works, not just to have it done.
   LiveKit/VAPID values); the owner registers first; `server.person()` = invite + register + the /verify link read
   from the server's printed emails (its log). `Socket.wait_for/nothing/drain/join/say`; fixtures `channel` (made
   and deleted: max 50) and `friends`; `cf-connecting-ip` varies per person for the per-IP limits. **Black-box
-  only: never import server.py**, so the suite proves a refactor (the planned split into modules) changed nothing.
+  only: never import server.py or chatapp/**, so the suite proves a refactor (like the split into modules) changed nothing.
   Files by area: accounts, admin, messages, channels, people, files, voice, misc (~170 tests, ~1.5 min). Connections
   start with state messages ("unread", "mutes", "pinned_chats"...): `drain()` before expecting an answer. Run it after
   every server change; add tests with features and fixes.
@@ -722,7 +724,7 @@ the point is for me to understand how it works, not just to have it done.
   page has sub-tabs (`.admin-tab`, `showAdminSection`) for the sections Inbox, Channels, Roles and Invites
   (everyone's open links with ×, and who joined with whose: `GET /admin/invites`, `/admin/invites/{code}/cancel`,
   `logged_in_admin`). New admin tools go there as another section.
-- Bans and the owner (server.py, "Bans and admins"; people.js "Banning"; settings.js "Admin → Bans/Admins"):
+- Bans and the owner (admin.py, "Bans and admins"; people.js "Banning"; settings.js "Admin → Bans/Admins"):
   `users.is_owner` (the first account, set in /register's INSERT like is_admin; older servers: the oldest
   non-bot admin), `banned_at`/`banned_until` (NULL = for good; 1, 7 or 30 days)/`banned_by`/`ban_reason`.
   `BANNED_NOW` (SQL) is checked by `session_user` (so banned = logged out), `users_message` (out of the lists)
@@ -731,7 +733,7 @@ the point is for me to understand how it works, not just to have it done.
   them from LiveKit rooms (`remove_from_voice`, RoomService/RemoveParticipant with a roomAdmin JWT) and
   closes their pages; `/admin/unban`, `/admin/bans`; `/admin/admins` (owner only). Page: Ban… in the user
   menu (`mayBan`), #ban-dialog, Settings → Admin → Bans and Admins (the owner's sub-tab).
-- Invites and email verification (server.py, "Invites" and "Email verification"; since 2026-10-14, replacing the
+- Invites and email verification (accounts.py, "Invites" and "Email verification"; since 2026-10-14, replacing the
   old INVITE_CODE): `/register` needs an unused invite (`invites`: code, created_by, used_by; one use,
   `INVITE_DAYS` 7, `MAX_OPEN_INVITES` 10 each), checked and used up in the same transaction as the INSERT, unless
   `REQUIRE_INVITE=0` (dev.env; serve.ps1 refuses it) or nobody has an account yet. `/invite/<code>` sets the HttpOnly
@@ -789,7 +791,7 @@ the point is for me to understand how it works, not just to have it done.
   Android's, iPhones none. `/download/windows` always redirects to the newest installer.
 - `static/landing/`: the landing page (`index.html`, `logo.png` from `icon/chattuschattus_square.png`,
   `screenshot.png`), served at `/` when the Host is `LANDING_HOST` (datslok.no) and always at `/welcome`;
-  `{{CHAT}}` in it becomes PUBLIC_URL (server.py, `landing_page`). Its pictures are under `/landing/`.
+  `{{CHAT}}` in it becomes PUBLIC_URL (pages.py, `landing_page`). Its pictures are under `/landing/`.
   The screenshot is of a throwaway server with test accounts (never the real chat): `tools/make_screenshot.py` (port
   8009, a temporary db; accounts with emoji pictures, statuses incl. alex's, activities, roles, the Lounge, a #general
   conversation with LaTeX, a reply, reactions, a custom emoji, a spoiler, code, Chattus's poll; Edge headless over the
@@ -846,7 +848,7 @@ the point is for me to understand how it works, not just to have it done.
   or a program the user added (`list_programs`, by the file's FileDescription). Never other window titles. Calls the
   page's `activityFromApp` on changes; settings.js ("Activity", in App behaviour, hidden until `set_activity_settings`
   works) keeps `activitySettings` (share, on by default; programs) in localStorage and sends `{"type": "activity"}`
-  (also at every connect, core.js). server.py: `clean_activity` (kinds playing/listening/using, 100 chars), kept on the
+  (also at every connect, core.js). presence.py: `clean_activity` (kinds playing/listening/using, 100 chars), kept on the
   connection (memory only), `activity_of` (None while shown offline) in "users" with "since"; announce_presences
   compares it too. people.js `activityText` replaces the status line in lists; the profile shows both, with
   `activityDuration`.
@@ -894,7 +896,7 @@ the point is for me to understand how it works, not just to have it done.
   "join"s it and uses its "history". Answers the newest message after his own last one (`answered` ids
   against double answers), never messages over 1 h old, one at a time (a queue), "typing" every 2 s,
   `reply_to` in shared channels (and in #chattus/DMs when someone wrote after it), auto-accepts friend
-  requests (rarely needed now: server.py's `befriend_bots` makes everyone a bot's friend at every start and at
+  requests (rarely needed now: users.py's `befriend_bots` makes everyone a bot's friend at every start and at
   /register; /friends/remove refuses for bots and the page shows no Remove for them), defuses @everyone/@here,
   max 400 tokens. DMs between friends: `users.is_bot` (set only by
   make_bot.py) lets a bot into a DM for an hour after a member names it there (`bot_invited`, `BOT_INVITE_TIME`;
@@ -987,7 +989,7 @@ the point is for me to understand how it works, not just to have it done.
   ("## topic" / "- item") into `{manual}` (`MANUAL_PROMPT`: answer how-to and where-is questions from it, with the
   way there, and don't make up settings). ~2,000 tokens; the whole prompt ~2,800.
   The asker's device (since 2026-10-18, the user's wish): `messages.sent_from` ("android app", "windows app", "phone
-  browser", "web browser"; server.py `device_of` from the connection's "looking": `android` (the phone app sends it),
+  browser", "web browser"; connections.py `device_of` from the connection's "looking": `android` (the phone app sends it),
   `app`, `mobile`), saved with each message and **sent to bots only** (`send()` strips it with `without_devices` for
   anyone whose connection isn't `bot`: messages, history/older/pins, search results, chat info items). chattus.py adds
   "(writing from the android app)" to the target's line; MANUAL_PROMPT says to give that device's way (the app's

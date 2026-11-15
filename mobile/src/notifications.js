@@ -2,7 +2,7 @@
 //   - Push notifications through Firebase (modules/push): on from the first start (Android asks whether
 //     we may), off and on in Settings → Notifications. At every connect we give the server this phone's
 //     token (/push/fcm); it then sends DMs, mentions, friend requests and calls here while we aren't
-//     looking at the chat anywhere (server.py, send_push), and Kotlin shows them, even with the app closed.
+//     looking at the chat anywhere (chatapp/push.py, send_push), and Kotlin shows them, even with the app closed.
 //   - The ping while the app is open: a DM or mention in another chat (the server's "unread" with
 //     "notify") or a friend request. Its own switch and volume, like the web page's Sound.
 //   - And a banner at the top for it (MessageBanner.js): who, where, the start of the message; a tap

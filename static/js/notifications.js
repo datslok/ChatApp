@@ -149,7 +149,7 @@ const inDesktopApp = "__TAURI_INTERNALS__" in window;
 
 // ----- Push notifications (the phone app): notifications on this device while the chat is closed.
 // Turning them on asks the browser for a "subscription": this device's address at its push
-// service, and keys to encrypt pushes for it. The server keeps it (server.py, "Push notifications")
+// service, and keys to encrypt pushes for it. The server keeps it (chatapp/push.py, "Push notifications")
 // and sends pushes there; the service worker (sw.js) shows them. Not in the Windows app, which
 // has its own notifications.
 
@@ -163,7 +163,7 @@ let pushOn = false;  // does this device get pushes? Then the page doesn't notif
 if (canPush) currentSubscription().then((subscription) => { pushOn = Boolean(subscription); });
 
 // Tell the server whether we're looking at the chat (tab in sight and window focused): while we
-// are, on any device, nobody pushes us anything (server.py, send_push). On every change, and on
+// are, on any device, nobody pushes us anything (chatapp/push.py, send_push). On every change, and on
 // each new connection (core.js). "blur": the window lost the focus. "app": this is the Windows
 // app, which notifies by itself: while it's open at all, our phones get no pushes either.
 function sendLooking() {
@@ -171,7 +171,7 @@ function sendLooking() {
   clearSeenNotifications();
 }
 
-// ----- Away from the PC (Settings → Notifications; server.py, "Away from the PC")
+// ----- Away from the PC (Settings → Notifications; chatapp/presence.py, "Away from the PC")
 // While the Windows app is open, the server sends our phones nothing: we'd see it here. But maybe nobody
 // is at the PC. So every 15 s the app tells us how long Windows' keyboard and mouse have gone unused
 // (main.rs, seconds_idle), and past our minutes we tell the server "idle" (a "looking" message). Then
@@ -348,7 +348,7 @@ const phoneBannerText = document.getElementById("phone-banner-text");
 const phoneBannerAction = document.getElementById("phone-banner-action");
 // A phone (the browser's description of itself names one; never the Windows app). For the banner, and
 // sent in "looking" (sendLooking): others see a little phone for our dot while we're only here on
-// phones (server.py, on_phone_only).
+// phones (chatapp/presence.py, on_phone_only).
 const onPhone = /Android|iPhone|iPad/.test(navigator.userAgent);
 const onIPhone = /iPhone|iPad/.test(navigator.userAgent);
 // Running as the installed app? It has no address bar ("standalone"); iPhones say it their own way.
@@ -563,7 +563,7 @@ function notify(channel, messageId, senderId, senderName, text) {
 // Clicking it opens the Friends page's Requests tab (openMessage with FRIENDS).
 function notifyFriendRequest(userId) {
   if (isMuted()) return;
-  if (pushOn) return;  // this device gets a push for it instead (server.py, friend_request): not twice
+  if (pushOn) return;  // this device gets a push for it instead (chatapp/people.py, friend_request): not twice
   if (notificationSound) playPing();
   if (!desktopNotifications || !("Notification" in window) || Notification.permission !== "granted") return;
   const person = people.get(userId);

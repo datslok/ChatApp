@@ -247,7 +247,7 @@ function formatSize(bytes) {
 }
 
 // The address of a picture at about the size it's shown, so a 4000 px photo in a 100 px tile isn't
-// downloaded and decoded whole (server.py, "Thumbnails"). `shown`: the longest side it needs on
+// downloaded and decoded whole (chatapp/files.py, "Thumbnails"). `shown`: the longest side it needs on
 // screen, in CSS pixels. A sharp screen (devicePixelRatio 2: two real pixels per CSS pixel) needs
 // twice as many. Takes the smallest of the server's sizes that's big enough (limits.thumb_sizes, small
 // to big), else the biggest; the server sends the original when that's smaller anyway. Only the
@@ -1105,7 +1105,7 @@ function makeLink(url) {
 }
 
 // A link's preview card, under its message: the site, the title (a link), a description and
-// a picture. The server fetched all of it (server.py, "Link previews"); the picture comes from
+// a picture. The server fetched all of it (chatapp/web.py, "Link previews"); the picture comes from
 // our own server too, so the linked site never sees who's looking. Text goes in as text.
 function makePreviewCard(preview) {
   const card = document.createElement("div");
@@ -1641,7 +1641,7 @@ document.getElementById("pins-close").addEventListener("click", () => pinsDialog
 //
 // 🔍 at the top of a chat: words to find, where (this chat or everywhere) and from whom (anyone or
 // one person). The server searches its full-text index, only in chats we can see, and answers with
-// the 50 newest matches (server.py, search_messages). It searches as you type, a moment after the
+// the 50 newest matches (chatapp/messages.py, search_messages). It searches as you type, a moment after the
 // last key, so not every letter sends a search.
 
 const searchDialog = document.getElementById("search-dialog");

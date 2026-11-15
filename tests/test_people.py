@@ -4,7 +4,7 @@ from conftest import befriend, dm_key, unique
 
 
 def friends_of(person):
-    """Someone's friends message, without bots (every bot is everyone's friend: server.py, befriend_bots)."""
+    """Someone's friends message, without bots (every bot is everyone's friend: chatapp/users.py, befriend_bots)."""
     with person.connect() as ws:
         friends = ws.wait_for("friends")
         bots = {user["id"] for user in ws.wait_for("users")["users"] if user["bot"]}

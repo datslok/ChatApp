@@ -199,7 +199,7 @@ function chatMembers() {
   return channel ? everyone.filter((user) => seesChannel(user, channel)) : everyone;
 }
 
-// May this person see this channel? The server's rule (server.py, "Who sees which channel"): a
+// May this person see this channel? The server's rule (chatapp/channels.py, "Who sees which channel"): a
 // private channel comes with everyone who sees it ("members"; its roles may be hidden from us), an
 // open one is for everyone not limited, and the owner sees all. (Only for drawing: the server decides.)
 function seesChannel(user, channel) {
@@ -477,7 +477,7 @@ for (const tab of document.querySelectorAll(".tab")) {
 
 // ---------- Invites ----------
 //
-// New accounts need an invite link from someone in the chat (server.py, "Invites"). Invite someone
+// New accounts need an invite link from someone in the chat (chatapp/accounts.py, "Invites"). Invite someone
 // on the People page opens a popup with our unused links: Copy to share one, × to cancel it, and
 // New link for another. Each works once, for a week.
 
@@ -588,7 +588,7 @@ document.getElementById("invite-close").addEventListener("click", () => inviteDi
 //
 // Admins ban people from the user menu (Ban…) or Settings → Admin → Bans; both open this popup:
 // an optional reason (shown to them when they try to log in), how long, and Ban. The server
-// (server.py, "Bans and admins") checks who may ban whom; mayBan only decides whether to offer it.
+// (chatapp/admin.py, "Bans and admins") checks who may ban whom; mayBan only decides whether to offer it.
 
 const banDialog = document.getElementById("ban-dialog");
 const banReason = document.getElementById("ban-reason");
@@ -659,7 +659,7 @@ function isGroup(channel) {
   return typeof channel === "string" && channel.startsWith("g:");
 }
 
-// A group's people: its members without the bots (every bot is in every group, see server.py).
+// A group's people: its members without the bots (every bot is in every group, see chatapp/users.py, add_bots_to_groups).
 function groupPeople(group) {
   return group.members.filter((id) => !people.get(id)?.bot);
 }
@@ -1025,7 +1025,7 @@ function renderMePopup() {
 
 // Our status: a row for each, with its dot and what it means; the chosen one highlighted. Picking
 // one tells the server, which tells all our pages ("my_presence") and everyone else ("users").
-const PRESENCES_CHOSEN = ["online", "idle", "dnd", "invisible"];  // the ones you can choose (server.py, PRESENCES)
+const PRESENCES_CHOSEN = ["online", "idle", "dnd", "invisible"];  // the ones you can choose (chatapp/presence.py, PRESENCES)
 const PRESENCE_HELP = {
   online: "",
   idle: "Shown as away",

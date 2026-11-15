@@ -305,7 +305,7 @@ voiceStatus.addEventListener("click", async () => {
 // ----- DM calls
 //
 // A DM call is a voice room named after the DM ("dm:3:7"), joined like Lounge. What's new is the
-// ringing, which our server passes along over the chat's WebSocket (see "DM calls" in server.py).
+// ringing, which our server passes along over the chat's WebSocket (see chatapp/voice.py, "Calls in DMs and group DMs").
 
 const dmHeader = document.getElementById("dm-header");
 const dmHeaderName = document.getElementById("dm-header-name");
@@ -435,10 +435,10 @@ function showDmHeader() {
   dmHeaderName.replaceChildren(name);
   if (!dmHeaderName.disabled) dmHeaderName.appendChild(makeIcon("chevron-down"));
   dmHeaderName.title = dmHeaderName.disabled ? "" : "Members, media, pins, links and files";
-  // No calls in channels (that's what Lounge is for), nor with a bot (server.py's is_call_member says no).
+  // No calls in channels (that's what Lounge is for), nor with a bot (chatapp/voice.py's is_call_member says no).
   const withBot = people.get(dmPartner(currentChannel))?.bot === true;
   callButton.hidden = (!inDm && !inGroup) || withBot;
-  // The bell mutes this chat, the crossed-out bell unmutes it. Not in a DM with an admin: admins can't be muted (server.py, can_mute).
+  // The bell mutes this chat, the crossed-out bell unmutes it. Not in a DM with an admin: admins can't be muted (chatapp/access.py, can_mute).
   const muted = mutedChats.has(currentChannel);
   muteButton.hidden = !muted && people.get(dmPartner(currentChannel))?.admin === true;
   setIcon(muteButton, muted ? "bell-off" : "bell");

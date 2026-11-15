@@ -348,7 +348,7 @@ async def clean_old_uploads():
 
 
 async def repack_old_videos():
-    """Videos uploaded before re-packing existed, and the seasonal videos (seasonal/, see "Seasons"):
+    """Videos uploaded before re-packing existed, and the seasonal videos (seasonal/, see pages.py, "Seasons"):
     re-packed once, in the background, started by the first connection (like watch_presences).
     The database is only touched here, in the server's own thread; ffmpeg runs in another.
     First, old files' metadata (clean_old_uploads)."""

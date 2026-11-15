@@ -14,7 +14,7 @@ import { saveToDownloads } from '../modules/downloads';
 import { SERVER } from './config';
 import { limits } from './limits';
 
-// A picture's address at about the size it's shown (the web page's pictureUrl; server.py "Thumbnails"),
+// A picture's address at about the size it's shown (the web page's pictureUrl; chatapp/files.py, "Thumbnails"),
 // so a list of photos doesn't download and decode each one whole. `shown`: the longest side it needs, in
 // layout pixels; a phone has ~3-4 real pixels for each (PixelRatio). Only ImageViewer (a picture opened)
 // and downloads use the original.

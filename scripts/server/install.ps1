@@ -1,7 +1,7 @@
 # Sets up this PC as the chat's server (see README, "Host your own"):
 #
 #   1. Python, and a virtual environment (.venv) with the packages from requirements.txt; and ffmpeg,
-#      which re-packs uploaded videos so every player knows their length (server.py, "Re-packing videos")
+#      which re-packs uploaded videos so every player knows their length (chatapp/files.py, "Re-packing videos")
 #   2. LiveKit (voice), downloaded into livekit/ and checked against its published checksums
 #   3. The Cloudflare Tunnel (cloudflared), as a Windows service, with your tunnel's token
 #   4. Windows Firewall rules for LiveKit's audio ports

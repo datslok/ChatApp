@@ -34,7 +34,7 @@ JavaScript for the page, no frameworks.
 
 | Part | What |
 |------|------|
-| Server | Python: [FastAPI](https://fastapi.tiangolo.com/) with WebSockets, all in `server.py`. SQLite for the data. |
+| Server | Python: [FastAPI](https://fastapi.tiangolo.com/) with WebSockets: `server.py` and the modules in `chatapp/`. SQLite for the data. |
 | Page | Plain HTML, CSS and JavaScript (`static/`), no framework and no build step. |
 | Voice, video, screen sharing | A self-hosted [LiveKit](https://livekit.io/) server (WebRTC). |
 | Reaching it from the internet | A [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/), so no ports need opening for the chat itself. |
@@ -309,7 +309,7 @@ Settings → Admin → Channels. A channel ticked **Private** there is only for 
 don't see it unless they have one of its roles), and a
 role ticked **Limited** (Settings → Admin → Roles) sees nothing but its private channels, DMs and groups
 (no other channels, no Lounge): for family who only need one channel with you, say. A role ticked **Hidden**
-is only known to admins (no name colour, member list section or profile tag for anyone else). The voice channel is `VOICE_ROOMS` in `server.py`; change it and update (see below). The "What's
+is only known to admins (no name colour, member list section or profile tag for anyone else). The voice channel is `VOICE_ROOMS` in `chatapp/voice.py`; change it and update (see below). The "What's
 new" page is yours to write (see [What's new](#whats-new)), and the icon should be your own too (see
 [License](#license)).
 
@@ -346,12 +346,12 @@ The free key allows about 100 searches an hour for the whole site, which is plen
 friends: the server remembers each search's answer for an hour, and each person can make 20 requests
 a minute. A GIF someone sends is downloaded by the server and saved like an uploaded picture (an
 animated WebP, usually a few hundred KB), so it stays even if GIPHY removes it, and only the person
-searching ever loads anything from GIPHY. The age rating is `pg-13` (`GIF_RATING` in server.py).
+searching ever loads anything from GIPHY. The age rating is `pg-13` (`GIF_RATING` in chatapp/web.py).
 
 ### Optional: a seasonal easter egg
 
 During a season, a small emoji sits on the corner of everyone's own picture at the bottom left, and
-clicking it plays that season's video. The seasons are `SEASONS` in `server.py` (Halloween: October, 🎃,
+clicking it plays that season's video. The seasons are `SEASONS` in `chatapp/pages.py` (Halloween: October, 🎃,
 `halloween.mp4`; Christmas: December, a Santa hat, `christmas.mp4`); add one with a line there. The videos aren't in git: they go in a `seasonal\` folder on
 the server, from your PC with
 
@@ -1005,20 +1005,26 @@ quit the app completely (also from the tray) and start it again.
 
 ## Working on the code
 
-- `server.py`: the server: accounts, messages, channels, uploads, link previews, voice tickets,
-  the WebSocket. Sections are marked with `# ---------- Name ----------` comments. It's being split into
-  modules by topic, in `chatapp/`: so far `config.py` (settings from the environment, shared limits),
-  `db.py` (the database and its migrations), `sessions.py` (who is logged in), `users.py` (small facts about
-  people: bots, names, friendships, blocks), `access.py` (who may see which channel, group, DM or message)
-  and `connections.py` (open WebSockets and sending to them); then the topics, each with its own routes
-  (a FastAPI `APIRouter` that server.py adds with `app.include_router`): `pages.py` (the HTML pages, static
-  files, seasons, downloads, the phone app's updates), `files.py` (uploads, thumbnails, videos, removing
-  metadata, cropping pictures), `web.py` (link previews and GIFs), `presence.py` (statuses and the list of
-  everyone), `push.py` (push notifications), `messages.py` (saving messages, replies, reactions, mentions,
-  pins, search, chat info, unread), `emoji.py` (custom emoji), `people.py` (profiles, friends, blocking),
-  `groups.py` (group DMs), `voice.py` (voice tokens, the Lounge, calls and ringing), `channels.py`
-  (channels, private channels, roles), `accounts.py` (registering, logging in, invites, email, passwords,
-  account settings) and `admin.py` (bans, admins, the bug reports inbox). A module only imports from the ones below it, never from server.py.
+- `server.py`: puts the server together: the FastAPI app, the routes of every part, the static folders,
+  the limits the pages are told (`LIMITS`) and the WebSocket (`/ws`). Start it with `uvicorn server:app`
+  (start.ps1 and serve.ps1 do).
+- `chatapp/`: the rest of the server, one module per topic. Inside each, sections are marked with
+  `# ---------- Name ----------` comments; elsewhere a reference like `channels.py, "Roles"` means that
+  section. They're in layers: a module only imports from the ones before it in this list, never from
+  server.py, so there are no circular imports.
+  - The shared bottom: `config.py` (settings from the environment, shared limits), `db.py` (the database,
+    its tables and migrations), `sessions.py` (who is logged in), `users.py` (small facts about people:
+    bots, names, friendships, blocks), `access.py` (who may see which channel, group, DM or message) and
+    `connections.py` (open WebSockets and sending to them).
+  - The topics, each with its own routes (a FastAPI `APIRouter` that server.py adds with
+    `app.include_router`): `pages.py` (the HTML pages, static files, seasons, downloads, the phone app's
+    updates), `files.py` (uploads, thumbnails, videos, removing metadata, cropping pictures), `web.py`
+    (link previews and GIFs), `presence.py` (statuses and the list of everyone), `push.py` (push
+    notifications), `messages.py` (saving messages, replies, reactions, mentions, pins, search, chat info,
+    unread), `emoji.py` (custom emoji), `people.py` (profiles, friends, blocking), `groups.py` (group DMs),
+    `voice.py` (voice tokens, the Lounge, calls and ringing), `channels.py` (channels, private channels,
+    roles), `accounts.py` (registering, logging in, invites, email, passwords, account settings) and
+    `admin.py` (bans, admins, the bug reports inbox).
 - `static/index.html`, `static/css/chat.css` and `static/js/`: the chat page. The scripts are plain
   scripts sharing one global scope, loaded in the order listed in `index.html`.
 - `static/login.html`, `reset.html`, `download.html`: the other pages.
@@ -1042,7 +1048,7 @@ with `start.ps1` (it restarts when you save), and try things in two browser wind
 The tests start a server of their own on port 8011, with an empty database and uploads folder in a
 temporary folder, so they never touch `chat.db` or `dev.db`, and they can run while `start.ps1` does.
 They use it only from the outside, like the web page and the phone app: HTTP requests and WebSocket
-messages, never server.py's own functions. So they keep passing however the server's code is arranged,
+messages, never the server's own functions. So they keep passing however the server's code is arranged,
 which is what makes them useful before and after moving code around.
 
 `tests/conftest.py` has the shared parts: the server, `server.person()` (a new account: invited by the

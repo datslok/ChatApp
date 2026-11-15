@@ -17,7 +17,7 @@ def session_user(token):
     """(user id, email verified?) for a session token, or None if it's missing, unknown or expired."""
     if not token:
         return None
-    # (A banned account is "logged out" too: see "Bans and admins".)
+    # (A banned account is "logged out" too: see admin.py, "Bans and admins".)
     return db.execute(
         f"""
         SELECT users.id, users.email_verified FROM sessions JOIN users ON users.id = sessions.user_id
@@ -30,7 +30,7 @@ def session_user(token):
 def user_id_from_token(token):
     """The id of the user a session token belongs to, or None if it's missing, unknown or expired,
     or the account's email isn't verified yet: until then, the account can only use the
-    verification page ("Email verification"), so everything else treats it as logged out."""
+    verification page (accounts.py, "Email verification"), so everything else treats it as logged out."""
     row = session_user(token)
     return row[0] if row and row[1] == 1 else None
 

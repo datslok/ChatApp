@@ -244,7 +244,7 @@ function showChannels(list) {
 
 // The server's "channels": an admin changed them (or we just connected). Only the channels we may
 // see (a private one needs one of its roles), and `lounge`: false for someone with a limited role,
-// who has no Lounge (server.py, "Who sees which channel").
+// who has no Lounge (chatapp/channels.py, "Who sees which channel").
 function channelsChanged(list, lounge) {
   showChannels(list);
   loungeAllowed = lounge !== false;

@@ -1,4 +1,4 @@
-"""Turns an `npx expo export` of the phone app into a JavaScript update for server.py's /app-update
+"""Turns an `npx expo export` of the phone app into a JavaScript update for the server's /app-update (chatapp/pages.py)
 (expo-updates' protocol: docs.expo.dev/technical-specs/expo-updates-1). scripts\\app-update.ps1 runs it:
 
     python tools/make_app_update.py EXPORT_FOLDER RUNTIME_VERSION [RELEASES_FOLDER]
@@ -10,7 +10,7 @@ It writes, in RELEASES_FOLDER (releases/ by default):
     app-assets/<md5>.<ext>                        each file, named by its content (never changes)
     app-updates/<runtime version>/<time>.json     the manifest: which files, with their fingerprints
 
-The manifest's "file" fields become full addresses when server.py hands it out.
+The manifest's "file" fields become full addresses when the server hands it out.
 """
 import base64
 import hashlib

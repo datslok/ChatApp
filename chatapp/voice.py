@@ -70,7 +70,7 @@ def members_in(room):
 
 def voice_members_message(user_id):
     """Who's in each voice channel: {"type": "voice_members", "rooms": {"lounge": [...members_in]}}.
-    Nothing for someone limited (see "Channels"), who has no Lounge."""
+    Nothing for someone limited (see channels.py, "Channels"), who has no Lounge."""
     rooms = {room: members_in(room) for room in VOICE_ROOMS} if may_use_lounge(user_id) else {}
     return {"type": "voice_members", "rooms": rooms}
 

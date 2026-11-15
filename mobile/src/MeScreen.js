@@ -12,7 +12,7 @@ import { Activity, Banner } from './ProfileScreen';
 import { chatLabel } from './chats';
 import { LOUNGE_ROOM } from './voice';
 
-// The ones you can choose (server.py, PRESENCES), with the web page's names and explanations.
+// The ones you can choose (chatapp/presence.py, PRESENCES), with the web page's names and explanations.
 const PRESENCES = [
   { key: 'online', name: 'Online', help: '' },
   { key: 'idle', name: 'Idle', help: 'Shown as away' },

@@ -1,9 +1,9 @@
-# From the development PC: copies a video for the seasonal easter egg (server.py, "Seasons") into the
+# From the development PC: copies a video for the seasonal easter egg (chatapp/pages.py, "Seasons") into the
 # server PC's seasonal\ folder, named after its season:
 #
 #   .\scripts\seasonal-upload.ps1 "external\SpOwOky OwOky Pumpkin Song.mp4" halloween
 #
-# The season's name is one from SEASONS in server.py (the file becomes halloween.mp4 there). Only .mp4
+# The season's name is one from SEASONS in chatapp/pages.py (the file becomes halloween.mp4 there). Only .mp4
 # videos. No restart is needed: pages see the season the next time they connect. The videos aren't in
 # git (seasonal\ is git-ignored), so this is how they get there; the server's nightly backup keeps them.
 # Uses SSH's file copy (scp), set up once with scripts\server-connect.ps1.

@@ -12,7 +12,7 @@ from PIL import Image
 
 
 # Settings from the environment. serve.ps1 loads them from the .env file (which is never committed).
-# New accounts need an invite link from someone in the chat ("Invites"). Only "0" turns that off (dev.env:
+# New accounts need an invite link from someone in the chat (accounts.py, "Invites"). Only "0" turns that off (dev.env:
 # development has no strangers), so a server whose .env forgot it stays closed.
 REQUIRE_INVITE = os.environ.get("REQUIRE_INVITE", "1") != "0"
 SECURE_COOKIES = os.environ.get("SECURE_COOKIES") == "1"  # 1 = cookies only ever sent over HTTPS

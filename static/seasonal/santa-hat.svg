@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 68 58">
-  <!-- A Santa hat for the seasonal easter egg (server.py, "Seasons"): worn on your own picture in
+  <!-- A Santa hat for the seasonal easter egg (chatapp/pages.py, "Seasons"): worn on your own picture in
        December. The red cone flops over to the right; a white fur band below, a pompom at its tip. -->
   <path d="M8 46 Q 14 12 40 9 Q 58 7 60 28 Q 52 20 45 23 Q 46 36 56 46 Z" fill="#d62828" />
   <!-- A darker fold down its middle, so it looks round rather than flat. -->

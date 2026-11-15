@@ -2,7 +2,7 @@
 
 pytest reads this file by itself before the tests (it's where "fixtures" go: setup code that tests ask
 for by naming it as an argument). The tests only ever talk to the server from the outside, like the web
-page and the phone app do: HTTP requests and WebSocket messages. They never import server.py, so they
+page and the phone app do: HTTP requests and WebSocket messages. They never import server.py or chatapp/, so they
 keep working however its code is arranged inside.
 
     def test_something(server, owner):
@@ -220,7 +220,7 @@ class Server:
 
     def email_link(self, address, path, timeout=5):
         """The newest link to `path` (like "/verify") in an email to this address. Without SMTP_HOST the
-        server prints each email instead of sending it (server.py, send_email); emails go out in the
+        server prints each email instead of sending it (chatapp/accounts.py, send_email); emails go out in the
         background after the answer, so this waits a moment for it."""
         deadline = time.monotonic() + timeout
         while True:

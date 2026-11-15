@@ -169,7 +169,7 @@ def users_message():
         " JOIN roles ON roles.id = user_roles.role_id ORDER BY roles.position"
     ):
         roles_of.setdefault(user_id, []).append(role_id)
-    # Who has a limited role (not admins): left out of open channels' member lists (see "Channels").
+    # Who has a limited role (not admins): left out of open channels' member lists (see channels.py, "Channels").
     limited = {user_id for (user_id,) in db.execute(
         "SELECT user_roles.user_id FROM user_roles JOIN roles ON roles.id = user_roles.role_id"
         " JOIN users ON users.id = user_roles.user_id WHERE roles.limited = 1 AND users.is_admin = 0 AND users.is_bot = 0"
@@ -183,15 +183,15 @@ def users_message():
             "activity": activity_of(user_id, presence),  # playing, listening to, using (or None)
             "avatar": avatar, "banner": banner, "status": status, "bio": bio, "admin": bool(admin),
             "bot": bool(bot),  # the AI bot: the page offers it in DMs' @ suggestions too
-            "owner": bool(owner),  # the server's owner (see "Bans and admins")
+            "owner": bool(owner),  # the server's owner (see admin.py, "Bans and admins")
             "roles": roles_of.get(user_id, []),  # role ids, the top one first (see "roles"; hidden: users_for)
-            "limited": user_id in limited,  # sees only their private channels (see "Channels")
+            "limited": user_id in limited,  # sees only their private channels (see channels.py, "Channels")
         })
     return {"type": "users", "users": users}
 
 
 def users_for(user_id, message):
-    """The users message as this person may see it: hidden roles (see "Roles") left out, but for admins."""
+    """The users message as this person may see it: hidden roles (see channels.py, "Roles") left out, but for admins."""
     if is_admin(user_id):
         return message
     hidden = hidden_role_ids()

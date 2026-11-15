@@ -3,7 +3,7 @@
 // Loaded in <head>, unlike the other scripts: it runs before the browser draws anything, so the
 // page appears in your theme straight away, from the copy kept in this browser. The server keeps
 // the theme, colours and font with your account, sends them in "welcome" (core.js) and to all your
-// open pages after a change ("appearance"), and checks every value (server.py, change_appearance).
+// open pages after a change ("appearance"), and checks every value (chatapp/accounts.py, change_appearance).
 // The text size and scale are this device's own (the user's wish: a phone and a big screen want
 // different sizes): they're only in that copy in this browser, never sent to the server.
 //
@@ -13,7 +13,7 @@
 // desktop app's own zoom (main.rs, set_zoom); browsers have Ctrl + and Ctrl − for that.
 
 // The fonts to choose from: Windows' own, each with a similar one for other systems after it.
-// (The names must be the same as APPEARANCE_FONTS in server.py.)
+// (The names must be the same as APPEARANCE_FONTS in chatapp/accounts.py.)
 const APPEARANCE_FONTS = {
   system: "system-ui, sans-serif",
   calibri: "Calibri, Carlito, sans-serif",

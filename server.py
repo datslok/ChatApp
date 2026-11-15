@@ -113,7 +113,7 @@ LIMITS = {
     "files_per_message": MAX_FILES_PER_MESSAGE,  # (also how many files the tray holds)
     "gif_size": MAX_GIF_SIZE,  # profile pictures, banners and emoji (they come whole)
     "image_types": sorted(IMAGE_TYPES),  # (a set isn't JSON)
-    "thumb_sizes": THUMB_SIZES,  # the ?size= a picture can be asked for (see "Thumbnails")
+    "thumb_sizes": THUMB_SIZES,  # the ?size= a picture can be asked for (see files.py, "Thumbnails")
     "group_size": MAX_GROUP_SIZE,
     "channel_name": MAX_CHANNEL_NAME,  # also group names
     "role_name": MAX_ROLE_NAME,
@@ -121,7 +121,7 @@ LIMITS = {
     "bio": MAX_BIO_LENGTH,
     "ban_reason": MAX_BAN_REASON,
     "feedback": MAX_FEEDBACK_LENGTH,
-    "idle_minutes": IDLE_MINUTES_CHOICES,  # Settings → Notifications' choices (see "Away from the PC")
+    "idle_minutes": IDLE_MINUTES_CHOICES,  # Settings → Notifications' choices (see presence.py, "Away from the PC")
 }
 
 
@@ -138,7 +138,7 @@ async def chat(websocket: WebSocket):
 
     await websocket.accept()
     # The first connection since the server started starts watching for idle, and re-packs older videos
-    # once (see "Re-packing videos"); later ones find them running.
+    # once (see files.py, "Re-packing videos"); later ones find them running.
     start_watching_presences()
     start_repacking()
     # No channel until they "join", no voice room until they say they joined one.
@@ -146,12 +146,12 @@ async def chat(websocket: WebSocket):
                           "looking": False,  # looking at it right now (the page says, see "looking")
                           "away_since": time.time(),  # since when it isn't (None while it is): for "idle"
                           "app": False,      # the Windows app (the page says so in "looking" too)
-                          "pc_idle": False,  # nobody at that PC for a while ("looking" too; "Away from the PC")
+                          "pc_idle": False,  # nobody at that PC for a while ("looking" too; presence.py, "Away from the PC")
                           "mobile": False,   # a phone (in "looking" too): see on_phone_only
                           "android": False,  # the Android app, not a phone's browser ("looking" too): device_of
                           "bot": is_bot(user_id),  # a bot gets each message's device (see send)
                           "activity": None,  # what they're doing, if this page says (see "activity")
-                          "stuck": False,    # not reading what we send: given up on (see "Stuck connections")
+                          "stuck": False,    # not reading what we send: given up on (see connections.py, "Stuck connections")
                           "task": asyncio.current_task()}  # this chat() call, for stopping it then
     try:
         # Tell the page who it is (the id is for building DM names).
@@ -162,16 +162,16 @@ async def chat(websocket: WebSocket):
             "page_version": PAGE_VERSION,  # a different one than it was loaded with: it reloads
             "appearance": appearance_of(user_id),  # Settings → Appearance (None: the defaults)
             "presence": presence_of(user_id),  # the status they chose (the others may see another: users)
-            "idle_minutes": idle_minutes_of(user_id),  # away from the PC after (see "Away from the PC")
+            "idle_minutes": idle_minutes_of(user_id),  # away from the PC after (see presence.py, "Away from the PC")
             "vapid_public_key": VAPID_PUBLIC_KEY or None,  # for subscribing to push (None: not set up)
             "phone_push": firebase_account is not None,  # can the phone app get pushes (FCM)?
-            "season": current_season(),  # the seasonal easter egg ("Seasons"; None: none now)
+            "season": current_season(),  # the seasonal easter egg (pages.py, "Seasons"; None: none now)
         })
         await send(websocket, channels_message(user_id))  # (they may have changed while away)
         await send(websocket, friends_message(user_id))
         await send(websocket, groups_message(user_id))
         await send(websocket, mutes_message(user_id))
-        await send(websocket, pinned_chats_message(user_id))  # (see "Recent and pinned DMs")
+        await send(websocket, pinned_chats_message(user_id))  # (see messages.py, "Recent and pinned DMs")
         await send(websocket, chat_activity_message(user_id))
         await send(websocket, blocks_message(user_id))
         await send(websocket, roles_message(user_id))  # (before "users", whose roles refer to these)
@@ -464,7 +464,7 @@ async def chat(websocket: WebSocket):
 
             elif kind == "chat_info" and channel is not None:
                 # {"type": "chat_info", "tab": "media" | "files" | "links", "before": a message id or null}:
-                # the chat info panel of the DM or group we're in ("Chat info" above). The answer
+                # the chat info panel of the DM or group we're in (messages.py, "Chat info"). The answer
                 # repeats tab and before, so the page knows which question it answers.
                 tab = data.get("tab")
                 before = data.get("before")
@@ -600,12 +600,12 @@ async def chat(websocket: WebSocket):
     except asyncio.CancelledError:
         if not clients[websocket]["stuck"]:
             raise  # (the server is shutting down)
-        # send() gave up on it (see "Stuck connections"): it ends here, cleaned up below.
+        # send() gave up on it (see connections.py, "Stuck connections"): it ends here, cleaned up below.
     finally:
         voice_room = clients[websocket]["voice"]
         gone = clients.pop(websocket)
         # A phone's connection closing while it was locked or left (Android cuts it): still idle for a
-        # while, from when it was locked (see "Statuses"). Not when it closed with the app on screen (logging
+        # while, from when it was locked (see presence.py, "Statuses"). Not when it closed with the app on screen (logging
         # out, a dropped network in use: back in a moment, or really gone).
         if gone["mobile"] and gone["away_since"] is not None:
             phones_away[user_id] = max(gone["away_since"], phones_away.get(user_id, 0))

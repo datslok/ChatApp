@@ -1,5 +1,5 @@
 // "Check your inbox": a new account that hasn't clicked its email's link yet (the web page's
-// static/verify.html). Until then the server treats it as logged out everywhere but here (server.py,
+// static/verify.html). Until then the server treats it as logged out everywhere but here (chatapp/accounts.py,
 // "Email verification"), so without this screen the app just fell back to an empty login screen.
 // Send again, change a mistyped address, or log out; and every 5 seconds we ask whether the link has
 // been clicked (on this phone or anywhere else), then on to the chat.

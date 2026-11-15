@@ -11,7 +11,7 @@
 //     rectangle reaches past its edges, the part that overlaps is sent with a rectangle in the address
 //     and the server adds the see-through space (Android's manipulator can't: its extent is web-only);
 //   - an animated GIF is sent whole with that rectangle in the address, and the server cuts it out of
-//     every frame (server.py, make_animated_webp), so it keeps moving. The same as the web page.
+//     every frame (chatapp/files.py, make_animated_webp), so it keeps moving. The same as the web page.
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
 import { useState } from 'react';

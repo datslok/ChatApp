@@ -17,7 +17,7 @@ import secrets
 import sqlite3
 from pathlib import Path
 
-from argon2 import PasswordHasher  # the same password hashing as server.py
+from argon2 import PasswordHasher  # the same password hashing as the server (chatapp/accounts.py)
 from PIL import Image
 
 parser = argparse.ArgumentParser(description="Make the AI bot's account, or give it a new password.")

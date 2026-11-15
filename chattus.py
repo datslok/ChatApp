@@ -32,7 +32,7 @@ import anthropic  # Anthropic's package for the Claude API (only used with CHATT
 from PIL import Image  # Pillow (in requirements.txt, for the server's pictures): shrinking pictures for the model
 from websockets.asyncio.client import connect  # the WebSocket library (installed with uvicorn[standard])
 
-Image.MAX_IMAGE_PIXELS = 25_000_000  # like server.py: refuse "decompression bombs" (tiny files claiming huge sizes)
+Image.MAX_IMAGE_PIXELS = 25_000_000  # like the server (chatapp/config.py): refuse "decompression bombs" (tiny files claiming huge sizes)
 
 HOME = "chattus"           # his own channel: he answers every message there
 CONTEXT_MESSAGES = 20      # how many of the latest messages the model reads
@@ -40,7 +40,7 @@ CLAUDE_CONTEXT_MESSAGES = 200  # ... with Claude (fetched like scrolling up: 50 
 MAX_ANSWER_TOKENS = 400    # an emergency brake on length (the prompt asks for short answers)
 CLAUDE_MAX_TOKENS = 2000   # ... with Claude more, as its (short) thinking counts too
 CLAUDE_TIMEOUT = 90        # seconds before a Claude request counts as stuck (and is tried again)
-MAX_TEXT_LENGTH = 2000     # the chat's own limit for a message (server.py)
+MAX_TEXT_LENGTH = 2000     # the chat's own limit for a message (chatapp/config.py)
 MAX_AGE = timedelta(hours=1)  # older messages are never answered (after he was offline for a while)
 
 SYSTEM_PROMPT = """You are Chattus, a friendly and helpful cat who lives in a small group chat of friends.
@@ -1086,7 +1086,7 @@ class Chattus:
                 conversation.append({"role": "assistant", "content": text})
                 continue
             replying = f"(replying to {message['reply']['name']}) " if (message.get("reply") or {}).get("name") else ""
-            # The message he answers says where it was written (the server tells bots: server.py, device_of),
+            # The message he answers says where it was written (the server tells bots: chatapp/connections.py, device_of),
             # so a how-to answer can give that device's way (MANUAL_PROMPT).
             device = f" (writing from the {message['sent_from']})" if message["id"] == target["id"] and message.get("sent_from") else ""
             line = f"[{self.when(message)}] {message['name']}{device}: {replying}{text}"

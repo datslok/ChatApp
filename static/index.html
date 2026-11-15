@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <!-- The tab icon. "?v=2": a new address for each new icon, so nobody keeps an old one (browsers and Cloudflare may keep /favicon.ico for a day). -->
   <link rel="icon" href="/favicon.ico?v=2">
-  <!-- The phone app (a PWA): its name, icons and look, so phones offer "Install app" (server.py, /manifest.json). -->
+  <!-- The phone app (a PWA): its name, icons and look, so phones offer "Install app" (chatapp/pages.py, /manifest.json). -->
   <link rel="manifest" href="/manifest.json">
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
   <meta name="theme-color" content="#1e1f22">
@@ -472,7 +472,7 @@
         <h3>Email</h3>
         <form id="email-form">
           <p>Current: <strong id="current-email">…</strong></p>
-          <!-- A new address waiting for its link to be clicked (server.py, "Email verification"). -->
+          <!-- A new address waiting for its link to be clicked (chatapp/accounts.py, "Email verification"). -->
           <div id="pending-email" hidden>
             <p>Waiting for you to verify <strong id="pending-email-address"></strong>: click the link we
               sent there. Until then, your current address stays.</p>
