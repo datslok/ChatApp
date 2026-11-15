@@ -25,6 +25,10 @@ the point is for me to understand how it works, not just to have it done.
 - **docs/notes/ is how it works inside.** Before changing an area, read its notes file (index below).
   In the same commit as a change, update that file: what the code does, why, and what was tried. This
   file only keeps what every session needs.
+- **Keep the docs up to date, and keep CLAUDE.md short.** Whenever something changes or is decided, update
+  the guide or notes it belongs in, in the same commit. New information goes into docs/guides/ or docs/notes/,
+  and CLAUDE.md only points to it (a rule in a line or two, plus the file). The exceptions are what must stay
+  out of the public repo's docs (our own addresses and setup, under "Hosting") and how we work together.
 - **Security basics still matter**, since friends will use this for real: never insert user text with
   `innerHTML`, hash passwords with a proper library, never commit secrets.
 
@@ -84,10 +88,9 @@ Gathered from the notes; the notes have the details and the reasons.
   `[Environment]::GetEnvironmentVariable(..., 'User')`.
 
 **Going live**
-- A feature that goes live goes live everywhere, in the same go: deploying the server (web page and Windows
-  app pages) always comes with the phone app's live update (`scripts\app-update.ps1`, which also deploys), and
-  changed desktop app code with a desktop release. If the phone part needs a new APK (native changes,
-  app-update.ps1 refuses), say so rather than leaving it out silently. From away: `-ViaGitHub`.
+- A feature that goes live goes live everywhere at once: deploy with `scripts\app-update.ps1` (it deploys too,
+  so the phone app is updated along with everything else), and release the desktop app when its code changed.
+  If the phone part needs a new APK, say so. How: docs/guides/running.md, "Updating". From away: `-ViaGitHub`.
 
 **What's new**
 - In the same commit as every feature friends would notice: a line in `static/changelog.json`'s `changes`
