@@ -12,6 +12,12 @@ From your own PC, after committing your changes:
 
 The AI bot (if you set it up) restarts with every update, so it always runs the newest `chattus.py`.
 
+`deploy.ps1` updates the server, the web page and the Windows app's pages, but not the phone app: its code goes
+out separately. If people use the phone app, run `.\scripts\app-update.ps1` instead (it deploys too), so a change
+goes live everywhere at once rather than on PCs first (see [the phone app's guide](phone-app.md)). If the phone
+part needs a new APK, it says so. Changes to the Windows app itself need a release of their own
+([desktop-app.md](desktop-app.md)).
+
 Or on the server itself (PowerShell as administrator, in `C:\ChatApp`): `.\scripts\server\update.ps1`.
 Both fetch the newest code from GitHub, install any new packages and restart the chat. Calls carry on
 (unless you restart voice too).
