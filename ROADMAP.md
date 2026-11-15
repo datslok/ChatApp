@@ -133,7 +133,7 @@
     - [x] Searching the chat (with Claude: older messages he can't see; only the channels and the chat he's asked in), and a "bot" badge
 - [ ] **24.** Tidier server code: server.py (about 5,900 lines) split into modules by topic
     - [x] A test suite first (tests/, test.ps1): a throwaway server tested from the outside only, so it proves the split changes nothing
-    - [ ] The shared bottom layer: the database (db.py) and what every part uses (connections, sending, the logged-in user)
+    - [x] The shared bottom layer: the database (db.py) and what every part uses (connections, sending, the logged-in user)
     - [ ] One group per step, each with FastAPI's APIRouter and the whole suite run after it: accounts, messages, channels, people, files, voice, push, web (previews, GIFs), pages
     - [ ] server.py left with the app, the routers and the WebSocket handler; CLAUDE.md's "server.py, 'Section'" references updated
 

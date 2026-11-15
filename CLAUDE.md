@@ -36,6 +36,11 @@ the point is for me to understand how it works, not just to have it done.
 ## Layout
 
 - `server.py`: FastAPI app. Serves the page and the `/ws` WebSocket endpoint that broadcasts messages.
+  Being split into `chatapp/` (milestone 24; started with `uvicorn server:app` as before): `config.py`
+  (environment settings, shared limits), `db.py` (`db`, tables, migrations), `connections.py` (`clients`,
+  `send`/`send_to_*`, nonces), `sessions.py` (`current_user`, `logged_in_user`/`_admin`, `is_admin`).
+  Layers: a module imports only from lower ones (config < db < sessions; connections), never server.py;
+  names are imported explicitly. A global another module reassigns must be read as `module.name`.
 - `static/index.html`: the chat page's markup. Its styles are in `static/css/chat.css`, its script in
   `static/js/`: plain scripts (not ES modules) sharing one global scope, loaded in this order:
   `icon-shapes.js` and `icons.js` (the line icons, see "Icons"), `core.js` (elements, connecting, server messages, channels, sidebar), `notifications.js` (and every

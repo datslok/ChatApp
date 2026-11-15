@@ -1005,8 +1005,11 @@ quit the app completely (also from the tray) and start it again.
 
 ## Working on the code
 
-- `server.py`: the whole server: accounts, messages, channels, uploads, link previews, voice tickets,
-  the WebSocket. Sections are marked with `# ---------- Name ----------` comments.
+- `server.py`: the server: accounts, messages, channels, uploads, link previews, voice tickets,
+  the WebSocket. Sections are marked with `# ---------- Name ----------` comments. It's being split into
+  modules by topic, in `chatapp/`: so far `config.py` (settings from the environment, shared limits),
+  `db.py` (the database and its migrations), `connections.py` (open WebSockets and sending to them) and
+  `sessions.py` (who is logged in). A module only imports from the ones below it, never from server.py.
 - `static/index.html`, `static/css/chat.css` and `static/js/`: the chat page. The scripts are plain
   scripts sharing one global scope, loaded in the order listed in `index.html`.
 - `static/login.html`, `reset.html`, `download.html`: the other pages.
