@@ -1010,8 +1010,10 @@ quit the app completely (also from the tray) and start it again.
   modules by topic, in `chatapp/`: so far `config.py` (settings from the environment, shared limits),
   `db.py` (the database and its migrations), `sessions.py` (who is logged in), `users.py` (small facts about
   people: bots, names, friendships, blocks), `access.py` (who may see which channel, group, DM or message)
-  and `connections.py` (open WebSockets and sending to them). A module only imports from the ones below it,
-  never from server.py.
+  and `connections.py` (open WebSockets and sending to them); then the topics, each with its own routes
+  (a FastAPI `APIRouter` that server.py adds with `app.include_router`): `pages.py` (the HTML pages, static
+  files, seasons, downloads, the phone app's updates) and `files.py` (uploads, thumbnails, videos, removing
+  metadata, cropping pictures). A module only imports from the ones below it, never from server.py.
 - `static/index.html`, `static/css/chat.css` and `static/js/`: the chat page. The scripts are plain
   scripts sharing one global scope, loaded in the order listed in `index.html`.
 - `static/login.html`, `reset.html`, `download.html`: the other pages.

@@ -41,9 +41,13 @@ the point is for me to understand how it works, not just to have it done.
   `sessions.py` (`current_user`, `logged_in_user`/`_admin`, `is_admin`), `users.py` (is_bot, username_of,
   is_owner, friendships, blocks, befriend_bots/add_bots_to_groups at start), `access.py` (read-only: channel
   visibility, group/DM membership, `can_join`, `visible_chats`), `connections.py` (`clients`, `send`/`send_to_*`,
-  nonces, `background_tasks`). Layers, low to high: config, db, sessions, users, access, connections, then the
-  topics (planned: files, web, presence, push, messages, emoji, people, groups, voice, channels, accounts,
-  admin; pages beside them). A module imports only from lower ones, never server.py; names are imported
+  nonces, `background_tasks`), `pages.py` (pages, Seasons, static file classes, PAGE_VERSION, downloads,
+  /app-update), `files.py` (uploads, thumbnails, re-packing, removing metadata, is_video, file_info/files_note,
+  crop/receive_picture). Topic modules have `router = APIRouter()`; server.py has one `app.include_router`
+  line each, then the static mounts (Mounts stay on `app`). FastAPI 0.163 keeps an included router whole in
+  app.routes (`_IncludedRouter`, `.original_router.routes`). Layers, low to high: config, db, sessions,
+  users, access, connections, pages, files, then (planned) web, presence, push, messages, emoji, people,
+  groups, voice, channels, accounts, admin. A module imports only from lower ones, never server.py; names are imported
   explicitly. Background starters are functions in their module (`start_repacking`, `start_watching_presences`),
   so no module reassigns another's global.
 - `static/index.html`: the chat page's markup. Its styles are in `static/css/chat.css`, its script in
