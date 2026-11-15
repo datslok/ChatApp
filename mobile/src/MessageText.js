@@ -190,9 +190,14 @@ function hasInlineMath(parts) {
 // (1️⃣), or a picture with its marks (FE0F, skin tones), joined to more by "glue" (200D) like 👩‍💻.
 const ONE_EMOJI = /\p{Regional_Indicator}{2}|[#*0-9]️?⃣|\p{Extended_Pictographic}[️\u{1F3FB}-\u{1F3FF}]*(?:‍\p{Extended_Pictographic}[️\u{1F3FB}-\u{1F3FF}]*)*/gu;
 
+// An emoji or a run of spaces, for JumboEmoji.
+const EMOJI_OR_SPACE = new RegExp(`\\s+|${ONE_EMOJI.source}`, 'gu');
+
 // A message of only emoji, drawn big: a row of pieces centred on each other, the custom ones as 48 px
 // pictures and the rest as text without a fixed line height. (In one line of text, Android sat the
 // emoji lower than the pictures and cut off their bottoms.) split() keeps the <:17> tokens' ids.
+// Spaced like the text, as on the web page: emoji written together touch, a space between them is a
+// space's width (the row itself has no gap between pieces; wrapped rows 2 px apart, like the web's line height).
 function JumboEmoji({ text, emoji, editedLabel }) {
   const styles = useStyles(makeStyles);
   return (
@@ -200,8 +205,10 @@ function JumboEmoji({ text, emoji, editedLabel }) {
       {text.split(/<:(\d+)>/).map((part, index) => {
         if (index % 2 === 1) return <CustomEmoji key={index} item={emoji[part]} size={48} />;
         // Each emoji a piece of its own: Android measured a run of big emoji too narrow, and cut the
-        // last one off. (The spaces between them: the row's gap does that.)
-        return (part.match(ONE_EMOJI) ?? []).map((one, n) => <Text key={`${index}-${n}`} style={styles.jumboText}>{one}</Text>);
+        // last one off. A run of spaces becomes an empty piece one space wide.
+        return (part.match(EMOJI_OR_SPACE) ?? []).map((one, n) => (/^\s/.test(one)
+          ? <View key={`${index}-${n}`} style={styles.jumboSpace} />
+          : <Text key={`${index}-${n}`} style={styles.jumboText}>{one}</Text>));
       })}
       {editedLabel}
     </View>
@@ -213,7 +220,7 @@ export default function MessageText({ text, users, emoji, edited, note, onMentio
   const styles = useStyles(makeStyles);
   const jumbo = isOnlyEmoji(text);
   if (jumbo) {
-    return <JumboEmoji text={text} emoji={emoji} editedLabel={edited ? <Text style={styles.edited}>(edited)</Text> : null} />;
+    return <JumboEmoji text={text} emoji={emoji} editedLabel={edited ? <Text style={[styles.edited, styles.jumboEdited]}>(edited)</Text> : null} />;
   }
   const context = { users, emoji, jumbo, styles, onMention };  // (styles: for the helpers above, which aren't components)
   const textStyle = [styles.text, jumbo && styles.jumbo, note && styles.note];
@@ -531,8 +538,10 @@ const makeStyles = (colors, size) => StyleSheet.create({
   note: { color: colors.textMuted, fontStyle: 'italic' },
   jumbo: { fontSize: size(41.6), lineHeight: size(50) },
   // .jumbo: emoji at 2.6rem; pictures 48 px; all centred on one line, wrapping when there are many.
-  jumboRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 4 },
+  jumboRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', rowGap: 2 },
   jumboText: { fontSize: size(41.6), color: colors.text },
+  jumboSpace: { width: size(11) },  // a space at 2.6rem, about 0.27 em
+  jumboEdited: { marginLeft: 4 },  // (the row has no gap: a little room before "(edited)")
   edited: { fontSize: size(11.2), color: colors.textMuted, fontStyle: 'normal' },
   bold: { fontWeight: 'bold' },
   italic: { fontStyle: 'italic' },
