@@ -474,7 +474,8 @@ Since 2026-10-15. See [notifications.md](notifications.md) for the server's push
 - `mobile/google-services.json` (app.json `googleServicesFile`; it has both the release and dev apps) and the
   service account key `firebase-key.json` in the repo folder (config.py's `FIREBASE_KEY_FILE`), both git-ignored.
   The key goes with export/import/backup.ps1.
-- **The real server doesn't have the key yet** (copy it with scp when the app is distributed).
+- The real server has had the key since 2026-10-15 (`C:\ChatApp\firebase-key.json`, the default path; checked
+  2026-11-15). A new server gets it with the rest of the data (export/import).
 
 ### The server side
 
