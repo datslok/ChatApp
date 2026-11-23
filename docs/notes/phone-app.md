@@ -509,6 +509,22 @@ since 25.1 for installation IDs but still work).
 - `PushModule.kt`: the token; taps (`getInitialOpenAsync`/"onOpen" like shared-files: {channel, messageId, action
   open/ring/accept}); clearChat/clearCall/isCallShowing; canFillScreen (USE_FULL_SCREEN_INTENT, Android 14+).
 
+### Late and silent call pushes (feedback #11, 2026-11-23)
+
+Reported: the phone rang after the call was accepted on the PC, and only once the app was opened.
+
+- How: FCM delivers late and in any order when Android holds an app's pushes back, so "call_end" could come
+  before "call", which then rang for a call already answered.
+- Why it was held back: Google deprioritizes HIGH pushes that often show nothing. With the Windows app open the
+  phone got no "call" (send_push skips it) but still a silent HIGH "call_end" at every answer. Other apps (Discord,
+  WhatsApp) don't need battery "Unrestricted", and ours shouldn't either.
+- Server: push.py's `rang_phones` (memory, like `on_phones`) holds (user, chat) for each "call" a phone got;
+  `stop_ringing_phones` sends "call_end" only to those.
+- Phone (APK 1.0.12): `showCall` uses the push's `sentTime` (Google's clock): no ring once 30 s are
+  gone (`setTimeoutAfter` = what's left), none if a "call_end" for that chat was sent later (`callEnded` keeps
+  its time in SharedPreferences, `ended:<chat>`, so it outlives the app being stopped).
+- Not testable black-box: the test server has no FCM. A fake FCM endpoint would be the way, if needed.
+
 ### The JS side
 
 - `src/notifications.js`, `useNotifications` in App.js's Screen:

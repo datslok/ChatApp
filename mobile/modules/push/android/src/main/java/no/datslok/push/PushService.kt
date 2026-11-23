@@ -9,13 +9,14 @@ import com.google.firebase.messaging.RemoteMessage
 
 class PushService : FirebaseMessagingService() {
   // A push: its data is what server.py's send_push sent (every value as text). Runs on a background
-  // thread, with about 10 seconds to finish.
+  // thread, with about 10 seconds to finish. sentTime: when Google's servers sent it (milliseconds),
+  // which matters for calls: a phone Android held pushes back from can get them late, and out of order.
   override fun onMessageReceived(message: RemoteMessage) {
     val data = message.data
     when (data["kind"]) {
       "message", "friend" -> Notifications.showMessage(this, data)
-      "call" -> Notifications.showCall(this, data)
-      "call_end" -> data["channel"]?.let { Notifications.cancelCall(this, it) }
+      "call" -> Notifications.showCall(this, data, message.sentTime)
+      "call_end" -> data["channel"]?.let { Notifications.callEnded(this, it, message.sentTime) }
       // The chat was seen on another device (or the People page, "friends"): its notification goes,
       // and with it its number on the app's icon.
       "read" -> data["channel"]?.let { Notifications.cancelChat(this, it) }

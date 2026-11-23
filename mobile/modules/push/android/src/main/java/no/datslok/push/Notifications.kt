@@ -52,15 +52,18 @@ object Notifications {
   const val MESSAGE = "no.datslok.push.message"
   const val ACTION = "no.datslok.push.action"
   private const val SETTINGS = "no.datslok.push"
+  private const val RING_MILLIS = 30_000L  // how long the server rings (voice.py's RING_SECONDS)
+
+  // SharedPreferences: Android's small key/value store for an app, kept in a file on the phone.
+  private fun settings(context: Context) = context.getSharedPreferences(SETTINGS, Context.MODE_PRIVATE)
 
   // The server's address (src/config.js's SERVER), kept on the phone: the pushes only carry paths
   // ("/avatars/x"), and Decline must reach it with the app closed. PushModule saves it.
   fun saveServer(context: Context, server: String) {
-    context.getSharedPreferences(SETTINGS, Context.MODE_PRIVATE).edit().putString("server", server).apply()
+    settings(context).edit().putString("server", server).apply()
   }
 
-  fun server(context: Context): String? =
-    context.getSharedPreferences(SETTINGS, Context.MODE_PRIVATE).getString("server", null)
+  fun server(context: Context): String? = settings(context).getString("server", null)
 
   // Our two channels, made once (making one that exists changes nothing, but its sound can't change
   // after that: Android leaves those to the user).
@@ -136,9 +139,16 @@ object Notifications {
   // intent" opens our call screen (IncomingCallActivity): only the caller and the two buttons. The app
   // itself never shows over the lock screen (the user's rule: that would show the chats to whoever holds
   // the phone), so Accept opens it after unlocking, as for any app; Decline needs no unlocking.
-  fun showCall(context: Context, data: Map<String, String>) {
+  //
+  // sentTime: when the push left Google. A call push can arrive late (Android held the app's pushes back,
+  // then handed them over when it was opened), so it only rings for what's left of its 30 s, and not at
+  // all if a "call_end" for this chat was sent after it (pushes can arrive in either order).
+  fun showCall(context: Context, data: Map<String, String>, sentTime: Long) {
     val channel = data["channel"] ?: return
     if (!allowed(context)) return
+    val left = RING_MILLIS - (System.currentTimeMillis() - sentTime).coerceAtLeast(0)
+    if (left <= 0) return  // the server has stopped ringing already
+    if (sentTime <= settings(context).getLong("ended:$channel", 0)) return  // answered or over already
     makeChannels(context)
     val picture = picture(context, data["avatar"])
     if (picture != null) IncomingCallActivity.pictures[channel] = picture
@@ -174,7 +184,7 @@ object Notifications {
       .setCategory(NotificationCompat.CATEGORY_CALL)
       .setPriority(NotificationCompat.PRIORITY_MAX)
       .setOngoing(true)  // can't be swiped away: answer or decline
-      .setTimeoutAfter(30_000)  // the server stops ringing after 30 s anyway (RING_SECONDS)
+      .setTimeoutAfter(left)  // the server stops ringing 30 s after it called (RING_SECONDS)
       .build()
     // INSISTENT: the sound repeats until the notification goes, like a ringing phone.
     notification.flags = notification.flags or Notification.FLAG_INSISTENT
@@ -184,6 +194,14 @@ object Notifications {
   // A chat's notification goes when it's been seen (the chat opened in the app).
   fun cancelChat(context: Context, channel: String) {
     NotificationManagerCompat.from(context).cancel(channel, MESSAGE_ID)
+  }
+
+  // The server's "call_end": the call stopped ringing for us (answered somewhere, declined, over). Its
+  // time is kept (in the app's settings, which outlive the app being stopped), so a call push sent
+  // before it that turns up later doesn't ring. One number per chat, replaced each time.
+  fun callEnded(context: Context, channel: String, sentTime: Long) {
+    settings(context).edit().putLong("ended:$channel", sentTime).apply()
+    cancelCall(context, channel)
   }
 
   // A call stopped ringing (answered somewhere, declined, over): its notification and call screen go.

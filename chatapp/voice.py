@@ -18,7 +18,7 @@ from chatapp.access import (
     dm_people, group_members, group_title, is_dm_member, is_group_member, may_use_lounge
 )
 from chatapp.connections import clients, send, send_to_channel, send_to_user
-from chatapp.push import base64url, push_in_background
+from chatapp.push import base64url, push_in_background, stop_ringing_phones
 from chatapp.messages import announce_new_message, save_message, with_files
 
 router = APIRouter()
@@ -207,9 +207,9 @@ async def start_call(channel, caller):
 
 def stop_ringing(people, channel):
     """Take a ringing call off these people's phones: answered on another device, declined, or over.
-    (Their pages stop by themselves, from "call_answered" or "call_ended".)"""
-    if people:
-        push_in_background(list(people), {"kind": "call_end", "channel": channel}, ttl=RING_SECONDS, always=True)
+    (Their pages stop by themselves, from "call_answered" or "call_ended". Only phones it rang on get
+    told: see push.py, rang_phones.)"""
+    stop_ringing_phones(people, channel, RING_SECONDS)
 
 
 async def ring_timeout(channel):

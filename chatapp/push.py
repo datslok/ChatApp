@@ -256,6 +256,8 @@ async def send_push(user_ids, payload, ttl=24 * 60 * 60, urgency="normal", alway
                 await asyncio.to_thread(send_fcm, endpoint.removeprefix("fcm:"), payload, ttl)
                 if payload.get("kind") in ("message", "friend"):
                     on_phones.add((user_id, payload["channel"]))
+                elif payload.get("kind") == "call":
+                    rang_phones.add((user_id, payload["channel"]))
             except FcmTokenGone:
                 with db:
                     db.execute("DELETE FROM push_subscriptions WHERE endpoint = ?", (endpoint,))
@@ -308,6 +310,21 @@ def clear_on_phones(user_id, channel):
     if (user_id, channel) in on_phones:
         on_phones.discard((user_id, channel))
         push_in_background([user_id], {"kind": "read", "channel": channel}, always=True)
+
+
+# The same for ringing calls: rang_phones holds (user id, call's chat key) for every call a phone was
+# actually rung for. Only those phones get a "call_end" when the ringing stops. A HIGH push that shows
+# nothing (taking away a call the phone never got, when the Windows app rang instead) is what Google
+# counts against an app: enough of them and Android may hold its pushes, calls too, until it's opened.
+rang_phones = set()
+
+
+def stop_ringing_phones(people, channel, ttl):
+    """Take this call off the phones of these people that it rang on."""
+    rang = [person for person in people if (person, channel) in rang_phones]
+    rang_phones.difference_update((person, channel) for person in rang)
+    if rang:
+        push_in_background(rang, {"kind": "call_end", "channel": channel}, ttl=ttl, always=True)
 
 
 def push_message(people, message):
