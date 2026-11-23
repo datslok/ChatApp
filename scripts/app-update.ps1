@@ -10,7 +10,8 @@
 #
 # New JavaScript only goes to phones whose native code it was made for: their APK's version (the
 # "runtime version"). So if anything native changed since the last APK (mobile\modules\, mobile\plugins\,
-# mobile\app.json, the packages), this stops: release an APK instead (scripts\app-release.ps1).
+# mobile\app.json, the packages), this stops: release an APK instead (scripts\app-release.ps1). And if
+# nothing in mobile\ changed since that APK, there's no update to make: it only deploys.
 #
 # 1. Exports the bundle (npx expo export), 2. turns it into an update (tools\make_app_update.py: the
 # files in releases\app-assets\, a manifest in releases\app-updates\<version>\), 3. copies those to the
@@ -35,6 +36,15 @@ if ($native) {
     $native | ForEach-Object { Write-Host "  $_" }
     Write-Host "Phones with that APK can't run this JavaScript: release an APK instead (scripts\app-release.ps1)."
     exit 1
+}
+
+# Nothing of the phone app changed since that APK: its own bundle is what an update would be. No update
+# then (one identical to the APK's bundle made phones reload in a loop, 2026-11-23: see
+# docs/notes/phone-app.md, "Live updates"), only the deploy, so the server's changes still go live.
+if (-not (git diff --name-only $latest.commit HEAD -- mobile)) {
+    Write-Host "Nothing in mobile\ changed since the APK of version $($latest.version): phones already have this JavaScript. No update, only deploying."
+    & .\scripts\deploy.ps1
+    exit $LASTEXITCODE
 }
 
 # 1. Export: the bundle as release builds have it, with its pictures and sounds.

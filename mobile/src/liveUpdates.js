@@ -16,6 +16,30 @@ import * as Updates from 'expo-updates';
 
 const stateFile = new File(Paths.cache, 'reload-state.json');
 
+// The safety catch. Just before switching, the update we switch to is written here; after the restart,
+// expo-updates says which one is running (Updates.updateId). The same: it worked, the file goes. Not: that
+// update didn't take, and it's never switched to again (the file stays, so later starts skip it too).
+// Without this, an update the same as the APK's own bundle made phones reload over and over (2026-11-23):
+// nothing to download, the restart came back to the APK's bundle, which isn't the update, so it switched
+// again. (In documents, not the cache, which Android may empty.)
+const triedFile = new File(Paths.document, 'tried-update.txt');
+const sameId = (a, b) => !!a && !!b && a.toLowerCase() === b.toLowerCase();
+
+// The id of an update that didn't take, or null.
+const brokenUpdate = (() => {
+  try {
+    if (!triedFile.exists) return null;
+    const tried = triedFile.textSync().trim();
+    if (sameId(tried, Updates.updateId)) {
+      triedFile.delete();  // it's running: all good
+      return null;
+    }
+    return tried;
+  } catch {
+    return null;
+  }
+})();
+
 // What was on screen before the last switch, {view, drafts}, or null. Read once, when the app starts,
 // and removed (a later ordinary start begins afresh).
 export const restored = (() => {
@@ -36,14 +60,17 @@ export function useLiveUpdates({ connection, safe, save }) {
   latest.current = { safe, save };
   const ready = useRef(false);     // a newer bundle is downloaded and waiting
   const checking = useRef(false);  // (one check at a time)
+  const readyId = useRef(null);    // the waiting bundle's update id
 
   async function check() {
     if (__DEV__ || checking.current || ready.current) return;
     checking.current = true;
     try {
       const result = await Updates.checkForUpdateAsync();
-      if (result.isAvailable) {
+      const id = result.manifest?.id;
+      if (result.isAvailable && !sameId(id, brokenUpdate) && !sameId(id, Updates.updateId)) {
         await Updates.fetchUpdateAsync();
+        readyId.current = id;
         ready.current = true;
         switchIfSafe();
       }
@@ -60,6 +87,10 @@ export function useLiveUpdates({ connection, safe, save }) {
     try {
       if (!stateFile.exists) stateFile.create();
       stateFile.write(JSON.stringify(latest.current.save()));
+    } catch {}
+    try {
+      if (!triedFile.exists) triedFile.create();
+      triedFile.write(readyId.current ?? '');
     } catch {}
     Updates.reloadAsync().catch(() => {
       ready.current = true;  // (didn't work: try again at the next safe moment)

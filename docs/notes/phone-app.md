@@ -589,6 +589,17 @@ Since 2026-10-15.
   app.json or package*.json changed since android.json's commit (those need a new APK). It ends with deploy.ps1 so
   open apps reconnect, then runs `tools/prune_app_updates.py` here and on the server: the newest 3 manifests per
   version and the app-assets they name stay.
+- **The reload loop (2026-11-23).** An update made a minute after APK 1.0.12, with no change in mobile/, was the
+  APK's own bundle under another id. Phones downloaded nothing (every file was already theirs: no
+  /app-update/assets requests), reloaded, still ran the APK's bundle (`Updates.updateId` not the update's), so the
+  next check offered it again: a reload every few seconds, the call banner flashing (dmCalls emptied at each
+  connect). Stopped by moving the server's `releases/app-updates/1.0.12` to `releases/app-updates-held-1.0.12`
+  (/app-update -> 204). Not a version mix-up (1.0.11 -> 1.0.12 was right) nor the server split (app_update is
+  unchanged). Two guards since:
+  - app-update.ps1 makes no update when nothing in mobile/ changed since android.json's commit; it only deploys.
+  - liveUpdates.js writes the id it switches to in `tried-update.txt` (Paths.document). At the next start, if
+    `Updates.updateId` isn't that id, the update didn't take and is never switched to again; if it is, the file
+    goes. It also skips an "available" update whose id is the one running. So a bad update costs one reload.
 
 ### New APKs
 
