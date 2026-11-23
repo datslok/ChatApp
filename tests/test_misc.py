@@ -48,6 +48,21 @@ def test_the_voice_worklets_and_rnnoise(server):
     assert Client().get("/rnnoise-0.4.1/rnnoise-worklet.js").status == 404
 
 
+def test_the_deepfilternet_files(server):
+    # Noise suppression "Extra strong": a fixed version, kept a week. The two scripts must be served as
+    # JavaScript (import() and addModule refuse anything else), and the model as it is: if it said
+    # Content-Encoding gzip, the browser would unpack it before the loader sees it.
+    for name in ["deepfilternet.js", "deepfilternet-worklet-processor.js"]:
+        answer = Client().get("/workadventure-ns-0.2.0/" + name)
+        assert answer.status == 200 and "javascript" in answer.headers["content-type"], name
+        assert "max-age=604800" in answer.headers["Cache-Control"], name
+    wasm = Client().get("/workadventure-ns-0.2.0/df_bg.wasm")
+    assert wasm.status == 200 and wasm.body[:4] == b"\0asm"
+    model = Client().get("/workadventure-ns-0.2.0/DeepFilterNet3_onnx.tar.gz")
+    assert model.status == 200 and model.body[:2] == b"\x1f\x8b"
+    assert "content-encoding" not in {key.lower() for key in model.headers}
+
+
 def test_nothing_outside_static_is_reachable(server):
     stranger = Client()
     for path in ["/static/../server.py", "/static/js/../../server.py", "/static/js/..%2F..%2Fserver.py",

@@ -13,7 +13,8 @@
 //
 // The sound goes through the browser's Web Audio engine, as a chain of "nodes" (like guitar
 // pedals), all in one AudioContext:
-//   microphone → noise suppression (RNNoise, when it's "On") → mic volume (a GainNode)
+//   microphone → noise suppression (RNNoise when it's "On", DeepFilterNet when "Extra strong")
+//     → mic volume (a GainNode)
 //     → noise gate (static/voice-gate.js) → a track LiveKit sends
 //   each other person → their volume (a GainNode LiveKit makes for them) → speakers or headphones
 
@@ -34,6 +35,7 @@ const voiceMeterLevel = document.getElementById("voice-meter-level");
 const voiceGateSlider = document.getElementById("voice-gate");
 const voiceGateReadout = document.getElementById("voice-gate-readout");
 const voiceTestButton = document.getElementById("voice-test");
+const voiceNoiseNote = document.getElementById("voice-noise-note");
 
 let voiceRoom = null;       // the LiveKit Room we're in (or joining), or null
 let voiceRoomName = null;   // its name: "lounge", or a DM's "dm:3:7"
@@ -49,7 +51,7 @@ let micTesting = false;     // "Test microphone" in Settings is on
 
 // ----- Settings, remembered in this browser: they belong to this device's microphone and speakers.
 // Device ids "" mean the computer's default. Volumes in %, gate in decibels (-100 = always on).
-// Noise suppression: "on" (RNNoise), "light" (the browser's own) or "off".
+// Noise suppression: "strong" (DeepFilterNet), "on" (RNNoise), "light" (the browser's own) or "off".
 // Input mode: "voice" (the gate's line decides) or "ptt" (push to talk: a key decides, see below).
 const voiceSettings = {
   inputDevice: "", outputDevice: "", cameraDevice: "", micVolume: 100, outputVolume: 100, gate: -60,
@@ -104,6 +106,98 @@ async function setUpAudio() {
   return nodes;
 }
 
+// ----- "Extra strong": DeepFilterNet 3, a bigger AI filter than RNNoise (~4 times the computing,
+// still only ~3% of one core). Where RNNoise only turns frequency bands down, it also rebuilds the
+// voice's fine structure, so sharp sounds like key clicks are gone from the first one (RNNoise
+// needs a moment to "learn" them, and forgets again in every pause).
+//
+// It comes from npm's @workadventure/noise-suppression 0.2.0 (static/workadventure-ns-0.2.0/, see
+// CLAUDE.md): DeepFilterNet's Rust code compiled to WebAssembly (df_bg.wasm, 15 MB), the trained model
+// (8 MB) and a loader, deepfilternet.js. That's an "ES module" (a file that shares its functions with
+// `export` instead of putting them in the global scope), which a plain script loads with import().
+// So only pages that choose it download it, and the browser keeps it for a week afterwards.
+//
+// Its two limits: it may turn the background down by at most 25 dB while you talk (more sounds
+// like dropouts and a metallic background), and 45 dB in pauses, where a gate of its own takes over.
+// That gate holds your voice back 30 ms so it's already open when a word starts. A sound must last
+// 20 ms (2 frames) to count as speech there, which a key click doesn't. Then its own leveller
+// ("postGain") evens out your volume, instead of the browser's automatic gain, which works before
+// any filter and turned the background up in every pause ("pumping"; see openMic).
+//
+// It takes a while to download the first time: RNNoise ("On") works meanwhile, and openMic switches
+// over once it's there. If it can't load, or this computer can't keep up, "On" is used instead.
+const STRONG_FILES = "/workadventure-ns-0.2.0/";
+let strongFilter = null;   // {node, dispose} once it's made (it lives in the audio engine), or null
+let strongLoading = false; // its files are on their way
+let strongProblem = null;  // why it can't be used until the page reloads: "failed" or "slow"
+
+function loadStrongFilter(nodes) {
+  if (strongLoading || strongFilter || strongProblem) return;
+  strongLoading = true;
+  showNoiseNote();
+  makeStrongFilter(nodes).then((filter) => {
+    if (strongProblem || voiceSettings.noiseSuppression !== "strong") {
+      filter.dispose();  // gave up, or another choice was made while it loaded
+      return;
+    }
+    strongFilter = filter;
+    if (micStream) openMic().catch(() => {});  // switch from RNNoise to it
+  }, (error) => {
+    console.warn("Noise suppression (DeepFilterNet) didn't load:", error);
+    giveUpStrong("failed");
+  }).finally(() => {
+    strongLoading = false;
+    showNoiseNote();
+  });
+}
+
+async function makeStrongFilter({ context, micGain }) {
+  const { createDeepFilterNetAudioWorklet } = await import(STRONG_FILES + "deepfilternet.js");
+  const filter = await createDeepFilterNetAudioWorklet(context, {
+    moduleUrl: STRONG_FILES + "deepfilternet-worklet-processor.js",
+    wasmUrl: STRONG_FILES + "df_bg.wasm",
+    modelUrl: STRONG_FILES + "DeepFilterNet3_onnx.tar.gz",
+    minSpeechFrames: 2,  // a sound must last 20 ms to open its pause gate: key clicks are shorter
+    postGain: true,      // its leveller, after the filter (the browser's is off with it, see openMic)
+    onOverload: () => giveUpStrong("slow"),  // this computer can't keep up (it measures itself)
+  });
+  // "ready" once the model is running inside the audio engine (a moment after this). Until then it lets
+  // the microphone through as it is.
+  filter.ready.catch(() => giveUpStrong("failed"));
+  filter.node.connect(micGain);
+  return filter;
+}
+
+// Stop using it until the page reloads, and go back to RNNoise.
+function giveUpStrong(why) {
+  strongProblem = why;
+  dropStrongFilter();
+  showNoiseNote();
+  if (micStream && voiceSettings.noiseSuppression === "strong") openMic().catch(() => {});
+}
+
+function dropStrongFilter() {
+  if (!strongFilter) return;
+  strongFilter.dispose();  // frees its memory; it would otherwise keep running on nothing
+  strongFilter = null;
+}
+
+// The line under the choice in Settings, while "Extra strong" is chosen but not (yet) at work.
+function showNoiseNote() {
+  let note = "";
+  if (voiceSettings.noiseSuppression === "strong") {
+    if (strongProblem === "slow") {
+      note = "This computer can't keep up with Extra strong, so On is used instead. It tries again the next time the chat opens.";
+    } else if (strongProblem === "failed") {
+      note = "Extra strong didn't load, so On is used instead. It tries again the next time the chat opens.";
+    } else if (strongLoading) {
+      note = "Downloading Extra strong (only the first time). On is used until it's ready.";
+    }
+  }
+  voiceNoiseNote.textContent = note;
+  voiceNoiseNote.hidden = note === "";
+}
+
 // RNNoise: a small neural network, trained to tell speech from everything else (keyboards, fans,
 // dogs, ...). Every 10 ms it looks at the last 480 samples and turns down what isn't voice, never by
 // more than 20 dB (the cap, see the file). It's written in C and compiled to WebAssembly (code the
@@ -141,26 +235,35 @@ async function applyOutputDevice(context) {
 // ----- The microphone
 
 async function openMic() {
-  const { context, micGain, denoiser } = await getAudio();
+  const nodes = await getAudio();
+  const { context, micGain, denoiser } = nodes;
   await context.resume();  // an AudioContext starts paused until the page has been clicked
+  // "Extra strong" uses DeepFilterNet once it's there (RNNoise until then, or if it can't be used).
+  // Any other choice lets go of it, so it doesn't keep running.
+  const choice = voiceSettings.noiseSuppression;
+  if (choice === "strong") loadStrongFilter(nodes);
+  else dropStrongFilter();
+  const useStrong = choice === "strong" && strongFilter !== null;
   // "On" uses RNNoise (if it loaded), and then not the browser's own suppression as well: two
   // filters in a row can make voices sound watery. "Light" is the browser's own only.
-  const useRnnoise = voiceSettings.noiseSuppression === "on" && denoiser !== null;
+  const useRnnoise = !useStrong && (choice === "on" || choice === "strong") && denoiser !== null;
   const stream = await navigator.mediaDevices.getUserMedia({
     audio: {
       // "ideal": this one if it's there, otherwise the default (if it was unplugged).
       deviceId: voiceSettings.inputDevice ? { ideal: voiceSettings.inputDevice } : undefined,
       // The browser's own clean-up: no echo of the others from your speakers, an even volume,
-      // and (unless it's off or RNNoise does it) less steady background noise like fans and hum.
+      // and (unless it's off or an AI filter does it) less steady background noise like fans and hum.
+      // The even volume ("automatic gain") works before our filters, so in pauses it turns the
+      // background up for them to fight. With DeepFilterNet its own leveller does that job after it.
       echoCancellation: true,
-      noiseSuppression: voiceSettings.noiseSuppression !== "off" && !useRnnoise,
-      autoGainControl: true,
+      noiseSuppression: choice !== "off" && !useStrong && !useRnnoise,
+      autoGainControl: !useStrong,
     },
   });
   closeMic();  // another microphone was open (switching devices): close that one first
   micStream = stream;
   micSource = context.createMediaStreamSource(stream);
-  micSource.connect(useRnnoise ? denoiser : micGain);
+  micSource.connect(useStrong ? strongFilter.node : useRnnoise ? denoiser : micGain);
   listDevices();  // now that we may use the microphone, the browser tells us the devices' names
 }
 

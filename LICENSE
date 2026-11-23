@@ -32,4 +32,7 @@ Not covered by this license:
 - Third-party files included under their own licenses:
   static/livekit-client-*.umd.js (LiveKit, Apache License 2.0) and
   static/jitsi-rnnoise-0.2.1/ (Jitsi's build of Xiph's RNNoise: Apache
-  License 2.0 in its LICENSE file, RNNoise's BSD license in COPYING-rnnoise).
+  License 2.0 in its LICENSE file, RNNoise's BSD license in COPYING-rnnoise) and
+  static/workadventure-ns-0.2.0/ (WorkAdventure's noise-suppression package: MIT
+  in its LICENSE file; DeepFilterNet's code and model: MIT or Apache License 2.0,
+  in LICENSE-DeepFilterNet-MIT and LICENSE-DeepFilterNet-APACHE).

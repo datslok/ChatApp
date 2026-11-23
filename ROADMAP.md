@@ -34,7 +34,7 @@
     - [x] Voice tickets from our server (/voice-token: a JWT signed with the standard library)
     - [x] Lounge voice channel: join, mute, leave
     - [x] Voice settings: input and output device, mic and output volume, sensitivity (noise gate, with dB numbers)
-    - [x] Noise suppression like Discord's Krisp: Off / Light (the browser's own) / On (RNNoise, an AI filter; the default)
+    - [x] Noise suppression like Discord's Krisp: Off / Light (the browser's own) / On (RNNoise, an AI filter; the default) / Extra strong on PCs (DeepFilterNet 3, since 2026-11-23)
     - [x] Volume per person (in the profile popup, 0-200%)
     - [x] Who is in voice (in the sidebar, with 🔇 for muted) and a speaking ring
     - [x] Calls in DMs: ringing on every device, accept/decline, call notes in the DM
@@ -179,13 +179,14 @@ with Windows, activity detection, zoom, drag-and-drop, hover bars and keyboard s
     - [x] Group rows in the sidebar show "N members"
     - [x] Profile in your own panel's menu
     - [x] "Add friends to send direct messages." when the DM list is empty
+- [ ] Noise suppression "Extra strong" (DeepFilterNet 3, on PCs since 2026-11-23) in the phone app too: libDF (Rust) built for Android in the call-service module, next to RNNoise in MicProcessor.kt; check that phones keep up first
 
 ## Maybe later
 
 - [ ] Android developer verification, before Google enforces it in Norway (worldwide from 2027): register as a developer (the hobbyist account, if it fits 5-20 phones) and the app's package and release key, so our own APKs keep installing. No Play Store needed
 - [ ] Discord-style photo picker in the phone app: our own grid of recent photos under the text box (needs photo access, "limited access" included), which also gives the photos' real names
 - [ ] Soundboard in voice (short clips anyone in a call can play for everyone; uploads like custom emoji, a few built-in ones, its own volume)
-- [ ] DeepFilterNet 3 noise suppression on PCs, if RNNoise 0.2 with the -20 dB cap (2026-11-07) still lets keyboards through: a stronger AI filter (rebuilds the voice's overtones instead of only turning bands down), as a choice in Settings → Voice & audio next to On/Light/Off. Runs on each PC (roughly 5-20% of one core, to measure first; ~40 ms delay), not on the server. Only our own files: the model from Rikorose/DeepFilterNet's GitHub (8 MB, pinned hash), the wasm built from its Rust source, our own worklet with `atten_lim` as the cap. The npm package `deepfilternet3-noise-filter` (Mezon) was read and is clean, but downloads both files from cdn.mezon.ai unchecked
+- [x] DeepFilterNet 3 noise suppression on PCs (2026-11-23): "Extra strong" in Settings → Voice & audio next to On/Light/Off, since RNNoise 0.2 with the -20 dB cap still let keyboards through. Runs on each PC, not on the server. From npm's `@workadventure/noise-suppression` 0.2.0 (MIT, its files committed after checking npm's hash; nothing fetched from anyone's CDN): 25 dB limit while talking, 45 dB in pauses through its pause gate, its leveller instead of the browser's automatic gain
 
 ## Known limitations
 

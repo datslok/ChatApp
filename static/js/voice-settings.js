@@ -64,13 +64,14 @@ voiceInputSelect.addEventListener("change", async () => {
   if (micStream) await openMic().catch(() => {});
 });
 
-// Noise suppression: Off, Light or On (voice.js, openMic). Changing it opens the microphone again
-// with the new choice, the same way as switching microphones, so a call carries on.
+// Noise suppression: Off, Light, On or Extra strong (voice.js, openMic). Changing it opens the
+// microphone again with the new choice, the same way as switching microphones, so a call carries on.
 const voiceNoiseSelect = document.getElementById("voice-noise");
 voiceNoiseSelect.value = voiceSettings.noiseSuppression;
 voiceNoiseSelect.addEventListener("change", async () => {
   voiceSettings.noiseSuppression = voiceNoiseSelect.value;
   saveVoiceSettings();
+  showNoiseNote();  // (the note under it belongs to Extra strong only)
   if (micStream) await openMic().catch(() => {});
 });
 

@@ -22,7 +22,7 @@ HTML, CSS and JavaScript for the page, no frameworks.
 - **People:** accounts by invite link (each one works once), with verified emails, friends and friend requests, profiles (picture, banner,
   status, bio; GIFs too), who's online and who's typing, admins who can tidy up.
 - **Voice and video:** a voice channel everyone can join and calls in DMs, with cameras, AI noise
-  suppression (RNNoise), a noise gate and a volume per person. **Screen sharing** up to 1440p at
+  suppression (RNNoise, or DeepFilterNet 3 on PCs), a noise gate and a volume per person. **Screen sharing** up to 1440p at
   60 fps with sound, encoded on the graphics card where possible.
 - **Notifications** for DMs and mentions, with sounds and muting. Clicking one goes to the message.
 - **A Windows app and an Android app** (both optional) with real notifications and automatic updates.
@@ -90,4 +90,4 @@ The app icons (the cats) are made by Niamh Hannon.
 
 The code is under the [MIT license](LICENSE): use it, change it and run your own copy. The cat icon
 isn't: it belongs to Niamh Hannon, so a copy of your own should use its own icon. LiveKit's browser
-library and the RNNoise files keep their own licenses (see [LICENSE](LICENSE)).
+library, the RNNoise files and DeepFilterNet's files keep their own licenses (see [LICENSE](LICENSE)).

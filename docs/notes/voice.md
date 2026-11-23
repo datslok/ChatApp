@@ -56,13 +56,14 @@ The microphone goes through Web Audio before LiveKit sends it, in this order:
 - mic volume,
 - then the noise gate `static/voice-gate.js`, an AudioWorklet.
 
-The AudioContext runs at 48 kHz for RNNoise. Voice settings are kept in the browser (localStorage
+The AudioContext runs at 48 kHz for RNNoise and DeepFilterNet. Voice settings are kept in the browser (localStorage
 "voiceSettings").
 
 ### Noise suppression
 
 | Setting | What it is |
 |---------|------------|
+| "Extra strong" (PCs, since 2026-11-23) | DeepFilterNet 3, WorkAdventure's worklet (see below) |
 | "On" (the default) | RNNoise 0.2, in our own worklet |
 | "Light" | the browser's own noise suppression |
 | "Off" | neither |
@@ -80,6 +81,51 @@ The AudioContext runs at 48 kHz for RNNoise. Voice settings are kept in the brow
 So `ORIGINAL` 0.1 of the original sound is mixed back in (a -20 dB floor). It is held back `LATE_BY` 2 frames,
 because 0.2 outputs 960 samples late (measured); out of step it would sound hollow. With the 10 ms of collecting,
 that makes 30 ms of delay in all.
+
+#### Extra strong: DeepFilterNet 3
+
+Since 2026-11-23, because clicks still came through as marbles after the cap. It's an extra choice, not the
+default (the user's wish: nobody is forced to download it). PCs only for now; the phone version is on ROADMAP's
+parity list.
+
+What other apps do (researched 2026-11-23): Discord and Jitsi's hosted service use Krisp (closed). OBS, Mumble and
+werman's plugin offer RNNoise, whose known weakness is sharp sounds like keys. Chrome's WebRTC once had a keyboard
+"transient suppressor", since removed. DeepFilterNet 3 is the open model newer projects move to.
+
+The files:
+
+- They come from npm's `@workadventure/noise-suppression` 0.2.0 (MIT). Only its DFN3 files are used, checked
+  against npm's integrity hash: `deepfilternet.js` (the loader, an ES module), `deepfilternet-worklet-processor.js`,
+  `df_bg.wasm` (libDF compiled to wasm, 15 MB) and `DeepFilterNet3_onnx.tar.gz` (the model, 8 MB).
+- They're kept in `static/workadventure-ns-0.2.0/` with the package's LICENSE and DeepFilterNet's own MIT/Apache
+  licences (fetched from its GitHub; the package left them out). The package's other 130 MB (DTLN, onnxruntime,
+  silero) isn't used.
+- They're served with a week's caching (a mount in server.py). The model must not get `Content-Encoding: gzip`:
+  the loader checks for gzip's first bytes itself (tests/test_misc.py).
+
+voice.js, "Extra strong":
+
+- `import()` loads it on first use, so only pages that choose it download it. Until it's ready RNNoise works,
+  then `loadStrongFilter` calls `openMic` again to switch.
+- `createDeepFilterNetAudioWorklet` runs with the package's defaults: at most 25 dB of attenuation while
+  talking (unlimited sounds like dropouts) and 45 dB in pauses through its pause gate (+30 ms of delay).
+- `minSpeechFrames` 2: a sound must last 20 ms to open that gate, which key clicks don't.
+- `postGain`: its leveller after the filter, with the browser's `autoGainControl` off. Automatic gain works before
+  any of our filters, so in pauses it turned the background up for them to fight ("pumping"). RNNoise still has
+  the browser's.
+- A load failure or the package's `onOverload` (this PC can't keep up) sets `strongProblem`: back to RNNoise until
+  the page reloads, with a note under the setting (`#voice-noise-note`). Any other choice disposes the filter.
+
+Measured offline in headless Edge (2026-11-23), Windows' text-to-speech voice with synthetic key clicks:
+
+| | Clicks with nobody talking | Speech | Clicks during speech |
+|---|---|---|---|
+| Input | -42.5 dB | -23.7 dB | -42.7 dB |
+| RNNoise ("On", with the cap) | -58.3 dB | -23.9 dB | -53 dB |
+| DeepFilterNet 3 | -87.5 dB | -24.0 dB | -50 dB |
+
+Neither removes much of a click under speech (the voice hides it there anyway). The difference is in pauses:
+RNNoise leaves clicks 16 dB down, still audible; DeepFilterNet removes them. It rendered 6 s in 0.6 s.
 
 ### Push to talk
 
