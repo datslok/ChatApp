@@ -100,7 +100,8 @@ The files:
 - They're kept in `static/workadventure-ns-0.2.0/` with the package's LICENSE and DeepFilterNet's own MIT/Apache
   licences (fetched from its GitHub; the package left them out). The package's other 130 MB (DTLN, onnxruntime,
   silero) isn't used.
-- They're served with a week's caching (a mount in server.py). The model must not get `Content-Encoding: gzip`:
+- They're served with a week's caching (a mount in server.py). Cloudflare brotli-compresses the wasm to 3.7 MB,
+  so the download is ~12 MB. The model must not get `Content-Encoding: gzip`:
   the loader checks for gzip's first bytes itself (tests/test_misc.py).
 
 voice.js, "Extra strong":

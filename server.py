@@ -102,7 +102,7 @@ app.mount("/katex-0.18.9", LastingStaticFiles(directory="static/katex-0.18.9"), 
 # Country flags for Windows, whose emoji font has none (chat.css's @font-face; see CLAUDE.md).
 app.mount("/flags-0.1.10", LastingStaticFiles(directory="static/flags-0.1.10"), name="flags")
 # Noise suppression "Extra strong" (voice.js): DeepFilterNet 3 from npm's @workadventure/noise-suppression
-# 0.2.0 (see CLAUDE.md). ~23 MB, fetched only by pages that choose it.
+# 0.2.0 (see docs/notes/voice.md). 23 MB (~12 MB as Cloudflare compresses the wasm), fetched only by pages that choose it.
 app.mount("/workadventure-ns-0.2.0", LastingStaticFiles(directory="static/workadventure-ns-0.2.0"), name="deepfilternet")
 
 
