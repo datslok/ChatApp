@@ -52,12 +52,29 @@ ringing against real uvicorn + websockets clients.
 
 The microphone goes through Web Audio before LiveKit sends it, in this order:
 
+- the low cut (below),
 - noise suppression,
 - mic volume,
 - then the noise gate `static/voice-gate.js`, an AudioWorklet.
 
 The AudioContext runs at 48 kHz for RNNoise and DeepFilterNet. Voice settings are kept in the browser (localStorage
 "voiceSettings").
+
+### The low cut
+
+Code: voice.js, "The low cut". Since 2026-11-24, always on (not a setting), on PCs.
+
+- Why: someone walking past a desk made very loud low rumbles for the others. The table's shaking reaches a mic
+  standing on it (10–80 Hz, below voices), and in a quiet room the levellers (DeepFilterNet's `postGain`, up to
+  +15 dB, or the browser's automatic gain) raised it like a voice; it also opened the gate.
+- What: two `BiquadFilterNode` high-passes at `LOW_CUT_HZ` 90, Q 0.5412 and 1.3066: a 4th-order Butterworth.
+  Computed with the cookbook formulas at 48 kHz: -52 dB at 20 Hz, -28 at 40, -14 at 60, -3 at 90, -0.4 at 120,
+  nothing from 165 Hz up.
+- It's first, before noise suppression, so neither the levellers nor the gate see the rumble. `openMic` connects
+  the new mic to it and re-points its output (`disconnect()` first) when the noise suppression changes.
+- One biquad (12 dB per octave) is too gentle: Chrome's own audio processing already has a mild high-pass, and the
+  steps came through it. Other apps' internals aren't published; 80–100 Hz low cuts are the standard for speech
+  (mics' "low cut" switches, broadcast). A shock mount or mic arm stops it at the source.
 
 ### Noise suppression
 

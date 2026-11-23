@@ -112,9 +112,37 @@ async function setUpAudio() {
   gate.port.onmessage = (event) => showMicLevel(event.data);  // the gate's reports, ~30 a second
   const denoiser = await loadDenoiser(context);
   if (denoiser) denoiser.connect(micGain);
-  const nodes = { context, micGain, gate, destination, denoiser };
+  const nodes = { context, micGain, gate, destination, denoiser, lowCut: makeLowCut(context) };
   await applyOutputDevice(context);
   return nodes;
+}
+
+// ----- The low cut: the very first step after the microphone, whatever the settings.
+//
+// Footsteps, a bumped table or a door shake a microphone that stands on the desk, and it hears that
+// as a deep rumble or thump (mostly 10–80 Hz) that the room itself doesn't. Voices sit higher (a deep
+// one starts around 85 Hz, and words are understood from what's above 300 Hz). So a "high-pass"
+// filter lets everything above ~90 Hz through and cuts what's below, before anything else sees it:
+// otherwise the levellers (the browser's automatic gain, or DeepFilterNet's) turn a quiet person's
+// rumble up by as much as their voice, and the gate opens on it.
+//
+// A BiquadFilterNode is the browser's own simple filter. One "highpass" cuts slowly (12 dB less per
+// halving of the frequency), so two in a row: together a 4th-order "Butterworth" filter, the
+// textbook kind with no bump in the voice's range. Its two parts need these Q values (how sharp each
+// part's corner is) to add up to that. At 90 Hz it's 3 dB down, at 40 Hz 28 dB, at 20 Hz 52 dB; at
+// 120 Hz less than half a dB. (The browser's own clean-up already has a gentle one, too weak for a step.)
+const LOW_CUT_HZ = 90;
+
+function makeLowCut(context) {
+  const first = context.createBiquadFilter();
+  const second = context.createBiquadFilter();
+  for (const [filter, q] of [[first, 0.5412], [second, 1.3066]]) {
+    filter.type = "highpass";
+    filter.frequency.value = LOW_CUT_HZ;
+    filter.Q.value = q;
+  }
+  first.connect(second);
+  return { input: first, output: second };
 }
 
 // ----- "Extra strong": DeepFilterNet 3, a bigger AI filter than RNNoise (~4 times the computing,
@@ -247,7 +275,7 @@ async function applyOutputDevice(context) {
 
 async function openMic() {
   const nodes = await getAudio();
-  const { context, micGain, denoiser } = nodes;
+  const { context, micGain, denoiser, lowCut } = nodes;
   await context.resume();  // an AudioContext starts paused until the page has been clicked
   // "Extra strong" uses DeepFilterNet once it's there (RNNoise until then, or if it can't be used).
   // Any other choice lets go of it, so it doesn't keep running.
@@ -274,7 +302,11 @@ async function openMic() {
   closeMic();  // another microphone was open (switching devices): close that one first
   micStream = stream;
   micSource = context.createMediaStreamSource(stream);
-  micSource.connect(useStrong ? strongFilter.node : useRnnoise ? denoiser : micGain);
+  // The microphone → the low cut (see above) → the chosen noise suppression (or straight to the volume).
+  // The low cut stays in the engine between microphones, so first let go of where it led last time.
+  micSource.connect(lowCut.input);
+  lowCut.output.disconnect();
+  lowCut.output.connect(useStrong ? strongFilter.node : useRnnoise ? denoiser : micGain);
   listDevices();  // now that we may use the microphone, the browser tells us the devices' names
 }
 
