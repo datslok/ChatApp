@@ -55,14 +55,25 @@ let micTesting = false;     // "Test microphone" in Settings is on
 // Input mode: "voice" (the gate's line decides) or "ptt" (push to talk: a key decides, see below).
 const voiceSettings = {
   inputDevice: "", outputDevice: "", cameraDevice: "", micVolume: 100, outputVolume: 100, gate: -60,
-  noiseSuppression: "on",
+  noiseSuppression: "strong",  // the default since 2026-11-23 (before: "on")
+  noiseUpgraded: true,  // see below
   inputMode: "voice", pttKey: "", pttWindowsKey: 0, pttName: "",  // (the key: see "Push to talk")
   shareHeight: 1080, shareFps: 30,  // screen sharing quality: the last choice in the 🖥️ menu
   miniCorner: "bottom-right",  // where the others float in fullscreen (rooms.js, the mini window)
   miniHidden: false,           // ...or hidden with 👥
 };
 try {
-  Object.assign(voiceSettings, JSON.parse(localStorage.getItem("voiceSettings")) || {});
+  const saved = JSON.parse(localStorage.getItem("voiceSettings"));
+  Object.assign(voiceSettings, saved || {});
+  // Once per browser: Extra strong became the default, but settings saved before then say "on" even when
+  // nobody chose it (the whole object is saved whenever any voice setting changes). So "on" from before
+  // becomes "strong", once; "noiseUpgraded" marks it done, so going back to On afterwards sticks. Light
+  // and Off were chosen on purpose and stay.
+  if (saved && !saved.noiseUpgraded) {
+    if (voiceSettings.noiseSuppression === "on") voiceSettings.noiseSuppression = "strong";
+    voiceSettings.noiseUpgraded = true;
+    localStorage.setItem("voiceSettings", JSON.stringify(voiceSettings));
+  }
 } catch {}
 
 function saveVoiceSettings() {

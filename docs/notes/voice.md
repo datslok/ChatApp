@@ -63,8 +63,8 @@ The AudioContext runs at 48 kHz for RNNoise and DeepFilterNet. Voice settings ar
 
 | Setting | What it is |
 |---------|------------|
-| "Extra strong" (PCs, since 2026-11-23) | DeepFilterNet 3, WorkAdventure's worklet (see below) |
-| "On" (the default) | RNNoise 0.2, in our own worklet |
+| "Extra strong" (PCs, the default since 2026-11-23) | DeepFilterNet 3, WorkAdventure's worklet (see below) |
+| "On" (the default before) | RNNoise 0.2, in our own worklet |
 | "Light" | the browser's own noise suppression |
 | "Off" | neither |
 
@@ -84,8 +84,10 @@ that makes 30 ms of delay in all.
 
 #### Extra strong: DeepFilterNet 3
 
-Since 2026-11-23, because clicks still came through as marbles after the cap. It's an extra choice, not the
-default (the user's wish: nobody is forced to download it). PCs only for now; the phone version is on ROADMAP's
+Since 2026-11-23, because clicks still came through as marbles after the cap. First an extra choice; the same
+day, after the user tried it in a call ("it sounds good"), the default. Saved settings say "on" even when nobody
+chose it (voiceSettings is saved whole on any change), so voice.js switches a saved "on" to "strong" once per
+browser (the `noiseUpgraded` marker; going back to On afterwards sticks). Light and Off stay. PCs only for now; the phone version is on ROADMAP's
 parity list.
 
 What other apps do (researched 2026-11-23): Discord and Jitsi's hosted service use Krisp (closed). OBS, Mumble and

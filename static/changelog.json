@@ -52,7 +52,7 @@
         "In a call but looking at another chat: the call floats in a small window in a corner (whoever is talking, or their camera). Click it to go back to the call, drag it to any corner",
         "Volume per person (0–200%) in their profile: click them, also in the voice list. A shared screen has its own volume: hover over it for the slider",
         "Settings → Voice & audio: microphone, speakers, volumes, sensitivity and noise suppression. Settings → Video: your camera, with a preview",
-        "Noise suppression (Settings → Voice & audio): On (the default) is an AI filter for keyboards, dogs and background voices. On a PC, Extra strong is a bigger AI that's best against typing (a 12 MB download the first time). Light is the browser's own, for fans and hum",
+        "Noise suppression (Settings → Voice & audio): On a PC, Extra strong (the default) is an AI that removes keyboards, dogs and background voices, even single key clicks (a 12 MB download the first time). On is a lighter AI, for slow computers (and what the Android app has). Light is the browser's own, for fans and hum",
         "Push to talk: Settings → Voice & audio → Input mode → Push to talk, then Set key (a key, or a mouse button like the side ones). Your microphone is only on while you hold it. In the Windows app it also works while you're in a game or another program; in a browser only while the chat is in front. Not on phones",
         "The signal icon in a call shows your ping. Click it for details, including how a screen share is doing (frame rate, data, and whether the graphics card encodes it)",
         "Sharing one browser window and covering it with another window makes the share go black (the browser stops drawing covered windows). Share the entire screen instead, or keep the window uncovered"
@@ -130,7 +130,8 @@
     {
       "date": "2026-11-23",
       "items": [
-        "🎙️ Calls on a PC: a new noise suppression choice, Extra strong (Settings → Voice & audio → Noise suppression). A bigger AI that removes keyboard clicks from the very first one and keeps your voice natural. It downloads 12 MB the first time and adds a tiny bit of delay, so On stays the default"
+        "🎙️ Calls on a PC: a new noise suppression choice, Extra strong (Settings → Voice & audio → Noise suppression). A bigger AI that removes keyboard clicks from the very first one and keeps your voice natural. It downloads 12 MB the first time and adds a tiny bit of delay",
+        "🎙️ Extra strong is now the default on PCs, also if you had On. Prefer the old one? Pick On in Settings → Voice & audio → Noise suppression (Light and Off stay as you set them)"
       ]
     },
     {
