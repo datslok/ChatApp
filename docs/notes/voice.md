@@ -137,13 +137,16 @@ voice.js, "Extra strong":
 
   | Strength | Talking | Pauses |
   |---|---|---|
-  | Strong (the default) | 25 | 45 (the package's defaults) |
-  | Medium | 20 | 30 |
+  | Strong | 25 | 45 (the package's defaults) |
+  | Medium (the default) | 20 | 30 |
   | Gentle | 15 | 15: the loader adds no pause gate when the two are equal, so nothing drops below -15 dB |
 
   The limits are fixed when the filter is made (`df_create`), so a change makes a new one
   (`loadStrongFilter` compares `strongFilter.level`). The old one keeps the mic until `openMic` has
   re-pointed the low cut, then it's disposed. A change made while one is being made is caught up in `finally`.
+- Medium became the default the same day, after the user tried it in a call ("works great"). Strong was
+  the default for a few hours, and voiceSettings is saved whole, so a saved "strong" switches to Medium once
+  per browser (the `strengthUpgraded` marker, like `noiseUpgraded`).
 - `postGain`: its leveller after the filter, with the browser's `autoGainControl` off. Automatic gain works before
   any of our filters, so in pauses it turned the background up for them to fight ("pumping"). RNNoise still has
   the browser's.

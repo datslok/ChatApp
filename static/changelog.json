@@ -52,7 +52,7 @@
         "In a call but looking at another chat: the call floats in a small window in a corner (whoever is talking, or their camera). Click it to go back to the call, drag it to any corner",
         "Volume per person (0–200%) in their profile: click them, also in the voice list. A shared screen has its own volume: hover over it for the slider",
         "Settings → Voice & audio: microphone, speakers, volumes, sensitivity and noise suppression. Settings → Video: your camera, with a preview",
-        "Noise suppression (Settings → Voice & audio): On a PC, Extra strong (the default) is an AI that removes keyboards, dogs and background voices, even single key clicks (a 12 MB download the first time). Its Strength: Strong (the default, the quietest background), Medium, or Gentle (never cuts a short word, but lets a bit more typing through). On is a lighter AI, for slow computers (and what the Android app has). Light is the browser's own, for fans and hum. On a PC, the deep rumble of footsteps or a bumped desk is always filtered out",
+        "Noise suppression (Settings → Voice & audio): On a PC, Extra strong (the default) is an AI that removes keyboards, dogs and background voices, even single key clicks (a 12 MB download the first time). Its Strength: Medium (the default), Strong (the quietest background, but may cut short words), or Gentle (never cuts a short word, but lets a bit more typing through). On is a lighter AI, for slow computers (and what the Android app has). Light is the browser's own, for fans and hum. On a PC, the deep rumble of footsteps or a bumped desk is always filtered out",
         "Push to talk: Settings → Voice & audio → Input mode → Push to talk, then Set key (a key, or a mouse button like the side ones). Your microphone is only on while you hold it. In the Windows app it also works while you're in a game or another program; in a browser only while the chat is in front. Not on phones",
         "The signal icon in a call shows your ping. Click it for details, including how a screen share is doing (frame rate, data, and whether the graphics card encodes it)",
         "Sharing one browser window and covering it with another window makes the share go black (the browser stops drawing covered windows). Share the entire screen instead, or keep the window uncovered"
@@ -131,7 +131,7 @@
       "date": "2026-11-24",
       "items": [
         "🎙️ Calls on a PC: no more loud rumbling when someone walks past your desk or bumps it. The deep shaking a microphone picks up through the table is now filtered out, while voices sound the same",
-        "🎙️ Short words like \"ja\" or \"mm\" sometimes vanish with Extra strong? Pick a gentler Strength under it in Settings → Voice & audio: Medium, or Gentle, which never cuts a word (but lets a bit more typing through)"
+        "🎙️ Extra strong no longer makes short words like \"ja\" or \"mm\" vanish: it now has a Strength (Settings → Voice & audio, under Noise suppression), and the new default, Medium, keeps them. Strong is the old one (the quietest background), Gentle never cuts a word but lets a bit more typing through"
       ]
     },
     {

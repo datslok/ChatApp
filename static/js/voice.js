@@ -57,7 +57,8 @@ const voiceSettings = {
   inputDevice: "", outputDevice: "", cameraDevice: "", micVolume: 100, outputVolume: 100, gate: -60,
   noiseSuppression: "strong",  // the default since 2026-11-23 (before: "on")
   noiseUpgraded: true,  // see below
-  strongLevel: "strong",  // Extra strong's strength: "strong", "medium" or "gentle" (see STRONG_LEVELS)
+  strongLevel: "medium",  // Extra strong's strength (see STRONG_LEVELS); the default since 2026-11-24
+  strengthUpgraded: true,  // see below
   inputMode: "voice", pttKey: "", pttWindowsKey: 0, pttName: "",  // (the key: see "Push to talk")
   shareHeight: 1080, shareFps: 30,  // screen sharing quality: the last choice in the 🖥️ menu
   miniCorner: "bottom-right",  // where the others float in fullscreen (rooms.js, the mini window)
@@ -73,6 +74,13 @@ try {
   if (saved && !saved.noiseUpgraded) {
     if (voiceSettings.noiseSuppression === "on") voiceSettings.noiseSuppression = "strong";
     voiceSettings.noiseUpgraded = true;
+    localStorage.setItem("voiceSettings", JSON.stringify(voiceSettings));
+  }
+  // The same once for Extra strong's strength: Medium became the default a few hours after Strength
+  // came (Strong cut short words out), and a saved "strong" from then wasn't necessarily chosen.
+  if (saved && !saved.strengthUpgraded) {
+    if (voiceSettings.strongLevel === "strong") voiceSettings.strongLevel = "medium";
+    voiceSettings.strengthUpgraded = true;
     localStorage.setItem("voiceSettings", JSON.stringify(voiceSettings));
   }
 } catch {}
@@ -213,9 +221,9 @@ async function makeStrongFilter({ context, micGain }) {
   const level = voiceSettings.strongLevel;  // read now: it may change while the files load
   const { createDeepFilterNetAudioWorklet } = await import(STRONG_FILES + "deepfilternet.js");
   const filter = await createDeepFilterNetAudioWorklet(context, {
-    // Its two limits ("..." copies the object's two entries in here). "??": Strong, if the saved
+    // Its two limits ("..." copies the object's two entries in here). "??": Medium, if the saved
     // strength is one this page doesn't know.
-    ...(STRONG_LEVELS[level] ?? STRONG_LEVELS.strong),
+    ...(STRONG_LEVELS[level] ?? STRONG_LEVELS.medium),
     moduleUrl: STRONG_FILES + "deepfilternet-worklet-processor.js",
     wasmUrl: STRONG_FILES + "df_bg.wasm",
     modelUrl: STRONG_FILES + "DeepFilterNet3_onnx.tar.gz",
