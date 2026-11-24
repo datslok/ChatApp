@@ -57,6 +57,7 @@ const voiceSettings = {
   inputDevice: "", outputDevice: "", cameraDevice: "", micVolume: 100, outputVolume: 100, gate: -60,
   noiseSuppression: "strong",  // the default since 2026-11-23 (before: "on")
   noiseUpgraded: true,  // see below
+  strongLevel: "strong",  // Extra strong's strength: "strong", "medium" or "gentle" (see STRONG_LEVELS)
   inputMode: "voice", pttKey: "", pttWindowsKey: 0, pttName: "",  // (the key: see "Push to talk")
   shareHeight: 1080, shareFps: 30,  // screen sharing quality: the last choice in the 🖥️ menu
   miniCorner: "bottom-right",  // where the others float in fullscreen (rooms.js, the mini window)
@@ -165,34 +166,56 @@ function makeLowCut(context) {
 //
 // It takes a while to download the first time: RNNoise ("On") works meanwhile, and openMic switches
 // over once it's there. If it can't load, or this computer can't keep up, "On" is used instead.
+//
+// The strength (Settings → Voice, "Strength") sets those two limits, in dB. Its gate in pauses is
+// what can swallow a short word ("ja", "mm", a laugh) whole: the AI has to judge a sound to be voice
+// before that gate opens, and it sometimes doesn't. "gentle" gives both the same limit, and then the
+// package leaves the gate out: a word is never turned down by more than 15 dB, so it's always heard.
+const STRONG_LEVELS = {
+  strong: { speechAttenuationDb: 25, pauseAttenuationDb: 45 },  // the package's defaults
+  medium: { speechAttenuationDb: 20, pauseAttenuationDb: 30 },
+  gentle: { speechAttenuationDb: 15, pauseAttenuationDb: 15 },  // no pause gate
+};
 const STRONG_FILES = "/workadventure-ns-0.2.0/";
-let strongFilter = null;   // {node, dispose} once it's made (it lives in the audio engine), or null
+let strongFilter = null;   // {node, dispose, level} once it's made (it lives in the audio engine), or null
 let strongLoading = false; // its files are on their way
 let strongProblem = null;  // why it can't be used until the page reloads: "failed" or "slow"
 
+// Makes the filter, at the chosen strength. Once there's one, only a different strength makes a new
+// one: the filter's limits are fixed when it's made, so a change means a new filter (its files are
+// already downloaded by then, so that's quick). The old one keeps working until the new one is in.
 function loadStrongFilter(nodes) {
-  if (strongLoading || strongFilter || strongProblem) return;
+  if (strongLoading || strongProblem) return;
+  if (strongFilter && strongFilter.level === voiceSettings.strongLevel) return;
   strongLoading = true;
   showNoiseNote();
-  makeStrongFilter(nodes).then((filter) => {
+  makeStrongFilter(nodes).then(async (filter) => {
     if (strongProblem || voiceSettings.noiseSuppression !== "strong") {
       filter.dispose();  // gave up, or another choice was made while it loaded
       return;
     }
+    const old = strongFilter;
     strongFilter = filter;
-    if (micStream) openMic().catch(() => {});  // switch from RNNoise to it
+    if (micStream) await openMic().catch(() => {});  // switch to it (from RNNoise, or the old one)
+    if (old) old.dispose();  // only now: until openMic, the microphone still led to the old one
   }, (error) => {
     console.warn("Noise suppression (DeepFilterNet) didn't load:", error);
     giveUpStrong("failed");
   }).finally(() => {
     strongLoading = false;
     showNoiseNote();
+    // The strength was changed again while this one was being made: make that one too.
+    if (micStream && voiceSettings.noiseSuppression === "strong") loadStrongFilter(nodes);
   });
 }
 
 async function makeStrongFilter({ context, micGain }) {
+  const level = voiceSettings.strongLevel;  // read now: it may change while the files load
   const { createDeepFilterNetAudioWorklet } = await import(STRONG_FILES + "deepfilternet.js");
   const filter = await createDeepFilterNetAudioWorklet(context, {
+    // Its two limits ("..." copies the object's two entries in here). "??": Strong, if the saved
+    // strength is one this page doesn't know.
+    ...(STRONG_LEVELS[level] ?? STRONG_LEVELS.strong),
     moduleUrl: STRONG_FILES + "deepfilternet-worklet-processor.js",
     wasmUrl: STRONG_FILES + "df_bg.wasm",
     modelUrl: STRONG_FILES + "DeepFilterNet3_onnx.tar.gz",
@@ -204,6 +227,7 @@ async function makeStrongFilter({ context, micGain }) {
   // the microphone through as it is.
   filter.ready.catch(() => giveUpStrong("failed"));
   filter.node.connect(micGain);
+  filter.level = level;  // what it was made for (compared in loadStrongFilter)
   return filter;
 }
 
@@ -229,7 +253,7 @@ function showNoiseNote() {
       note = "This computer can't keep up with Extra strong, so On is used instead. It tries again the next time the chat opens.";
     } else if (strongProblem === "failed") {
       note = "Extra strong didn't load, so On is used instead. It tries again the next time the chat opens.";
-    } else if (strongLoading) {
+    } else if (strongLoading && !strongFilter) {  // (not when only the strength changes)
       note = "Downloading Extra strong (only the first time). On is used until it's ready.";
     }
   }

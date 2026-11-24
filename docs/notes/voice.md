@@ -127,14 +127,29 @@ voice.js, "Extra strong":
 
 - `import()` loads it on first use, so only pages that choose it download it. Until it's ready RNNoise works,
   then `loadStrongFilter` calls `openMic` again to switch.
-- `createDeepFilterNetAudioWorklet` runs with the package's defaults: at most 25 dB of attenuation while
-  talking (unlimited sounds like dropouts) and 45 dB in pauses through its pause gate (+30 ms of delay).
+- `createDeepFilterNetAudioWorklet` gets two limits: the most attenuation while talking (`speechAttenuationDb`;
+  unlimited sounds like dropouts) and in pauses, through its pause gate (`pauseAttenuationDb`, +30 ms of delay).
 - `minSpeechFrames` 2: a sound must last 20 ms to open that gate, which key clicks don't.
+- **Strength** (since 2026-11-24, `strongLevel`, the `#voice-strength` row, shown with Extra strong only).
+  The user heard short words vanish completely: the pause gate only opens for a frame 10 dB above the floor
+  that the denoiser kept (lost at most 15 dB), so a short "ja", "mm" or laugh the AI judges as noise stays at
+  -45 dB. `STRONG_LEVELS`, talking/pauses in dB:
+
+  | Strength | Talking | Pauses |
+  |---|---|---|
+  | Strong (the default) | 25 | 45 (the package's defaults) |
+  | Medium | 20 | 30 |
+  | Gentle | 15 | 15: the loader adds no pause gate when the two are equal, so nothing drops below -15 dB |
+
+  The limits are fixed when the filter is made (`df_create`), so a change makes a new one
+  (`loadStrongFilter` compares `strongFilter.level`). The old one keeps the mic until `openMic` has
+  re-pointed the low cut, then it's disposed. A change made while one is being made is caught up in `finally`.
 - `postGain`: its leveller after the filter, with the browser's `autoGainControl` off. Automatic gain works before
   any of our filters, so in pauses it turned the background up for them to fight ("pumping"). RNNoise still has
   the browser's.
 - A load failure or the package's `onOverload` (this PC can't keep up) sets `strongProblem`: back to RNNoise until
-  the page reloads, with a note under the setting (`#voice-noise-note`). Any other choice disposes the filter.
+  the page reloads, with a note under the setting (`#voice-noise-note`; "Downloading" shows only for the first
+  filter, not for a change of strength). Any other choice disposes the filter.
 
 Measured offline in headless Edge (2026-11-23), Windows' text-to-speech voice with synthetic key clicks:
 

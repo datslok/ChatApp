@@ -72,6 +72,24 @@ voiceNoiseSelect.addEventListener("change", async () => {
   voiceSettings.noiseSuppression = voiceNoiseSelect.value;
   saveVoiceSettings();
   showNoiseNote();  // (the note under it belongs to Extra strong only)
+  showStrengthRow();
+  if (micStream) await openMic().catch(() => {});
+});
+
+// Extra strong's strength (voice.js, STRONG_LEVELS), only shown while Extra strong is chosen. A change
+// makes a new filter at that strength and switches to it; a call carries on.
+const voiceStrengthRow = document.getElementById("voice-strength-row");
+const voiceStrengthSelect = document.getElementById("voice-strength");
+voiceStrengthSelect.value = voiceSettings.strongLevel;
+
+function showStrengthRow() {
+  voiceStrengthRow.hidden = voiceSettings.noiseSuppression !== "strong";
+}
+showStrengthRow();
+
+voiceStrengthSelect.addEventListener("change", async () => {
+  voiceSettings.strongLevel = voiceStrengthSelect.value;
+  saveVoiceSettings();
   if (micStream) await openMic().catch(() => {});
 });
 
