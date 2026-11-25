@@ -92,8 +92,8 @@ the server itself, in PowerShell as administrator.
 # Is everything running? (ChatApp, voice, AI and bot: Running. ChatApp backup: Ready.)
 Get-ScheduledTask ChatApp*
 
-# The logs. chat.log: starts, requests and errors; chat.out.log: what the chat itself writes since its
-# last start (each push: sent or not, and why; failed pushes; emails without SMTP_HOST); voice.log: LiveKit;
+# The logs. chat.log: starts, errors and connections; chat.out.log, since the chat's last start: every
+# request, and what the chat itself writes (each push: sent or not, and why; emails without SMTP_HOST); voice.log: LiveKit;
 # ai.log: llama-server (the AI bot's model); bot.log: what the bot answered, bot.errors.log: its crashes.
 Get-Content logs\chat.log -Tail 30
 Get-Content logs\chat.log -Tail 30 -Wait                         # keep following it (Ctrl+C stops)
