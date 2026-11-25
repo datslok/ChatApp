@@ -130,7 +130,7 @@ needs no invite link (everyone after you does), and becomes the admin and the **
 admins can edit and delete anyone's messages and custom emoji, manage channels and roles, read the bug
 reports and ban people (Settings → Admin), and the owner can also make others admins there, or ban an
 admin. Nobody can ban the owner. Click
-the link in the email you get to verify your address (without `SMTP_HOST`, it's in `logs\chat.log`
+the link in the email you get to verify your address (without `SMTP_HOST`, it's in `logs\chat.out.log`
 instead).
 
 To make someone an admin from the server instead (or yourself, on a server from before owners existed):

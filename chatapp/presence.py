@@ -89,7 +89,7 @@ def on_phone_only(user_id, presence):
 
 
 # Away from the PC (since 2026-11-15, the user's wish): with the Windows app left open, the phones got no
-# pushes at all (has_app_open), even with nobody at the PC. Now the app asks Windows how long the keyboard
+# pushes at all (push.py, why_no_push), even with nobody at the PC. Now the app asks Windows how long the keyboard
 # and mouse have gone unused (main.rs, seconds_idle), and after the person's own number of minutes the
 # page says "idle" in its "looking" messages (notifications.js). Then that app no longer counts as
 # looking or as open (so the phones get pushes again), and it shows its person as idle.

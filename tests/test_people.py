@@ -1,5 +1,7 @@
 """People: friends and requests, blocking, group DMs, muting chats, pinning DMs, statuses and activities,
 the profile's status and bio, and appearance settings."""
+import time
+
 from conftest import befriend, dm_key, unique
 
 
@@ -331,6 +333,31 @@ def test_nobody_at_the_pc_shows_as_idle(server):
         ws_w.drain()
         ws_a.send(type="looking", looking=True, idle=True)  # a browser can't tell: ignored
         ws_w.nothing("users")
+
+
+def wait_for_log_line(server, text, timeout=5):
+    """Wait until the server's log has a line containing this text (pushes go out in the background)."""
+    deadline = time.monotonic() + timeout
+    while text not in server.log():
+        if time.monotonic() > deadline:
+            raise AssertionError(f"No log line with {text!r}")
+        time.sleep(0.1)
+
+
+def test_pushes_follow_the_pc_and_are_logged(server, friends):
+    # Whether a DM reaches someone's phones, and why not, is written in the log (push.py, why_no_push).
+    a, b, dm = friends
+    with a.connect() as ws_a, b.connect() as ws_b:
+        ws_a.join(dm)
+        ws_b.send(type="looking", looking=False, app=True)  # the Windows app open in the background
+        ws_a.say("are you there?")
+        wait_for_log_line(server, f"push message in {dm} for {b.name} ({b.id}): not sent, the Windows app is open")
+        ws_b.send(type="looking", looking=False, app=True, idle=True)  # nobody at the PC: on to the phones
+        ws_a.say("hello?")
+        wait_for_log_line(server, f"({b.id}): not sent, no device with push on")  # (b has no phone)
+        ws_b.send(type="looking", looking=True, app=False)  # now a browser, in sight
+        ws_a.say("there you are")
+        wait_for_log_line(server, f"({b.id}): not sent, looking at the chat in the web browser")
 
 
 def test_idle_minutes_setting(server):

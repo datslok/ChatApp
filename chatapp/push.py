@@ -19,7 +19,8 @@ from chatapp.config import FIREBASE_KEY_FILE, MAIL_FROM, VAPID_PRIVATE_KEY, VAPI
 from chatapp.db import db
 from chatapp.sessions import logged_in_user
 from chatapp.access import channel_name, group_title
-from chatapp.connections import background_tasks, clients
+from chatapp.users import is_bot
+from chatapp.connections import background_tasks, clients, device_of
 from chatapp.files import files_note
 from chatapp.presence import presence_of
 
@@ -214,31 +215,54 @@ def readable_text(text):
     return re.sub(r"<:(\d+)>", lambda match: ":" + emoji.get(int(match[1]), "emoji") + ":", text)
 
 
-def is_looking(user_id):
-    """Is this person looking at the chat right now, on any device? (Each page says so: "looking".)"""
-    return any(client["user_id"] == user_id and client["looking"] and not client["pc_idle"]
-               for client in clients.values())
+def why_no_push(user_id):
+    """Why this person gets no push right now, in words for the log, or None: they get one.
+    - Looking at the chat on any device (each page says so: "looking"): they see it there.
+    - The Windows app open (focused or not) and someone at the PC lately: it notifies by itself, so
+      their phones stay quiet meanwhile. (The page says it's the app in its "looking" messages, and
+      when nobody has been at the PC for a while: see presence.py, "Away from the PC".)
+    - Do Not Disturb."""
+    for client in clients.values():
+        if client["user_id"] != user_id or client["pc_idle"]:  # (an idle PC counts for nothing)
+            continue
+        if client["looking"]:
+            return f"looking at the chat in the {device_of(client)}"
+        if client["app"]:
+            return "the Windows app is open and the PC in use"
+    if presence_of(user_id) == "dnd":
+        return "Do Not Disturb"
+    return None
 
 
-def has_app_open(user_id):
-    """Has this person got the Windows app open (focused or not), and been at the PC lately? It notifies
-    by itself, so their phones stay quiet meanwhile. (The page says it's the app in its "looking"
-    messages, and when nobody has been at the PC for a while: see presence.py, "Away from the PC".)"""
-    return any(client["user_id"] == user_id and client["app"] and not client["pc_idle"]
-               for client in clients.values())
+# The log (since 2026-11-26): a push that should notify (a message, a friend request, a call) writes one
+# line per person, sent or not and why, so "I got no notification" can be looked up in chat.out.log instead of
+# guessed at. Ids and names only, never the message.
+LOGGED_KINDS = ("message", "friend", "call")
+
+
+def log_push(user_id, payload, outcome):
+    name = (db.execute("SELECT username FROM users WHERE id = ?", (user_id,)).fetchone() or ["?"])[0]
+    print(f"{time.strftime('%Y-%m-%d %H:%M:%S')} push {payload.get('kind')} in {payload.get('channel')}"
+          f" for {name} ({user_id}): {outcome}", flush=True)
 
 
 async def send_push(user_ids, payload, ttl=24 * 60 * 60, urgency="normal", always=False):
-    """Push this to every device of these people that turned push on and isn't muted, unless they're
-    looking at the chat somewhere right now or have the Windows app open (then they get it there), or
-    chose Do Not Disturb. ttl: how many seconds the push service keeps trying a phone that's off or
-    offline. Run it as a background task: each push service takes a moment to answer, and the chat
-    mustn't wait for that.
+    """Push this to every device of these people that turned push on and isn't muted, unless they
+    shouldn't get one now (why_no_push: looking at the chat somewhere, the Windows app in use, Do Not
+    Disturb). ttl: how many seconds the push service keeps trying a phone that's off or offline. Run it
+    as a background task: each push service takes a moment to answer, and the chat mustn't wait for that.
     always: to all of them, whatever they're doing, and only to the phone app: for taking a ringing
     call off their phones (a browser's notification can't be taken back by a push)."""
+    logged = not always and payload.get("kind") in LOGGED_KINDS
     if not always:
-        user_ids = [user_id for user_id in user_ids
-                    if not is_looking(user_id) and not has_app_open(user_id) and presence_of(user_id) != "dnd"]
+        wanted = []
+        for user_id in user_ids:
+            reason = why_no_push(user_id)
+            if reason is None:
+                wanted.append(user_id)
+            elif logged and not is_bot(user_id):
+                log_push(user_id, payload, "not sent, " + reason)
+        user_ids = wanted
     if not user_ids:
         return
     marks = ",".join("?" * len(user_ids))  # "?,?,?": one placeholder per person
@@ -247,6 +271,10 @@ async def send_push(user_ids, payload, ttl=24 * 60 * 60, urgency="normal", alway
         + ("" if always else " AND (muted_until IS NULL OR muted_until < ?)"),
         (*user_ids,) if always else (*user_ids, time.time()),
     ).fetchall()
+    if logged:
+        for user_id in set(user_ids) - {row[3] for row in rows}:
+            if not is_bot(user_id):
+                log_push(user_id, payload, "not sent, no device with push on (or all muted)")
     data = json.dumps(payload)
     for endpoint, p256dh, auth, user_id in rows:
         if endpoint.startswith("fcm:"):  # the phone app
@@ -254,6 +282,8 @@ async def send_push(user_ids, payload, ttl=24 * 60 * 60, urgency="normal", alway
                 continue
             try:
                 await asyncio.to_thread(send_fcm, endpoint.removeprefix("fcm:"), payload, ttl)
+                if logged:
+                    log_push(user_id, payload, "sent to the phone app")
                 if payload.get("kind") in ("message", "friend"):
                     on_phones.add((user_id, payload["channel"]))
                 elif payload.get("kind") == "call":
@@ -261,8 +291,13 @@ async def send_push(user_ids, payload, ttl=24 * 60 * 60, urgency="normal", alway
             except FcmTokenGone:
                 with db:
                     db.execute("DELETE FROM push_subscriptions WHERE endpoint = ?", (endpoint,))
+                if logged:
+                    log_push(user_id, payload, "not sent, the phone app's token is gone (uninstalled?), forgotten")
             except Exception as error:
-                print(f"A push to the phone app failed: {error}")
+                if logged:
+                    log_push(user_id, payload, f"to the phone app FAILED: {error}")
+                else:
+                    print(f"A push to the phone app failed: {error}", flush=True)
             continue
         if always or not VAPID_PRIVATE_KEY:
             continue
@@ -279,15 +314,17 @@ async def send_push(user_ids, payload, ttl=24 * 60 * 60, urgency="normal", alway
                 headers={"Urgency": urgency},  # "high": deliver at once, even to a sleeping phone
                 timeout=10,
             )
+            if logged:
+                log_push(user_id, payload, f"sent to a browser ({urlsplit(endpoint).hostname})")
         except WebPushException as error:
             status = error.response.status_code if error.response is not None else None
             if status in (404, 410):  # "this subscription doesn't exist (any more)": uninstalled, say
                 with db:
                     db.execute("DELETE FROM push_subscriptions WHERE endpoint = ?", (endpoint,))
             else:
-                print(f"A push to {urlsplit(endpoint).hostname} failed: {error}")
+                print(f"A push to {urlsplit(endpoint).hostname} failed: {error}", flush=True)
         except Exception as error:  # (no connection, a timeout, ...): try again with the next message
-            print(f"A push to {urlsplit(endpoint).hostname} failed: {error}")
+            print(f"A push to {urlsplit(endpoint).hostname} failed: {error}", flush=True)
 
 
 def push_in_background(user_ids, payload, **options):

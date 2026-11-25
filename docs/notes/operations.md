@@ -18,7 +18,8 @@ in README.md.
 | `voice.ps1` | Runs LiveKit, for voice (see [voice.md](voice.md)). |
 
 `serve.ps1` uses `.venv` if there is one (the server PC), else the conda environment. `-LogFile` (used by the
-scheduled tasks) writes everything to a log instead of the window; `voice.ps1` has the same option.
+scheduled tasks) writes everything to a log instead of the window (uvicorn's to it, our prints, unbuffered with
+`python -u`, to `.out.log` beside it); `voice.ps1` has the same option.
 
 ## Setting up and moving the server
 

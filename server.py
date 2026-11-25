@@ -211,7 +211,7 @@ async def chat(websocket: WebSocket):
                 if new_channel is None:
                     # Looking at no channel (the Friends page): new messages anywhere count as unread.
                     clients[websocket]["channel"] = None
-                    if clients[websocket]["looking"]:
+                    if clients[websocket]["looking"] and not clients[websocket]["pc_idle"]:
                         clear_on_phones(user_id, "friends")  # (the friend requests are on that page)
                     continue
                 if not can_join(new_channel, user_id):
@@ -227,8 +227,10 @@ async def chat(websocket: WebSocket):
                 ).fetchone()
                 mark_read(user_id, new_channel)  # opening a channel means you've seen it
                 # Seen, if the page is in sight (a page in the background also rejoins after a dropped
-                # connection: then it's when they look at it, "looking" below).
-                if clients[websocket]["looking"]:
+                # connection: then it's when they look at it, "looking" below). Not on an idle PC: a
+                # Windows app left in front reconnecting while they're away would take the notification
+                # off their phone (2026-11-26).
+                if clients[websocket]["looking"] and not clients[websocket]["pc_idle"]:
                     clear_on_phones(user_id, new_channel)
                 # "more": a full batch, so there may be older messages to load by scrolling up.
                 more = len(history) == HISTORY_LIMIT
@@ -512,7 +514,7 @@ async def chat(websocket: WebSocket):
                 if looking_changed:
                     clients[websocket]["away_since"] = None if looking else time.time()
                 clients[websocket]["looking"] = looking
-                clients[websocket]["app"] = data.get("app") is True  # (then no pushes at all: has_app_open)
+                clients[websocket]["app"] = data.get("app") is True  # (then no pushes at all: push.py, why_no_push)
                 clients[websocket]["android"] = data.get("android") is True
                 # "idle": the Windows app's keyboard and mouse unused for the person's minutes (only the app can tell)
                 pc_idle = data.get("idle") is True and clients[websocket]["app"]

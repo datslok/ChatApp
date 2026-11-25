@@ -41,8 +41,28 @@ But never:
 
 - to someone "looking" at the chat on any device (each page sends `{"type": "looking"}` on focus/visibility
   changes);
-- while they have the Windows app open at all (the page adds `app: inDesktopApp` to "looking"; `has_app_open`);
+- while they have the Windows app open at all (the page adds `app: inDesktopApp` to "looking"), unless nobody
+  has been at that PC for their minutes (`pc_idle`; [people.md](people.md), "Away from the PC");
+- to someone on Do Not Disturb;
 - to a muted device (`/push/mute`).
+
+push.py `why_no_push` has these rules (but muting) in one place, and says which one applied.
+
+### The push log
+
+Since 2026-11-26, after "I got no notification on my phone" (she was away from her PC, shown as idle) could only be
+guessed at: every push that should notify (a message, a friend request, a call) writes one line per person to
+stdout, which serve.ps1 sends to `logs\chat.out.log`: `2026-11-26 00:11:02 push message in dm:3:7 for kari (7):
+sent to the phone app`, or `not sent, ` + why_no_push's reason, `no device with push on (or all muted)`, or
+`FAILED: ...`. Names and ids only, never the text; bots are left out.
+
+- serve.ps1 runs Python with `-u`: before, prints sat in an 8 KB buffer and chat.out.log stayed empty for days, so
+  even "A push to the phone app failed" lines never showed up.
+- tests/test_people.py `test_pushes_follow_the_pc_and_are_logged` reads the test server's log for these lines.
+
+Also found then: a page "looking" on an idle PC that opened a chat (a "join", like the Windows app left in front
+rejoining after a dropped connection) counted as seeing it, and its "read" push took the new notification off
+the phone. The two `clear_on_phones` in server.py's "join" now skip an idle PC, like "looking" already did.
 
 ### Showing them
 

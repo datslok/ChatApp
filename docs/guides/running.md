@@ -92,10 +92,12 @@ the server itself, in PowerShell as administrator.
 # Is everything running? (ChatApp, voice, AI and bot: Running. ChatApp backup: Ready.)
 Get-ScheduledTask ChatApp*
 
-# The logs. chat.log: starts and errors; chat.out.log: every request; voice.log: LiveKit;
+# The logs. chat.log: starts, requests and errors; chat.out.log: what the chat itself writes since its
+# last start (each push: sent or not, and why; failed pushes; emails without SMTP_HOST); voice.log: LiveKit;
 # ai.log: llama-server (the AI bot's model); bot.log: what the bot answered, bot.errors.log: its crashes.
 Get-Content logs\chat.log -Tail 30
 Get-Content logs\chat.log -Tail 30 -Wait                         # keep following it (Ctrl+C stops)
+Select-String "for kari \(" logs\chat.out.log | Select-Object -Last 10   # kari got no notification: why?
 Get-Content logs\backup.log -Tail 5
 
 # Restart by hand (update.ps1 does this too).

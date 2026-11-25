@@ -89,7 +89,7 @@ Since 2026-11-15, the user's wish.
   GetLastInputInfo (see [desktop-app.md](desktop-app.md)).
 - notifications.js `checkIdle` polls it every 15 s.
 - Past the account's `users.idle_minutes`, "looking" carries `idle: true` -> `pc_idle`: that device is not
-  looking and not `has_app_open` (so phones get pushes again), and it shows idle.
+  looking and doesn't count as the app being open (push.py `why_no_push`, so phones get pushes again), and it shows idle.
 - The minutes come from `IDLE_MINUTES_CHOICES` (default 10). They're set with `POST /settings/idle` ->
   "idle_minutes", and are in "welcome". The setting is in Settings → Notifications on the web and the phone.
 

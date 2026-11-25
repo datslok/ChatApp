@@ -35,7 +35,8 @@ if (Test-Path .venv\Scripts\python.exe) {
 # --host 127.0.0.1: only programs on this PC (like the tunnel) can connect, not other devices.
 # --env-file .env:  load the settings (SECURE_COOKIES, the keys, ...) from the .env file.
 # No --reload: that's only for development.
-$arguments = "-m uvicorn server:app --host 127.0.0.1 --port 8000 --env-file .env"
+# -u: our prints go into the log at once (otherwise Python keeps them in a buffer until it has 8 KB).
+$arguments = "-u -m uvicorn server:app --host 127.0.0.1 --port 8000 --env-file .env"
 
 if (-not $LogFile) {
     & $python $arguments.Split(" ")
