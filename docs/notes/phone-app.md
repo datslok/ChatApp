@@ -600,6 +600,13 @@ Since 2026-10-15.
   - liveUpdates.js writes the id it switches to in `tried-update.txt` (Paths.document). At the next start, if
     `Updates.updateId` isn't that id, the update didn't take and is never switched to again; if it is, the file
     goes. It also skips an "available" update whose id is the one running. So a bad update costs one reload.
+- **The same update again (2026-11-26).** The check above compares with the APK, so once anything in mobile/
+  changed after it (liveUpdates.js, here), every app-update.ps1 made another update of the same JavaScript: three
+  for 1.0.12, all with the id 7a17f5f2. Harmless (phones running that id skip it), but an export and ~6 MB uploaded
+  each time. The id is the SHA-256 of Expo's metadata.json, which names the bundle by a fingerprint of the source,
+  so the same source gives the same id, while the compiled .hbc came out different at every export (Hermes isn't
+  byte for byte the same). Now make_app_update.py makes none when the newest manifest for that version has the
+  same id ("No new update: ..."), and app-update.ps1 then only deploys.
 
 ### New APKs
 

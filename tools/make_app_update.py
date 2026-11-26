@@ -52,11 +52,23 @@ def asset(path, ext, launch=False):
     return described
 
 
+# The same metadata.json always gives the same id (Expo's example server does it this way): a UUID made
+# from its SHA-256. metadata.json names the bundle by a fingerprint of the JavaScript's source, so the same
+# source gives the same id, even though the compiled bundle comes out a little different every time.
+update_id = str(uuid.UUID(hashlib.sha256(metadata_bytes).hexdigest()[:32]))
+folder = releases / "app-updates" / runtime
+
+# The newest update already is this one (nothing in mobile\ changed since it went out)? Then phones running
+# it would skip a new one anyway (liveUpdates.js: the same id), so none is made: app-update.ps1 reads this
+# line and only deploys. (It made a new one at every deploy before, 2026-11-26.)
+newest = sorted(folder.glob("*.json"))[-1:] if folder.exists() else []
+if newest and json.loads(newest[0].read_text())["id"] == update_id:
+    print(f"No new update: the same JavaScript as {newest[0].name} ({update_id}).")
+    sys.exit(0)
+
 now = datetime.now(timezone.utc)
 manifest = {
-    # The same metadata.json always gives the same id (Expo's example server does it this way): a UUID
-    # made from its SHA-256.
-    "id": str(uuid.UUID(hashlib.sha256(metadata_bytes).hexdigest()[:32])),
+    "id": update_id,
     "createdAt": now.strftime("%Y-%m-%dT%H:%M:%S.") + f"{now.microsecond // 1000:03d}Z",
     "runtimeVersion": runtime,
     "launchAsset": asset(android["bundle"], "hbc", launch=True),
@@ -64,7 +76,6 @@ manifest = {
     "metadata": {},
     "extra": {},
 }
-folder = releases / "app-updates" / runtime
 folder.mkdir(parents=True, exist_ok=True)
 name = now.strftime("%Y%m%d-%H%M%S") + ".json"
 (folder / name).write_text(json.dumps(manifest, indent=2))

@@ -11,7 +11,8 @@
 # New JavaScript only goes to phones whose native code it was made for: their APK's version (the
 # "runtime version"). So if anything native changed since the last APK (mobile\modules\, mobile\plugins\,
 # mobile\app.json, the packages), this stops: release an APK instead (scripts\app-release.ps1). And if
-# nothing in mobile\ changed since that APK, there's no update to make: it only deploys.
+# nothing in mobile\ changed since that APK, or since the last update it sent, there's no update to make:
+# it only deploys.
 #
 # 1. Exports the bundle (npx expo export), 2. turns it into an update (tools\make_app_update.py: the
 # files in releases\app-assets\, a manifest in releases\app-updates\<version>\), 3. copies those to the
@@ -66,6 +67,11 @@ if (Get-Command conda -ErrorAction SilentlyContinue) {
 Remove-Item $export -Recurse -Force
 if ($LASTEXITCODE -ne 0) { Write-Host "Making the update failed: $output"; exit 1 }
 Write-Host $output
+# The same JavaScript as the newest update (already sent out): nothing to upload, only the deploy.
+if ("$output" -like "*No new update*") {
+    & .\scripts\deploy.ps1
+    exit $LASTEXITCODE
+}
 $manifest = Get-ChildItem "releases\app-updates\$version" -Filter *.json | Sort-Object Name | Select-Object -Last 1
 if (-not $manifest) { Write-Host "No update was made (see above)."; exit 1 }
 $files = (Get-Content $manifest.FullName -Raw | ConvertFrom-Json)

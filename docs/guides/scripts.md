@@ -26,7 +26,7 @@ the same PC, but the scripts assume two).
 | `scripts\backup-fetch.ps1` | your PC | copies the server's newest backup here (`-Install`: every day) |
 | `scripts\release-upload.ps1` | your PC | puts a new desktop app version on the server |
 | `scripts\app-release.ps1` | your PC | a new version of the phone app (the APK, when its native side changed): builds, signs, uploads; phones offer it when they next connect |
-| `scripts\app-update.ps1` | your PC | the phone app's JavaScript only: phones fetch it by themselves, no new APK (if nothing in `mobile\` changed since the last APK, it makes no update and only deploys) |
+| `scripts\app-update.ps1` | your PC | the phone app's JavaScript only: phones fetch it by themselves, no new APK (if nothing in `mobile\` changed since the last APK or the last update, it makes no update and only deploys) |
 | `-ViaGitHub` (on the three above) | your PC | away from home: the big files go through a temporary GitHub release instead of the slow tunnel (see [Releasing from away](hosting.md#reaching-the-server-from-outside-your-home-network)); `scripts\send-to-server.ps1` does it |
 | `scripts\seasonal-upload.ps1` | your PC | puts a seasonal easter egg's video on the server (see [Optional: a seasonal easter egg](hosting.md#optional-a-seasonal-easter-egg)) |
 | `scripts\refresh-icons.bat` | any Windows PC | double-click: Windows shows programs' new icons (after a new app icon) |

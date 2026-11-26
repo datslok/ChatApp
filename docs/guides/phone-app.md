@@ -133,7 +133,8 @@ install file, straight from your server, no Play Store. After that it updates it
   server; the app then offers "A new version" (at its next start or reconnect, or after a call), downloads it
   and opens Android's installer. `app-update.ps1` refuses when native code changed since the last APK, and says so.
   When nothing in `mobile\` changed since the last APK, it makes no update (the APK already has that JavaScript)
-  and only deploys the server.
+  and only deploys the server. The same when the JavaScript is the same as the last update it sent out ("No new
+  update"): the phones already have it.
 
 New JavaScript only goes to phones whose APK it was made for (the app's version is its "runtime
 version"), so an update can never break an older app.
