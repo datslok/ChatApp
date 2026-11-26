@@ -130,7 +130,8 @@
     {
       "date": "2026-11-26",
       "items": [
-        "🪟 Windows app: going fullscreen (a video, a call or a shared screen) no longer moves the window afterwards. It comes back exactly where it was, still snapped next to your other windows"
+        "🪟 Windows app: going fullscreen (a video, a call or a shared screen) no longer moves the window afterwards. It comes back exactly where it was, still snapped next to your other windows",
+        "🎙️ Calls: your first words after a quiet moment no longer come through extra loud, and a sudden loud sound is turned down right away"
       ]
     },
     {

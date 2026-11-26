@@ -185,6 +185,7 @@ const STRONG_LEVELS = {
   gentle: { speechAttenuationDb: 15, pauseAttenuationDb: 15 },  // no pause gate
 };
 const STRONG_FILES = "/workadventure-ns-0.2.0/";
+const POST_GAIN_MAX_DB = 6;  // the most its leveller may turn you up (the package's default: 15)
 let strongFilter = null;   // {node, dispose, level} once it's made (it lives in the audio engine), or null
 let strongLoading = false; // its files are on their way
 let strongProblem = null;  // why it can't be used until the page reloads: "failed" or "slow"
@@ -228,7 +229,10 @@ async function makeStrongFilter({ context, micGain }) {
     wasmUrl: STRONG_FILES + "df_bg.wasm",
     modelUrl: STRONG_FILES + "DeepFilterNet3_onnx.tar.gz",
     minSpeechFrames: 2,  // a sound must last 20 ms to open its pause gate: key clicks are shorter
-    postGain: true,      // its leveller, after the filter (the browser's is off with it, see openMic)
+    // Its leveller, after the filter (the browser's is off with it, see openMic). Its own settings,
+    // except the most it may turn you up: 6 dB instead of 15. It only moves 5 dB a second, so after
+    // a pause it was often still turned far up, and the first words came through booming.
+    postGain: { maxGainDb: POST_GAIN_MAX_DB },
     onOverload: () => giveUpStrong("slow"),  // this computer can't keep up (it measures itself)
   });
   // "ready" once the model is running inside the audio engine (a moment after this). Until then it lets

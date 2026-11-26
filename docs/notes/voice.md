@@ -150,6 +150,20 @@ voice.js, "Extra strong":
 - `postGain`: its leveller after the filter, with the browser's `autoGainControl` off. Automatic gain works before
   any of our filters, so in pauses it turned the background up for them to fight ("pumping"). RNNoise still has
   the browser's.
+  - Its most boost is 6 dB (`POST_GAIN_MAX_DB`, since 2026-11-26; the package's default is 15). It only moves
+    0.05 dB per 10 ms frame (5 dB/s) and only on frames above -45 dB, so quiet sounds in pauses (breaths, "mm")
+    raised it, and the first words after a pause came through booming until it caught up (heard by the user's
+    girlfriend). The other options stay the package's (an object for `postGain` is merged over its defaults).
+    The gate's safety net (below) catches what still gets through.
+
+### The safety net
+
+Code: voice-gate.js, since 2026-11-26, for every setting (also push to talk). A compressor that only turns down:
+a 2.7 ms block louder than `LIMIT_DB` -14 (RMS; talking averages ~-23, loud syllables ~-15) loses 3 of every
+4 dB above it (`LIMIT_RATIO` 4), with a 1 ms attack and a 0.3 s release, multiplied with the gate's own volume.
+Added with the lower `postGain` boost, against the booming first words. Not the browser's `DynamicsCompressorNode`:
+Chromium adds automatic "makeup gain" after it, which would turn everything up, background included. The level
+meter and the gate still see the level before it.
 - A load failure or the package's `onOverload` (this PC can't keep up) sets `strongProblem`: back to RNNoise until
   the page reloads, with a note under the setting (`#voice-noise-note`; "Downloading" shows only for the first
   filter, not for a change of strength). Any other choice disposes the filter.

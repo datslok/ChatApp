@@ -11,6 +11,17 @@ const HOLD_SECONDS = 0.3;    // stay open this long after you go quiet, so word 
 const FADE_SECONDS = 0.005;  // open and close over a few milliseconds instead of instantly (no clicks)
 const REPORTS_PER_SECOND = 30;
 
+// The safety net: a "compressor" that only turns down, and only what's louder than LIMIT_DB (normal
+// talking averages around -23 dB, its loud syllables reach about -15, so they're left alone). Above the line, 3 of every 4 dB more are taken away
+// (LIMIT_RATIO 4). It turns down within a millisecond, so a word that starts booming (a leveller still
+// turned up after a pause, see voice.js) is caught at once, and lets go slowly, over about 0.3 s, so it
+// doesn't pump up and down inside a word. (The browser's own DynamicsCompressorNode turns everything
+// else up afterwards to make up for it, background included, so it's done here instead.)
+const LIMIT_DB = -14;
+const LIMIT_RATIO = 4;
+const LIMIT_ATTACK_SECONDS = 0.001;
+const LIMIT_RELEASE_SECONDS = 0.3;
+
 class VoiceGate extends AudioWorkletProcessor {
   constructor() {
     super();
@@ -19,6 +30,7 @@ class VoiceGate extends AudioWorkletProcessor {
     this.talking = false;   // ...and whether it's held right now
     this.holdLeft = 0;      // samples left before the gate may close
     this.gain = 0;          // how open it is right now: 0 (closed) to 1 (open)
+    this.limit = 1;         // the safety net's volume right now: 1 = untouched, less = turned down
     this.loudest = -100;    // the loudest block since the last report, in dB
     this.sinceReport = 0;   // samples since the last report
     // The page sends {threshold} or {ptt, talking}: take whatever is in the message.
@@ -52,12 +64,20 @@ class VoiceGate extends AudioWorkletProcessor {
     }
     const target = this.holdLeft > 0 ? 1 : 0;
 
-    // Copy the sound through, moving the gain a little closer to its target at every sample.
+    // The safety net: how far down this block should be. E.g. 8 dB over the line, ratio 4: 6 dB down
+    // (it comes out 2 dB over). "10 ** (dB / 20)" turns decibels into a factor to multiply by.
+    const over = Math.max(0, level - LIMIT_DB);
+    const limitTarget = 10 ** (-over * (1 - 1 / LIMIT_RATIO) / 20);
+    const limitStep = 1 - Math.exp(-1 / ((limitTarget < this.limit ? LIMIT_ATTACK_SECONDS : LIMIT_RELEASE_SECONDS) * sampleRate));
+
+    // Copy the sound through, moving both volumes a little closer to their targets at every sample.
     const step = 1 - Math.exp(-1 / (FADE_SECONDS * sampleRate));
     for (let i = 0; i < samples.length; i++) {
       this.gain += (target - this.gain) * step;
+      this.limit += (limitTarget - this.limit) * limitStep;
+      const volume = this.gain * this.limit;
       for (let channel = 0; channel < output.length; channel++) {
-        output[channel][i] = (input[channel] || samples)[i] * this.gain;
+        output[channel][i] = (input[channel] || samples)[i] * volume;
       }
     }
 
