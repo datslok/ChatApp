@@ -152,7 +152,7 @@ function makeVideoPlayer(video, { arrowKeys = true, audio = true } = {}) {
   // The frame goes fullscreen, not the video, so our bar comes along. Esc comes out too.
   function toggleFullscreen() {
     if (document.fullscreenElement === frame) document.exitFullscreen().catch(() => {});
-    else frame.requestFullscreen().catch(() => {});
+    else goFullscreen(frame);  // (ui.js)
   }
   playButton.addEventListener("click", playOrPause);
   muteButton.addEventListener("click", toggleMute);

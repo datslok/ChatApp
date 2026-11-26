@@ -128,6 +128,12 @@
   ],
   "changes": [
     {
+      "date": "2026-11-26",
+      "items": [
+        "🪟 Windows app: going fullscreen (a video, a call or a shared screen) no longer moves the window afterwards. It comes back exactly where it was, still snapped next to your other windows"
+      ]
+    },
+    {
       "date": "2026-11-24",
       "items": [
         "🎙️ Calls on a PC: no more loud rumbling when someone walks past your desk or bumps it. The deep shaking a microphone picks up through the table is now filtered out, while voices sound the same",

@@ -787,7 +787,7 @@ function toggleFocus(tile) {
 // ----- Fullscreen: the whole banner (or Lounge page), tiles and buttons. Esc leaves too.
 function toggleFullscreen(element) {
   if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
-  else element.requestFullscreen().catch(() => {});
+  else goFullscreen(element);  // (ui.js)
 }
 callPanelFullscreen.addEventListener("click", () => toggleFullscreen(callPanel));
 loungeFullscreen.addEventListener("click", () => toggleFullscreen(loungeView));

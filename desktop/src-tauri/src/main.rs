@@ -3,6 +3,7 @@
 
 mod activity;  // what you're doing (activity.rs)
 mod app_audio;  // the shared program's sound (app_audio.rs)
+mod fullscreen;  // fullscreen in a window of its own (fullscreen.rs)
 mod share_bar;  // hides WebView2's "sharing your screen" bar (share_bar.rs)
 
 use std::os::windows::process::CommandExt;  // raw_arg
@@ -40,7 +41,7 @@ fn main() {
         // it's visible: the chat window starts hidden behind the loading window (show_chat).
         .plugin(
             tauri_plugin_window_state::Builder::default()
-                .with_denylist(&["update", "loading"])
+                .with_denylist(&["update", "loading", "fullscreen"])
                 .with_state_flags(StateFlags::all() & !StateFlags::VISIBLE)
                 .build(),
         )
@@ -58,7 +59,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![check_for_update, set_zoom, get_autostart, set_autostart, set_push_to_talk, page_ready,
                                                  set_unread_dot, activity::set_activity_settings, activity::list_programs,
                                                  app_audio::start_app_audio, app_audio::read_app_audio, app_audio::stop_app_audio,
-                                                 share_bar::hide_share_bar, seconds_idle])
+                                                 share_bar::hide_share_bar, seconds_idle, fullscreen::fullscreen_window])
         .setup(|app| {
             // First, before the chat window opens WebView2's storage: repair it if it's damaged.
             repair_local_storage(app.handle());
@@ -74,10 +75,16 @@ fn main() {
 
             // The chat window, from its settings in tauri.conf.json ("create": false there, so that
             // we make it here, with a handler added): it shows https://chat.datslok.no. Hidden
-            // until the page is ready (show_chat).
-            let handle = app.handle().clone();
-            WebviewWindowBuilder::from_config(app.handle(), &app.config().app.windows[0])?
+            // until the page is ready (show_chat). Made as a window with the page added to it
+            // ("add_child") rather than both at once: only a page added that way can move to
+            // another window with Tauri's fullscreen following it (fullscreen.rs).
+            let config = &app.config().app.windows[0];
+            let window = tauri::window::WindowBuilder::from_config(app.handle(), config)?
                 .visible(false)
+                .build()?;
+            let handle = app.handle().clone();
+            let page = tauri::webview::WebviewBuilder::from_config(config)
+                .auto_resize()  // always fills the window, whatever its size
                 // A link with target="_blank" asks for a new window. Tauri says no to those unless
                 // we decide, so: open web addresses in the default browser, and never a window here.
                 .on_new_window(move |url, _features| {
@@ -100,8 +107,9 @@ fn main() {
                         }
                     }
                     true  // let every download through (for "Requested"; ignored for "Finished")
-                })
-                .build()?;
+                });
+            window.add_child(page, tauri::PhysicalPosition::new(0, 0), window.inner_size()?)?;
+            fullscreen::watch_chat_window(app.handle());
 
             // chatapp:// links. Registered with Windows at every start, whatever the installer did (the
             // user's own registry, HKCU\Software\Classes\chatapp, pointing at
@@ -136,7 +144,9 @@ fn main() {
                 if performed.action_id() != "tap" {
                     return;
                 }
-                let Some(window) = handle.get_webview_window("main") else {
+                // (The window and its page separately: during a fullscreen the page is in a window of
+                // its own, fullscreen.rs.)
+                let (Some(window), Some(page)) = (handle.get_window("main"), handle.get_webview("main")) else {
                     return;
                 };
                 let _ = window.unminimize();
@@ -146,7 +156,7 @@ fn main() {
                     return;
                 };
                 if let (Some(channel), Some(message_id)) = (extra.get("channel"), extra.get("messageId")) {
-                    let _ = window.eval(format!("openMessage({channel}, {message_id})"));
+                    let _ = page.eval(format!("openMessage({channel}, {message_id})"));
                 }
             })?;
 
@@ -188,11 +198,11 @@ fn show_chat(app: &tauri::AppHandle) {
     if CHAT_SHOWN.swap(true, Ordering::SeqCst) {
         return;  // only the first time (the page says "ready" again after every reload)
     }
-    if let Some(main) = app.get_webview_window("main") {
+    if let Some(main) = app.get_window("main") {
         let _ = main.show();
         let _ = main.set_focus();
     }
-    if let Some(loading) = app.get_webview_window("loading") {
+    if let Some(loading) = app.get_window("loading") {
         let _ = loading.close();
     }
 }
@@ -201,9 +211,9 @@ fn show_chat(app: &tauri::AppHandle) {
 // update window while updating, the loading window while the chat is still hidden behind it, else
 // the chat window (even when minimized).
 fn bring_to_front(app: &tauri::AppHandle) {
-    let window = app.get_webview_window("update")
-        .or_else(|| if CHAT_SHOWN.load(Ordering::SeqCst) { None } else { app.get_webview_window("loading") })
-        .or_else(|| app.get_webview_window("main"));
+    let window = app.get_window("update")
+        .or_else(|| if CHAT_SHOWN.load(Ordering::SeqCst) { None } else { app.get_window("loading") })
+        .or_else(|| app.get_window("main"));
     if let Some(window) = window {
         let _ = window.unminimize();
         let _ = window.show();
@@ -232,7 +242,7 @@ fn open_link(app: &tauri::AppHandle, link: &tauri::Url) {
     page.set_path("/reset");
     page.set_query(Some(&format!("token={token}")));
     page.set_fragment(None);
-    if let Some(main) = app.get_webview_window("main") {
+    if let Some(main) = app.get_webview("main") {
         if let Err(error) = main.navigate(page) {
             eprintln!("Couldn't open the reset page: {error}");
             return;
@@ -263,11 +273,11 @@ fn check_for_update(app: tauri::AppHandle) {
 
 // Settings → Appearance's scale (appearance.js): WebView2's own zoom, like Ctrl + in Edge, so
 // everything grows together (CSS zoom got sizes and mouse positions out of step). WebView2
-// doesn't remember it, so the page asks again every time it loads. `window`: the one asking;
+// doesn't remember it, so the page asks again every time it loads. `webview`: the page asking;
 // `scale`: 1.2 for 120%, kept between 80% and 150% so a wrong value can't make the chat unusable.
 #[tauri::command]
-fn set_zoom(window: tauri::WebviewWindow, scale: f64) -> Result<(), String> {
-    window.set_zoom(scale.clamp(0.8, 1.5)).map_err(|error| error.to_string())
+fn set_zoom(webview: tauri::Webview, scale: f64) -> Result<(), String> {
+    webview.set_zoom(scale.clamp(0.8, 1.5)).map_err(|error| error.to_string())
 }
 
 // Settings → App behaviour: does Windows start the app at login? (Asked from Windows itself, so
@@ -314,7 +324,11 @@ fn unread_dot() -> tauri::image::Image<'static> {
 
 // The page calls this whenever the answer changes (and once after each load).
 #[tauri::command]
-fn set_unread_dot(window: tauri::WebviewWindow, on: bool) -> Result<(), String> {
+fn set_unread_dot(app: tauri::AppHandle, on: bool) -> Result<(), String> {
+    // On the chat window's button, also while the page is in fullscreen's window (fullscreen.rs).
+    let Some(window) = app.get_window("main") else {
+        return Ok(());
+    };
     window.set_overlay_icon(if on { Some(unread_dot()) } else { None }).map_err(|error| error.to_string())
 }
 
@@ -353,8 +367,8 @@ fn watch_push_to_talk(app: tauri::AppHandle) {
             let down = key != 0 && unsafe { GetAsyncKeyState(key) } < 0;
             if down != was_down {
                 was_down = down;
-                if let Some(window) = app.get_webview_window("main") {
-                    let _ = window.eval(format!("pushToTalkFromApp({down})"));  // (true or false: never anything else)
+                if let Some(page) = app.get_webview("main") {
+                    let _ = page.eval(format!("pushToTalkFromApp({down})"));  // (true or false: never anything else)
                 }
             }
             std::thread::sleep(std::time::Duration::from_millis(if key == 0 { 250 } else { 15 }));
@@ -482,14 +496,14 @@ async fn update(app: tauri::AppHandle) -> tauri_plugin_updater::Result<()> {
         .center()
         .initialization_script(format!("window.NEW_VERSION = {version};"))
         .build()?;
-    let main = app.get_webview_window("main");
+    let main = app.get_window("main");
     if let Some(main) = &main {
         main.hide()?;
     }
     // Found at the start: the update window replaces the loading window too, and the chat
     // mustn't pop up over it later.
     CHAT_SHOWN.store(true, Ordering::SeqCst);
-    if let Some(loading) = app.get_webview_window("loading") {
+    if let Some(loading) = app.get_window("loading") {
         let _ = loading.close();
     }
 

@@ -81,9 +81,9 @@ pub fn watch(app: tauri::AppHandle) {
             };
             let now = if share { detect(&open_windows(), &programs) } else { Value::Null };
             if SEND_AGAIN.swap(false, Ordering::SeqCst) || last.as_ref() != Some(&now) {
-                if let Some(window) = app.get_webview_window("main") {
+                if let Some(page) = app.get_webview("main") {
                     // serde_json writes it as JSON, which is always a valid JavaScript value.
-                    let _ = window.eval(format!("activityFromApp({now})"));
+                    let _ = page.eval(format!("activityFromApp({now})"));
                 }
                 last = Some(now);
             }

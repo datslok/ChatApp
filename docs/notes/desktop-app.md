@@ -17,6 +17,7 @@ A window around https://chat.datslok.no. On top of the web page it adds:
 - **Starting with Windows** (see below).
 - **Links open in the default browser**: the opener plugin, used only by main.rs's new-window handler, not by
   the page.
+- **Fullscreen in a window of its own** (see below), so the chat window keeps its place.
 
 To try it: `npm run tauri dev` in `desktop/`.
 
@@ -33,6 +34,39 @@ To try it: `npm run tauri dev` in `desktop/`.
 
 The page fetches a file itself, with a progress bar (messages.js, only in the app). main.rs's download handler
 then runs `explorer.exe /select,` on it. (The opener plugin's reveal_item_in_dir silently did nothing.)
+
+## Fullscreen in a window of its own
+
+Since 0.1.29 (fullscreen.rs, the page's side is ui.js `goFullscreen`, used by video-player.js and rooms.js).
+
+- **The problem:** when a page goes fullscreen, Tauri (tauri-runtime-wry's ContainsFullScreenElementChanged
+  handler) makes its window fullscreen, and tao saves and restores it with `GetWindowPlacement` /
+  `SetWindowPlacement`. For a snapped window that's the size and place from *before* the snap, and Windows no
+  longer counts it as snapped. Putting the rect back afterwards was rejected: the window would look right but
+  not be snapped any more (no snap group, dragging it out keeps the snapped size).
+- **What it does:** before `requestFullscreen`, the page invokes `fullscreen_window {on: true}`. The app makes a
+  hidden, borderless, taskbar-less window `fullscreen` exactly over the chat's page, moves the page into it
+  (`Webview::reparent`) and shows it. Tauri then makes that window fullscreen; the chat window is never
+  touched. When it stops being fullscreen (its `Resized` with `is_fullscreen()` false, after having been true),
+  the page moves back and the window is destroyed. The same page, so videos and calls go on.
+- **Needs** tauri's `unstable` feature (reparent, plain `WindowBuilder`, `add_child`).
+- **The chat window is made with `WindowBuilder` + `add_child`** (a page with `auto_resize`), not
+  `WebviewWindowBuilder`. Tried first with the latter: Tauri gives a webview window's fullscreen handler its own
+  copy of the window id, which reparent doesn't update, so the *chat* window went fullscreen and the page sat
+  in the small window (with an old-style frame; `set_decorations(false)` is now called again after building).
+  A child webview's handler shares the dispatcher's id. Its labels are both "main", so it still counts as a
+  webview window (`get_webview_window("main")`), but only while the page is in it: code that must work during a
+  fullscreen uses `get_webview("main")` for the page (eval, navigate) and `get_window("main")` for the window
+  (show, focus, the unread dot). Commands take `Webview` or `AppHandle`, never `WebviewWindow`, and the
+  capability names the page (`"webviews": ["main"]`) as well as the window.
+- Moving the page waits for Tauri's main thread, so it never runs there: the command is `async`, and the window
+  events start a thread.
+- Alt+F4 on the fullscreen window leaves fullscreen instead of closing it (closing would close the page). The
+  chat window's taskbar button while it's empty brings the fullscreen window to the front.
+- An older app doesn't know the command: the invoke fails and fullscreen works the old way.
+- Trying it with a dev build next to the installed app: `npm run tauri dev -- --config dev-local.json` with a
+  config that sets another `identifier` (own storage and single-instance lock), the window `url`
+  `http://localhost:8001`, and an inline capability in `app.security.capabilities` allowing that address.
 
 ## Notification clicks
 

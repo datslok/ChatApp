@@ -1,5 +1,5 @@
 // The phone drawers, the back button, closing popups with a click outside, the text
-// box, emoji autocomplete (typing ":po") and the character limit.
+// box, emoji autocomplete (typing ":po"), the character limit, and going fullscreen.
 //
 // One of the chat page's scripts (static/js/), loaded in order by static/index.html. They're
 // plain scripts sharing one global scope: what one file declares, the others can use.
@@ -149,6 +149,30 @@ window.addEventListener("popstate", (event) => {
   }
   switchChannel(channel, channelLabel(channel), true);
 });
+
+// ---------- Fullscreen ----------
+// Every fullscreen on the page (a video's ⛶, a call's, the Lounge's) goes through here. In a
+// browser it's just requestFullscreen. In the Windows app, the page first asks the app to move it
+// into a window of its own (desktop/src-tauri/src/fullscreen.rs): otherwise the app makes the chat
+// window itself fullscreen, and afterwards a snapped window comes back unsnapped and elsewhere.
+// The app moves the page back by itself once fullscreen ends. An older app doesn't know
+// "fullscreen_window": then the invoke fails and fullscreen works the old way.
+async function goFullscreen(element) {
+  let moved = false;
+  if (inDesktopApp) {
+    try {
+      await window.__TAURI_INTERNALS__.invoke("fullscreen_window", { on: true });
+      moved = true;
+    } catch {}
+  }
+  try {
+    // (A click lets a page go fullscreen for a few seconds after it, so waiting for the app is fine.)
+    await element.requestFullscreen();
+  } catch {
+    // Not allowed after all: back into the chat window.
+    if (moved) window.__TAURI_INTERNALS__.invoke("fullscreen_window", { on: false }).catch(() => {});
+  }
+}
 
 // ---------- Clicking outside a popup closes it ----------
 // (A modal dialog's surroundings, the darkened "backdrop", count as the dialog itself for
