@@ -30,6 +30,9 @@ the point is for me to understand how it works, not just to have it done.
   session needs, our own hosting, and how we work together.
 - **Rules for one part of the app** are in `.claude/rules/` (server, web-page, phone-app, desktop-app, whats-new,
   chattus) and load when its files are touched. What a script can check, the hooks check (`docs/notes/claude-code.md`).
+- **A rule, not a memory:** before saving a memory, ask whether it could be a rule instead (CLAUDE.md, a rule in
+  `.claude/rules/`, a skill, or a hook if a script can check it). If so, write it there. Memory keeps only dated
+  reminders and private facts that can't go in the public repo.
 - **What's new:** every feature friends would notice gets a `static/changelog.json` line in the same commit
   (`.claude/rules/whats-new.md`; the commit hook reminds).
 
