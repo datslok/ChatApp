@@ -34,6 +34,23 @@ Server side: voice.py, "Calls in DMs and group DMs".
 - `calls[channel]["ringing"]` is the set of people still being rung (in a DM: the other one).
 - "dm_call" (who's in the call) goes to `call_people`.
 
+### Where a call rings
+
+Until 2026-11-27 the ring ("call") went to every connection someone had open, while the phone push already followed
+`why_no_push`. So with the Windows app idle (nobody at the PC), my girlfriend's phone and PC both rang (the push log
+showed "sent to the phone app" for that call). voice.py `ring` now picks the connections, with push.py `is_here`
+(looking at the chat, or the Windows app with someone at the PC: the same test `why_no_push` uses):
+
+- Somewhere they are: only there. (No push then either.) On both a phone and a PC in use, both ring.
+- Nowhere: every connection but an idle PC's Windows app, plus the push. A background browser tab still rings,
+  since the server can't tell whether anyone is at that PC.
+- Only an idle PC and no device with push on (`has_push_on`): the idle PC rings after all, so it reaches someone.
+- A connection that becomes `is_here` while a call still rings for them (back at the PC, or switched to that
+  page) gets the ring then: server.py's "looking", like a page that opens mid-ring ("join"). A second "call" is
+  harmless: rooms.js `startRinging` and the phone app ignore a call that already rings.
+
+Test: tests/test_voice.py `test_a_call_rings_only_where_you_are`.
+
 In a group:
 
 - Everyone else rings.

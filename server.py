@@ -39,7 +39,7 @@ from chatapp.presence import (
     IDLE_MINUTES_CHOICES, PRESENCES, announce_presences, clean_activity, idle_minutes_of, phones_away,
     presence_of, start_watching_presences, users_for, users_message
 )
-from chatapp.push import clear_on_phones, firebase_account, push_message
+from chatapp.push import clear_on_phones, firebase_account, is_here, push_message
 from chatapp.messages import (
     CHAT_INFO_TABS, MAX_PINS, announce_new_message, chat_activity_message, chat_info, check_reply,
     clean_text, expand_mentions, live_reply_preview, mark_read, messages_around, mutes_message,
@@ -510,6 +510,7 @@ async def chat(websocket: WebSocket):
                 # {"type": "looking", "looking": true}: the page is in sight and has the focus (or
                 # not any more). Nobody gets a push while they're looking at the chat somewhere.
                 looking = data.get("looking") is True
+                was_here = is_here(clients[websocket])
                 looking_changed = looking != clients[websocket]["looking"]
                 if looking_changed:
                     clients[websocket]["away_since"] = None if looking else time.time()
@@ -532,6 +533,13 @@ async def chat(websocket: WebSocket):
                     await announce_presences()  # back from idle, a phone locked (idle), now known to be a phone
                 if looking and not pc_idle:  # back at the page: the chat on it has been seen (or the People page)
                     clear_on_phones(user_id, clients[websocket]["channel"] or "friends")
+                # They turned up here (back at the idle PC, or switched to this page): a call ringing
+                # for them that skipped this device rings here now (voice.py, ring). A second ring is
+                # harmless: the pages and the phone app ignore a call that already rings.
+                if is_here(clients[websocket]) and not was_here:
+                    for ringing, call in list(calls.items()):
+                        if user_id in call["ringing"]:
+                            await send(websocket, call_message(ringing))
 
             elif kind == "activity":
                 # {"type": "activity", "activity": {"kind": "playing", "name": "Hollow Knight"} or null}:

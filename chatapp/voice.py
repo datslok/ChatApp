@@ -18,7 +18,7 @@ from chatapp.access import (
     dm_people, group_members, group_title, is_dm_member, is_group_member, may_use_lounge
 )
 from chatapp.connections import clients, send, send_to_channel, send_to_user
-from chatapp.push import base64url, push_in_background, stop_ringing_phones
+from chatapp.push import base64url, has_push_on, is_here, push_in_background, stop_ringing_phones
 from chatapp.messages import announce_new_message, save_message, with_files
 
 router = APIRouter()
@@ -172,6 +172,24 @@ def call_message(channel):
     return {"type": "call", "channel": channel, "from": call["caller"], "name": username_of(call["caller"])}
 
 
+async def ring(person, channel):
+    """Ring a call where this person is, not on every device they have open:
+    - somewhere they are (is_here: looking at the chat, or the Windows app in use): only there (their
+      phones get no push then either);
+    - nowhere: every page but an idle PC's Windows app (they're away from it, and the push rings their
+      phone); a background browser tab still rings, since we can't tell whether they're at that PC;
+    - an idle PC is all there is, and no device has push on: there after all, so it reaches someone.
+    A device where they turn up while it still rings starts ringing then (server.py, "looking")."""
+    theirs = [(websocket, client) for websocket, client in list(clients.items()) if client["user_id"] == person]
+    here = [websocket for websocket, client in theirs if is_here(client)]
+    if not here:
+        here = [websocket for websocket, client in theirs if not client["pc_idle"]]
+    if not here and not has_push_on(person):
+        here = [websocket for websocket, client in theirs]
+    for websocket in here:
+        await send(websocket, call_message(channel))
+
+
 async def start_call(channel, caller):
     if not is_call_member(channel, caller):
         return  # only in your own DMs with friends, and your groups
@@ -190,7 +208,7 @@ async def start_call(channel, caller):
         "ring": asyncio.create_task(ring_timeout(channel)),
     }
     for person in others:
-        await send_to_user(person, call_message(channel))  # every tab and device they have open rings
+        await ring(person, channel)  # where they are (not an idle PC while their phone rings)
     # ...and their phones: "high" urgency (wake it now), and gone after the 30 s it rings.
     if channel.startswith("dm:"):
         title, body = username_of(caller), "📞 Calling you"

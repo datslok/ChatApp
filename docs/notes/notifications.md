@@ -46,7 +46,9 @@ But never:
 - to someone on Do Not Disturb;
 - to a muted device (`/push/mute`).
 
-push.py `why_no_push` has these rules (but muting) in one place, and says which one applied.
+push.py `why_no_push` has these rules (but muting) in one place, and says which one applied. Its "they're here"
+test is `is_here`, which also decides which devices a call rings on over the WebSocket (voice.md, "Where a call
+rings").
 
 ### The push log
 

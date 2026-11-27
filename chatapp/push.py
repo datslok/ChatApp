@@ -215,6 +215,21 @@ def readable_text(text):
     return re.sub(r"<:(\d+)>", lambda match: ":" + emoji.get(int(match[1]), "emoji") + ":", text)
 
 
+def is_here(client):
+    """Whether this connection is where its person is right now: looking at the chat, or the Windows
+    app with someone at the PC (an idle PC counts for nothing). Calls ring only here when there is
+    such a place (voice.py, ring), and pushes stay away meanwhile (why_no_push)."""
+    return not client["pc_idle"] and (client["looking"] or client["app"])
+
+
+def has_push_on(user_id):
+    """Whether any of this person's devices has push on and isn't muted (a push could reach them)."""
+    return db.execute(
+        "SELECT 1 FROM push_subscriptions WHERE user_id = ? AND (muted_until IS NULL OR muted_until < ?)",
+        (user_id, time.time()),
+    ).fetchone() is not None
+
+
 def why_no_push(user_id):
     """Why this person gets no push right now, in words for the log, or None: they get one.
     - Looking at the chat on any device (each page says so: "looking"): they see it there.
@@ -223,12 +238,11 @@ def why_no_push(user_id):
       when nobody has been at the PC for a while: see presence.py, "Away from the PC".)
     - Do Not Disturb."""
     for client in clients.values():
-        if client["user_id"] != user_id or client["pc_idle"]:  # (an idle PC counts for nothing)
+        if client["user_id"] != user_id or not is_here(client):
             continue
         if client["looking"]:
             return f"looking at the chat in the {device_of(client)}"
-        if client["app"]:
-            return "the Windows app is open and the PC in use"
+        return "the Windows app is open and the PC in use"
     if presence_of(user_id) == "dnd":
         return "Do Not Disturb"
     return None

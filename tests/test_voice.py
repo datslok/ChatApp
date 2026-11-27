@@ -92,6 +92,43 @@ def test_a_dm_call_rings_is_answered_and_ends(friends):
         assert note["text"] == "📞 Call · under a minute" and note["user_id"] == a.id
 
 
+def test_a_call_rings_only_where_you_are(friends):
+    # voice.py, ring: not on an idle PC while you're somewhere else, or while your phone rings.
+    a, b, dm = friends
+    with a.connect() as ws_a, b.connect() as ws_pc, b.connect() as ws_tab:
+        ws_pc.send(type="looking", looking=False, app=True, idle=True)  # the Windows app, nobody at the PC
+        ws_tab.send(type="looking", looking=True)  # ...and a browser in sight: b is here
+        ws_tab.drain()
+        ws_a.send(type="call", channel=dm)
+        ws_tab.wait_for("call")
+        ws_pc.nothing("call")
+        ws_pc.send(type="looking", looking=False, app=True, idle=False)  # back at the PC while it rings
+        assert ws_pc.wait_for("call")["channel"] == dm
+        ws_a.send(type="call_cancel", channel=dm)
+        ws_pc.wait_for("call_ended")
+
+    # Only an idle PC, and no phone: it rings there after all.
+    with a.connect() as ws_a, b.connect() as ws_pc:
+        ws_pc.send(type="looking", looking=False, app=True, idle=True)
+        ws_pc.drain()
+        ws_a.send(type="call", channel=dm)
+        ws_pc.wait_for("call")
+        ws_a.send(type="call_cancel", channel=dm)
+        ws_pc.wait_for("call_ended")
+
+    # Only an idle PC, and a phone with push on: the phone rings, not the PC. (The keys are no real
+    # keys, so the push fails before it leaves the server.)
+    phone = {"endpoint": "https://fcm.googleapis.com/fcm/send/ring-test", "p256dh": "key", "auth": "auth"}
+    assert b.post("/push/subscribe", phone).status == 200
+    with a.connect() as ws_a, b.connect() as ws_pc:
+        ws_pc.send(type="looking", looking=False, app=True, idle=True)
+        ws_pc.drain()
+        ws_a.send(type="call", channel=dm)
+        ws_pc.nothing("call")
+        ws_a.send(type="call_cancel", channel=dm)
+    assert b.post("/push/unsubscribe", {"endpoint": phone["endpoint"]}).status == 200
+
+
 def test_declining_a_dm_call(friends):
     a, b, dm = friends
     with a.connect() as ws_a, b.connect() as ws_b:
