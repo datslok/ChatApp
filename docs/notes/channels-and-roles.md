@@ -1,5 +1,7 @@
 # Channels and roles
 
+Covers: `chatapp/channels.py`, `chatapp/access.py`
+
 How channels and their headings are stored and managed, who sees which channel (private channels, limited
 roles), roles with their colours and member lists, and hidden roles.
 

@@ -71,6 +71,15 @@ dollar a month. **But then the chat's messages leave your server:** to answer, h
 channel's last 200 messages and the pictures he looks at, so tell your friends. Without `CHATTUS_MODEL`
 (or with the line empty), he uses the local model again.
 
+**When the key expires** (a key can have an end date; an expired one quietly stops him), make a new one before
+it does:
+
+- In the Claude Console, Settings → API keys → Create key. Copy the long `sk-ant-...` text from the window that
+  pops up: it's shown only once (the `apikey_...` in the list is its ID, not the key).
+- On your PC, run `scripts\set-server-secret.ps1` and paste it when asked. It puts it in the server's `.env` and
+  restarts the bot, without the key passing through anything else.
+- Check `logs\bot.log` on the server for his next answer, then delete the old key in the Console.
+
 With Claude he also **reads links** someone asks about ("what does this page say?"): Claude's own web fetch
 tool reads the page (Anthropic's servers fetch it, not yours; at most about a long article's worth), and he answers
 from it. Some big sites block AI readers; then he says he couldn't open it. He **reads files** people send

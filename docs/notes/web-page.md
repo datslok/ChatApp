@@ -1,5 +1,7 @@
 # The web page
 
+Covers: `static/`, `chatapp/pages.py`, `chatapp/emoji.py`, `tools/make_emoji_json.py`, `tools/make_screenshot.py`, `tools/make_icons.py`
+
 How the chat's web page is built: its markup and scripts, appearance and loading, caching and reloads, what
 it remembers per chat, the smaller pages (login, reset, download, landing), What's new, seasons, icons, emoji,
 maths, and the parts of the page around the messages (member list, chat info, user menu, pickers).

@@ -1,8 +1,10 @@
 # Voice, calls and screen sharing
 
+Covers: `chatapp/voice.py`, `static/js/rooms.js`, `static/js/voice.js`, `static/js/voice-settings.js`, `static/js/video.js`, `static/voice-gate.js`, `static/voice-denoiser.js`, `static/app-audio.js`, `livekit.yaml`, `voice.ps1`, `tools/get_rnnoise.py`, `tools/make_call_sounds.py`
+
 How voice works: the self-hosted LiveKit server, calls in DMs and groups, what the web page does to the
 microphone (noise suppression, the gate, push to talk), the floating call window, speaking rings, and screen
-shares with their sound. The phone app's side of calls is in [phone-app.md](phone-app.md); the Windows app's
+shares with their sound. The phone app's side of calls is in [phone-calls.md](phone-calls.md); the Windows app's
 Rust code is in [desktop-app.md](desktop-app.md).
 
 ## The LiveKit server
@@ -115,6 +117,17 @@ Code: voice.js, "The low cut". Since 2026-11-24, always on (not a setting), on P
 So `ORIGINAL` 0.1 of the original sound is mixed back in (a -20 dB floor). It is held back `LATE_BY` 2 frames,
 because 0.2 outputs 960 samples late (measured); out of step it would sound hollow. With the 10 ms of collecting,
 that makes 30 ms of delay in all.
+
+**Tried and reverted: a gate that only opens for voices** (2026-10-29, commit 8b11423, reverted in 17a5376). For
+keyboard noise in desktop calls, our own RNNoise worklet passed `rnnoise_process_frame`'s voice score to
+voice-gate.js. In a Node simulation, typing alone no longer opened the gate, but in real calls "it didn't really
+help": the noise heard likely comes while the gate is open anyway (typing while talking), or RNNoise leaks the
+clicks itself, and a gate can't fix either. So don't build voice-score gating again; if keyboard noise comes up,
+ask first when it's heard (while talking or in silence), and look at stronger suppression instead (which led to
+the cap above and then Extra strong).
+
+Any wasm worklet: an Emscripten import like `emscripten_memcpy_big` must return nothing. Returning the Uint8Array
+made V8 convert 16 MB to a number, about 1 s per frame.
 
 #### Extra strong: DeepFilterNet 3
 
@@ -242,6 +255,23 @@ only every 500 ms.
 ## Screen shares
 
 Code: video.js. H.264, no simulcast, `maintain-framerate` at 60 fps.
+
+### Open: the stall of 2026-10-21
+
+Not solved. In a DM call, a PC sharing from the Windows app (720p30 H.264, a video playing) to a phone elsewhere:
+after about 6.5 minutes the share dropped to about 2 fps and the sound failed both ways. The server's
+`logs\voice.log` showed only the PC's side going bad: screen audio loss, then ICE moving to the PC's other IPv6
+address (temporary vs. permanent, same wired card), then mic packets lost with RttMax 16.8 s and video sender
+reports about 5 s late. Nothing bad for the phone.
+
+- **Ruled out:** the phone and its bandwidth, our phone code (no per-frame allocation), the LAN (the PC wired at
+  1 Gbps), window throttling (the app was visible), GPU driver resets (no Windows events then). A 15-minute repeat
+  stayed clean (the app about 50% of one core, the server 11-27% CPU). The server blocks ICMP ping.
+- **When it's seen again:** ask for the exact time and a screenshot of the PC's connection popup ("held back by",
+  the encoder), then read voice.log for the PC's participant around then (PacketsLost, RttMax, "ice reconnected")
+  and the PC's System and Application event logs (`server-logs` skill).
+- **A fix to try if it's Chromium throttling after all:** WebView2's `additionalBrowserArgs` (Tauri's
+  `backgroundThrottling` doesn't work on Windows).
 
 ### The H.264 profile
 

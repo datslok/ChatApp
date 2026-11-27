@@ -56,3 +56,7 @@ chatapp-data.zip
 
 # Your own files kept next to the code, never committed (like videos for trying things out)
 external/
+
+# Claude Code: this PC's own notes and settings (CLAUDE.local.md: paths, keys' places, test passwords)
+CLAUDE.local.md
+.claude/settings.local.json

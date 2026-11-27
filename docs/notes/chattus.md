@@ -1,5 +1,7 @@
 # Chattus, the AI bot
 
+Covers: `chattus.py`, `chattus.ps1`, `llama.ps1`, `dev-chattus.env.example`, `tools/make_bot.py`
+
 How the chat's AI bot Chattus works: the model and where it runs, the bot program `chattus.py`, how he reads
 the chat and answers, and his tools (search, reading links and files, pictures, dice, polls, reminders, the
 chat's manual). Chattus is milestone 23, still in progress: English, friendly, short chat-sized answers.

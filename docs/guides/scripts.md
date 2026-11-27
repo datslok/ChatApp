@@ -9,7 +9,7 @@ the same PC, but the scripts assume two).
 | `setup.ps1` | your PC | makes a conda environment and installs the Python packages |
 | `start.ps1` | your PC | the chat for trying and developing (http://localhost:8001, its own `dev.db`; keys from `dev-secrets.env` if there is one) |
 | `voice.ps1 -Dev` | your PC | voice for development (only reachable from this PC) |
-| `test.ps1` | your PC | runs the test suite against a throwaway server of its own (see [Running the tests](development.md#running-the-tests)) |
+| `test.ps1` | your PC | runs the test suite against a throwaway server of its own, then the docs check (see [Running the tests](development.md#running-the-tests)) |
 | `scripts\server\install.ps1` | server (as admin) | installs and sets up everything; safe to run again (`-AI`: also the AI bot's model) |
 | `serve.ps1`, `voice.ps1` | server | the chat and voice; scheduled tasks start them at boot |
 | `llama.ps1` | server | the AI bot's language model (optional); a scheduled task starts it at boot |

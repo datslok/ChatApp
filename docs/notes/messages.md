@@ -1,5 +1,7 @@
 # Messages
 
+Covers: `chatapp/messages.py`, `static/js/messages.js`
+
 How messages carry several files and how the picture viewer shows them; the order of the Direct messages list
 and pinned DMs; muting chats; pinned messages and jumping to a message; and searching messages. For uploads,
 thumbnails and videos themselves, see [files.md](files.md).
@@ -40,7 +42,7 @@ Since 2026-10-18, the user's wish, like Discord.
 
 ### The phone
 
-See [phone-app.md](phone-app.md).
+See [phone-messages.md](phone-messages.md).
 
 - MessageText.js `Attachments`/`MediaGrid` (videos as ▶ squares).
 - `ImageViewer({files, index})` swipes between pictures (`ZoomablePicture` keyed per file, `scheduleOnRN`).

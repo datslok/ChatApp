@@ -1,8 +1,10 @@
 # The Windows app
 
+Covers: `desktop/`, `tools/make_installer_images.py`
+
 How the Windows app in `desktop/` works (Tauri): what it adds around the web page, its updates, the loading
 window, the installer's pictures, the app icon, and where releases and the signing key live. The steps for
-releasing a new version are in README.md, "The desktop app". The app's call features (push to talk, a shared
+releasing a new version are in [the desktop app guide](../guides/desktop-app.md#releasing-a-version). The app's call features (push to talk, a shared
 window's sound, the share bar) are in [voice.md](voice.md); its activity detection is in [people.md](people.md).
 
 ## What the app is

@@ -1,5 +1,7 @@
 # Accounts, admins and invites
 
+Covers: `chatapp/accounts.py`, `chatapp/admin.py`, `static/login.html`, `static/reset.html`, `static/verify.html`, `tools/make_admin.py`, `tools/feedback.py`
+
 How accounts come to be and are run: emails, the first admin, invites and email verification, bans and the
 owner, the feedback inbox and Settings → Admin. The server side is in `accounts.py` and `admin.py` (see
 [server.md](server.md)).

@@ -1,5 +1,7 @@
 # Running and operating the server
 
+Covers: `scripts/`, `serve.ps1`, `tools/copy_db.py`, `.env.example`, `.gitignore`, `.gitattributes`
+
 The scripts for running the chat in development and for real, setting up and moving the server PC,
 backups, deploying from the development PC, and the `.env` files. The step-by-step manual for all of this is
 in README.md.

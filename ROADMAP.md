@@ -136,6 +136,14 @@
     - [x] The shared bottom layer: the database (db.py) and what every part uses (connections, sending, the logged-in user)
     - [x] One group per step, each with FastAPI's APIRouter and the whole suite run after it: accounts, messages, channels, people, files, voice, push, web (previews, GIFs), pages
     - [x] server.py left with the app, the routers and the WebSocket handler; CLAUDE.md's "server.py, 'Section'" references updated
+- [x] **25.** Claude's rules checked, not remembered (as in my GameEngine, Browser and ClowderOS projects)
+    - [x] A short CLAUDE.md: rules for one part of the app in `.claude/rules/` (loaded only for those files), this PC's own facts in a git-ignored CLAUDE.local.md
+    - [x] Claude's memories moved to where they belong: rules, skills, notes, guides
+    - [x] Skills: docs-review, compact-docs, go-live, server-logs, drive-phone, drive-desktop, check-page
+    - [x] Hooks (`tools/hooks/claude_hooks.py`, with tests): blocks what breaks a rule, reminders before a commit
+    - [x] A docs check (`tools/docs_check.py`, run by test.ps1): sizes, links, named files and sections exist
+    - [x] A personal check (git hooks): no home folders or email addresses in a commit
+    - [x] docs/notes/phone-app.md split by topic (it's twice the size limit)
 
 ## Phone app parity
 

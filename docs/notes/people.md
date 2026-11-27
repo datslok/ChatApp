@@ -1,5 +1,7 @@
 # People
 
+Covers: `chatapp/people.py`, `chatapp/groups.py`, `chatapp/presence.py`, `static/js/people.js`
+
 Group DMs, statuses (online, idle, do not disturb, invisible; phones; being away from the PC), mutual friends,
 blocking, and activities (games, Spotify, programs) reported by the Windows app.
 
@@ -122,7 +124,7 @@ when you two aren't friends.
   refetch.
 - #profile-mutual under the bio: "n mutual friends", then a wrapping row of small pictures with names (buttons
   that open that profile). Hidden when empty and on your own profile.
-- The phone app: ProfileScreen.js `MutualFriends` (see [phone-app.md](phone-app.md)).
+- The phone app: ProfileScreen.js `MutualFriends` (see [phone-messages.md](phone-messages.md)).
 
 Who invited whom isn't on profiles: Settings → Admin → Invites already lists it (see
 [accounts.md](accounts.md)); the user decided that's enough.

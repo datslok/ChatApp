@@ -1,5 +1,7 @@
 # Files, pictures and videos
 
+Covers: `chatapp/files.py`, `chatapp/web.py`, `static/js/viewer.js`, `static/js/video-player.js`
+
 How uploaded files are stored and served: the upload size limit, thumbnails, videos and our own video player,
 re-packing videos with ffmpeg, removing metadata from pictures, GIFs from GIPHY and link previews. For several
 files in one message and the picture viewer, see [messages.md](messages.md).
@@ -30,7 +32,7 @@ original.**
 
 - Web: messages.js `pictureUrl(file, shown)` asks for the shown size × devicePixelRatio. Tiles in a grid ask for
   × `COVER_FACTOR` 1.5 on top.
-- Phone: files.js `pictureUri` (× PixelRatio). See [phone-app.md](phone-app.md).
+- Phone: files.js `pictureUri` (× PixelRatio). See [phone-messages.md](phone-messages.md).
 - The viewer, ImageViewer, links and downloads keep the plain address (the original).
 
 ## Videos
@@ -83,7 +85,7 @@ Since 2026-10-16, the user's wish: every video starts at 30% and remembers its o
 
 ### The phone
 
-The phone uses expo-video (more in [phone-app.md](phone-app.md)):
+The phone uses expo-video (more in [phone-messages.md](phone-messages.md)):
 
 - `VideoAttachment` in MessageText.js shows the first frame with a play button.
 - A tap opens `src/VideoScreen.js`, a popup with our control bar right under the video (the user's wish:

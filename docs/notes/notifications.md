@@ -1,8 +1,10 @@
 # The PWA and Web Push
 
+Covers: `chatapp/push.py`, `static/sw.js`, `static/manifest.json`, `static/js/notifications.js`, `tools/make_pwa_icons.py`, `tools/make_vapid_keys.py`
+
 How the web chat works as an installable phone app (a PWA), how Web Push notifications are sent and shown, and
 the banner and dialog that offer installing, push or the native app on phones. The native phone app's own push
-(Firebase Cloud Messaging) is in [phone-app.md](phone-app.md).
+(Firebase Cloud Messaging) is in [phone-calls.md](phone-calls.md).
 
 ## The PWA
 

@@ -1,0 +1,3 @@
+#!/bin/sh
+# Keeps personal details out of every line a commit adds (docs/notes/claude-code.md, "The personal check").
+exec python -I tools/personal_check.py staged

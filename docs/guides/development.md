@@ -75,7 +75,26 @@ keys reach the test server, and voice tokens are made without a LiveKit server. 
 to the server, and add a test with every new feature or fixed bug. `setup.ps1` installs pytest
 (`requirements-dev.txt`).
 
+A whole run (`.\test.ps1` with nothing after it) then also runs the docs check, `tools\docs_check.py`: broken
+links, file names that no longer exist, docs over their size, scripts missing from
+[Scripts at a glance](scripts.md). After it come the tests of the tools below.
+
+## The git hooks
+
+Once per clone, turn on the repo's git hooks:
+
+```powershell
+git config core.hooksPath tools/githooks
+```
+
+Then every commit is checked for personal details before it's made: home folders with a name in them
+(`C:\Users\<name>`) and email addresses, since the repo is public. To refuse your own words too (your username,
+your router's and server's local addresses), put them one per line in `~\.chatapp-private.txt`, which stays
+outside the repo. A commit it refuses prints each find; take it out and commit again.
+
 **CLAUDE.md** is the original author's instruction file for [Claude Code](https://claude.com/claude-code),
 the AI assistant this project was built with: how they like to work (small steps, explained first)
-and notes about their setup. If you use Claude Code with your copy and want a different workflow,
-write your own `CLAUDE.md`.
+and notes about their setup. Rules for one part of the app are in `.claude/rules/`, procedures in
+`.claude/skills/`, and `.claude/settings.json` runs hooks that check some rules while Claude works
+(`tools/hooks/claude_hooks.py`). If you use Claude Code with your copy and want a different workflow, write your
+own `CLAUDE.md` and change or remove those.

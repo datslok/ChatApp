@@ -1,5 +1,7 @@
 # The server
 
+Covers: `server.py`, `chatapp/__init__.py`, `chatapp/config.py`, `chatapp/db.py`, `chatapp/connections.py`, `chatapp/sessions.py`, `chatapp/users.py`, `tests/`, `pytest.ini`, `requirements.txt`, `requirements-dev.txt`, `setup.ps1`, `start.ps1`, `test.ps1`, `dev.env`, `dev-secrets.env.example`
+
 How the Python server is put together: `server.py` and the modules in `chatapp/`, the limits the pages
 need, the test suite, and the development settings in `dev.env`.
 
@@ -82,7 +84,8 @@ Exceptions and details:
 
 Since 2026-10-18; how to run it is in the README, "Running the tests".
 
-- The tests are in `tests/`, run by `test.ps1` (pytest, in `requirements-dev.txt`; settings in `pytest.ini`).
+- The tests are in `tests/`, run by `test.ps1` (pytest, in `requirements-dev.txt`; settings in `pytest.ini`). A
+  whole run then runs the docs check and the tools' tests ([claude-code.md](claude-code.md)).
 - `conftest.py` starts a real uvicorn server on port 8011 with:
   - a temporary DATABASE_FILE/UPLOAD_DIR;
   - REQUIRE_INVITE=1;
